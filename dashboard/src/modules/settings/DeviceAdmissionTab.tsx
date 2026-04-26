@@ -9,8 +9,9 @@ import { notify } from "@components/Notification";
 import Paragraph from "@components/Paragraph";
 import { useHasChanges } from "@hooks/useHasChanges";
 import * as Tabs from "@radix-ui/react-tabs";
-import useFetchApi, { useApiCall } from "@utils/api";
-import { ExternalLinkIcon, ShieldHalf } from "lucide-react";
+import useFetchApi, { useApiCall, useOpenzroFetch } from "@utils/api";
+import { API_ORIGIN } from "@utils/openzro";
+import { DownloadIcon, ExternalLinkIcon, ShieldHalf } from "lucide-react";
 import React, { useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
 import SettingsIcon from "@/assets/icons/SettingsIcon";
@@ -26,6 +27,7 @@ export default function DeviceAdmissionTab({ account }: Readonly<Props>) {
   const { permission } = usePermissions();
   const { mutate } = useSWRConfig();
   const saveRequest = useApiCall<Account>("/accounts/" + account.id, true);
+  const { fetch: authedFetch } = useOpenzroFetch();
 
   const { data: postureChecks, isLoading: postureChecksLoading } =
     useFetchApi<PostureCheck[]>("/posture-checks");
@@ -77,6 +79,36 @@ export default function DeviceAdmissionTab({ account }: Readonly<Props>) {
     [postureChecks, postureChecksLoading],
   );
 
+  const downloadAuditCsv = async () => {
+    const res = await authedFetch(
+      `${API_ORIGIN}/api/events/admission.csv`,
+      {
+        method: "GET",
+        headers: { Accept: "text/csv" },
+      },
+    );
+    if (!res.ok) {
+      notify({
+        title: "Audit export",
+        description: `Failed: ${res.status} ${res.statusText}`,
+        promise: Promise.reject(new Error("admission audit export failed")),
+        loadingMessage: "Downloading admission audit...",
+      });
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `openzro-admission-audit-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <Tabs.Content value={"device-admission"}>
       <div className={"p-default py-6 max-w-2xl"}>
@@ -106,13 +138,19 @@ export default function DeviceAdmissionTab({ account }: Readonly<Props>) {
               admission control with an audit trail.
             </Paragraph>
           </div>
-          <Button
-            variant={"primary"}
-            disabled={!hasChanges || !permission.settings.update}
-            onClick={saveChanges}
-          >
-            Save Changes
-          </Button>
+          <div className={"flex gap-2"}>
+            <Button variant={"secondary"} onClick={downloadAuditCsv}>
+              <DownloadIcon size={14} />
+              Audit CSV
+            </Button>
+            <Button
+              variant={"primary"}
+              disabled={!hasChanges || !permission.settings.update}
+              onClick={saveChanges}
+            >
+              Save Changes
+            </Button>
+          </div>
         </div>
 
         <div className={"flex flex-col gap-6 w-full mt-8"}>

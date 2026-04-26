@@ -254,6 +254,12 @@ func BuildManager(
 		am.onPeersInvalidated(ctx, accountID)
 	})
 
+	// Phase 2 admission gate: catches compliance flips on peers that
+	// already have an open Sync stream. The Phase 1 gate only fires
+	// at stream-open; without this worker, a peer whose Intune state
+	// flips post-connect would keep its session indefinitely.
+	go am.runAdmissionRevalidator(ctx)
+
 	return am, nil
 }
 
