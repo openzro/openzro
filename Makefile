@@ -52,6 +52,15 @@ build.go: ## go build ./... — verifies the whole module compiles
 build.dashboard: ## Production build of the Next.js dashboard
 	cd $(DASHBOARD_DIR) && $(NPM) ci && $(NPM) run build
 
+dev.dashboard: ## Run the dashboard in dev mode (hot reload, http://localhost:3000)
+	cd $(DASHBOARD_DIR) && $(NPM) install && $(NPM) run dev
+
+dev.dashboard.turbo: ## Run the dashboard in dev mode with Turbopack
+	cd $(DASHBOARD_DIR) && $(NPM) install && $(NPM) run turbo
+
+lint.dashboard: ## ESLint over the dashboard sources
+	cd $(DASHBOARD_DIR) && $(NPM) install && $(NPM) run lint
+
 # ---------------------------------------------------------------------------
 # Test
 # ---------------------------------------------------------------------------
