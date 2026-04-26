@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"hash/crc32"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/openzro/openzro/base62"
 	nbjwt "github.com/openzro/openzro/management/server/auth/jwt"

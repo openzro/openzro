@@ -3,7 +3,7 @@ package auth
 import (
 	"context"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 
 	nbcontext "github.com/openzro/openzro/management/server/context"
 	"github.com/openzro/openzro/management/server/types"
