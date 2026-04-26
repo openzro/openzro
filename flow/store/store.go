@@ -93,14 +93,16 @@ type Event struct {
 type Filter struct {
 	AccountID string
 
-	PeerID    string
-	UserID    string // filters via the peer's owning user
-	SourceIP  string
-	DestIP    string
-	Protocol  *uint16
-	Type      *EventType
-	Direction *Direction
-	RuleID    []byte
+	PeerID     string
+	UserID     string // filters via the peer's owning user
+	SourceIP   string
+	DestIP     string
+	SourcePort *uint32
+	DestPort   *uint32
+	Protocol   *uint16
+	Type       *EventType
+	Direction  *Direction
+	RuleID     []byte
 
 	// Time range — both endpoints inclusive of nanoseconds. Either or
 	// both may be the zero time, in which case it is treated as

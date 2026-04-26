@@ -297,7 +297,20 @@ var (
 			routersManager := routers.NewManager(store, permissionsManager, accountManager)
 			networksManager := networks.NewManager(store, permissionsManager, resourcesManager, routersManager, accountManager)
 
-			httpAPIHandler, err := nbhttp.NewAPIHandler(ctx, accountManager, networksManager, resourcesManager, routersManager, groupsManager, geo, authManager, appMetrics, integratedPeerValidator, proxyController, permissionsManager, peersManager, settingsManager)
+			// Flow events store: built early so the HTTP /network-traffic-events
+			// handler and the gRPC FlowService both see the same instance.
+			// Returns nil when OPENZRO_FLOW_STORE_ENGINE is unset/none.
+			flowBuilt, err := flowFactory.NewFromEnv(ctx)
+			if err != nil {
+				return fmt.Errorf("flow store: %w", err)
+			}
+			var flowStore flowstore.Store
+			if flowBuilt != nil {
+				flowStore = flowBuilt.Store
+				defer func() { _ = flowBuilt.Close() }()
+			}
+
+			httpAPIHandler, err := nbhttp.NewAPIHandler(ctx, accountManager, networksManager, resourcesManager, routersManager, groupsManager, geo, authManager, appMetrics, integratedPeerValidator, proxyController, permissionsManager, peersManager, settingsManager, flowStore)
 
 			if err != nil {
 				return fmt.Errorf("failed creating HTTP API handler: %v", err)
@@ -313,19 +326,9 @@ var (
 			}
 			mgmtProto.RegisterManagementServiceServer(gRPCAPIHandler, srv)
 
-			// Flow events: build the configured hot store (or nil for
-			// engine=none) and wire FlowService to it. The peer
-			// resolver runs against the management's primary store —
-			// see ADR-0002 for the design.
-			flowBuilt, err := flowFactory.NewFromEnv(ctx)
-			if err != nil {
-				return fmt.Errorf("flow store: %w", err)
-			}
-			var flowStore flowstore.Store
-			if flowBuilt != nil {
-				flowStore = flowBuilt.Store
-				defer func() { _ = flowBuilt.Close() }()
-			}
+			// FlowService streams flow events from peers — resolves the
+			// peer's pubkey to (peer_id, account_id) via the management
+			// store, then hands off to the flow.Store from above.
 			peerResolver := func(ctx context.Context, pubKeyBytes []byte) (string, string, error) {
 				key := base64.StdEncoding.EncodeToString(pubKeyBytes)
 				peer, err := store.GetPeerByPeerPubKey(ctx, mgmtStore.LockingStrengthShare, key)

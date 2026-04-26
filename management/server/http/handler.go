@@ -23,8 +23,11 @@ import (
 	"github.com/openzro/openzro/management/server/http/handlers/dns"
 	"github.com/openzro/openzro/management/server/http/handlers/events"
 	"github.com/openzro/openzro/management/server/http/handlers/groups"
+	"github.com/openzro/openzro/management/server/http/handlers/network_events"
 	"github.com/openzro/openzro/management/server/http/handlers/networks"
 	"github.com/openzro/openzro/management/server/http/handlers/peers"
+
+	flowstore "github.com/openzro/openzro/flow/store"
 	"github.com/openzro/openzro/management/server/http/handlers/policies"
 	"github.com/openzro/openzro/management/server/http/handlers/routes"
 	"github.com/openzro/openzro/management/server/http/handlers/scim"
@@ -57,6 +60,7 @@ func NewAPIHandler(
 	permissionsManager permissions.Manager,
 	peersManager nbpeers.Manager,
 	settingsManager settings.Manager,
+	flowEventsStore flowstore.Store,
 ) (http.Handler, error) {
 
 	authMiddleware := middleware.NewAuthMiddleware(
@@ -92,6 +96,7 @@ func NewAPIHandler(
 	dns.AddEndpoints(accountManager, router)
 	events.AddEndpoints(accountManager, router)
 	networks.AddEndpoints(networksManager, resourceManager, routerManager, groupsManager, accountManager, router)
+	network_events.AddEndpoints(permissionsManager, flowEventsStore, router)
 
 	// SCIM 2.0 lives at /scim/v2 per RFC 7644 — separate from /api so
 	// the path matches what every IdP expects out of the box. Same
