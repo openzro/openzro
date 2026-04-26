@@ -29,6 +29,8 @@ const (
 	TypeElastic ExportType = "elastic"
 	TypeS3      ExportType = "s3"
 	TypeHTTP    ExportType = "http"
+	TypeDatadog ExportType = "datadog"
+	TypeGCS     ExportType = "gcs"
 )
 
 // FlowExport is the GORM-managed row. The whole credential payload
@@ -169,4 +171,92 @@ type HTTPDestConfigPublic struct {
 	Timeout        time.Duration `json:"timeout,omitempty"`
 	MaxAttempts    int           `json:"max_attempts,omitempty"`
 	InitialBackoff time.Duration `json:"initial_backoff,omitempty"`
+}
+
+// DatadogDestConfig is the full Datadog Logs Intake config as stored
+// (encrypted) in ConfigCipher. The Public projection drops APIKey;
+// HasAPIKey reports presence.
+type DatadogDestConfig struct {
+	Site          string        `json:"site,omitempty"`
+	URL           string        `json:"url,omitempty"`
+	APIKey        string        `json:"api_key,omitempty"`
+	Service       string        `json:"service,omitempty"`
+	Source        string        `json:"source,omitempty"`
+	Tags          string        `json:"tags,omitempty"`
+	BatchSize     int           `json:"batch_size,omitempty"`
+	FlushInterval time.Duration `json:"flush_interval,omitempty"`
+	BufferSize    int           `json:"buffer_size,omitempty"`
+}
+
+func (c DatadogDestConfig) PublicView() DatadogDestConfigPublic {
+	return DatadogDestConfigPublic{
+		Site:          c.Site,
+		URL:           c.URL,
+		HasAPIKey:     c.APIKey != "",
+		Service:       c.Service,
+		Source:        c.Source,
+		Tags:          c.Tags,
+		BatchSize:     c.BatchSize,
+		FlushInterval: c.FlushInterval,
+		BufferSize:    c.BufferSize,
+	}
+}
+
+type DatadogDestConfigPublic struct {
+	Site          string        `json:"site,omitempty"`
+	URL           string        `json:"url,omitempty"`
+	HasAPIKey     bool          `json:"has_api_key"`
+	Service       string        `json:"service,omitempty"`
+	Source        string        `json:"source,omitempty"`
+	Tags          string        `json:"tags,omitempty"`
+	BatchSize     int           `json:"batch_size,omitempty"`
+	FlushInterval time.Duration `json:"flush_interval,omitempty"`
+	BufferSize    int           `json:"buffer_size,omitempty"`
+}
+
+// GCSDestConfig configures the native Google Cloud Storage sink.
+// Distinct from S3 mode: this uses Google's SDK and authenticates
+// via Application Default Credentials, a Service Account JSON
+// path, or inline JSON. See flow/sinks/gcs.go.
+type GCSDestConfig struct {
+	Bucket           string        `json:"bucket"`
+	Prefix           string        `json:"prefix,omitempty"`
+	CredentialsJSON  string        `json:"credentials_json,omitempty"`
+	CredentialsFile  string        `json:"credentials_file,omitempty"`
+	ProjectID        string        `json:"project_id,omitempty"`
+	Endpoint         string        `json:"endpoint,omitempty"`
+	FlushInterval    time.Duration `json:"flush_interval,omitempty"`
+	MaxEventsPerFile int           `json:"max_events_per_file,omitempty"`
+	BufferSize       int           `json:"buffer_size,omitempty"`
+}
+
+func (c GCSDestConfig) PublicView() GCSDestConfigPublic {
+	authMode := "adc"
+	switch {
+	case c.CredentialsJSON != "":
+		authMode = "inline-json"
+	case c.CredentialsFile != "":
+		authMode = "file"
+	}
+	return GCSDestConfigPublic{
+		Bucket:           c.Bucket,
+		Prefix:           c.Prefix,
+		AuthMode:         authMode,
+		ProjectID:        c.ProjectID,
+		Endpoint:         c.Endpoint,
+		FlushInterval:    c.FlushInterval,
+		MaxEventsPerFile: c.MaxEventsPerFile,
+		BufferSize:       c.BufferSize,
+	}
+}
+
+type GCSDestConfigPublic struct {
+	Bucket           string        `json:"bucket"`
+	Prefix           string        `json:"prefix,omitempty"`
+	AuthMode         string        `json:"auth_mode"`
+	ProjectID        string        `json:"project_id,omitempty"`
+	Endpoint         string        `json:"endpoint,omitempty"`
+	FlushInterval    time.Duration `json:"flush_interval,omitempty"`
+	MaxEventsPerFile int           `json:"max_events_per_file,omitempty"`
+	BufferSize       int           `json:"buffer_size,omitempty"`
 }

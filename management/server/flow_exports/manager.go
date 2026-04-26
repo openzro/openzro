@@ -174,6 +174,37 @@ func (m *Manager) buildSink(ctx context.Context, row *FlowExport) (store.Sink, e
 		// the package does not expose one yet (PR-E only added Elastic).
 		// Reject the configuration cleanly until it does.
 		return nil, fmt.Errorf("type=http for flow events not yet supported (Elastic and S3 only)")
+
+	case TypeDatadog:
+		c := plain.(*DatadogDestConfig)
+		return sinks.NewDatadog(sinks.DatadogConfig{
+			Site:          c.Site,
+			URL:           c.URL,
+			APIKey:        c.APIKey,
+			Service:       c.Service,
+			Source:        c.Source,
+			Tags:          c.Tags,
+			BatchSize:     c.BatchSize,
+			FlushInterval: c.FlushInterval,
+			BufferSize:    c.BufferSize,
+		})
+
+	case TypeGCS:
+		c := plain.(*GCSDestConfig)
+		gcsCfg := sinks.GCSConfig{
+			Bucket:           c.Bucket,
+			Prefix:           c.Prefix,
+			CredentialsFile:  c.CredentialsFile,
+			ProjectID:        c.ProjectID,
+			Endpoint:         c.Endpoint,
+			FlushInterval:    c.FlushInterval,
+			MaxEventsPerFile: c.MaxEventsPerFile,
+			BufferSize:       c.BufferSize,
+		}
+		if c.CredentialsJSON != "" {
+			gcsCfg.CredentialsJSON = []byte(c.CredentialsJSON)
+		}
+		return sinks.NewGCS(ctx, gcsCfg)
 	}
 	return nil, fmt.Errorf("unsupported type %q", row.Type)
 }

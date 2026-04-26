@@ -50,6 +50,8 @@ type SaveInput struct {
 	Elastic *ElasticDestConfig
 	S3      *S3DestConfig
 	HTTP    *HTTPDestConfig
+	Datadog *DatadogDestConfig
+	GCS     *GCSDestConfig
 }
 
 // Validate ensures Type matches a non-nil Config block and basic
@@ -84,6 +86,14 @@ func (in *SaveInput) Validate() error {
 		if in.HTTP.URL == "" {
 			return errors.New("flow_exports: http URL is required")
 		}
+	case TypeDatadog:
+		if in.Datadog == nil || in.Datadog.APIKey == "" {
+			return errors.New("flow_exports: datadog api_key is required")
+		}
+	case TypeGCS:
+		if in.GCS == nil || in.GCS.Bucket == "" {
+			return errors.New("flow_exports: gcs bucket is required")
+		}
 	default:
 		return fmt.Errorf("flow_exports: unsupported type %q", in.Type)
 	}
@@ -99,6 +109,10 @@ func (in *SaveInput) configBlob() ([]byte, error) {
 		return json.Marshal(in.S3)
 	case TypeHTTP:
 		return json.Marshal(in.HTTP)
+	case TypeDatadog:
+		return json.Marshal(in.Datadog)
+	case TypeGCS:
+		return json.Marshal(in.GCS)
 	}
 	return nil, fmt.Errorf("flow_exports: unknown type %q", in.Type)
 }
@@ -111,6 +125,10 @@ func (in *SaveInput) publicBlob() ([]byte, error) {
 		return json.Marshal(in.S3.PublicView())
 	case TypeHTTP:
 		return json.Marshal(in.HTTP.PublicView())
+	case TypeDatadog:
+		return json.Marshal(in.Datadog.PublicView())
+	case TypeGCS:
+		return json.Marshal(in.GCS.PublicView())
 	}
 	return nil, fmt.Errorf("flow_exports: unknown type %q", in.Type)
 }
@@ -216,6 +234,12 @@ func (s *Store) Decrypt(row *FlowExport) (any, error) {
 		return &c, json.Unmarshal(plain, &c)
 	case TypeHTTP:
 		var c HTTPDestConfig
+		return &c, json.Unmarshal(plain, &c)
+	case TypeDatadog:
+		var c DatadogDestConfig
+		return &c, json.Unmarshal(plain, &c)
+	case TypeGCS:
+		var c GCSDestConfig
 		return &c, json.Unmarshal(plain, &c)
 	}
 	return nil, fmt.Errorf("flow_exports: unknown type %q on decrypt", row.Type)

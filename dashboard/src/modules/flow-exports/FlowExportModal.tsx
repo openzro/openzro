@@ -60,6 +60,23 @@ export default function FlowExportModal({
   // HTTP fields
   const [httpURL, setHTTPURL] = useState("");
 
+  // Datadog fields
+  const [ddSite, setDdSite] = useState("us1");
+  const [ddURL, setDdURL] = useState("");
+  const [ddAPIKey, setDdAPIKey] = useState("");
+  const [ddService, setDdService] = useState("openzro-flow");
+  const [ddTags, setDdTags] = useState("");
+
+  // GCS native fields
+  const [gcsBucket, setGcsBucket] = useState("");
+  const [gcsPrefix, setGcsPrefix] = useState("");
+  const [gcsAuthMode, setGcsAuthMode] = useState<"adc" | "file" | "json">(
+    "adc",
+  );
+  const [gcsCredFile, setGcsCredFile] = useState("");
+  const [gcsCredJSON, setGcsCredJSON] = useState("");
+  const [gcsProjectID, setGcsProjectID] = useState("");
+
   const { mutate } = useSWRConfig();
   const apiCreate = useApiCall<FlowExport>("/admin/flow-exports");
   const apiUpdate = useApiCall<FlowExport>(
@@ -92,6 +109,27 @@ export default function FlowExportModal({
         case "http":
           setHTTPURL(cfg?.url ?? "");
           break;
+        case "datadog":
+          setDdSite(cfg?.site ?? "us1");
+          setDdURL(cfg?.url ?? "");
+          setDdAPIKey("");
+          setDdService(cfg?.service ?? "openzro-flow");
+          setDdTags(cfg?.tags ?? "");
+          break;
+        case "gcs":
+          setGcsBucket(cfg?.bucket ?? "");
+          setGcsPrefix(cfg?.prefix ?? "");
+          setGcsAuthMode(
+            cfg?.auth_mode === "file"
+              ? "file"
+              : cfg?.auth_mode === "inline-json"
+                ? "json"
+                : "adc",
+          );
+          setGcsCredFile("");
+          setGcsCredJSON("");
+          setGcsProjectID(cfg?.project_id ?? "");
+          break;
       }
     } else {
       setName("");
@@ -108,6 +146,17 @@ export default function FlowExportModal({
       setS3SecretKey("");
       setS3Prefix("");
       setHTTPURL("");
+      setDdSite("us1");
+      setDdURL("");
+      setDdAPIKey("");
+      setDdService("openzro-flow");
+      setDdTags("");
+      setGcsBucket("");
+      setGcsPrefix("");
+      setGcsAuthMode("adc");
+      setGcsCredFile("");
+      setGcsCredJSON("");
+      setGcsProjectID("");
     }
   }, [open, existing]);
 
@@ -132,6 +181,22 @@ export default function FlowExportModal({
       };
     } else if (type === "http") {
       base.http = { url: httpURL };
+    } else if (type === "datadog") {
+      base.datadog = {
+        site: ddSite || undefined,
+        url: ddURL || undefined,
+        api_key: ddAPIKey || undefined,
+        service: ddService || undefined,
+        tags: ddTags || undefined,
+      };
+    } else if (type === "gcs") {
+      base.gcs = {
+        bucket: gcsBucket,
+        prefix: gcsPrefix || undefined,
+        project_id: gcsProjectID || undefined,
+        credentials_file: gcsAuthMode === "file" ? gcsCredFile || undefined : undefined,
+        credentials_json: gcsAuthMode === "json" ? gcsCredJSON || undefined : undefined,
+      };
     }
     return base;
   };
@@ -147,6 +212,18 @@ export default function FlowExportModal({
       if (!s3Bucket.trim()) return "S3 bucket is required";
     } else if (type === "http") {
       if (!httpURL.trim()) return "HTTP URL is required";
+    } else if (type === "datadog") {
+      if (!isEdit && !ddAPIKey.trim()) {
+        return "Datadog API key is required on first save";
+      }
+    } else if (type === "gcs") {
+      if (!gcsBucket.trim()) return "GCS bucket is required";
+      if (gcsAuthMode === "json" && !isEdit && !gcsCredJSON.trim()) {
+        return "Inline service-account JSON is required on first save";
+      }
+      if (gcsAuthMode === "file" && !isEdit && !gcsCredFile.trim()) {
+        return "Credentials file path is required on first save";
+      }
     }
     return null;
   };
@@ -208,9 +285,11 @@ export default function FlowExportModal({
               className="w-full rounded-md border border-nb-gray-700 bg-nb-gray-940 px-3 py-2 text-sm"
             >
               <option value="elastic">Elasticsearch (SIEM)</option>
+              <option value="datadog">Datadog Logs Intake (SIEM/NPM)</option>
               <option value="s3">
-                S3 / R2 / B2 / GCS / MinIO (cold archive)
+                S3 / R2 / B2 / GCS Interop / MinIO (cold archive)
               </option>
+              <option value="gcs">Google Cloud Storage native (cold archive)</option>
               <option value="http">HTTP webhook</option>
             </select>
           </div>
@@ -258,6 +337,149 @@ export default function FlowExportModal({
                 placeholder="https://example.com/ingest"
               />
             </div>
+          )}
+
+          {type === "datadog" && (
+            <>
+              <div>
+                <Label>Site</Label>
+                <select
+                  value={ddSite}
+                  onChange={(e) => setDdSite(e.target.value)}
+                  className="w-full rounded-md border border-nb-gray-700 bg-nb-gray-940 px-3 py-2 text-sm"
+                >
+                  <option value="us1">US1 (datadoghq.com)</option>
+                  <option value="us3">US3</option>
+                  <option value="us5">US5</option>
+                  <option value="eu1">EU1 (datadoghq.eu)</option>
+                  <option value="ap1">AP1</option>
+                </select>
+                <Paragraph className="text-xs text-nb-gray-400 mt-1">
+                  Pick the site your Datadog org lives on — sending to
+                  the wrong site silently 401s.
+                </Paragraph>
+              </div>
+              <div>
+                <Label>API key</Label>
+                <Input
+                  type="password"
+                  value={ddAPIKey}
+                  onChange={(e) => setDdAPIKey(e.target.value)}
+                  placeholder={isEdit ? "(unchanged)" : "DD-API-KEY"}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Service</Label>
+                  <Input
+                    value={ddService}
+                    onChange={(e) => setDdService(e.target.value)}
+                    placeholder="openzro-flow"
+                  />
+                </div>
+                <div>
+                  <Label>Tags</Label>
+                  <Input
+                    value={ddTags}
+                    onChange={(e) => setDdTags(e.target.value)}
+                    placeholder="env:prod,team:secops"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label>URL override (optional)</Label>
+                <Input
+                  value={ddURL}
+                  onChange={(e) => setDdURL(e.target.value)}
+                  placeholder="https://datadog-proxy.internal"
+                />
+                <Paragraph className="text-xs text-nb-gray-400 mt-1">
+                  Only when proxying through an internal log forwarder.
+                </Paragraph>
+              </div>
+            </>
+          )}
+
+          {type === "gcs" && (
+            <>
+              <div>
+                <Label>Bucket</Label>
+                <Input
+                  value={gcsBucket}
+                  onChange={(e) => setGcsBucket(e.target.value)}
+                  placeholder="openzro-flow-archive"
+                />
+              </div>
+              <div>
+                <Label>Prefix (optional)</Label>
+                <Input
+                  value={gcsPrefix}
+                  onChange={(e) => setGcsPrefix(e.target.value)}
+                  placeholder="openzro/prod"
+                />
+              </div>
+              <div>
+                <Label>Project ID (optional)</Label>
+                <Input
+                  value={gcsProjectID}
+                  onChange={(e) => setGcsProjectID(e.target.value)}
+                  placeholder="my-gcp-project"
+                />
+              </div>
+              <div>
+                <Label>Authentication</Label>
+                <select
+                  value={gcsAuthMode}
+                  onChange={(e) =>
+                    setGcsAuthMode(
+                      e.target.value as "adc" | "file" | "json",
+                    )
+                  }
+                  className="w-full rounded-md border border-nb-gray-700 bg-nb-gray-940 px-3 py-2 text-sm"
+                >
+                  <option value="adc">
+                    Application Default Credentials (Workload Identity, GKE,
+                    Cloud Run, gcloud)
+                  </option>
+                  <option value="file">Service Account JSON (file path)</option>
+                  <option value="json">Service Account JSON (inline)</option>
+                </select>
+                <Paragraph className="text-xs text-nb-gray-400 mt-1">
+                  ADC is the recommended posture inside GCP — no
+                  credential files in the container, IAM bound to the
+                  workload identity. Self-host outside GCP uses the
+                  file or inline JSON.
+                </Paragraph>
+              </div>
+              {gcsAuthMode === "file" && (
+                <div>
+                  <Label>Credentials file path</Label>
+                  <Input
+                    value={gcsCredFile}
+                    onChange={(e) => setGcsCredFile(e.target.value)}
+                    placeholder={
+                      isEdit
+                        ? "(unchanged)"
+                        : "/etc/openzro/gcs-service-account.json"
+                    }
+                  />
+                </div>
+              )}
+              {gcsAuthMode === "json" && (
+                <div>
+                  <Label>Service account JSON</Label>
+                  <textarea
+                    value={gcsCredJSON}
+                    onChange={(e) => setGcsCredJSON(e.target.value)}
+                    placeholder={
+                      isEdit ? "(unchanged)" : '{"type":"service_account",...}'
+                    }
+                    rows={6}
+                    className="w-full rounded-md border border-nb-gray-700 bg-nb-gray-940 px-3 py-2 text-xs font-mono"
+                  />
+                </div>
+              )}
+            </>
           )}
         </div>
 
