@@ -1,138 +1,174 @@
 <div align="center">
-<br/>
-  <br/>
-<p align="center">
-  <img width="234" src="docs/media/logo-full.png"/>
-</p>
+  <img width="120" src="brand/openzro-icon.svg" alt="openZro"/>
+  <h1>open<span style="color:#7c3aed;font-weight:700">Z</span>ro</h1>
   <p>
-   <a href="https://img.shields.io/badge/license-BSD--3-blue)">
-       <img src="https://sonarcloud.io/api/project_badges/measure?project=openzro_openzro&metric=alert_status" />
-     </a> 
-     <a href="https://github.com/openzro/openzro/blob/main/LICENSE">
-       <img src="https://img.shields.io/badge/license-BSD--3-blue" />
-     </a> 
-    <br>
-    <a href="https://docs.openzro.io/slack-url">
-        <img src="https://img.shields.io/badge/slack-@openzro-red.svg?logo=slack"/>
-     </a>
-    <a href="https://forum.openzro.io">
-        <img src="https://img.shields.io/badge/community forum-@openzro-red.svg?logo=discourse"/>
-     </a>  
-     <br>
-    <a href="https://gurubase.io/g/openzro">
-        <img src="https://img.shields.io/badge/Gurubase-Ask%20Openzro%20Guru-006BFF"/>
-     </a>    
+    <strong>Open-source zero-trust mesh networking — BSD-3, no AGPL strings, no artificial limits.</strong>
+  </p>
+
+  <p>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSD--3-7c3aed" alt="BSD-3-Clause"/></a>
+    <a href="go.mod"><img src="https://img.shields.io/badge/go-1.23%2B-7c3aed" alt="Go 1.23+"/></a>
+    <a href="docs/adr/0001-openzro-foundation.md"><img src="https://img.shields.io/badge/ADR-0001-7c3aed" alt="ADR-0001"/></a>
   </p>
 </div>
 
+---
 
-<p align="center">
-<strong>
-  Start using openZro at <a href="https://openzro.io/pricing">openzro.io</a>
-  <br/>
-  See <a href="https://openzro.io/docs/">Documentation</a>
-  <br/>
-   Join our <a href="https://docs.openzro.io/slack-url">Slack channel</a> or our <a href="https://forum.openzro.io">Community forum</a>
-  <br/>
- 
-</strong>
-<br>
-<a href="https://registry.terraform.io/providers/openzro/openzro/latest">
-    New: openZro terraform provider
-  </a> 
-</p>
+openZro is a [WireGuard®](https://www.wireguard.com/)-based zero-trust overlay
+network: every machine you put on it gets a flat, encrypted private LAN with
+SSO, MFA, posture checks, and granular access policies — no port-forwarding,
+no VPN gateways, no per-device manual config.
 
-<br>
+It is a fork of [`netbirdio/netbird@v0.52.2`](https://github.com/netbirdio/netbird/tree/v0.52.2)
+([the last BSD-3 release](docs/FORK.md) before the upstream relicensed three
+core components to AGPLv3 in August 2025), continued under BSD-3-Clause for
+self-hosted deployments that want a freely-licensed, fully-featured baseline.
 
-**openZro combines a configuration-free peer-to-peer private network and a centralized access control system in a single platform, making it easy to create secure private networks for your organization or home.**
+## Why openZro and not upstream NetBird?
 
-**Connect.** openZro creates a WireGuard-based overlay network that automatically connects your machines over an encrypted tunnel, leaving behind the hassle of opening ports, complex firewall rules, VPN gateways, and so forth.
+| | NetBird ≥ v0.53 | **openZro** |
+|---|---|---|
+| **License** of `management/`, `signal/`, `relay/` | AGPLv3 | **BSD-3-Clause** |
+| Self-hosted with full features | Possible, but AGPL obligations attach to any modification served over a network | **No license obligations beyond BSD attribution** |
+| Per-peer update buffer | Hardcoded at 100 (silent drops above that) | **Configurable, default 1000** ([commit](https://github.com/openzro/openzro/commit/17f40f94)) |
+| Account fan-out concurrency | Hardcoded at 10 | **Configurable, default 64** ([commit](https://github.com/openzro/openzro/commit/092ddb6f)) |
+| HA story | Sticky session required, no first-class cluster support | **First-class HA via Redis-compatible (Valkey/Redis/Dragonfly), external NATS, or embedded NATS** |
+| Security advisory backports | N/A (you're on a current upstream version) | Tracked in [`docs/security/advisories.md`](docs/security/advisories.md), reimplemented clean-room |
 
-**Secure.** openZro enables secure remote access by applying granular access policies while allowing you to manage them intuitively from a single place. Works universally on any infrastructure.
+The full reasoning is captured in [ADR-0001](docs/adr/0001-openzro-foundation.md).
 
-### Open Source Network Security in a Single Platform
+## Architecture
 
-<img width="1188" alt="centralized-network-management 1" src="https://github.com/user-attachments/assets/c28cc8e4-15d2-4d2f-bb97-a6433db39d56" />
-
-### openZro on Lawrence Systems (Video)
-[![Watch the video](https://img.youtube.com/vi/Kwrff6h0rEw/0.jpg)](https://www.youtube.com/watch?v=Kwrff6h0rEw)
-
-### Key features
-
-| Connectivity | Management | Security | Automation| Platforms |
-|----|----|----|----|----|
-| <ul><li>- \[x] Kernel WireGuard</ul></li> | <ul><li>- \[x] [Admin Web UI](https://github.com/openzro/dashboard)</ul></li> | <ul><li>- \[x] [SSO & MFA support](https://docs.openzro.io/how-to/installation#running-net-bird-with-sso-login)</ul></li> | <ul><li>- \[x] [Public API](https://docs.openzro.io/api)</ul></li> | <ul><li>- \[x] Linux</ul></li> |
-| <ul><li>- \[x] Peer-to-peer connections</ul></li> | <ul><li>- \[x] Auto peer discovery and configuration</ui></li> | <ul><li>- \[x] [Access control - groups & rules](https://docs.openzro.io/how-to/manage-network-access)</ui></li> | <ul><li>- \[x] [Setup keys for bulk network provisioning](https://docs.openzro.io/how-to/register-machines-using-setup-keys)</ui></li> | <ul><li>- \[x] Mac</ui></li> |
-| <ul><li>- \[x] Connection relay fallback</ui></li> | <ul><li>- \[x] [IdP integrations](https://docs.openzro.io/selfhosted/identity-providers)</ui></li> | <ul><li>- \[x] [Activity logging](https://docs.openzro.io/how-to/audit-events-logging)</ui></li> | <ul><li>- \[x] [Self-hosting quickstart script](https://docs.openzro.io/selfhosted/selfhosted-quickstart)</ui></li> | <ul><li>- \[x] Windows</ui></li> |
-| <ul><li>- \[x] [Routes to external networks](https://docs.openzro.io/how-to/routing-traffic-to-private-networks)</ui></li> | <ul><li>- \[x] [Private DNS](https://docs.openzro.io/how-to/manage-dns-in-your-network)</ui></li> | <ul><li>- \[x] [Device posture checks](https://docs.openzro.io/how-to/manage-posture-checks)</ui></li> | <ul><li>- \[x] IdP groups sync with JWT</ui></li> | <ul><li>- \[x] Android</ui></li> |
-| <ul><li>- \[x] NAT traversal with BPF</ui></li> | <ul><li>- \[x] [Multiuser support](https://docs.openzro.io/how-to/add-users-to-your-network)</ui></li> | <ul><li>- \[x] Peer-to-peer encryption</ui></li> || <ul><li>- \[x] iOS</ui></li> |
-||| <ul><li>- \[x] [Quantum-resistance with Rosenpass](https://openzro.io/knowledge-hub/the-first-quantum-resistant-mesh-vpn)</ui></li> || <ul><li>- \[x] OpenWRT</ui></li> |
-||| <ul><li>- \[x] [Periodic re-authentication](https://docs.openzro.io/how-to/enforce-periodic-user-authentication)</ui></li> || <ul><li>- \[x] [Serverless](https://docs.openzro.io/how-to/openzro-on-faas)</ui></li> |
-||||| <ul><li>- \[x] Docker</ui></li> |
-
-### Quickstart with openZro Cloud
-
-- Download and install openZro at [https://app.openzro.io/install](https://app.openzro.io/install)
-- Follow the steps to sign-up with Google, Microsoft, GitHub or your email address.
-- Check openZro [admin UI](https://app.openzro.io/).
-- Add more machines.
-
-### Quickstart with self-hosted openZro
-
-> This is the quickest way to try self-hosted openZro. It should take around 5 minutes to get started if you already have a public domain and a VM.
-Follow the [Advanced guide with a custom identity provider](https://docs.openzro.io/selfhosted/selfhosted-guide#advanced-guide-with-a-custom-identity-provider) for installations with different IDPs.
-
-**Infrastructure requirements:**
-- A Linux VM with at least **1CPU** and **2GB** of memory.
-- The VM should be publicly accessible on TCP ports **80** and **443** and UDP ports: **3478**, **49152-65535**.
-- **Public domain** name pointing to the VM.
-
-**Software requirements:**
-- Docker installed on the VM with the docker-compose plugin ([Docker installation guide](https://docs.docker.com/engine/install/)) or docker with docker-compose in version 2 or higher.
-- [jq](https://jqlang.github.io/jq/) installed. In most distributions
-  Usually available in the official repositories and can be installed with `sudo apt install jq` or `sudo yum install jq`
-- [curl](https://curl.se/) installed.
-  Usually available in the official repositories and can be installed with `sudo apt install curl` or `sudo yum install curl`
-
-**Steps**
-- Download and run the installation script:
-```bash
-export OPENZRO_DOMAIN=openzro.example.com; curl -fsSL https://github.com/openzro/openzro/releases/latest/download/getting-started-with-zitadel.sh | bash
 ```
-- Once finished, you can manage the resources via `docker-compose`
+┌──────────────┐         ┌─────────────────┐
+│   client     │◄────────│ signal-server   │  WebRTC ICE candidate exchange
+│ (WireGuard)  │         │ (HA-capable)    │
+└──────┬───────┘         └─────────────────┘
+       │
+       ▼
+┌──────────────┐         ┌─────────────────┐         ┌────────────────┐
+│   client     │◄────────│ management      │◄───────►│ Postgres/MySQL │
+│ (WireGuard)  │  gRPC   │ (HA-capable)    │   DB    │ (state of      │
+└──────────────┘  Sync   └────────┬────────┘         │  truth)        │
+                                  │                  └────────────────┘
+                                  │ pub/sub + locks
+                                  ▼
+                          ┌───────────────┐
+                          │ Valkey / NATS │  (only required for HA)
+                          └───────────────┘
+```
 
-### A bit on openZro internals
--  Every machine in the network runs [openZro Agent (or Client)](client/) that manages WireGuard.
--  Every agent connects to [Management Service](management/) that holds network state, manages peer IPs, and distributes network updates to agents (peers).
--  openZro agent uses WebRTC ICE implemented in [pion/ice library](https://github.com/pion/ice) to discover connection candidates when establishing a peer-to-peer connection between machines.
--  Connection candidates are discovered with the help of [STUN](https://en.wikipedia.org/wiki/STUN) servers.
--  Agents negotiate a connection through [Signal Service](signal/) passing p2p encrypted messages with candidates.
--  Sometimes the NAT traversal is unsuccessful due to strict NATs (e.g. mobile carrier-grade NAT) and a p2p connection isn't possible. When this occurs the system falls back to a relay server called [TURN](https://en.wikipedia.org/wiki/Traversal_Using_Relays_around_NAT), and a secure WireGuard tunnel is established via the TURN server. 
- 
-[Coturn](https://github.com/coturn/coturn) is the one that has been successfully used for STUN and TURN in openZro setups.
+### HA modes (pick one — only required for ≥2 instances)
 
-<p float="left" align="middle">
-  <img src="https://docs.openzro.io/docs-static/img/architecture/high-level-dia.png" width="700"/>
-</p>
+| Mode | What you run | When it fits |
+|---|---|---|
+| **None (single-instance)** | management + signal + Postgres/MySQL | Default. Works out of the box. |
+| **Valkey** *(recommended)* | + Valkey 8 (or Redis 5+, or Dragonfly) | Same license family as openZro. |
+| **NATS (external)** | + a NATS 2.7+ broker with JetStream | Already running NATS for other workloads. |
+| **NATS (embedded)** | nothing extra; each openZro instance starts an in-process NATS server | Zero infra outside openZro itself. |
 
-See a complete [architecture overview](https://docs.openzro.io/about-openzro/how-openzro-works#architecture) for details.
+Activate by setting **one** of:
 
-### Community projects
--  [openZro installer script](https://github.com/physk/openzro-installer)
--  [openZro ansible collection by Dominion Solutions](https://galaxy.ansible.com/ui/repo/published/dominion_solutions/openzro/)
+```bash
+OPENZRO_REDIS_URL=valkey://broker:6379/0     # Valkey/Redis/Dragonfly
+OPENZRO_NATS_URL=nats://broker:4222          # external NATS
+OPENZRO_BROKER=embedded                      # embedded NATS
+OPENZRO_CLUSTER_PEERS=nats://node2:6222,nats://node3:6222
+```
 
-**Note**: The `main` branch may be in an *unstable or even broken state* during development.
-For stable versions, see [releases](https://github.com/openzro/openzro/releases).
+The same broker selection drives both signal HA and management HA — one
+piece of stateful infra, two components served. See
+[ADR-0001 §3.4](docs/adr/0001-openzro-foundation.md#34-ha-architecture).
 
-### Support acknowledgement
+## Repository layout
 
-In November 2022, openZro joined the [StartUpSecure program](https://www.forschung-it-sicherheit-kommunikationssysteme.de/foerderung/bekanntmachungen/startup-secure) sponsored by The Federal Ministry of Education and Research of The Federal Republic of Germany. Together with [CISPA Helmholtz Center for Information Security](https://cispa.de/en) openZro brings the security best practices and simplicity to private networking.
+```
+openzro/
+├── CLAUDE.md             Brand & engineering rules (read by Claude Code)
+├── design-tokens.md      Colors / typography reference
+├── brand/                Official brand assets (icon, etc.)
+├── client/               WireGuard agent
+├── management/           Control plane (gRPC + HTTP API)
+├── signal/               WebRTC signaling
+├── relay/                TURN-style relay
+├── cluster/              Distributed coordinator (HA primitives)
+├── dashboard/            Next.js web UI (with its own CLAUDE.md)
+├── deploy/               Local docker-compose for dev/HA testing
+└── docs/
+    ├── FORK.md           Fork-point provenance
+    ├── adr/              Architecture Decision Records
+    └── security/         Security advisories tracking
+```
 
-![CISPA_Logo_BLACK_EN_RZ_RGB (1)](https://user-images.githubusercontent.com/700848/203091324-c6d311a0-22b5-4b05-a288-91cbc6cdcc46.png)
+## Quick start (development)
 
-### Testimonials
-We use open-source technologies like [WireGuard®](https://www.wireguard.com/), [Pion ICE (WebRTC)](https://github.com/pion/ice), [Coturn](https://github.com/coturn/coturn), and [Rosenpass](https://rosenpass.eu). We very much appreciate the work these guys are doing and we'd greatly appreciate if you could support them in any way (e.g., by giving a star or a contribution).
+```bash
+# 1. Bring up Postgres + Valkey + NATS locally
+make dev.deps.up
 
-### Legal
- _WireGuard_ and the _WireGuard_ logo are [registered trademarks](https://www.wireguard.com/trademark-policy/) of Jason A. Donenfeld.
+# 2. Build the Go core
+make build
 
+# 3. Run tests
+make test
+```
+
+Single-instance dev:
+
+```bash
+export OPENZRO_STORE_ENGINE=postgres
+export OPENZRO_STORE_ENGINE_POSTGRES_DSN=postgres://openzro:openzro@localhost:5432/openzro?sslmode=disable
+./management/management management --datadir=/tmp/openzro
+```
+
+HA dev (one of):
+
+```bash
+# Valkey
+export OPENZRO_REDIS_URL=valkey://localhost:6379/0
+
+# external NATS
+export OPENZRO_NATS_URL=nats://localhost:4222
+
+# embedded NATS (no broker container needed)
+export OPENZRO_BROKER=embedded
+export OPENZRO_CLUSTER_PEERS=nats://localhost:6222
+```
+
+`make help` lists every available target.
+
+## Documentation
+
+| Document | What's there |
+|---|---|
+| [docs/adr/0001-openzro-foundation.md](docs/adr/0001-openzro-foundation.md) | Why this fork exists, license posture, HA architecture |
+| [docs/FORK.md](docs/FORK.md) | Exact fork point and license boundary |
+| [docs/security/advisories.md](docs/security/advisories.md) | Triage record of every CVE/GHSA we've evaluated |
+| [CLAUDE.md](CLAUDE.md) | Brand + engineering rules (read by AI assistants) |
+| [dashboard/CLAUDE.md](dashboard/CLAUDE.md) | Frontend-specific engineering rules |
+
+## Contributing
+
+1. **No CLA.** openZro accepts contributions under the inbound-equals-outbound
+   BSD-3 rule. By submitting a PR you agree it will be released as BSD-3.
+2. **No AGPL ingestion ever.** Do not paste, mirror, or translate code from
+   `netbirdio/netbird` post-`v0.53.0` (the AGPLv3 cut). Reimplementation from
+   public CVE/CWE/protocol descriptions is fine and is how we backport security
+   fixes — see the existing examples in [`docs/security/advisories.md`](docs/security/advisories.md).
+3. **TDD is the default.** New code lands with tests written first. See
+   [CLAUDE.md](CLAUDE.md) §Engineering rules.
+
+## Upstream credit
+
+openZro inherits and credits prior work from [`netbirdio/netbird`](https://github.com/netbirdio/netbird)
+through `v0.52.2` (BSD-3-Clause). The upstream `LICENSE` and `AUTHORS`
+files are preserved verbatim under the BSD-3 attribution clause. New
+contributors to openZro itself are added to `AUTHORS` separately.
+
+WireGuard® and the WireGuard logo are
+[registered trademarks](https://www.wireguard.com/trademark-policy/) of
+Jason A. Donenfeld.
+
+## License
+
+[BSD 3-Clause](LICENSE) — forever, in every directory.
