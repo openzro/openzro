@@ -6,7 +6,9 @@ import (
 	b64 "encoding/base64"
 	"fmt"
 	"net"
+	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -34,6 +36,36 @@ import (
 	nbpeer "github.com/openzro/openzro/management/server/peer"
 	"github.com/openzro/openzro/management/server/status"
 )
+
+const (
+	// defaultPeerUpdateFanoutConcurrency caps how many peers in a single
+	// account are processed in parallel when fanning out an update broadcast.
+	// Upstream hardcoded this to 10, which serializes broadcasts in accounts
+	// of any meaningful size — a 1000-peer account with ~50ms per-peer
+	// processing took ~5s to finish a single fan-out, during which any new
+	// event triggered queueing. 64 is a balance: enough parallelism to
+	// keep large fan-outs sub-second on common hardware, while not bursting
+	// 1000+ goroutines on small VMs.
+	defaultPeerUpdateFanoutConcurrency = 64
+	peerUpdateFanoutConcurrencyEnv     = "OPENZRO_PEER_UPDATE_FANOUT_CONCURRENCY"
+)
+
+// peerUpdateFanoutConcurrency is resolved once at package init.
+var peerUpdateFanoutConcurrency = resolvePeerUpdateFanoutConcurrency()
+
+func resolvePeerUpdateFanoutConcurrency() int {
+	v := os.Getenv(peerUpdateFanoutConcurrencyEnv)
+	if v == "" {
+		return defaultPeerUpdateFanoutConcurrency
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n <= 0 {
+		log.Warnf("ignoring invalid %s=%q; using default %d", peerUpdateFanoutConcurrencyEnv, v, defaultPeerUpdateFanoutConcurrency)
+		return defaultPeerUpdateFanoutConcurrency
+	}
+	log.Infof("%s set to %d (overriding default %d)", peerUpdateFanoutConcurrencyEnv, n, defaultPeerUpdateFanoutConcurrency)
+	return n
+}
 
 // GetPeers returns a list of peers under the given account filtering out peers that do not belong to a user if
 // the current user is not an admin.
@@ -1214,7 +1246,7 @@ func (am *DefaultAccountManager) UpdateAccountPeers(ctx context.Context, account
 	}
 
 	var wg sync.WaitGroup
-	semaphore := make(chan struct{}, 10)
+	semaphore := make(chan struct{}, peerUpdateFanoutConcurrency)
 
 	dnsCache := &DNSConfigCache{}
 	dnsDomain := am.GetDNSDomain(account.Settings)
