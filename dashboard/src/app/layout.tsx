@@ -5,6 +5,6 @@ import AppLayout from "@/layouts/AppLayout";
 export const metadata: Metadata = {
   title: `${globalMetaTitle}`,
   description:
-    "Openzro combines a configuration-free peer-to-peer private network and a centralized access control system in a single open-source platform",
+    "openZro combines a configuration-free peer-to-peer private network and a centralized access control system in a single open-source platform.",
 };
 export default AppLayout;
