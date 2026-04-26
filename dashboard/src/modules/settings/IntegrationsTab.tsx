@@ -61,10 +61,11 @@ export default function IntegrationsTab(_: Readonly<Props>) {
 
       <h2 className="mt-2">Integrations</h2>
       <Paragraph>
-        Stream traffic events to your SIEM (Elastic), cold-archive
-        them to an S3-compatible bucket, or POST them to a generic
-        HTTP webhook. Each destination runs independently — a slow
-        SIEM never blocks your archive, and vice-versa.
+        Stream traffic events to your SIEM (Elastic) or cold-archive
+        them to S3-compatible storage (AWS S3, Cloudflare R2,
+        Backblaze B2, Google Cloud Storage via Interoperability mode,
+        MinIO). Each destination runs independently — a slow SIEM
+        never blocks your archive, and vice-versa.
       </Paragraph>
       <HelpText>
         Credentials are encrypted at rest with the management&apos;s
