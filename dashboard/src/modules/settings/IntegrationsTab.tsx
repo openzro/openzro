@@ -2,17 +2,23 @@
 
 import Breadcrumbs from "@components/Breadcrumbs";
 import Button from "@components/Button";
+import Code from "@components/Code";
 import HelpText from "@components/HelpText";
+import InlineLink from "@components/InlineLink";
 import { notify } from "@components/Notification";
 import Paragraph from "@components/Paragraph";
+import Separator from "@components/Separator";
 import * as Tabs from "@radix-ui/react-tabs";
 import useFetchApi, { useApiCall } from "@utils/api";
 import {
   CableIcon,
   CloudIcon,
+  ExternalLinkIcon,
   GlobeIcon,
+  KeyRoundIcon,
   PlusCircleIcon,
   Trash2Icon,
+  UsersIcon,
 } from "lucide-react";
 import React, { useState } from "react";
 import { useSWRConfig } from "swr";
@@ -116,7 +122,145 @@ export default function IntegrationsTab(_: Readonly<Props>) {
         setOpen={setModalOpen}
         existing={editing}
       />
+
+      <div className="my-10">
+        <Separator />
+      </div>
+
+      <SCIMSetupSection />
     </Tabs.Content>
+  );
+}
+
+// SCIMSetupSection points operators at the static configuration they
+// need to plug into Okta / Entra / JumpCloud. The SCIM protocol
+// itself is fully server-side (no UI mutations); this section's job
+// is just discoverability and copy-paste convenience.
+function SCIMSetupSection() {
+  const baseURL =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/scim/v2`
+      : "https://your-management.example.com/scim/v2";
+
+  return (
+    <div>
+      <h2 className="flex items-center gap-2">
+        <UsersIcon size={18} className="text-violet-300" />
+        SCIM 2.0 Provisioning
+      </h2>
+      <Paragraph>
+        Connect your enterprise IdP (Okta, Microsoft Entra, JumpCloud,
+        Authentik, …) to auto-provision Users and Groups into openZro.
+        Membership in a SCIM group becomes the user&apos;s AutoGroups
+        list — every peer the user registers automatically inherits
+        the group&apos;s policies.
+      </Paragraph>
+      <HelpText>
+        SCIM-provisioned users carry an{" "}
+        <code className="font-mono text-xs">issued = integration</code>{" "}
+        marker. Edits made through the dashboard to those users will
+        be overwritten on the next sync from the IdP — that&apos;s
+        the IdP-as-source-of-truth contract, intentional.
+      </HelpText>
+
+      <div className="mt-6 space-y-4">
+        <div>
+          <label className="text-xs text-nb-gray-300 uppercase tracking-wide">
+            Tenant URL
+          </label>
+          <Code message="Copied!">{baseURL}</Code>
+        </div>
+
+        <div>
+          <label className="text-xs text-nb-gray-300 uppercase tracking-wide">
+            Authentication
+          </label>
+          <Paragraph className="text-sm">
+            Bearer token — issue a Personal Access Token to a
+            service user with the <b>admin</b> or <b>owner</b> role and
+            paste the token into your IdP&apos;s SCIM connector.
+          </Paragraph>
+          <InlineLink href="/team/service-users">
+            <KeyRoundIcon size={12} /> Manage service users & tokens
+          </InlineLink>
+        </div>
+
+        <details className="mt-4 rounded-md border border-nb-gray-800 bg-nb-gray-940 p-4">
+          <summary className="cursor-pointer text-sm">
+            Okta — Provisioning configuration
+          </summary>
+          <ol className="mt-3 list-decimal pl-5 text-sm text-nb-gray-200 space-y-1">
+            <li>
+              In the Okta admin console, go to <b>Applications</b> →
+              your openZro app → <b>Provisioning</b> → <b>Integration</b>.
+            </li>
+            <li>
+              <b>Enable API integration</b>. Set <b>Base URL</b> to{" "}
+              <code className="font-mono text-xs">{baseURL}</code>.
+            </li>
+            <li>
+              Set <b>API Token</b> to the PAT you generated above
+              (format: <code className="font-mono text-xs">nbp_...</code>).
+            </li>
+            <li>
+              Click <b>Test API Credentials</b>. Save.
+            </li>
+            <li>
+              Under <b>To App</b>, enable <i>Create Users</i>,{" "}
+              <i>Update User Attributes</i>, and <i>Deactivate Users</i>.
+            </li>
+          </ol>
+        </details>
+
+        <details className="rounded-md border border-nb-gray-800 bg-nb-gray-940 p-4">
+          <summary className="cursor-pointer text-sm">
+            Microsoft Entra (Azure AD) — Provisioning configuration
+          </summary>
+          <ol className="mt-3 list-decimal pl-5 text-sm text-nb-gray-200 space-y-1">
+            <li>
+              In Entra admin center, <b>Enterprise applications</b> →
+              your openZro app → <b>Provisioning</b>.
+            </li>
+            <li>
+              Set <b>Provisioning Mode</b> to <b>Automatic</b>.
+            </li>
+            <li>
+              <b>Tenant URL</b>:{" "}
+              <code className="font-mono text-xs">{baseURL}</code>.
+            </li>
+            <li>
+              <b>Secret Token</b>: your PAT (
+              <code className="font-mono text-xs">nbp_...</code>).
+            </li>
+            <li>
+              Click <b>Test Connection</b>. Save. Set <b>Provisioning Status</b> to{" "}
+              <b>On</b>.
+            </li>
+          </ol>
+        </details>
+
+        <details className="rounded-md border border-nb-gray-800 bg-nb-gray-940 p-4">
+          <summary className="cursor-pointer text-sm">
+            JumpCloud, Authentik, others
+          </summary>
+          <Paragraph className="mt-3 text-sm">
+            Any SCIM 2.0-compliant IdP works. Use{" "}
+            <code className="font-mono text-xs">{baseURL}</code> as
+            the SCIM endpoint and the PAT as the bearer token. Our
+            ServiceProviderConfig advertises the supported features
+            (PATCH, userName-eq filtering, no bulk, no sort);
+            well-behaved IdPs read it on first connect and adapt.
+          </Paragraph>
+          <InlineLink
+            href="/scim/v2/ServiceProviderConfig"
+            target="_blank"
+            className="mt-2"
+          >
+            View ServiceProviderConfig <ExternalLinkIcon size={12} />
+          </InlineLink>
+        </details>
+      </div>
+    </div>
   );
 }
 
