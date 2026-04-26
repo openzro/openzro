@@ -208,7 +208,9 @@ export default function FlowExportModal({
               className="w-full rounded-md border border-nb-gray-700 bg-nb-gray-940 px-3 py-2 text-sm"
             >
               <option value="elastic">Elasticsearch (SIEM)</option>
-              <option value="s3">S3-compatible bucket (cold archive)</option>
+              <option value="s3">
+                S3 / R2 / B2 / GCS / MinIO (cold archive)
+              </option>
               <option value="http">HTTP webhook</option>
             </select>
           </div>
@@ -350,6 +352,36 @@ function ElasticForm({
   );
 }
 
+// Provider presets fill the Endpoint (and sometimes Region) for the
+// common S3-compatible services. The bucket-level settings still come
+// from the user. AWS S3 is the default — it leaves Endpoint empty so
+// the SDK uses its built-in routing.
+//
+// GCS works via Cloud Storage's "Interoperability" mode: enable it in
+// the GCP Console, mint an HMAC key (access_key + secret_key), point
+// the Endpoint here. Native service-account JSON auth would need the
+// google-cloud-go SDK; for now interop covers it.
+const s3Presets = [
+  { id: "aws", label: "AWS S3", endpoint: "" },
+  {
+    id: "r2",
+    label: "Cloudflare R2",
+    endpoint: "https://<account>.r2.cloudflarestorage.com",
+  },
+  {
+    id: "b2",
+    label: "Backblaze B2",
+    endpoint: "https://s3.<region>.backblazeb2.com",
+  },
+  {
+    id: "gcs",
+    label: "Google Cloud Storage (Interop)",
+    endpoint: "https://storage.googleapis.com",
+  },
+  { id: "minio", label: "MinIO / self-hosted", endpoint: "https://minio.example.com" },
+  { id: "custom", label: "Custom", endpoint: "" },
+];
+
 function S3Form({
   bucket,
   setBucket,
@@ -379,8 +411,34 @@ function S3Form({
   setPrefix: (v: string) => void;
   isEdit: boolean;
 }) {
+  const onPresetChange = (id: string) => {
+    const preset = s3Presets.find((p) => p.id === id);
+    if (!preset) return;
+    setEndpoint(preset.endpoint);
+    if (id === "gcs" && !region) setRegion("auto");
+    if (id === "r2" && !region) setRegion("auto");
+  };
+
   return (
     <>
+      <div>
+        <Label>Provider</Label>
+        <select
+          onChange={(e) => onPresetChange(e.target.value)}
+          className="w-full rounded-md border border-nb-gray-700 bg-nb-gray-940 px-3 py-2 text-sm"
+          defaultValue="aws"
+        >
+          {s3Presets.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+        <Paragraph className="text-xs text-nb-gray-400 mt-1">
+          GCS works via Cloud Storage&apos;s Interoperability mode —
+          enable it in the GCP console and mint an HMAC key.
+        </Paragraph>
+      </div>
       <div>
         <Label>Bucket</Label>
         <Input
@@ -399,17 +457,19 @@ function S3Form({
           />
         </div>
         <div>
-          <Label>Endpoint (optional)</Label>
+          <Label>Endpoint (optional for AWS)</Label>
           <Input
             value={endpoint}
             onChange={(e) => setEndpoint(e.target.value)}
-            placeholder="https://r2.account.cloudflarestorage.com"
+            placeholder="https://storage.googleapis.com"
           />
         </div>
       </div>
       <Paragraph className="text-xs text-nb-gray-300">
-        Provide static credentials, or leave blank to use the AWS SDK
-        default credential chain (env vars, profile, IAM role).
+        Provide HMAC-style credentials, or leave blank for AWS to use
+        the SDK default credential chain (env vars, profile, IAM role).
+        For GCS Interop and Cloudflare R2, the access/secret keys are
+        required.
         {isEdit && " Leave blank to keep the existing values."}
       </Paragraph>
       <div className="grid grid-cols-2 gap-3">
