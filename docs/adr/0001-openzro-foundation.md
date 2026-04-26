@@ -186,6 +186,42 @@ First targets (more will be found by audit):
 - [`management/server/updatechannel.go`](../../management/server/updatechannel.go): `channelBufferSize = 100` → make configurable via `OPENZRO_PEER_UPDATE_CHANNEL_BUFFER_SIZE`, raise default to `10000`, and convert silent `default:`-drop to a metric-tracked, log-loud drop.
 - Audit for: account-level peer count caps, group size caps, per-account user caps, hardcoded rate limits without env override, hardcoded timeouts that masquerade as security but are really pricing levers.
 
+#### 3.7 Closing the GPL-stub security gaps
+
+[`management/integrations/integrations/`](../../management/integrations/integrations/) is the
+clean-room replacement for the upstream's GPL-licensed `management-integrations`
+module. Until this ADR rev, several files in that package were no-op stubs —
+notably [`validator.go`](../../management/integrations/integrations/validator.go),
+which silently approved every peer regardless of the
+`ExtraSettings.PeerApprovalEnabled` toggle. The dashboard exposed the toggle as
+if it were enforcing a policy; nothing actually was.
+
+This is the worst class of security defect — a UI suggesting protection that
+the backend does not provide. The stub is now a real implementation of the
+peer-approval gate (pending state, exempt-group bypass via
+`IntegratedValidatorGroups`, admin approve/revoke through
+`UpdatePeer`, activity log entries via `PeerApproved`/`PeerApprovalRevoked`).
+
+Sources consulted (per §3.3):
+- The pre-existing BSD-3 surface in this repo: `PeerStatus.RequiresApproval`,
+  `ExtraSettings.PeerApprovalEnabled`, `IntegratedValidatorGroups`, the
+  `getValidatedPeerWithMap` short-circuit in `peer.go`, and the
+  `additionalOrigins`/`approval_required` field already in `types.gen.go`.
+- Public NetBird documentation describing the visible behaviour of the
+  pending → approved transition.
+- **No upstream GPL `management-integrations` code, diff, or comment was
+  consulted.** The structural decisions (single boolean `RequiresApproval`
+  rather than a tri-state enum, exempt-group resolution by ID equality,
+  auto-clear on settings ungate) were made independently to minimize migration
+  surface.
+
+Audit policy for the rest of the package: any subsequent file that lands in
+`management/integrations/integrations/` must follow the same clean-room
+discipline. Stub files that look harmless (`PreparePeer`, `PeerDeleted`,
+`ValidateExtraSettings`) are part of a security-relevant interface and need to
+be reviewed for the "does the dashboard imply a guarantee that the backend
+fails to provide" property before they are considered safe.
+
 ## Consequences
 
 ### Positive
