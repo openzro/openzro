@@ -32,3 +32,10 @@ infrastructure_files/setup-*.env
 vendor/
 /openzro
 
+# Local dev IdP — generated PAT and provisioning marker
+deploy/dev-idp/machinekey/*
+!deploy/dev-idp/machinekey/.gitkeep
+
+# Local dev management — generated config (templated from .tmpl)
+deploy/dev-mgmt/management.json
+
