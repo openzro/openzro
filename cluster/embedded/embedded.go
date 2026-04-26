@@ -63,13 +63,22 @@ type Config struct {
 	// development / standalone deploys.
 	ClusterPeers []string
 
-	// JetStream toggles JetStream support. Off by default — the signal
-	// dispatcher and the planned management coordinator do not need
-	// persistence; basic NATS pub/sub is enough.
-	JetStream bool
+	// JetStream toggles JetStream support. **Defaults to true** because
+	// the management coordinator (cluster/nats) needs JetStream KV for
+	// distributed locks. Set to false explicitly only for deployments
+	// using cluster/redis as their coordinator and the embedded NATS
+	// purely for signal pub/sub (which works on core NATS alone).
+	//
+	// Use *bool semantics via JetStreamDisabled if you need to set false
+	// — the zero-value of a bool field can't distinguish "not set" from
+	// "false". This struct chooses to flip the polarity for the same
+	// reason (see DisableJetStream below).
+	DisableJetStream bool
 
-	// JetStreamStoreDir is where JetStream persists data. Required only
-	// when JetStream=true.
+	// JetStreamStoreDir is where JetStream persists data. If empty,
+	// JetStream uses an in-memory store (no persistence across restart).
+	// Recommended for production: a writable directory under the
+	// openzro data dir.
 	JetStreamStoreDir string
 
 	// StartupTimeout caps how long Start waits for the server to become
@@ -121,6 +130,8 @@ func Start(cfg Config) (*Server, error) {
 		routes = append(routes, u)
 	}
 
+	jsEnabled := !cfg.DisableJetStream
+
 	opts := &natsserver.Options{
 		Host: cfg.ClientHost,
 		Port: cfg.ClientPort,
@@ -130,7 +141,7 @@ func Start(cfg Config) (*Server, error) {
 			Port: cfg.ClusterPort,
 		},
 		Routes:    routes,
-		JetStream: cfg.JetStream,
+		JetStream: jsEnabled,
 		StoreDir:  cfg.JetStreamStoreDir,
 		// Logs go through the openzro logger via SetLogger below.
 		NoLog: true,
@@ -157,7 +168,7 @@ func Start(cfg Config) (*Server, error) {
 	}
 
 	log.Infof("embedded nats: running; client=%s cluster=%s peers=%v jetstream=%v",
-		srv.clientURL, srv.clusterURL, cfg.ClusterPeers, cfg.JetStream)
+		srv.clientURL, srv.clusterURL, cfg.ClusterPeers, jsEnabled)
 	return srv, nil
 }
 
