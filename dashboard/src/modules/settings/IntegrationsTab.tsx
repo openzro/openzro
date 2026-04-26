@@ -26,8 +26,13 @@ import React, { useState } from "react";
 import { useSWRConfig } from "swr";
 import SettingsIcon from "@/assets/icons/SettingsIcon";
 import { Account } from "@/interfaces/Account";
+import {
+  ActivityExporter,
+  ActivityExporterType,
+} from "@/interfaces/ActivityExporter";
 import { FlowExport, FlowExportType } from "@/interfaces/FlowExport";
 import { MDMProvider, MDMProviderType } from "@/interfaces/MDMProvider";
+import ActivityExporterModal from "@/modules/activity-exporters/ActivityExporterModal";
 import FlowExportModal from "@/modules/flow-exports/FlowExportModal";
 import MDMProviderModal from "@/modules/mdm-providers/MDMProviderModal";
 
@@ -80,6 +85,9 @@ export default function IntegrationsTab(_: Readonly<Props>) {
               <SegmentedTabs.Trigger value="mdm">
                 <ShieldCheckIcon size={14} /> MDM / EDR
               </SegmentedTabs.Trigger>
+              <SegmentedTabs.Trigger value="activity">
+                <CableIcon size={14} /> Activity Streamer
+              </SegmentedTabs.Trigger>
               <SegmentedTabs.Trigger value="scim">
                 <UsersIcon size={14} /> SCIM Provisioning
               </SegmentedTabs.Trigger>
@@ -90,6 +98,9 @@ export default function IntegrationsTab(_: Readonly<Props>) {
             </SegmentedTabs.Content>
             <SegmentedTabs.Content value="mdm">
               <MDMProvidersSection />
+            </SegmentedTabs.Content>
+            <SegmentedTabs.Content value="activity">
+              <ActivityExportersSection />
             </SegmentedTabs.Content>
             <SegmentedTabs.Content value="scim">
               <SCIMSetupSection />
@@ -374,6 +385,148 @@ function mdmEndpointLabel(row: MDMProvider): string {
   if (row.type === "huntress") {
     return "api.huntress.io";
   }
+  return "";
+}
+
+// ----- Activity Streamer section -------------------------------------
+
+function ActivityExportersSection() {
+  const { data, isLoading } =
+    useFetchApi<ActivityExporter[]>("/admin/activity-exporters");
+
+  const [editing, setEditing] = useState<ActivityExporter | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  return (
+    <div>
+      <Paragraph>
+        Stream the audit log to your SIEM in real time. Every Activity
+        event (peer login, posture denial, settings change, admission
+        revocation, …) fans out to the destinations listed here in
+        addition to whatever the operator configured via{" "}
+        <code className={"font-mono text-xs"}>
+          OPENZRO_ACTIVITY_EXPORT_*
+        </code>{" "}
+        env vars at boot.
+      </Paragraph>
+      <HelpText>
+        Credentials are encrypted at rest. Custom payload templates let
+        you reshape events to match the SIEM&apos;s expected schema —
+        bring your own JSON layout without standing up Vector or Fluent
+        Bit in the middle.
+      </HelpText>
+
+      <div className="mt-6 flex justify-end">
+        <Button
+          variant="primary"
+          onClick={() => {
+            setEditing(null);
+            setModalOpen(true);
+          }}
+        >
+          <PlusCircleIcon size={16} /> Add exporter
+        </Button>
+      </div>
+
+      <div className="mt-4">
+        {isLoading && (
+          <Paragraph className="text-nb-gray-300">Loading…</Paragraph>
+        )}
+        {!isLoading && (!data || data.length === 0) && (
+          <EmptyState message="No activity exporters configured. Click Add exporter to start streaming the audit log to Datadog, Elastic, or any HTTP receiver." />
+        )}
+        {data && data.length > 0 && (
+          <table className="w-full text-sm">
+            <TableHead
+              cols={["Type", "Name", "Endpoint", "Template", "Status", ""]}
+            />
+            <tbody>
+              {data.map((row) => (
+                <ActivityExporterRow
+                  key={row.id}
+                  row={row}
+                  onEdit={() => {
+                    setEditing(row);
+                    setModalOpen(true);
+                  }}
+                />
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <ActivityExporterModal
+        open={modalOpen}
+        setOpen={setModalOpen}
+        existing={editing}
+      />
+    </div>
+  );
+}
+
+function ActivityExporterRow({
+  row,
+  onEdit,
+}: {
+  row: ActivityExporter;
+  onEdit: () => void;
+}) {
+  const { mutate } = useSWRConfig();
+  const api = useApiCall(`/admin/activity-exporters/${row.id}`);
+
+  const onDelete = async () => {
+    if (!confirm(`Delete "${row.name}"? This cannot be undone.`)) return;
+    try {
+      await api.del();
+      await mutate("/admin/activity-exporters");
+      notify({ title: "Deleted", description: row.name });
+    } catch {}
+  };
+
+  return (
+    <tr className="border-t border-nb-gray-900">
+      <td className="py-3">
+        <ActivityExporterTypeBadge type={row.type} />
+      </td>
+      <td className="py-3">{row.name}</td>
+      <td className="py-3 font-mono text-xs text-nb-gray-300">
+        {activityEndpointLabel(row)}
+      </td>
+      <td className="py-3 text-xs text-nb-gray-300">
+        {row.template ? "custom" : "default"}
+      </td>
+      <td className="py-3">
+        <EnabledStatus enabled={row.enabled} />
+      </td>
+      <td className="py-3 text-right">
+        <RowActions onEdit={onEdit} onDelete={onDelete} />
+      </td>
+    </tr>
+  );
+}
+
+function ActivityExporterTypeBadge({ type }: { type: ActivityExporterType }) {
+  const map: Record<ActivityExporterType, { label: string }> = {
+    http: { label: "HTTP" },
+    datadog: { label: "Datadog" },
+    elastic: { label: "Elastic" },
+  };
+  return (
+    <span className="inline-flex items-center gap-1 rounded bg-nb-gray-900 px-2 py-1 text-xs text-violet-300">
+      <CableIcon size={12} /> {map[type].label}
+    </span>
+  );
+}
+
+function activityEndpointLabel(row: ActivityExporter): string {
+  const cfg = (row.config ?? {}) as Record<string, unknown>;
+  if (row.type === "datadog") {
+    if (cfg.url) return String(cfg.url);
+    if (cfg.site) return `site:${cfg.site}`;
+    return "datadoghq.com";
+  }
+  if (typeof cfg.url === "string") return cfg.url;
   return "";
 }
 

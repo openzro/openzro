@@ -45,6 +45,7 @@ import (
 	flowProto "github.com/openzro/openzro/flow/proto"
 	flowSinks "github.com/openzro/openzro/flow/sinks"
 	flowFactory "github.com/openzro/openzro/flow/store/factory"
+	activityExporters "github.com/openzro/openzro/management/server/activity_exporters"
 	flowExports "github.com/openzro/openzro/management/server/flow_exports"
 	"github.com/openzro/openzro/management/server/mdm"
 	"github.com/openzro/openzro/management/server/posture"
@@ -321,6 +322,8 @@ var (
 			var flowExportsStore *flowExports.Store
 			var mdmStore *mdm.Store
 			var mdmManager *mdm.Manager
+			var activityExportersStore *activityExporters.Store
+			var activityExportersManager *activityExporters.Manager
 			if sqlStore, ok := store.(*mgmtStore.SqlStore); ok {
 				flowExportsStore, err = flowExports.NewStore(sqlStore.GetGormDB(), config.DataStoreEncryptionKey)
 				if err != nil {
@@ -334,6 +337,15 @@ var (
 				if err != nil {
 					return fmt.Errorf("mdm manager: %w", err)
 				}
+				activityExportersStore, err = activityExporters.NewStore(sqlStore.GetGormDB(), config.DataStoreEncryptionKey)
+				if err != nil {
+					return fmt.Errorf("activity_exporters store: %w", err)
+				}
+				activityExportersManager, err = activityExporters.NewManager(ctx, activityExportersStore)
+				if err != nil {
+					return fmt.Errorf("activity_exporters manager: %w", err)
+				}
+				defer activityExportersManager.Stop()
 				// Wire the posture check into the live manager. Set
 				// the package-level resolver once so every Account's
 				// posture eval can call the manager without threading
@@ -386,7 +398,14 @@ var (
 				}
 			}
 
-			httpAPIHandler, err := nbhttp.NewAPIHandler(ctx, accountManager, networksManager, resourcesManager, routersManager, groupsManager, geo, authManager, appMetrics, integratedPeerValidator, proxyController, permissionsManager, peersManager, settingsManager, flowStore, flowExportsStore, flowExportsManager, mdmStore, mdmManager)
+			// Wire the per-account activity streamer into StoreEvent
+			// fan-out before the HTTP API comes online, so the very
+			// first events the API can produce already flow through.
+			if activityExportersManager != nil {
+				accountManager.SetActivityExporters(activityExportersManager)
+			}
+
+			httpAPIHandler, err := nbhttp.NewAPIHandler(ctx, accountManager, networksManager, resourcesManager, routersManager, groupsManager, geo, authManager, appMetrics, integratedPeerValidator, proxyController, permissionsManager, peersManager, settingsManager, flowStore, flowExportsStore, flowExportsManager, mdmStore, mdmManager, activityExportersStore, activityExportersManager)
 
 			if err != nil {
 				return fmt.Errorf("failed creating HTTP API handler: %v", err)
