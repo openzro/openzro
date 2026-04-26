@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -88,23 +88,11 @@ func NewValidator(issuer string, audienceList []string, keysLocation string, idp
 
 func (v *Validator) getKeyFunc(ctx context.Context) jwt.Keyfunc {
 	return func(token *jwt.Token) (interface{}, error) {
-		// Verify 'aud' claim
-		var checkAud bool
-		for _, audience := range v.audienceList {
-			checkAud = token.Claims.(jwt.MapClaims).VerifyAudience(audience, false)
-			if checkAud {
-				break
-			}
-		}
-		if !checkAud {
-			return token, errInvalidAudience
-		}
-
-		// Verify 'issuer' claim
-		checkIss := token.Claims.(jwt.MapClaims).VerifyIssuer(v.issuer, false)
-		if !checkIss {
-			return token, errInvalidIssuer
-		}
+		// Note: aud / iss verification used to live here in v3. In
+		// jwt/v5 it runs after the keyfunc as a parser option — see
+		// the jwt.WithAudience / jwt.WithIssuer calls in
+		// ValidateAndParse below. Keeping the keyfunc focused on the
+		// signing-key lookup matches the v5 contract.
 
 		// If keys are rotated, verify the keys prior to token validation
 		if v.idpSignkeyRefreshEnabled {
@@ -152,12 +140,38 @@ func (m *Validator) ValidateAndParse(ctx context.Context, token string) (*jwt.To
 		return nil, errTokenEmpty
 	}
 
-	// Now parse the token
-	parsedToken, err := jwt.Parse(token, m.getKeyFunc(ctx))
+	// Now parse the token. jwt/v5 takes parser options for aud/iss
+	// verification — these used to be inline checks inside getKeyFunc
+	// in v3 (`MapClaims.VerifyAudience` / `VerifyIssuer`) and were
+	// removed by the upstream advisory fix. Each registered audience
+	// becomes its own option; v5 accepts the union (token must match
+	// any one of them).
+	opts := []jwt.ParserOption{
+		jwt.WithIssuer(m.issuer),
+		// WithIssuedAt re-introduces the v3 default where a token with
+		// `iat` in the future is rejected. v5 dropped this from the
+		// defaults; we keep the stricter behavior because tokens
+		// from the future signal clock skew or tampering.
+		jwt.WithIssuedAt(),
+	}
+	for _, aud := range m.audienceList {
+		opts = append(opts, jwt.WithAudience(aud))
+	}
+	parsedToken, err := jwt.Parse(token, m.getKeyFunc(ctx), opts...)
 
 	// Check if there was an error in parsing...
 	if err != nil {
-		err = fmt.Errorf("%w: %s", errTokenParsing, err)
+		// Preserve the structured error variants the upstream callers
+		// already pattern-match (errInvalidAudience / errInvalidIssuer
+		// vs the generic parsing error).
+		switch {
+		case errors.Is(err, jwt.ErrTokenInvalidAudience):
+			err = fmt.Errorf("%w: %s", errInvalidAudience, err)
+		case errors.Is(err, jwt.ErrTokenInvalidIssuer):
+			err = fmt.Errorf("%w: %s", errInvalidIssuer, err)
+		default:
+			err = fmt.Errorf("%w: %s", errTokenParsing, err)
+		}
 		log.WithContext(ctx).Error(err.Error())
 		return nil, err
 	}

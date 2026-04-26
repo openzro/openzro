@@ -15,7 +15,7 @@ import (
 
 	"github.com/openzro/openzro/management/server/telemetry"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 )
 

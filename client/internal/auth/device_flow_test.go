@@ -3,7 +3,7 @@ package auth
 import (
 	"context"
 	"fmt"
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/openzro/openzro/client/internal"
 	"github.com/stretchr/testify/require"
 	"io"
