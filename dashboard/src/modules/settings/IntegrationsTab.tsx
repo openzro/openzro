@@ -10,6 +10,7 @@ import Paragraph from "@components/Paragraph";
 import Separator from "@components/Separator";
 import * as Tabs from "@radix-ui/react-tabs";
 import useFetchApi, { useApiCall } from "@utils/api";
+import { API_ORIGIN } from "@utils/openzro";
 import {
   CableIcon,
   CloudIcon,
@@ -137,10 +138,12 @@ export default function IntegrationsTab(_: Readonly<Props>) {
 // itself is fully server-side (no UI mutations); this section's job
 // is just discoverability and copy-paste convenience.
 function SCIMSetupSection() {
-  const baseURL =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/scim/v2`
-      : "https://your-management.example.com/scim/v2";
+  // SCIM lives on the management server, NOT on the dashboard's
+  // origin. Use apiOrigin (the management's HTTP base) so the URL
+  // we tell IdPs to call actually points at the right host.
+  const baseURL = API_ORIGIN
+    ? `${API_ORIGIN.replace(/\/+$/, "")}/scim/v2`
+    : "https://your-management.example.com/scim/v2";
 
   return (
     <div>
@@ -252,7 +255,7 @@ function SCIMSetupSection() {
             well-behaved IdPs read it on first connect and adapt.
           </Paragraph>
           <InlineLink
-            href="/scim/v2/ServiceProviderConfig"
+            href={`${baseURL}/ServiceProviderConfig`}
             target="_blank"
             className="mt-2"
           >

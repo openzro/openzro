@@ -4,6 +4,7 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/openzro/openzro/management/server/account"
+	"github.com/openzro/openzro/management/server/http/middleware/bypass"
 )
 
 // Handler hosts the SCIM 2.0 endpoints. It stays tiny on purpose:
@@ -31,6 +32,16 @@ type Handler struct {
 //	DELETE /Users/{id}              soft delete (active=false)
 func AddEndpoints(accountManager account.Manager, router *mux.Router) {
 	h := &Handler{accountManager: accountManager}
+
+	// SCIM RFC 7644 §4 explicitly allows the discovery endpoints
+	// (ServiceProviderConfig / Schemas / ResourceTypes) to be served
+	// without authentication. Operators benefit: the dashboard's
+	// "View ServiceProviderConfig" link works in a browser without
+	// pasting a PAT, IdPs can sniff capability before issuing creds.
+	for _, p := range []string{"/scim/v2/ServiceProviderConfig", "/scim/v2/Schemas", "/scim/v2/ResourceTypes"} {
+		_ = bypass.AddBypassPath(p)
+	}
+
 	router.HandleFunc("/ServiceProviderConfig", h.handleServiceProviderConfig).Methods("GET", "OPTIONS")
 	router.HandleFunc("/Schemas", h.handleSchemas).Methods("GET", "OPTIONS")
 	router.HandleFunc("/ResourceTypes", h.handleResourceTypes).Methods("GET", "OPTIONS")
