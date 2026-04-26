@@ -45,6 +45,7 @@ import (
 	flowProto "github.com/openzro/openzro/flow/proto"
 	flowSinks "github.com/openzro/openzro/flow/sinks"
 	flowFactory "github.com/openzro/openzro/flow/store/factory"
+	flowExports "github.com/openzro/openzro/management/server/flow_exports"
 	mgmtProto "github.com/openzro/openzro/management/proto"
 	"github.com/openzro/openzro/management/server"
 	"github.com/openzro/openzro/management/server/auth"
@@ -311,7 +312,57 @@ var (
 				defer func() { _ = flowBuilt.Close() }()
 			}
 
-			httpAPIHandler, err := nbhttp.NewAPIHandler(ctx, accountManager, networksManager, resourcesManager, routersManager, groupsManager, geo, authManager, appMetrics, integratedPeerValidator, proxyController, permissionsManager, peersManager, settingsManager, flowStore)
+			// flow_exports: runtime-configurable destinations. The store
+			// shares the management's primary DB so admin-created rows
+			// land alongside accounts/peers/etc. Reads & writes go
+			// through GORM with credentials encrypted at rest.
+			var flowExportsStore *flowExports.Store
+			if sqlStore, ok := store.(*mgmtStore.SqlStore); ok {
+				flowExportsStore, err = flowExports.NewStore(sqlStore.GetGormDB(), config.DataStoreEncryptionKey)
+				if err != nil {
+					return fmt.Errorf("flow_exports store: %w", err)
+				}
+			}
+
+			// Build FlowService + flow_exports.Manager BEFORE
+			// NewAPIHandler so the admin endpoints can be registered
+			// with the live manager (no nil manager + no late
+			// binding).
+			peerResolver := func(ctx context.Context, pubKeyBytes []byte) (string, string, error) {
+				key := base64.StdEncoding.EncodeToString(pubKeyBytes)
+				peer, err := store.GetPeerByPeerPubKey(ctx, mgmtStore.LockingStrengthShare, key)
+				if err != nil {
+					return "", "", err
+				}
+				return peer.ID, peer.AccountID, nil
+			}
+
+			extraSinks, err := flowSinks.NewFromEnv(ctx)
+			if err != nil {
+				return fmt.Errorf("flow sinks: %w", err)
+			}
+			defer func() {
+				for _, s := range extraSinks {
+					_ = s.Close()
+				}
+			}()
+
+			initial := []flowstore.Sink{}
+			if flowStore != nil {
+				initial = append(initial, flowStore)
+			}
+			initial = append(initial, extraSinks...)
+			flowSvc := server.NewFlowService(initial, peerResolver)
+
+			var flowExportsManager *flowExports.Manager
+			if flowExportsStore != nil {
+				flowExportsManager, err = flowExports.NewManager(ctx, flowExportsStore, flowSvc, flowStore, extraSinks)
+				if err != nil {
+					return fmt.Errorf("flow_exports manager: %w", err)
+				}
+			}
+
+			httpAPIHandler, err := nbhttp.NewAPIHandler(ctx, accountManager, networksManager, resourcesManager, routersManager, groupsManager, geo, authManager, appMetrics, integratedPeerValidator, proxyController, permissionsManager, peersManager, settingsManager, flowStore, flowExportsStore, flowExportsManager)
 
 			if err != nil {
 				return fmt.Errorf("failed creating HTTP API handler: %v", err)
@@ -326,38 +377,7 @@ var (
 				return fmt.Errorf("failed creating gRPC API handler: %v", err)
 			}
 			mgmtProto.RegisterManagementServiceServer(gRPCAPIHandler, srv)
-
-			// FlowService streams flow events from peers — resolves the
-			// peer's pubkey to (peer_id, account_id) via the management
-			// store, then hands off to the flow.Store from above.
-			peerResolver := func(ctx context.Context, pubKeyBytes []byte) (string, string, error) {
-				key := base64.StdEncoding.EncodeToString(pubKeyBytes)
-				peer, err := store.GetPeerByPeerPubKey(ctx, mgmtStore.LockingStrengthShare, key)
-				if err != nil {
-					return "", "", err
-				}
-				return peer.ID, peer.AccountID, nil
-			}
-			// Aggregate destinations: hot store (queryable from UI) +
-			// any streaming sinks the operator configured (Elastic
-			// today, future Datadog/etc.). Each sink is independent —
-			// a slow one cannot back-pressure peers or block other
-			// sinks.
-			sinks := []flowstore.Sink{}
-			if flowStore != nil {
-				sinks = append(sinks, flowStore)
-			}
-			extraSinks, err := flowSinks.NewFromEnv(ctx)
-			if err != nil {
-				return fmt.Errorf("flow sinks: %w", err)
-			}
-			sinks = append(sinks, extraSinks...)
-			defer func() {
-				for _, s := range extraSinks {
-					_ = s.Close()
-				}
-			}()
-			flowProto.RegisterFlowServiceServer(gRPCAPIHandler, server.NewFlowService(sinks, peerResolver))
+			flowProto.RegisterFlowServiceServer(gRPCAPIHandler, flowSvc)
 
 			installationID, err := getInstallationID(ctx, store)
 			if err != nil {

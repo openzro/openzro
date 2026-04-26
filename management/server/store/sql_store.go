@@ -1136,6 +1136,15 @@ func (s *SqlStore) GetStoreEngine() types.Engine {
 	return s.storeEngine
 }
 
+// GetGormDB returns the underlying *gorm.DB. Reserved for in-process
+// callers (e.g. flow_exports) that need to persist their own tables
+// inside the same connection. External callers must stick to the
+// Store interface — sharing the connection matters on SQLite where
+// multiple gorm.DB instances over the same file deadlock.
+func (s *SqlStore) GetGormDB() *gorm.DB {
+	return s.db
+}
+
 // NewSqliteStore creates a new SQLite store.
 func NewSqliteStore(ctx context.Context, dataDir string, metrics telemetry.AppMetrics, skipMigration bool) (*SqlStore, error) {
 	storeStr := fmt.Sprintf("%s?cache=shared", storeSqliteFileName)
