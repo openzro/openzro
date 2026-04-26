@@ -175,6 +175,20 @@ const (
 	AccountLazyConnectionEnabled  Activity = 85
 	AccountLazyConnectionDisabled Activity = 86
 
+	// PeerAdmissionDenied records that a peer's Login/Sync was refused
+	// because the configured AdmissionPostureChecks rejected it. The
+	// audit trail required by Bacen 4.893 lives off this code.
+	PeerAdmissionDenied Activity = 87
+
+	// AdmissionEnforcementEnabled / AdmissionEnforcementDisabled record
+	// flips of the account-wide admission gate.
+	AdmissionEnforcementEnabled  Activity = 88
+	AdmissionEnforcementDisabled Activity = 89
+
+	// AdmissionPostureChecksUpdated records changes to the list of
+	// posture check IDs that act as the admission gate.
+	AdmissionPostureChecksUpdated Activity = 90
+
 	AccountDeleted Activity = 99999
 )
 
@@ -277,6 +291,11 @@ var activityMap = map[Activity]Code{
 
 	AccountLazyConnectionEnabled:  {"Account lazy connection enabled", "account.setting.lazy.connection.enable"},
 	AccountLazyConnectionDisabled: {"Account lazy connection disabled", "account.setting.lazy.connection.disable"},
+
+	PeerAdmissionDenied:           {"Peer admission denied", "peer.admission.deny"},
+	AdmissionEnforcementEnabled:   {"Admission enforcement enabled", "account.setting.admission.enforcement.enable"},
+	AdmissionEnforcementDisabled:  {"Admission enforcement disabled", "account.setting.admission.enforcement.disable"},
+	AdmissionPostureChecksUpdated: {"Admission posture checks updated", "account.setting.admission.checks.update"},
 }
 
 // StringCode returns a string code of the activity

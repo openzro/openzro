@@ -140,6 +140,16 @@ components:
           description: Enables or disables experimental lazy connection
           type: boolean
           example: true
+        admission_enforcement_enabled:
+          description: When true, peer Login/Sync is gated on the listed posture checks. A peer that fails any listed check is refused with PermissionDenied and cannot enter the mesh. Required for regulated tenants (e.g. Bacen 4.893 / Circular 3.909) that need provable endpoint admission control with an audit trail.
+          type: boolean
+          example: false
+        admission_posture_checks:
+          description: Posture check IDs evaluated as the admission gate when admission_enforcement_enabled is true. ALL listed checks must pass for the peer to be admitted.
+          type: array
+          items:
+            type: string
+            example: "posture-check-id"
       required:
         - peer_login_expiration_enabled
         - peer_login_expiration

@@ -47,6 +47,21 @@ type Settings struct {
 
 	// LazyConnectionEnabled indicates if the experimental feature is enabled or disabled
 	LazyConnectionEnabled bool `gorm:"default:false"`
+
+	// AdmissionEnforcementEnabled gates peer login/registration on the
+	// AdmissionPostureChecks list. When false, the list is ignored and
+	// only per-policy posture checks apply (current behavior). When
+	// true, a peer that fails any of the listed posture checks is
+	// rejected at the gRPC Login boundary with PermissionDenied — it
+	// cannot enter the mesh at all. Required for regulated tenants
+	// (Bacen 4.893 / Circular 3.909) that need provable endpoint
+	// admission control with an audit trail.
+	AdmissionEnforcementEnabled bool `gorm:"default:false"`
+
+	// AdmissionPostureChecks lists posture check IDs evaluated against
+	// every peer at Login/Sync time when AdmissionEnforcementEnabled
+	// is true. Order is irrelevant; ALL listed checks must pass.
+	AdmissionPostureChecks []string `gorm:"serializer:json"`
 }
 
 // Copy copies the Settings struct
@@ -66,6 +81,8 @@ func (s *Settings) Copy() *Settings {
 		RoutingPeerDNSResolutionEnabled: s.RoutingPeerDNSResolutionEnabled,
 		LazyConnectionEnabled:           s.LazyConnectionEnabled,
 		DNSDomain:                       s.DNSDomain,
+		AdmissionEnforcementEnabled:     s.AdmissionEnforcementEnabled,
+		AdmissionPostureChecks:          append([]string(nil), s.AdmissionPostureChecks...),
 	}
 	if s.Extra != nil {
 		settings.Extra = s.Extra.Copy()

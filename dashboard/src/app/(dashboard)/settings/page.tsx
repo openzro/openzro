@@ -9,6 +9,7 @@ import {
   LockIcon,
   MonitorSmartphoneIcon,
   NetworkIcon,
+  ShieldHalfIcon,
   ShieldIcon,
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
@@ -20,6 +21,7 @@ import { useAccount } from "@/modules/account/useAccount";
 import AuthenticationTab from "@/modules/settings/AuthenticationTab";
 import ClientSettingsTab from "@/modules/settings/ClientSettingsTab";
 import DangerZoneTab from "@/modules/settings/DangerZoneTab";
+import DeviceAdmissionTab from "@/modules/settings/DeviceAdmissionTab";
 import GroupsTab from "@/modules/settings/GroupsTab";
 import IntegrationsTab from "@/modules/settings/IntegrationsTab";
 import NetworkSettingsTab from "@/modules/settings/NetworkSettingsTab";
@@ -71,6 +73,10 @@ export default function OpenzroSettings() {
                 <MonitorSmartphoneIcon size={14} />
                 Clients
               </VerticalTabs.Trigger>
+              <VerticalTabs.Trigger value="device-admission">
+                <ShieldHalfIcon size={14} />
+                Device Admission
+              </VerticalTabs.Trigger>
               <VerticalTabs.Trigger value="integrations">
                 <CableIcon size={14} />
                 Integrations
@@ -90,6 +96,7 @@ export default function OpenzroSettings() {
             {account && <GroupsTab account={account} />}
             {account && <NetworkSettingsTab account={account} />}
             {account && <ClientSettingsTab account={account} />}
+            {account && <DeviceAdmissionTab account={account} />}
             {account && <IntegrationsTab account={account} />}
             {account && <DangerZoneTab account={account} />}
           </div>

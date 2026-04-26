@@ -20,5 +20,7 @@ export interface Account {
     routing_peer_dns_resolution_enabled: boolean;
     dns_domain: string;
     lazy_connection_enabled: boolean;
+    admission_enforcement_enabled?: boolean;
+    admission_posture_checks?: string[];
   };
 }
