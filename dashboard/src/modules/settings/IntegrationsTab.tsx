@@ -7,7 +7,7 @@ import HelpText from "@components/HelpText";
 import InlineLink from "@components/InlineLink";
 import { notify } from "@components/Notification";
 import Paragraph from "@components/Paragraph";
-import Separator from "@components/Separator";
+import { SegmentedTabs } from "@components/SegmentedTabs";
 import * as Tabs from "@radix-ui/react-tabs";
 import useFetchApi, { useApiCall } from "@utils/api";
 import { API_ORIGIN } from "@utils/openzro";
@@ -35,11 +35,75 @@ type Props = {
   account: Account;
 };
 
-// IntegrationsTab is the dashboard surface for the
-// /api/admin/flow-exports backend that landed in PR-G. Operators
-// configure SIEM streams (Elastic), cold archives (S3), and HTTP
-// webhooks here without touching env vars.
+// IntegrationsTab is the dashboard surface for runtime-configurable
+// external integrations. Three sub-tabs:
+//
+//   Flow Exports — SIEM/archive destinations for traffic events
+//   MDM / EDR    — Intune/SentinelOne/Huntress posture providers
+//   SCIM         — read-only setup info for IdP provisioning
+//
+// All three share the same encrypted-at-rest credential envelope on
+// the backend; they're grouped here because they're all "outbound
+// connections to corporate systems" from the operator's perspective.
 export default function IntegrationsTab(_: Readonly<Props>) {
+  const [inner, setInner] = useState<string>("flow");
+
+  return (
+    <Tabs.Content value="integrations">
+      <div className={"p-default py-6"}>
+        <Breadcrumbs>
+          <Breadcrumbs.Item
+            href={"/settings"}
+            label={"Settings"}
+            icon={<SettingsIcon size={13} />}
+          />
+          <Breadcrumbs.Item
+            href={"/settings?tab=integrations"}
+            label={"Integrations"}
+            icon={<CableIcon size={14} />}
+            active
+          />
+        </Breadcrumbs>
+        <h1>Integrations</h1>
+        <Paragraph>
+          External destinations and providers — SIEM streaming + cold
+          archive for traffic events, MDM/EDR vendors for posture
+          compliance, and SCIM 2.0 for user provisioning from your IdP.
+        </Paragraph>
+
+        <div className={"mt-6"}>
+          <SegmentedTabs value={inner} onChange={setInner}>
+            <SegmentedTabs.List>
+              <SegmentedTabs.Trigger value="flow">
+                <CableIcon size={14} /> Flow Exports
+              </SegmentedTabs.Trigger>
+              <SegmentedTabs.Trigger value="mdm">
+                <ShieldCheckIcon size={14} /> MDM / EDR
+              </SegmentedTabs.Trigger>
+              <SegmentedTabs.Trigger value="scim">
+                <UsersIcon size={14} /> SCIM Provisioning
+              </SegmentedTabs.Trigger>
+            </SegmentedTabs.List>
+
+            <SegmentedTabs.Content value="flow">
+              <FlowExportsSection />
+            </SegmentedTabs.Content>
+            <SegmentedTabs.Content value="mdm">
+              <MDMProvidersSection />
+            </SegmentedTabs.Content>
+            <SegmentedTabs.Content value="scim">
+              <SCIMSetupSection />
+            </SegmentedTabs.Content>
+          </SegmentedTabs>
+        </div>
+      </div>
+    </Tabs.Content>
+  );
+}
+
+// ----- Flow Exports section ------------------------------------------
+
+function FlowExportsSection() {
   const { data, isLoading } =
     useFetchApi<FlowExport[]>("/admin/flow-exports");
 
@@ -56,20 +120,7 @@ export default function IntegrationsTab(_: Readonly<Props>) {
   };
 
   return (
-    <Tabs.Content value="integrations" className="px-default pb-8 pt-6">
-      <Breadcrumbs>
-        <Breadcrumbs.Item
-          label={"Settings"}
-          href={"/settings"}
-          icon={<SettingsIcon size={13} />}
-        />
-        <Breadcrumbs.Item
-          label={"Integrations"}
-          icon={<CableIcon size={13} />}
-        />
-      </Breadcrumbs>
-
-      <h2 className="mt-2">Integrations</h2>
+    <div>
       <Paragraph>
         Stream traffic events to your SIEM (Elastic) or cold-archive
         them to S3-compatible storage (AWS S3, Cloudflare R2,
@@ -94,27 +145,18 @@ export default function IntegrationsTab(_: Readonly<Props>) {
           <Paragraph className="text-nb-gray-300">Loading…</Paragraph>
         )}
         {!isLoading && (!data || data.length === 0) && (
-          <div className="rounded-md border border-dashed border-nb-gray-700 p-8 text-center">
-            <Paragraph className="text-nb-gray-300">
-              No destinations configured. Click <b>Add destination</b> to
-              start streaming traffic events.
-            </Paragraph>
-          </div>
+          <EmptyState message="No destinations configured. Click Add destination to start streaming traffic events." />
         )}
         {data && data.length > 0 && (
           <table className="w-full text-sm">
-            <thead className="text-left text-nb-gray-300 text-xs uppercase">
-              <tr>
-                <th className="py-2">Type</th>
-                <th>Name</th>
-                <th>Endpoint</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
+            <TableHead cols={["Type", "Name", "Endpoint", "Status", ""]} />
             <tbody>
               {data.map((row) => (
-                <Row key={row.id} row={row} onEdit={() => openEdit(row)} />
+                <FlowExportRow
+                  key={row.id}
+                  row={row}
+                  onEdit={() => openEdit(row)}
+                />
               ))}
             </tbody>
           </table>
@@ -126,26 +168,80 @@ export default function IntegrationsTab(_: Readonly<Props>) {
         setOpen={setModalOpen}
         existing={editing}
       />
-
-      <div className="my-10">
-        <Separator />
-      </div>
-
-      <MDMProvidersSection />
-
-      <div className="my-10">
-        <Separator />
-      </div>
-
-      <SCIMSetupSection />
-    </Tabs.Content>
+    </div>
   );
 }
 
-// MDMProvidersSection mirrors the Flow Exports table shape: list,
-// add, edit, delete. Each row is one configured vendor connection
-// (Intune / SentinelOne / Huntress). Posture checks reference these
-// rows by ID.
+function FlowExportRow({
+  row,
+  onEdit,
+}: {
+  row: FlowExport;
+  onEdit: () => void;
+}) {
+  const { mutate } = useSWRConfig();
+  const api = useApiCall(`/admin/flow-exports/${row.id}`);
+
+  const onDelete = async () => {
+    if (!confirm(`Delete "${row.name}"? This cannot be undone.`)) return;
+    try {
+      await api.del();
+      await mutate("/admin/flow-exports");
+      notify({ title: "Deleted", description: row.name });
+    } catch {
+      // useApiCall surfaces toast
+    }
+  };
+
+  return (
+    <tr className="border-t border-nb-gray-900">
+      <td className="py-3">
+        <FlowExportTypeBadge type={row.type} />
+      </td>
+      <td className="py-3">{row.name}</td>
+      <td className="py-3 font-mono text-xs text-nb-gray-300">
+        {flowEndpointLabel(row)}
+      </td>
+      <td className="py-3">
+        <EnabledStatus enabled={row.enabled} />
+      </td>
+      <td className="py-3 text-right">
+        <RowActions onEdit={onEdit} onDelete={onDelete} />
+      </td>
+    </tr>
+  );
+}
+
+function FlowExportTypeBadge({ type }: { type: FlowExportType }) {
+  const map = {
+    elastic: { icon: <CableIcon size={12} />, label: "Elastic" },
+    s3: { icon: <CloudIcon size={12} />, label: "S3" },
+    http: { icon: <GlobeIcon size={12} />, label: "HTTP" },
+  };
+  const m = map[type];
+  return (
+    <span className="inline-flex items-center gap-1 rounded bg-nb-gray-900 px-2 py-1 text-xs text-violet-300">
+      {m.icon} {m.label}
+    </span>
+  );
+}
+
+function flowEndpointLabel(row: FlowExport): string {
+  if (row.type === "elastic") {
+    return (row.config as { url?: string })?.url ?? "";
+  }
+  if (row.type === "s3") {
+    const c = row.config as { bucket?: string; endpoint?: string };
+    return c?.endpoint ? `${c.endpoint}/${c.bucket}` : c?.bucket ?? "";
+  }
+  if (row.type === "http") {
+    return (row.config as { url?: string })?.url ?? "";
+  }
+  return "";
+}
+
+// ----- MDM / EDR section ---------------------------------------------
+
 function MDMProvidersSection() {
   const { data, isLoading } =
     useFetchApi<MDMProvider[]>("/admin/mdm-providers");
@@ -153,36 +249,28 @@ function MDMProvidersSection() {
   const [editing, setEditing] = useState<MDMProvider | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
 
-  const openCreate = () => {
-    setEditing(null);
-    setModalOpen(true);
-  };
-  const openEdit = (row: MDMProvider) => {
-    setEditing(row);
-    setModalOpen(true);
-  };
-
   return (
     <div>
-      <h2 className="flex items-center gap-2">
-        <ShieldCheckIcon size={18} className="text-violet-300" />
-        MDM / EDR Providers
-      </h2>
       <Paragraph>
         Connect Microsoft Intune, SentinelOne, or Huntress to require
-        devices to be in good security standing before they&apos;re
-        allowed in the network. Configured providers can then be
-        referenced from any posture check via the &quot;Endpoint
-        Security&quot; check type.
+        devices in good security standing before they&apos;re allowed
+        in the network. Configured providers can be referenced from
+        any posture check via the &quot;Endpoint Security&quot; check
+        type.
       </Paragraph>
       <HelpText>
-        Credentials are encrypted at rest with the management&apos;s
-        DataStoreEncryptionKey. Posture lookups are cached for 5
-        minutes per device to avoid hammering the vendor API.
+        Credentials are encrypted at rest. Posture lookups are cached
+        for 5 minutes per device to avoid hammering the vendor API.
       </HelpText>
 
       <div className="mt-6 flex justify-end">
-        <Button variant="primary" onClick={openCreate}>
+        <Button
+          variant="primary"
+          onClick={() => {
+            setEditing(null);
+            setModalOpen(true);
+          }}
+        >
           <PlusCircleIcon size={16} /> Add provider
         </Button>
       </div>
@@ -192,30 +280,22 @@ function MDMProvidersSection() {
           <Paragraph className="text-nb-gray-300">Loading…</Paragraph>
         )}
         {!isLoading && (!data || data.length === 0) && (
-          <div className="rounded-md border border-dashed border-nb-gray-700 p-8 text-center">
-            <Paragraph className="text-nb-gray-300">
-              No MDM/EDR providers configured. Click <b>Add provider</b>{" "}
-              to connect Intune, SentinelOne, or Huntress.
-            </Paragraph>
-          </div>
+          <EmptyState message="No MDM/EDR providers configured. Click Add provider to connect Intune, SentinelOne, or Huntress." />
         )}
         {data && data.length > 0 && (
           <table className="w-full text-sm">
-            <thead className="text-left text-nb-gray-300 text-xs uppercase">
-              <tr>
-                <th className="py-2">Type</th>
-                <th>Name</th>
-                <th>Tenant / Endpoint</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
+            <TableHead
+              cols={["Type", "Name", "Tenant / Endpoint", "Status", ""]}
+            />
             <tbody>
               {data.map((row) => (
                 <MDMRow
                   key={row.id}
                   row={row}
-                  onEdit={() => openEdit(row)}
+                  onEdit={() => {
+                    setEditing(row);
+                    setModalOpen(true);
+                  }}
                 />
               ))}
             </tbody>
@@ -248,9 +328,7 @@ function MDMRow({
       await api.del();
       await mutate("/admin/mdm-providers");
       notify({ title: "Deleted", description: row.name });
-    } catch {
-      // useApiCall surfaces toast
-    }
+    } catch {}
   };
 
   return (
@@ -263,19 +341,10 @@ function MDMRow({
         {mdmEndpointLabel(row)}
       </td>
       <td className="py-3">
-        <span
-          className={row.enabled ? "text-emerald-400" : "text-nb-gray-400"}
-        >
-          {row.enabled ? "Enabled" : "Disabled"}
-        </span>
+        <EnabledStatus enabled={row.enabled} />
       </td>
       <td className="py-3 text-right">
-        <Button variant="secondary" onClick={onEdit} className="mr-2">
-          Edit
-        </Button>
-        <Button variant="danger-outline" onClick={onDelete}>
-          <Trash2Icon size={14} />
-        </Button>
+        <RowActions onEdit={onEdit} onDelete={onDelete} />
       </td>
     </tr>
   );
@@ -289,8 +358,7 @@ function MDMTypeBadge({ type }: { type: MDMProviderType }) {
   };
   return (
     <span className="inline-flex items-center gap-1 rounded bg-nb-gray-900 px-2 py-1 text-xs text-violet-300">
-      <ShieldCheckIcon size={12} />
-      {labels[type]}
+      <ShieldCheckIcon size={12} /> {labels[type]}
     </span>
   );
 }
@@ -309,30 +377,20 @@ function mdmEndpointLabel(row: MDMProvider): string {
   return "";
 }
 
-// SCIMSetupSection points operators at the static configuration they
-// need to plug into Okta / Entra / JumpCloud. The SCIM protocol
-// itself is fully server-side (no UI mutations); this section's job
-// is just discoverability and copy-paste convenience.
+// ----- SCIM Provisioning section -------------------------------------
+
 function SCIMSetupSection() {
-  // SCIM lives on the management server, NOT on the dashboard's
-  // origin. Use apiOrigin (the management's HTTP base) so the URL
-  // we tell IdPs to call actually points at the right host.
   const baseURL = API_ORIGIN
     ? `${API_ORIGIN.replace(/\/+$/, "")}/scim/v2`
     : "https://your-management.example.com/scim/v2";
 
   return (
     <div>
-      <h2 className="flex items-center gap-2">
-        <UsersIcon size={18} className="text-violet-300" />
-        SCIM 2.0 Provisioning
-      </h2>
       <Paragraph>
         Connect your enterprise IdP (Okta, Microsoft Entra, JumpCloud,
         Authentik, …) to auto-provision Users and Groups into openZro.
         Membership in a SCIM group becomes the user&apos;s AutoGroups
-        list — every peer the user registers automatically inherits
-        the group&apos;s policies.
+        list.
       </Paragraph>
       <HelpText>
         SCIM-provisioned users carry an{" "}
@@ -355,9 +413,9 @@ function SCIMSetupSection() {
             Authentication
           </label>
           <Paragraph className="text-sm">
-            Bearer token — issue a Personal Access Token to a
-            service user with the <b>admin</b> or <b>owner</b> role and
-            paste the token into your IdP&apos;s SCIM connector.
+            Bearer token — issue a Personal Access Token to a service
+            user with the <b>admin</b> or <b>owner</b> role and paste
+            the token into your IdP&apos;s SCIM connector.
           </Paragraph>
           <InlineLink href="/team/service-users">
             <KeyRoundIcon size={12} /> Manage service users & tokens
@@ -371,22 +429,23 @@ function SCIMSetupSection() {
           <ol className="mt-3 list-decimal pl-5 text-sm text-nb-gray-200 space-y-1">
             <li>
               In the Okta admin console, go to <b>Applications</b> →
-              your openZro app → <b>Provisioning</b> → <b>Integration</b>.
+              your openZro app → <b>Provisioning</b> →{" "}
+              <b>Integration</b>.
             </li>
             <li>
               <b>Enable API integration</b>. Set <b>Base URL</b> to{" "}
               <code className="font-mono text-xs">{baseURL}</code>.
             </li>
             <li>
-              Set <b>API Token</b> to the PAT you generated above
-              (format: <code className="font-mono text-xs">nbp_...</code>).
+              Set <b>API Token</b> to your PAT (
+              <code className="font-mono text-xs">nbp_...</code>).
             </li>
             <li>
               Click <b>Test API Credentials</b>. Save.
             </li>
             <li>
               Under <b>To App</b>, enable <i>Create Users</i>,{" "}
-              <i>Update User Attributes</i>, and <i>Deactivate Users</i>.
+              <i>Update User Attributes</i>, <i>Deactivate Users</i>.
             </li>
           </ol>
         </details>
@@ -397,23 +456,22 @@ function SCIMSetupSection() {
           </summary>
           <ol className="mt-3 list-decimal pl-5 text-sm text-nb-gray-200 space-y-1">
             <li>
-              In Entra admin center, <b>Enterprise applications</b> →
-              your openZro app → <b>Provisioning</b>.
+              <b>Enterprise applications</b> → your openZro app →{" "}
+              <b>Provisioning</b>.
             </li>
             <li>
-              Set <b>Provisioning Mode</b> to <b>Automatic</b>.
+              <b>Provisioning Mode</b> = <b>Automatic</b>.
             </li>
             <li>
               <b>Tenant URL</b>:{" "}
               <code className="font-mono text-xs">{baseURL}</code>.
             </li>
             <li>
-              <b>Secret Token</b>: your PAT (
-              <code className="font-mono text-xs">nbp_...</code>).
+              <b>Secret Token</b>: your PAT.
             </li>
             <li>
-              Click <b>Test Connection</b>. Save. Set <b>Provisioning Status</b> to{" "}
-              <b>On</b>.
+              <b>Test Connection</b>, save, set <b>Provisioning Status</b>{" "}
+              to <b>On</b>.
             </li>
           </ol>
         </details>
@@ -425,10 +483,7 @@ function SCIMSetupSection() {
           <Paragraph className="mt-3 text-sm">
             Any SCIM 2.0-compliant IdP works. Use{" "}
             <code className="font-mono text-xs">{baseURL}</code> as
-            the SCIM endpoint and the PAT as the bearer token. Our
-            ServiceProviderConfig advertises the supported features
-            (PATCH, userName-eq filtering, no bulk, no sort);
-            well-behaved IdPs read it on first connect and adapt.
+            the SCIM endpoint and the PAT as the bearer token.
           </Paragraph>
           <InlineLink
             href={`${baseURL}/ServiceProviderConfig`}
@@ -443,84 +498,53 @@ function SCIMSetupSection() {
   );
 }
 
-function Row({
-  row,
-  onEdit,
-}: {
-  row: FlowExport;
-  onEdit: () => void;
-}) {
-  const { mutate } = useSWRConfig();
-  const api = useApiCall(`/admin/flow-exports/${row.id}`);
+// ----- Shared subcomponents ------------------------------------------
 
-  const onDelete = async () => {
-    if (!confirm(`Delete "${row.name}"? This cannot be undone.`)) return;
-    try {
-      await api.del();
-      await mutate("/admin/flow-exports");
-      notify({ title: "Deleted", description: row.name });
-    } catch {
-      // useApiCall already surfaces the error toast
-    }
-  };
-
-  const endpoint = endpointLabel(row);
-
+function TableHead({ cols }: { cols: string[] }) {
   return (
-    <tr className="border-t border-nb-gray-900">
-      <td className="py-3">
-        <TypeBadge type={row.type} />
-      </td>
-      <td className="py-3">{row.name}</td>
-      <td className="py-3 font-mono text-xs text-nb-gray-300">
-        {endpoint}
-      </td>
-      <td className="py-3">
-        <span
-          className={
-            row.enabled ? "text-emerald-400" : "text-nb-gray-400"
-          }
-        >
-          {row.enabled ? "Enabled" : "Disabled"}
-        </span>
-      </td>
-      <td className="py-3 text-right">
-        <Button variant="secondary" onClick={onEdit} className="mr-2">
-          Edit
-        </Button>
-        <Button variant="danger-outline" onClick={onDelete}>
-          <Trash2Icon size={14} />
-        </Button>
-      </td>
-    </tr>
+    <thead className="text-left text-nb-gray-300 text-xs uppercase">
+      <tr>
+        {cols.map((c, i) => (
+          <th key={i} className="py-2">
+            {c}
+          </th>
+        ))}
+      </tr>
+    </thead>
   );
 }
 
-function TypeBadge({ type }: { type: FlowExportType }) {
-  const map = {
-    elastic: { icon: <CableIcon size={12} />, label: "Elastic" },
-    s3: { icon: <CloudIcon size={12} />, label: "S3" },
-    http: { icon: <GlobeIcon size={12} />, label: "HTTP" },
-  };
-  const m = map[type];
+function EmptyState({ message }: { message: string }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded bg-nb-gray-900 px-2 py-1 text-xs text-violet-300">
-      {m.icon}
-      {m.label}
+    <div className="rounded-md border border-dashed border-nb-gray-700 p-8 text-center">
+      <Paragraph className="text-nb-gray-300">{message}</Paragraph>
+    </div>
+  );
+}
+
+function EnabledStatus({ enabled }: { enabled: boolean }) {
+  return (
+    <span className={enabled ? "text-emerald-400" : "text-nb-gray-400"}>
+      {enabled ? "Enabled" : "Disabled"}
     </span>
   );
 }
 
-function endpointLabel(row: FlowExport): string {
-  if (row.type === "elastic") {
-    return (row.config as { url?: string })?.url ?? "";
-  }
-  if (row.type === "s3") {
-    const c = row.config as { bucket?: string; endpoint?: string };
-    return c?.endpoint ? `${c.endpoint}/${c.bucket}` : c?.bucket ?? "";
-  }
-  if (row.type === "http") {
-    return (row.config as { url?: string })?.url ?? "";
-  }
-  return "";
+function RowActions({
+  onEdit,
+  onDelete,
+}: {
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <>
+      <Button variant="secondary" onClick={onEdit} className="mr-2">
+        Edit
+      </Button>
+      <Button variant="danger-outline" onClick={onDelete}>
+        <Trash2Icon size={14} />
+      </Button>
+    </>
+  );
 }
