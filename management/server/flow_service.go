@@ -37,6 +37,7 @@ import (
 type FlowService struct {
 	flowProto.UnimplementedFlowServiceServer
 
+	sinksMu  sync.RWMutex
 	sinks    []store.Sink
 	resolver PeerResolver
 	cache    *peerCache
@@ -134,6 +135,50 @@ func (s *FlowService) Close() error {
 		}
 	})
 	return nil
+}
+
+// SetSinks atomically replaces the destination set. The old set's
+// Close() is called AFTER the new one is in place, so the worker
+// never observes a moment with no sinks (other than the original
+// nil set when len(active)==0).
+//
+// Used by the runtime config Manager to apply changes operators
+// make through the dashboard without restarting the process. The
+// caller is responsible for not feeding the same Sink instance to
+// two services — Close on a Sink is idempotent but Save is not.
+func (s *FlowService) SetSinks(next []store.Sink) {
+	active := make([]store.Sink, 0, len(next))
+	for _, sink := range next {
+		if sink != nil {
+			active = append(active, sink)
+		}
+	}
+
+	s.sinksMu.Lock()
+	old := s.sinks
+	s.sinks = active
+	// If the service started without any sinks, spin up the worker
+	// now — the queue is created lazily on first activation.
+	if s.queue == nil && len(active) > 0 {
+		s.queue = make(chan *bufferedEvent, s.bufferSize)
+		s.wg.Add(1)
+		go s.runWorker()
+	}
+	s.sinksMu.Unlock()
+
+	for _, sink := range old {
+		_ = sink.Close()
+	}
+}
+
+// snapshotSinks returns a pointer-stable copy of the current set so
+// flush can iterate without holding the lock across Save calls.
+func (s *FlowService) snapshotSinks() []store.Sink {
+	s.sinksMu.RLock()
+	defer s.sinksMu.RUnlock()
+	out := make([]store.Sink, len(s.sinks))
+	copy(out, s.sinks)
+	return out
 }
 
 // bufferedEvent pairs a proto event with its server-side received
@@ -245,7 +290,7 @@ func (s *FlowService) flush(ctx context.Context, batch []*bufferedEvent) {
 	if len(events) == 0 {
 		return
 	}
-	for _, sink := range s.sinks {
+	for _, sink := range s.snapshotSinks() {
 		if err := sink.Save(ctx, events); err != nil {
 			log.WithContext(ctx).Errorf(
 				"flow sink save failed (%d events): %v", len(events), err)
