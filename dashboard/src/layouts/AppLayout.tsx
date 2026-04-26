@@ -6,8 +6,9 @@ import { TooltipProvider } from "@components/Tooltip";
 import { cn } from "@utils/helpers";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
+import { GeistSans } from "geist/font/sans";
 import { Viewport } from "next";
-import { Geist, JetBrains_Mono } from "next/font/google";
+import { JetBrains_Mono } from "next/font/google";
 import localFont from "next/font/local";
 import React, { Suspense } from "react";
 import { Toaster } from "react-hot-toast";
@@ -26,16 +27,9 @@ const inter = localFont({
   display: "swap",
 });
 
-// Brand fonts (CLAUDE.md). Wired through CSS variables so the rest of
-// the app can pick them up via the tokens defined in globals.css and
-// the fontFamily config in tailwind.config.ts.
-const geist = Geist({
-  subsets: ["latin"],
-  variable: "--font-geist",
-  weight: ["400", "500", "600", "700", "800"],
-  display: "swap",
-});
-
+// Brand fonts (CLAUDE.md). Geist comes from the `geist` npm package
+// because next/font/google only exposes Geist on Next.js 15+, and we
+// stay on 14 until CVE-2025-66478 is reassessed.
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
   variable: "--font-jetbrains-mono",
@@ -55,7 +49,7 @@ export default function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={cn(geist.variable, jetbrainsMono.variable)}>
+    <html lang="en" className={cn(GeistSans.variable, jetbrainsMono.variable)}>
       <head>
         <GoogleTagManagerHeadScript />
       </head>
