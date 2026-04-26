@@ -146,10 +146,22 @@ export default function Navigation({
                 <SidebarItem
                   icon={<ActivityIcon />}
                   label="Activity"
-                  href={"/events/audit"}
-                  exactPathMatch={true}
+                  collapsible
                   visible={permission.events.read}
-                />
+                >
+                  <SidebarItem
+                    label="Audit Events"
+                    isChild
+                    href={"/events/audit"}
+                    visible={permission.events.read}
+                  />
+                  <SidebarItem
+                    label="Network Traffic"
+                    isChild
+                    href={"/events/network-traffic"}
+                    visible={permission.events.read}
+                  />
+                </SidebarItem>
               </SidebarItemGroup>
 
               <SidebarItemGroup>
