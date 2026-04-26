@@ -243,6 +243,7 @@ func (am *DefaultAccountManager) UpdatePeer(ctx context.Context, accountID, user
 	var sshChanged bool
 	var loginExpirationChanged bool
 	var inactivityExpirationChanged bool
+	var approvalChanged bool
 	var dnsDomain string
 
 	err = am.Store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
@@ -313,6 +314,17 @@ func (am *DefaultAccountManager) UpdatePeer(ctx context.Context, accountID, user
 			inactivityExpirationChanged = true
 		}
 
+		// Persist approval transitions: ValidatePeer has already produced
+		// the desired final value in update.Status.RequiresApproval (taking
+		// gating settings, exempt groups, and admin intent into account).
+		// Without this copy the admin's "approve" action never lands in the
+		// store, leaving the peer pending forever.
+		if update.Status != nil && peer.Status != nil &&
+			peer.Status.RequiresApproval != update.Status.RequiresApproval {
+			peer.Status.RequiresApproval = update.Status.RequiresApproval
+			approvalChanged = true
+		}
+
 		return transaction.SavePeer(ctx, store.LockingStrengthUpdate, accountID, peer)
 	})
 	if err != nil {
@@ -356,7 +368,15 @@ func (am *DefaultAccountManager) UpdatePeer(ctx context.Context, accountID, user
 		}
 	}
 
-	if peerLabelChanged || requiresPeerUpdates {
+	if approvalChanged {
+		event := activity.PeerApproved
+		if peer.Status.RequiresApproval {
+			event = activity.PeerApprovalRevoked
+		}
+		am.StoreEvent(ctx, userID, peer.ID, accountID, event, peer.EventMeta(dnsDomain))
+	}
+
+	if peerLabelChanged || requiresPeerUpdates || approvalChanged {
 		am.UpdateAccountPeers(ctx, accountID)
 	} else if sshChanged {
 		am.UpdateAccountPeer(ctx, accountID, peer.ID)
