@@ -116,16 +116,27 @@ type Filter struct {
 	Offset int
 }
 
-// Store is the persistence interface. Implementations may queue or
-// batch but MUST be best-effort durable: an event acked back to the
-// caller has been at least handed off for persistence (committed to
-// a write buffer the implementation will eventually flush).
-type Store interface {
-	// Save persists a batch of events. Backends are encouraged to
-	// implement this as a single bulk insert. An error indicates the
-	// caller should retry the whole batch; partial failures should be
-	// surfaced rather than silently dropped.
+// Sink is anywhere flow events land. The hot Store is a Sink;
+// streaming SIEM exporters and cold archives are also Sinks. The
+// FlowService fans events out to a slice of Sinks, so adding a
+// destination is purely additive — no code in the hot path changes.
+type Sink interface {
+	// Save handles a batch of events. Implementations MUST be
+	// non-blocking on the hot path beyond a small bounded buffer:
+	// the gRPC handler calls Save off the request goroutine but
+	// hundreds of peers may share a Sink, and a slow destination
+	// must not back-pressure the others.
 	Save(ctx context.Context, events []*Event) error
+
+	// Close releases backend resources.
+	Close() error
+}
+
+// Store is the queryable Sink that backs the dashboard's
+// /api/network-traffic-events page. The factory selects exactly one
+// at process start; further destinations come in as Sinks alongside.
+type Store interface {
+	Sink
 
 	// Query returns events matching the filter, ordered by ReceivedAt
 	// descending. Returns an empty slice (not an error) when no rows
@@ -136,7 +147,4 @@ type Store interface {
 	// number deleted. Backends with native partitioning may implement
 	// this as DROP PARTITION rather than DELETE for O(1) cost.
 	Purge(ctx context.Context, olderThan time.Time) (int64, error)
-
-	// Close releases backend resources.
-	Close() error
 }

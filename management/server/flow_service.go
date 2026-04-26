@@ -17,26 +17,27 @@ import (
 // FlowService is the management-side endpoint of the bidirectional
 // FlowService.Events stream. Peers send FlowEvents (start/end/drop of
 // individual TCP/UDP/ICMP flows); the management server buffers them
-// in memory and persists them in batches to the configured
-// flow.Store.
+// in memory and fans batches out to one or more Sinks (hot store,
+// SIEM exporter, cold archive — any combination, configured by the
+// operator).
 //
 // Hot path (Events RPC) is non-blocking: events are pushed onto a
 // per-process channel and the peer is acked immediately. A
 // background worker drains the channel, batches up to batchSize
 // events or until flushEvery elapses, looks up peer→account from a
 // cache (with the supplied resolver as the cache miss path), and
-// calls store.Save on the batch. This decouples peer ack latency
-// from DB latency, which matters because flow rates can be high and
-// peers should not wait for a slow DB.
+// calls Save on every Sink. This decouples peer ack latency from
+// any sink's latency, which matters because flow rates can be high
+// and a slow Sink (e.g., a SIEM under load) must not block peer
+// reporting.
 //
-// If store is nil (engine=none in the env factory), the service
-// degrades to the previous ack-only behavior — events are dropped
-// after acking. This is the expected configuration for operators
-// relying entirely on streaming export to a SIEM.
+// If sinks is empty (engine=none and no exporters configured), the
+// service degrades to ack-only — events are dropped after acking.
+// This is the expected configuration for the smallest dev setups.
 type FlowService struct {
 	flowProto.UnimplementedFlowServiceServer
 
-	store    store.Store
+	sinks    []store.Sink
 	resolver PeerResolver
 	cache    *peerCache
 
@@ -88,13 +89,23 @@ func WithFlushInterval(d time.Duration) FlowServiceOption {
 	}
 }
 
-// NewFlowService constructs a FlowService. If s is nil the service
-// runs in ack-only mode; the resolver is then unused. The resolver
-// MUST be non-nil when s is non-nil; the constructor does not check
-// — wiring is internal and the cmd/ side is the only caller.
-func NewFlowService(s store.Store, resolver PeerResolver, opts ...FlowServiceOption) *FlowService {
+// NewFlowService constructs a FlowService. When sinks is empty the
+// service runs in ack-only mode and the resolver is unused. The
+// resolver MUST be non-nil when sinks is non-empty; the constructor
+// does not check — wiring is internal and the cmd/ side is the only
+// caller.
+//
+// nil entries in sinks are silently skipped, so callers can pass an
+// optional Store as the first element without conditionals.
+func NewFlowService(sinks []store.Sink, resolver PeerResolver, opts ...FlowServiceOption) *FlowService {
+	active := sinks[:0]
+	for _, s := range sinks {
+		if s != nil {
+			active = append(active, s)
+		}
+	}
 	f := &FlowService{
-		store:      s,
+		sinks:      active,
 		resolver:   resolver,
 		bufferSize: 10000,
 		batchSize:  500,
@@ -105,7 +116,7 @@ func NewFlowService(s store.Store, resolver PeerResolver, opts ...FlowServiceOpt
 	for _, opt := range opts {
 		opt(f)
 	}
-	if s != nil {
+	if len(active) > 0 {
 		f.queue = make(chan *bufferedEvent, f.bufferSize)
 		f.wg.Add(1)
 		go f.runWorker()
@@ -206,10 +217,14 @@ func (s *FlowService) runWorker() {
 }
 
 // flush resolves peer identity for each buffered event and writes
-// the batch via store.Save. Resolution failures are logged loud but
-// do NOT fail the batch — events whose peer cannot be resolved are
-// dropped (a peer was deleted between sending the event and the
-// flush). The successfully-resolved events still land.
+// the batch to every configured sink. Resolution failures are logged
+// loud but do NOT fail the batch — events whose peer cannot be
+// resolved are dropped (a peer was deleted between sending the event
+// and the flush). The successfully-resolved events still land.
+//
+// Sinks are independent: a failure in one (network blip to the SIEM)
+// is logged and we move on to the next. Operators concerned about
+// durability run multiple sinks (hot store + SIEM, hot store + S3).
 func (s *FlowService) flush(ctx context.Context, batch []*bufferedEvent) {
 	events := make([]*store.Event, 0, len(batch))
 	for _, b := range batch {
@@ -230,8 +245,11 @@ func (s *FlowService) flush(ctx context.Context, batch []*bufferedEvent) {
 	if len(events) == 0 {
 		return
 	}
-	if err := s.store.Save(ctx, events); err != nil {
-		log.WithContext(ctx).Errorf("flow ingest: save batch (%d events): %v", len(events), err)
+	for _, sink := range s.sinks {
+		if err := sink.Save(ctx, events); err != nil {
+			log.WithContext(ctx).Errorf(
+				"flow sink save failed (%d events): %v", len(events), err)
+		}
 	}
 }
 

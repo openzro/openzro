@@ -19,7 +19,7 @@ import (
 
 // startFlowService spins up a real in-process gRPC server with the
 // FlowService registered, returns a client and a cleanup func. The
-// service is built in ack-only mode (nil store) so these tests
+// service is built in ack-only mode (no sinks) so these tests
 // exercise the gRPC contract without persistence.
 func startFlowService(t *testing.T) (flowProto.FlowServiceClient, func()) {
 	t.Helper()
@@ -29,6 +29,7 @@ func startFlowService(t *testing.T) (flowProto.FlowServiceClient, func()) {
 	server := grpc.NewServer()
 	fs := NewFlowService(nil, nil)
 	flowProto.RegisterFlowServiceServer(server, fs)
+	_ = fs
 	go func() { _ = server.Serve(lis) }()
 
 	conn, err := grpc.NewClient(lis.Addr().String(),
@@ -139,13 +140,13 @@ func (s *inMemoryStore) all() []*flowstore.Event {
 
 // startFlowServiceWithStore starts a service that persists events and
 // resolves peer keys via the given resolver function.
-func startFlowServiceWithStore(t *testing.T, store flowstore.Store, resolver PeerResolver) (flowProto.FlowServiceClient, *FlowService, func()) {
+func startFlowServiceWithStore(t *testing.T, store flowstore.Sink, resolver PeerResolver) (flowProto.FlowServiceClient, *FlowService, func()) {
 	t.Helper()
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 
 	server := grpc.NewServer()
-	fs := NewFlowService(store, resolver,
+	fs := NewFlowService([]flowstore.Sink{store}, resolver,
 		WithBatchSize(2),                       // small batch so tests don't wait
 		WithFlushInterval(50*time.Millisecond), // and tight flush
 	)
