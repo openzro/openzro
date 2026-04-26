@@ -103,10 +103,14 @@ func (m *AuthMiddleware) checkJWTFromRequest(r *http.Request, auth []string) (*h
 		return r, err
 	}
 
-	if impersonate, ok := r.URL.Query()["account"]; ok && len(impersonate) == 1 {
-		userAuth.AccountId = impersonate[0]
-		userAuth.IsChild = ok
-	}
+	// SECURITY: account id is derived only from the validated token.
+	// The previous behavior accepted "?account=<id>" as a query parameter
+	// and overwrote userAuth.AccountId (and set IsChild=true, which bypasses
+	// admin checks downstream — see peers_handler.go and user.go). That made
+	// any authenticated user able to read/manipulate any other account's
+	// resources by manipulating a request parameter. See CWE-639. Account
+	// impersonation, if ever needed, must be re-introduced as an opt-in
+	// feature gated by a server-side authorization check, not as a default.
 
 	// we need to call this method because if user is new, we will automatically add it to existing or create a new account
 	accountId, _, err := m.ensureAccount(ctx, userAuth)
@@ -167,10 +171,9 @@ func (m *AuthMiddleware) checkPATFromRequest(r *http.Request, auth []string) (*h
 		IsPAT:          true,
 	}
 
-	if impersonate, ok := r.URL.Query()["account"]; ok && len(impersonate) == 1 {
-		userAuth.AccountId = impersonate[0]
-		userAuth.IsChild = ok
-	}
+	// SECURITY: see CWE-639 note on the JWT path above. AccountId is bound
+	// to the PAT's owner; the "?account=" query parameter must not be able
+	// to override it.
 
 	return nbcontext.SetUserAuthInRequest(r, userAuth), nil
 }

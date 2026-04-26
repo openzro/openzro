@@ -242,15 +242,16 @@ func TestAuthMiddleware_Handler_Child(t *testing.T) {
 			},
 		},
 		{
-			name:       "Valid PAT Token accesses child",
+			// Regression: ?account= must NOT override the AccountId derived
+			// from the token. See CWE-639 fix in auth_middleware.go.
+			name:       "PAT Token ignores ?account= override",
 			path:       "/test?account=xyz",
 			authHeader: "Token " + PAT,
 			expectedUserAuth: &nbcontext.UserAuth{
-				AccountId:      "xyz",
+				AccountId:      accountID,
 				UserId:         userID,
 				Domain:         testAccount.Domain,
 				DomainCategory: testAccount.DomainCategory,
-				IsChild:        true,
 				IsPAT:          true,
 			},
 		},
@@ -267,15 +268,16 @@ func TestAuthMiddleware_Handler_Child(t *testing.T) {
 		},
 
 		{
-			name:       "Valid JWT Token with child",
+			// Regression: ?account= must NOT override the AccountId derived
+			// from the token. See CWE-639 fix in auth_middleware.go.
+			name:       "JWT Token ignores ?account= override",
 			path:       "/test?account=xyz",
 			authHeader: "Bearer " + JWT,
 			expectedUserAuth: &nbcontext.UserAuth{
-				AccountId:      "xyz",
+				AccountId:      accountID,
 				UserId:         userID,
 				Domain:         testAccount.Domain,
 				DomainCategory: testAccount.DomainCategory,
-				IsChild:        true,
 			},
 		},
 	}
