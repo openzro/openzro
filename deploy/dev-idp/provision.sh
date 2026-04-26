@@ -212,7 +212,18 @@ if [[ -f "$MARKER_PATH" ]]; then
       write_local_config "$client_id"
       write_mgmt_config "$client_id"
     else
-      echo "Already provisioned (clientId=$client_id). Nothing to do."
+      echo "Already provisioned (clientId=$client_id)."
+    fi
+    # Always wait for Zitadel to be reachable before returning —
+    # downstream targets (dev.management.up) immediately try to fetch
+    # the OIDC discovery doc, and the container takes ~10s to come up
+    # after `docker compose up -d`. Without this wait, management
+    # restarts that race with Zitadel boot fail with
+    # "connection refused".
+    if [[ -f "$TOKEN_PATH" ]]; then
+      PAT=$(cat "$TOKEN_PATH")
+      echo "Waiting for Zitadel API to be ready…"
+      wait_api "$PAT"
     fi
     exit 0
   fi
