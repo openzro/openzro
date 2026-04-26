@@ -224,10 +224,12 @@ function FlowExportRow({
 }
 
 function FlowExportTypeBadge({ type }: { type: FlowExportType }) {
-  const map = {
+  const map: Record<FlowExportType, { icon: React.ReactNode; label: string }> = {
     elastic: { icon: <CableIcon size={12} />, label: "Elastic" },
     s3: { icon: <CloudIcon size={12} />, label: "S3" },
     http: { icon: <GlobeIcon size={12} />, label: "HTTP" },
+    datadog: { icon: <CableIcon size={12} />, label: "Datadog" },
+    gcs: { icon: <CloudIcon size={12} />, label: "GCS" },
   };
   const m = map[type];
   return (
@@ -247,6 +249,16 @@ function flowEndpointLabel(row: FlowExport): string {
   }
   if (row.type === "http") {
     return (row.config as { url?: string })?.url ?? "";
+  }
+  if (row.type === "datadog") {
+    const c = row.config as { url?: string; site?: string };
+    if (c?.url) return c.url;
+    if (c?.site) return `site:${c.site}`;
+    return "datadoghq.com";
+  }
+  if (row.type === "gcs") {
+    const c = row.config as { bucket?: string; prefix?: string };
+    return c?.prefix ? `gs://${c.bucket}/${c.prefix}` : `gs://${c?.bucket ?? ""}`;
   }
   return "";
 }

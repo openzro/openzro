@@ -31,6 +31,31 @@ const (
 	envS3FlushInterval    = "OPENZRO_FLOW_ARCHIVE_S3_FLUSH_INTERVAL"
 	envS3MaxEventsPerFile = "OPENZRO_FLOW_ARCHIVE_S3_MAX_EVENTS_PER_FILE"
 	envS3BufferSize       = "OPENZRO_FLOW_ARCHIVE_S3_BUFFER_SIZE"
+
+	// Datadog Logs Intake (streaming)
+	envDDFlowAPIKey        = "OPENZRO_FLOW_EXPORT_DATADOG_API_KEY"
+	envDDFlowSite          = "OPENZRO_FLOW_EXPORT_DATADOG_SITE"
+	envDDFlowURL           = "OPENZRO_FLOW_EXPORT_DATADOG_URL"
+	envDDFlowService       = "OPENZRO_FLOW_EXPORT_DATADOG_SERVICE"
+	envDDFlowSource        = "OPENZRO_FLOW_EXPORT_DATADOG_SOURCE"
+	envDDFlowTags          = "OPENZRO_FLOW_EXPORT_DATADOG_TAGS"
+	envDDFlowBatchSize     = "OPENZRO_FLOW_EXPORT_DATADOG_BATCH_SIZE"
+	envDDFlowFlushInterval = "OPENZRO_FLOW_EXPORT_DATADOG_FLUSH_INTERVAL"
+	envDDFlowBufferSize    = "OPENZRO_FLOW_EXPORT_DATADOG_BUFFER_SIZE"
+
+	// Google Cloud Storage native (cold archive). Distinct from the
+	// S3 path — operators wanting GCS Interop mode keep using the
+	// existing S3 vars; this set is for native auth (Workload
+	// Identity, Service Account JSON).
+	envGCSBucket           = "OPENZRO_FLOW_ARCHIVE_GCS_BUCKET"
+	envGCSPrefix           = "OPENZRO_FLOW_ARCHIVE_GCS_PREFIX"
+	envGCSCredentialsFile  = "OPENZRO_FLOW_ARCHIVE_GCS_CREDENTIALS_FILE"
+	envGCSCredentialsJSON  = "OPENZRO_FLOW_ARCHIVE_GCS_CREDENTIALS_JSON"
+	envGCSProjectID        = "OPENZRO_FLOW_ARCHIVE_GCS_PROJECT_ID"
+	envGCSEndpoint         = "OPENZRO_FLOW_ARCHIVE_GCS_ENDPOINT"
+	envGCSFlushInterval    = "OPENZRO_FLOW_ARCHIVE_GCS_FLUSH_INTERVAL"
+	envGCSMaxEventsPerFile = "OPENZRO_FLOW_ARCHIVE_GCS_MAX_EVENTS_PER_FILE"
+	envGCSBufferSize       = "OPENZRO_FLOW_ARCHIVE_GCS_BUFFER_SIZE"
 )
 
 // NewFromEnv reads OPENZRO_FLOW_EXPORT_* variables and returns the
@@ -51,7 +76,83 @@ func NewFromEnv(ctx context.Context) ([]store.Sink, error) {
 		out = append(out, exp)
 	}
 
+	if exp, err := newDatadogFromEnv(ctx); err != nil {
+		return nil, err
+	} else if exp != nil {
+		out = append(out, exp)
+	}
+
+	if exp, err := newGCSFromEnv(ctx); err != nil {
+		return nil, err
+	} else if exp != nil {
+		out = append(out, exp)
+	}
+
 	return out, nil
+}
+
+func newDatadogFromEnv(ctx context.Context) (store.Sink, error) {
+	apiKey := os.Getenv(envDDFlowAPIKey)
+	if apiKey == "" {
+		return nil, nil
+	}
+	exp, err := NewDatadog(DatadogConfig{
+		APIKey:        apiKey,
+		Site:          os.Getenv(envDDFlowSite),
+		URL:           os.Getenv(envDDFlowURL),
+		Service:       os.Getenv(envDDFlowService),
+		Source:        os.Getenv(envDDFlowSource),
+		Tags:          os.Getenv(envDDFlowTags),
+		BatchSize:     envInt(envDDFlowBatchSize),
+		FlushInterval: envDuration(envDDFlowFlushInterval),
+		BufferSize:    envInt(envDDFlowBufferSize),
+	})
+	if err != nil {
+		return nil, err
+	}
+	target := os.Getenv(envDDFlowURL)
+	if target == "" {
+		site := os.Getenv(envDDFlowSite)
+		if site == "" {
+			site = "us1"
+		}
+		target = "site=" + site
+	}
+	log.WithContext(ctx).Infof("flow streaming enabled: Datadog Logs Intake → %s", target)
+	return exp, nil
+}
+
+func newGCSFromEnv(ctx context.Context) (store.Sink, error) {
+	bucket := os.Getenv(envGCSBucket)
+	if bucket == "" {
+		return nil, nil
+	}
+	cfg := GCSConfig{
+		Bucket:           bucket,
+		Prefix:           os.Getenv(envGCSPrefix),
+		CredentialsFile:  os.Getenv(envGCSCredentialsFile),
+		ProjectID:        os.Getenv(envGCSProjectID),
+		Endpoint:         os.Getenv(envGCSEndpoint),
+		FlushInterval:    envDuration(envGCSFlushInterval),
+		MaxEventsPerFile: envInt(envGCSMaxEventsPerFile),
+		BufferSize:       envInt(envGCSBufferSize),
+	}
+	if v := os.Getenv(envGCSCredentialsJSON); v != "" {
+		cfg.CredentialsJSON = []byte(v)
+	}
+	exp, err := NewGCS(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	authMode := "ADC"
+	switch {
+	case len(cfg.CredentialsJSON) > 0:
+		authMode = "inline-json"
+	case cfg.CredentialsFile != "":
+		authMode = "file"
+	}
+	log.WithContext(ctx).Infof("flow archive enabled: GCS bucket %q (auth=%s)", bucket, authMode)
+	return exp, nil
 }
 
 func newS3FromEnv(ctx context.Context) (store.Sink, error) {
