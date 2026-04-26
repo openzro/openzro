@@ -27,6 +27,7 @@ import (
 	"github.com/openzro/openzro/management/server/http/handlers/peers"
 	"github.com/openzro/openzro/management/server/http/handlers/policies"
 	"github.com/openzro/openzro/management/server/http/handlers/routes"
+	"github.com/openzro/openzro/management/server/http/handlers/scim"
 	"github.com/openzro/openzro/management/server/http/handlers/setup_keys"
 	"github.com/openzro/openzro/management/server/http/handlers/users"
 	"github.com/openzro/openzro/management/server/http/middleware"
@@ -91,6 +92,14 @@ func NewAPIHandler(
 	dns.AddEndpoints(accountManager, router)
 	events.AddEndpoints(accountManager, router)
 	networks.AddEndpoints(networksManager, resourceManager, routerManager, groupsManager, accountManager, router)
+
+	// SCIM 2.0 lives at /scim/v2 per RFC 7644 — separate from /api so
+	// the path matches what every IdP expects out of the box. Same
+	// auth middleware: SCIM clients authenticate with a PAT issued to
+	// a service user (`Authorization: Bearer nbp_*`).
+	scimRouter := rootRouter.PathPrefix("/scim/v2").Subrouter()
+	scimRouter.Use(metricsMiddleware.Handler, corsMiddleware.Handler, authMiddleware.Handler)
+	scim.AddEndpoints(accountManager, scimRouter)
 
 	return rootRouter, nil
 }
