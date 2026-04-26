@@ -1,7 +1,8 @@
 import { cn, generateColorFromUser } from "@utils/helpers";
 import { Ban, Clock, Cog } from "lucide-react";
 import React from "react";
-import { User } from "@/interfaces/User";
+import { User, UserIssued } from "@/interfaces/User";
+import SCIMBadge from "@/modules/common/SCIMBadge";
 
 type Props = {
   user: User;
@@ -50,6 +51,7 @@ export default function UserNameCell({ user }: Readonly<Props>) {
               You
             </span>
           )}
+          {user.issued === UserIssued.INTEGRATION && <SCIMBadge />}
         </span>
         <span className={cn("text-sm text-nb-gray-400")}>{user.email}</span>
       </div>

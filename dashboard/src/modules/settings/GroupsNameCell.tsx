@@ -3,7 +3,8 @@ import TextWithTooltip from "@components/ui/TextWithTooltip";
 import { cn } from "@utils/helpers";
 import React from "react";
 import CircleIcon from "@/assets/icons/CircleIcon";
-import { Group } from "@/interfaces/Group";
+import { Group, GroupIssued } from "@/interfaces/Group";
+import SCIMBadge from "@/modules/common/SCIMBadge";
 
 type Props = {
   active: boolean;
@@ -23,6 +24,9 @@ export default function GroupsNameCell({ active, group }: Readonly<Props>) {
               className={"font-medium flex gap-2 items-center justify-center"}
             >
               <TextWithTooltip text={group?.name} maxChars={25} />
+              {group?.issued === GroupIssued.INTEGRATION && (
+                <SCIMBadge description="Group provisioned via SCIM. Membership changes made here will be overwritten on the next IdP sync." />
+              )}
             </div>
           </div>
           <CircleIcon
