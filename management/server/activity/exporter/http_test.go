@@ -34,6 +34,40 @@ func TestHTTPWebhook_RequiresURL(t *testing.T) {
 	assert.Error(t, err, "missing URL must be rejected")
 }
 
+// TestHTTPWebhook_PostsTemplatedPayload verifies the template path
+// from end-to-end: configure a template, send an event, assert the
+// receiver got the rendered bytes verbatim. The Content-Type header
+// is overridable via Headers so non-JSON templates can declare their
+// own media type.
+func TestHTTPWebhook_PostsTemplatedPayload(t *testing.T) {
+	var (
+		gotBody string
+		gotCT   string
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var b [4096]byte
+		n, _ := r.Body.Read(b[:])
+		gotBody = string(b[:n])
+		gotCT = r.Header.Get("Content-Type")
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+
+	tmpl, err := NewPayloadTemplate(`act={{.Activity}} usr={{.InitiatorID}}`)
+	require.NoError(t, err)
+
+	exp, err := NewHTTPWebhook(HTTPWebhookConfig{
+		URL:      srv.URL,
+		Headers:  map[string]string{"Content-Type": "text/plain"},
+		Template: tmpl,
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, exp.Export(context.Background(), sampleEvent()))
+	assert.Equal(t, "act=peer.approve usr=user-1", gotBody)
+	assert.Equal(t, "text/plain", gotCT)
+}
+
 func TestHTTPWebhook_PostsJSONWithCorrectShape(t *testing.T) {
 	var got httpEventPayload
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

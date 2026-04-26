@@ -19,8 +19,9 @@ type HTTPWebhookConfig struct {
 	// URL is the destination endpoint. Required. Must be http or https.
 	URL string
 	// Headers are sent on every request. Optional; commonly used for
-	// authorization tokens. The Content-Type header is overwritten to
-	// application/json — set it elsewhere if you need a different one.
+	// authorization tokens. The Content-Type header defaults to
+	// application/json; supply a different value here to override
+	// (e.g. text/plain when paired with a flat-format Template).
 	Headers map[string]string
 	// Timeout for a single HTTP attempt. Default 5s.
 	Timeout time.Duration
@@ -28,6 +29,12 @@ type HTTPWebhookConfig struct {
 	MaxAttempts int
 	// InitialBackoff for retry. Default 200ms; doubles each attempt.
 	InitialBackoff time.Duration
+	// Template, when non-nil, replaces the default openZro JSON
+	// payload with the rendered template output. The body is sent
+	// as-is (no JSON wrapping). The operator is responsible for
+	// matching Content-Type via Headers when their template emits a
+	// non-JSON shape. See template.go.
+	Template *PayloadTemplate
 	// HTTPClient overrides the default net/http client. Test seam.
 	HTTPClient *http.Client
 }
@@ -42,6 +49,7 @@ type HTTPWebhook struct {
 	maxAttempts    int
 	initialBackoff time.Duration
 	client         *http.Client
+	template       *PayloadTemplate
 }
 
 // NewHTTPWebhook constructs an HTTPWebhook from cfg, applying defaults
@@ -72,6 +80,7 @@ func NewHTTPWebhook(cfg HTTPWebhookConfig) (*HTTPWebhook, error) {
 		maxAttempts:    maxAttempts,
 		initialBackoff: initial,
 		client:         client,
+		template:       cfg.Template,
 	}, nil
 }
 
@@ -111,14 +120,28 @@ func toPayload(e *activity.Event) httpEventPayload {
 
 // Export POSTs the event as JSON, retrying on 5xx and transport errors
 // up to MaxAttempts. Returns the last error if all attempts fail.
+//
+// When a Template is configured, the rendered output replaces the
+// default JSON payload — the body is sent as-is and the operator is
+// responsible for matching Content-Type via Headers if their template
+// emits a non-JSON shape.
 func (h *HTTPWebhook) Export(ctx context.Context, event *activity.Event) error {
 	if event == nil {
 		return nil
 	}
 
-	body, err := json.Marshal(toPayload(event))
-	if err != nil {
-		return fmt.Errorf("marshal event: %w", err)
+	var body []byte
+	var err error
+	if h.template != nil {
+		body, err = h.template.Render(event)
+		if err != nil {
+			return fmt.Errorf("render template: %w", err)
+		}
+	} else {
+		body, err = json.Marshal(toPayload(event))
+		if err != nil {
+			return fmt.Errorf("marshal event: %w", err)
+		}
 	}
 
 	backoff := h.initialBackoff
