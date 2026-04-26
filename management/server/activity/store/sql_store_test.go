@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/netbirdio/netbird/management/server/activity"
+	"github.com/openzro/openzro/management/server/activity"
 )
 
 func TestNewSqlStore(t *testing.T) {

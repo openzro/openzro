@@ -8,7 +8,7 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip/header"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
 
-	nblog "github.com/netbirdio/netbird/client/firewall/uspfilter/log"
+	nblog "github.com/openzro/openzro/client/firewall/uspfilter/log"
 )
 
 // endpoint implements stack.LinkEndpoint and handles integration with the wireguard device

@@ -11,9 +11,9 @@ import (
 	"golang.zx2c4.com/wireguard/tun"
 	"golang.zx2c4.com/wireguard/tun/netstack"
 
-	"github.com/netbirdio/netbird/client/iface/bind"
-	"github.com/netbirdio/netbird/client/iface/configurer"
-	"github.com/netbirdio/netbird/client/iface/wgaddr"
+	"github.com/openzro/openzro/client/iface/bind"
+	"github.com/openzro/openzro/client/iface/configurer"
+	"github.com/openzro/openzro/client/iface/wgaddr"
 )
 
 // WGTunDevice ignore the WGTunDevice interface on Android because the creation of the tun device is different on this platform
@@ -74,9 +74,9 @@ func (t *WGTunDevice) Create(routes []string, dns string, searchDomains []string
 	t.filteredDevice = newDeviceFilter(tunDevice)
 
 	log.Debugf("attaching to interface %v", name)
-	t.device = device.NewDevice(t.filteredDevice, t.iceBind, device.NewLogger(wgLogLevel(), "[netbird] "))
+	t.device = device.NewDevice(t.filteredDevice, t.iceBind, device.NewLogger(wgLogLevel(), "[openzro] "))
 	// without this property mobile devices can discover remote endpoints if the configured one was wrong.
-	// this helps with support for the older NetBird clients that had a hardcoded direct mode
+	// this helps with support for the older Openzro clients that had a hardcoded direct mode
 	// t.device.DisableSomeRoamingForBrokenMobileSemantics()
 
 	t.configurer = configurer.NewUSPConfigurer(t.device, t.name, t.iceBind.ActivityRecorder())

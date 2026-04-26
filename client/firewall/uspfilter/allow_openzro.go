@@ -9,7 +9,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/internal/statemanager"
+	"github.com/openzro/openzro/client/internal/statemanager"
 )
 
 // Close cleans up the firewall manager by removing all rules and closing trackers
@@ -50,10 +50,10 @@ func (m *Manager) Close(stateManager *statemanager.Manager) error {
 	return nil
 }
 
-// AllowNetbird allows netbird interface traffic
-func (m *Manager) AllowNetbird() error {
+// AllowOpenzro allows openzro interface traffic
+func (m *Manager) AllowOpenzro() error {
 	if m.nativeFirewall != nil {
-		return m.nativeFirewall.AllowNetbird()
+		return m.nativeFirewall.AllowOpenzro()
 	}
 	return nil
 }

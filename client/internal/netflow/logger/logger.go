@@ -10,10 +10,10 @@ import (
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/internal/dnsfwd"
-	"github.com/netbirdio/netbird/client/internal/netflow/store"
-	"github.com/netbirdio/netbird/client/internal/netflow/types"
-	"github.com/netbirdio/netbird/client/internal/peer"
+	"github.com/openzro/openzro/client/internal/dnsfwd"
+	"github.com/openzro/openzro/client/internal/netflow/store"
+	"github.com/openzro/openzro/client/internal/netflow/types"
+	"github.com/openzro/openzro/client/internal/peer"
 )
 
 type rcvChan chan *types.EventFields

@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/netbirdio/netbird/management/server/http/api"
+	"github.com/openzro/openzro/management/server/http/api"
 )
 
 // NetworksAPI APIs for Networks, do not use directly
@@ -14,7 +14,7 @@ type NetworksAPI struct {
 }
 
 // List list all networks
-// See more: https://docs.netbird.io/api/resources/networks#list-all-networks
+// See more: https://docs.openzro.io/api/resources/networks#list-all-networks
 func (a *NetworksAPI) List(ctx context.Context) ([]api.Network, error) {
 	resp, err := a.c.NewRequest(ctx, "GET", "/api/networks", nil, nil)
 	if err != nil {
@@ -28,7 +28,7 @@ func (a *NetworksAPI) List(ctx context.Context) ([]api.Network, error) {
 }
 
 // Get get network info
-// See more: https://docs.netbird.io/api/resources/networks#retrieve-a-network
+// See more: https://docs.openzro.io/api/resources/networks#retrieve-a-network
 func (a *NetworksAPI) Get(ctx context.Context, networkID string) (*api.Network, error) {
 	resp, err := a.c.NewRequest(ctx, "GET", "/api/networks/"+networkID, nil, nil)
 	if err != nil {
@@ -42,7 +42,7 @@ func (a *NetworksAPI) Get(ctx context.Context, networkID string) (*api.Network, 
 }
 
 // Create create new network
-// See more: https://docs.netbird.io/api/resources/networks#create-a-network
+// See more: https://docs.openzro.io/api/resources/networks#create-a-network
 func (a *NetworksAPI) Create(ctx context.Context, request api.PostApiNetworksJSONRequestBody) (*api.Network, error) {
 	requestBytes, err := json.Marshal(request)
 	if err != nil {
@@ -60,7 +60,7 @@ func (a *NetworksAPI) Create(ctx context.Context, request api.PostApiNetworksJSO
 }
 
 // Update update network
-// See more: https://docs.netbird.io/api/resources/networks#update-a-network
+// See more: https://docs.openzro.io/api/resources/networks#update-a-network
 func (a *NetworksAPI) Update(ctx context.Context, networkID string, request api.PutApiNetworksNetworkIdJSONRequestBody) (*api.Network, error) {
 	requestBytes, err := json.Marshal(request)
 	if err != nil {
@@ -78,7 +78,7 @@ func (a *NetworksAPI) Update(ctx context.Context, networkID string, request api.
 }
 
 // Delete delete network
-// See more: https://docs.netbird.io/api/resources/networks#delete-a-network
+// See more: https://docs.openzro.io/api/resources/networks#delete-a-network
 func (a *NetworksAPI) Delete(ctx context.Context, networkID string) error {
 	resp, err := a.c.NewRequest(ctx, "DELETE", "/api/networks/"+networkID, nil, nil)
 	if err != nil {
@@ -106,7 +106,7 @@ func (a *NetworksAPI) Resources(networkID string) *NetworkResourcesAPI {
 }
 
 // List list all resources in networks
-// See more: https://docs.netbird.io/api/resources/networks#list-all-network-resources
+// See more: https://docs.openzro.io/api/resources/networks#list-all-network-resources
 func (a *NetworkResourcesAPI) List(ctx context.Context) ([]api.NetworkResource, error) {
 	resp, err := a.c.NewRequest(ctx, "GET", "/api/networks/"+a.networkID+"/resources", nil, nil)
 	if err != nil {
@@ -120,7 +120,7 @@ func (a *NetworkResourcesAPI) List(ctx context.Context) ([]api.NetworkResource, 
 }
 
 // Get get network resource info
-// See more: https://docs.netbird.io/api/resources/networks#retrieve-a-network-resource
+// See more: https://docs.openzro.io/api/resources/networks#retrieve-a-network-resource
 func (a *NetworkResourcesAPI) Get(ctx context.Context, networkResourceID string) (*api.NetworkResource, error) {
 	resp, err := a.c.NewRequest(ctx, "GET", "/api/networks/"+a.networkID+"/resources/"+networkResourceID, nil, nil)
 	if err != nil {
@@ -134,7 +134,7 @@ func (a *NetworkResourcesAPI) Get(ctx context.Context, networkResourceID string)
 }
 
 // Create create new network resource
-// See more: https://docs.netbird.io/api/resources/networks#create-a-network-resource
+// See more: https://docs.openzro.io/api/resources/networks#create-a-network-resource
 func (a *NetworkResourcesAPI) Create(ctx context.Context, request api.PostApiNetworksNetworkIdResourcesJSONRequestBody) (*api.NetworkResource, error) {
 	requestBytes, err := json.Marshal(request)
 	if err != nil {
@@ -152,7 +152,7 @@ func (a *NetworkResourcesAPI) Create(ctx context.Context, request api.PostApiNet
 }
 
 // Update update network resource
-// See more: https://docs.netbird.io/api/resources/networks#update-a-network-resource
+// See more: https://docs.openzro.io/api/resources/networks#update-a-network-resource
 func (a *NetworkResourcesAPI) Update(ctx context.Context, networkResourceID string, request api.PutApiNetworksNetworkIdResourcesResourceIdJSONRequestBody) (*api.NetworkResource, error) {
 	requestBytes, err := json.Marshal(request)
 	if err != nil {
@@ -170,7 +170,7 @@ func (a *NetworkResourcesAPI) Update(ctx context.Context, networkResourceID stri
 }
 
 // Delete delete network resource
-// See more: https://docs.netbird.io/api/resources/networks#delete-a-network-resource
+// See more: https://docs.openzro.io/api/resources/networks#delete-a-network-resource
 func (a *NetworkResourcesAPI) Delete(ctx context.Context, networkResourceID string) error {
 	resp, err := a.c.NewRequest(ctx, "DELETE", "/api/networks/"+a.networkID+"/resources/"+networkResourceID, nil, nil)
 	if err != nil {
@@ -198,7 +198,7 @@ func (a *NetworksAPI) Routers(networkID string) *NetworkRoutersAPI {
 }
 
 // List list all routers in networks
-// See more: https://docs.netbird.io/api/routers/networks#list-all-network-routers
+// See more: https://docs.openzro.io/api/routers/networks#list-all-network-routers
 func (a *NetworkRoutersAPI) List(ctx context.Context) ([]api.NetworkRouter, error) {
 	resp, err := a.c.NewRequest(ctx, "GET", "/api/networks/"+a.networkID+"/routers", nil, nil)
 	if err != nil {
@@ -212,7 +212,7 @@ func (a *NetworkRoutersAPI) List(ctx context.Context) ([]api.NetworkRouter, erro
 }
 
 // Get get network router info
-// See more: https://docs.netbird.io/api/routers/networks#retrieve-a-network-router
+// See more: https://docs.openzro.io/api/routers/networks#retrieve-a-network-router
 func (a *NetworkRoutersAPI) Get(ctx context.Context, networkRouterID string) (*api.NetworkRouter, error) {
 	resp, err := a.c.NewRequest(ctx, "GET", "/api/networks/"+a.networkID+"/routers/"+networkRouterID, nil, nil)
 	if err != nil {
@@ -226,7 +226,7 @@ func (a *NetworkRoutersAPI) Get(ctx context.Context, networkRouterID string) (*a
 }
 
 // Create create new network router
-// See more: https://docs.netbird.io/api/routers/networks#create-a-network-router
+// See more: https://docs.openzro.io/api/routers/networks#create-a-network-router
 func (a *NetworkRoutersAPI) Create(ctx context.Context, request api.PostApiNetworksNetworkIdRoutersJSONRequestBody) (*api.NetworkRouter, error) {
 	requestBytes, err := json.Marshal(request)
 	if err != nil {
@@ -244,7 +244,7 @@ func (a *NetworkRoutersAPI) Create(ctx context.Context, request api.PostApiNetwo
 }
 
 // Update update network router
-// See more: https://docs.netbird.io/api/routers/networks#update-a-network-router
+// See more: https://docs.openzro.io/api/routers/networks#update-a-network-router
 func (a *NetworkRoutersAPI) Update(ctx context.Context, networkRouterID string, request api.PutApiNetworksNetworkIdRoutersRouterIdJSONRequestBody) (*api.NetworkRouter, error) {
 	requestBytes, err := json.Marshal(request)
 	if err != nil {
@@ -262,7 +262,7 @@ func (a *NetworkRoutersAPI) Update(ctx context.Context, networkRouterID string, 
 }
 
 // Delete delete network router
-// See more: https://docs.netbird.io/api/routers/networks#delete-a-network-router
+// See more: https://docs.openzro.io/api/routers/networks#delete-a-network-router
 func (a *NetworkRoutersAPI) Delete(ctx context.Context, networkRouterID string) error {
 	resp, err := a.c.NewRequest(ctx, "DELETE", "/api/networks/"+a.networkID+"/routers/"+networkRouterID, nil, nil)
 	if err != nil {

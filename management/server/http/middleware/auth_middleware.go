@@ -10,12 +10,12 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/management/server/auth"
-	nbcontext "github.com/netbirdio/netbird/management/server/context"
-	"github.com/netbirdio/netbird/management/server/http/middleware/bypass"
-	"github.com/netbirdio/netbird/management/server/http/util"
-	"github.com/netbirdio/netbird/management/server/status"
-	"github.com/netbirdio/netbird/management/server/types"
+	"github.com/openzro/openzro/management/server/auth"
+	nbcontext "github.com/openzro/openzro/management/server/context"
+	"github.com/openzro/openzro/management/server/http/middleware/bypass"
+	"github.com/openzro/openzro/management/server/http/util"
+	"github.com/openzro/openzro/management/server/status"
+	"github.com/openzro/openzro/management/server/types"
 )
 
 type EnsureAccountFunc func(ctx context.Context, userAuth nbcontext.UserAuth) (string, string, error)

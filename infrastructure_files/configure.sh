@@ -34,43 +34,43 @@ if ! which envsubst >/dev/null 2>&1; then
   exit 1
 fi
 
-if [[ "x-$NETBIRD_DOMAIN" == "x-" ]]; then
-  echo NETBIRD_DOMAIN is not set, please update your setup.env file
+if [[ "x-$OPENZRO_DOMAIN" == "x-" ]]; then
+  echo OPENZRO_DOMAIN is not set, please update your setup.env file
   echo If you are migrating from old versions, you might need to update your variables prefixes from
-  echo WIRETRUSTEE_.. TO NETBIRD_
+  echo WIRETRUSTEE_.. TO OPENZRO_
   exit 1
 fi
 
 # Check if PostgreSQL is set as the store engine
-if [[ "$NETBIRD_STORE_CONFIG_ENGINE" == "postgres" ]]; then
-  # Exit if 'NETBIRD_STORE_ENGINE_POSTGRES_DSN' is not set
-  if [[ -z "$NETBIRD_STORE_ENGINE_POSTGRES_DSN" ]]; then
-    echo "Warning: NETBIRD_STORE_CONFIG_ENGINE=postgres but NETBIRD_STORE_ENGINE_POSTGRES_DSN is not set."
+if [[ "$OPENZRO_STORE_CONFIG_ENGINE" == "postgres" ]]; then
+  # Exit if 'OPENZRO_STORE_ENGINE_POSTGRES_DSN' is not set
+  if [[ -z "$OPENZRO_STORE_ENGINE_POSTGRES_DSN" ]]; then
+    echo "Warning: OPENZRO_STORE_CONFIG_ENGINE=postgres but OPENZRO_STORE_ENGINE_POSTGRES_DSN is not set."
     echo "Please add the following line to your setup.env file:"
-    echo 'NETBIRD_STORE_ENGINE_POSTGRES_DSN="host=<PG_HOST> user=<PG_USER> password=<PG_PASSWORD> dbname=<PG_DB_NAME> port=<PG_PORT>"'
+    echo 'OPENZRO_STORE_ENGINE_POSTGRES_DSN="host=<PG_HOST> user=<PG_USER> password=<PG_PASSWORD> dbname=<PG_DB_NAME> port=<PG_PORT>"'
     exit 1
   fi
-  export NETBIRD_STORE_ENGINE_POSTGRES_DSN
+  export OPENZRO_STORE_ENGINE_POSTGRES_DSN
 fi
 
 # Check if MySQL is set as the store engine
-if [[ "$NETBIRD_STORE_CONFIG_ENGINE" == "mysql" ]]; then
-  # Exit if 'NETBIRD_STORE_ENGINE_MYSQL_DSN' is not set
-  if [[ -z "$NETBIRD_STORE_ENGINE_MYSQL_DSN" ]]; then
-    echo "Warning: NETBIRD_STORE_CONFIG_ENGINE=mysql but NETBIRD_STORE_ENGINE_MYSQL_DSN is not set."
+if [[ "$OPENZRO_STORE_CONFIG_ENGINE" == "mysql" ]]; then
+  # Exit if 'OPENZRO_STORE_ENGINE_MYSQL_DSN' is not set
+  if [[ -z "$OPENZRO_STORE_ENGINE_MYSQL_DSN" ]]; then
+    echo "Warning: OPENZRO_STORE_CONFIG_ENGINE=mysql but OPENZRO_STORE_ENGINE_MYSQL_DSN is not set."
     echo "Please add the following line to your setup.env file:"
-    echo 'NETBIRD_STORE_ENGINE_MYSQL_DSN="<username>:<password>@tcp(127.0.0.1:3306)/<database>"'
+    echo 'OPENZRO_STORE_ENGINE_MYSQL_DSN="<username>:<password>@tcp(127.0.0.1:3306)/<database>"'
     exit 1
   fi
-  export NETBIRD_STORE_ENGINE_MYSQL_DSN
+  export OPENZRO_STORE_ENGINE_MYSQL_DSN
 fi
 
 # local development or tests
-if [[ $NETBIRD_DOMAIN == "localhost" || $NETBIRD_DOMAIN == "127.0.0.1" ]]; then
-  export NETBIRD_MGMT_SINGLE_ACCOUNT_MODE_DOMAIN="netbird.selfhosted"
-  export NETBIRD_MGMT_API_ENDPOINT=http://$NETBIRD_DOMAIN:$NETBIRD_MGMT_API_PORT
-  unset NETBIRD_MGMT_API_CERT_FILE
-  unset NETBIRD_MGMT_API_CERT_KEY_FILE
+if [[ $OPENZRO_DOMAIN == "localhost" || $OPENZRO_DOMAIN == "127.0.0.1" ]]; then
+  export OPENZRO_MGMT_SINGLE_ACCOUNT_MODE_DOMAIN="openzro.selfhosted"
+  export OPENZRO_MGMT_API_ENDPOINT=http://$OPENZRO_DOMAIN:$OPENZRO_MGMT_API_PORT
+  unset OPENZRO_MGMT_API_CERT_FILE
+  unset OPENZRO_MGMT_API_CERT_KEY_FILE
 fi
 
 # if not provided, we generate a turn password
@@ -80,7 +80,7 @@ fi
 
 TURN_EXTERNAL_IP_CONFIG="#"
 
-if [[ "x-$NETBIRD_TURN_EXTERNAL_IP" == "x-" ]]; then
+if [[ "x-$OPENZRO_TURN_EXTERNAL_IP" == "x-" ]]; then
   echo "discovering server's public IP"
   IP=$(curl -s -4 https://jsonip.com | jq -r '.ip')
   if [[ "x-$IP" != "x-" ]]; then
@@ -89,12 +89,12 @@ if [[ "x-$NETBIRD_TURN_EXTERNAL_IP" == "x-" ]]; then
     echo "unable to discover server's public IP"
   fi
 else
-  echo "${NETBIRD_TURN_EXTERNAL_IP}"| egrep '([0-9]{1,3}\.){3}[0-9]{1,3}$' > /dev/null
+  echo "${OPENZRO_TURN_EXTERNAL_IP}"| egrep '([0-9]{1,3}\.){3}[0-9]{1,3}$' > /dev/null
   if [[ $? -eq 0 ]]; then
     echo "using provided server's public IP"
-    TURN_EXTERNAL_IP_CONFIG="external-ip=$NETBIRD_TURN_EXTERNAL_IP"
+    TURN_EXTERNAL_IP_CONFIG="external-ip=$OPENZRO_TURN_EXTERNAL_IP"
   else
-    echo "provided NETBIRD_TURN_EXTERNAL_IP $NETBIRD_TURN_EXTERNAL_IP is invalid, please correct it and try again"
+    echo "provided OPENZRO_TURN_EXTERNAL_IP $OPENZRO_TURN_EXTERNAL_IP is invalid, please correct it and try again"
     exit 1
   fi
 fi
@@ -102,8 +102,8 @@ fi
 export TURN_EXTERNAL_IP_CONFIG
 
 # if not provided, we generate a relay auth secret
-if [[ "x-$NETBIRD_RELAY_AUTH_SECRET" == "x-" ]]; then
-  export NETBIRD_RELAY_AUTH_SECRET=$(openssl rand -base64 32 | sed 's/=//g')
+if [[ "x-$OPENZRO_RELAY_AUTH_SECRET" == "x-" ]]; then
+  export OPENZRO_RELAY_AUTH_SECRET=$(openssl rand -base64 32 | sed 's/=//g')
 fi
 
 artifacts_path="./artifacts"
@@ -112,7 +112,7 @@ mkdir -p $artifacts_path
 MGMT_VOLUMENAME="${VOLUME_PREFIX}${MGMT_VOLUMESUFFIX}"
 SIGNAL_VOLUMENAME="${VOLUME_PREFIX}${SIGNAL_VOLUMESUFFIX}"
 LETSENCRYPT_VOLUMENAME="${VOLUME_PREFIX}${LETSENCRYPT_VOLUMESUFFIX}"
-# if volume with wiretrustee- prefix already exists, use it, else create new with netbird-
+# if volume with wiretrustee- prefix already exists, use it, else create new with openzro-
 OLD_PREFIX='wiretrustee-'
 if docker volume ls | grep -q "${OLD_PREFIX}${MGMT_VOLUMESUFFIX}"; then
   MGMT_VOLUMENAME="${OLD_PREFIX}${MGMT_VOLUMESUFFIX}"
@@ -129,77 +129,77 @@ export SIGNAL_VOLUMENAME
 export LETSENCRYPT_VOLUMENAME
 
 #backwards compatibility after migrating to generic OIDC with Auth0
-if [[ -z "${NETBIRD_AUTH_OIDC_CONFIGURATION_ENDPOINT}" ]]; then
+if [[ -z "${OPENZRO_AUTH_OIDC_CONFIGURATION_ENDPOINT}" ]]; then
 
-  if [[ -z "${NETBIRD_AUTH0_DOMAIN}" ]]; then
+  if [[ -z "${OPENZRO_AUTH0_DOMAIN}" ]]; then
     # not a backward compatible state
-    echo "NETBIRD_AUTH_OIDC_CONFIGURATION_ENDPOINT property must be set in the setup.env file"
+    echo "OPENZRO_AUTH_OIDC_CONFIGURATION_ENDPOINT property must be set in the setup.env file"
     exit 1
   fi
 
   echo "It seems like you provided an old setup.env file."
   echo "Since the release of v0.8.10, we introduced a new set of properties."
   echo "The script is backward compatible and will continue automatically."
-  echo "In the future versions it will be deprecated. Please refer to the documentation to learn about the changes http://netbird.io/docs/getting-started/self-hosting"
+  echo "In the future versions it will be deprecated. Please refer to the documentation to learn about the changes http://openzro.io/docs/getting-started/self-hosting"
 
-  export NETBIRD_AUTH_OIDC_CONFIGURATION_ENDPOINT="https://${NETBIRD_AUTH0_DOMAIN}/.well-known/openid-configuration"
-  export NETBIRD_USE_AUTH0="true"
-  export NETBIRD_AUTH_AUDIENCE=${NETBIRD_AUTH0_AUDIENCE}
-  export NETBIRD_AUTH_CLIENT_ID=${NETBIRD_AUTH0_CLIENT_ID}
+  export OPENZRO_AUTH_OIDC_CONFIGURATION_ENDPOINT="https://${OPENZRO_AUTH0_DOMAIN}/.well-known/openid-configuration"
+  export OPENZRO_USE_AUTH0="true"
+  export OPENZRO_AUTH_AUDIENCE=${OPENZRO_AUTH0_AUDIENCE}
+  export OPENZRO_AUTH_CLIENT_ID=${OPENZRO_AUTH0_CLIENT_ID}
 fi
 
-echo "loading OpenID configuration from ${NETBIRD_AUTH_OIDC_CONFIGURATION_ENDPOINT} to the openid-configuration.json file"
-curl "${NETBIRD_AUTH_OIDC_CONFIGURATION_ENDPOINT}" -q -o ${artifacts_path}/openid-configuration.json
+echo "loading OpenID configuration from ${OPENZRO_AUTH_OIDC_CONFIGURATION_ENDPOINT} to the openid-configuration.json file"
+curl "${OPENZRO_AUTH_OIDC_CONFIGURATION_ENDPOINT}" -q -o ${artifacts_path}/openid-configuration.json
 
-export NETBIRD_AUTH_AUTHORITY=$(jq -r '.issuer' ${artifacts_path}/openid-configuration.json)
-export NETBIRD_AUTH_JWT_CERTS=$(jq -r '.jwks_uri' ${artifacts_path}/openid-configuration.json)
-export NETBIRD_AUTH_TOKEN_ENDPOINT=$(jq -r '.token_endpoint' ${artifacts_path}/openid-configuration.json)
-export NETBIRD_AUTH_DEVICE_AUTH_ENDPOINT=$(jq -r '.device_authorization_endpoint' ${artifacts_path}/openid-configuration.json)
-export NETBIRD_AUTH_PKCE_AUTHORIZATION_ENDPOINT=$(jq -r '.authorization_endpoint' ${artifacts_path}/openid-configuration.json)
+export OPENZRO_AUTH_AUTHORITY=$(jq -r '.issuer' ${artifacts_path}/openid-configuration.json)
+export OPENZRO_AUTH_JWT_CERTS=$(jq -r '.jwks_uri' ${artifacts_path}/openid-configuration.json)
+export OPENZRO_AUTH_TOKEN_ENDPOINT=$(jq -r '.token_endpoint' ${artifacts_path}/openid-configuration.json)
+export OPENZRO_AUTH_DEVICE_AUTH_ENDPOINT=$(jq -r '.device_authorization_endpoint' ${artifacts_path}/openid-configuration.json)
+export OPENZRO_AUTH_PKCE_AUTHORIZATION_ENDPOINT=$(jq -r '.authorization_endpoint' ${artifacts_path}/openid-configuration.json)
 
-if [[ ! -z "${NETBIRD_AUTH_DEVICE_AUTH_CLIENT_ID}" ]]; then
+if [[ ! -z "${OPENZRO_AUTH_DEVICE_AUTH_CLIENT_ID}" ]]; then
   # user enabled Device Authorization Grant feature
-  export NETBIRD_AUTH_DEVICE_AUTH_PROVIDER="hosted"
+  export OPENZRO_AUTH_DEVICE_AUTH_PROVIDER="hosted"
 fi
 
-if [ "$NETBIRD_TOKEN_SOURCE" = "idToken" ]; then
-    export NETBIRD_AUTH_PKCE_USE_ID_TOKEN=true
+if [ "$OPENZRO_TOKEN_SOURCE" = "idToken" ]; then
+    export OPENZRO_AUTH_PKCE_USE_ID_TOKEN=true
 fi
 
 # Check if letsencrypt was disabled
-if [[ "$NETBIRD_DISABLE_LETSENCRYPT" == "true" ]]; then
-  export NETBIRD_DASHBOARD_ENDPOINT="https://$NETBIRD_DOMAIN:443"
-  export NETBIRD_SIGNAL_ENDPOINT="https://$NETBIRD_DOMAIN:$NETBIRD_SIGNAL_PORT"
-  export NETBIRD_RELAY_ENDPOINT="rels://$NETBIRD_DOMAIN:$NETBIRD_RELAY_PORT/relay"
+if [[ "$OPENZRO_DISABLE_LETSENCRYPT" == "true" ]]; then
+  export OPENZRO_DASHBOARD_ENDPOINT="https://$OPENZRO_DOMAIN:443"
+  export OPENZRO_SIGNAL_ENDPOINT="https://$OPENZRO_DOMAIN:$OPENZRO_SIGNAL_PORT"
+  export OPENZRO_RELAY_ENDPOINT="rels://$OPENZRO_DOMAIN:$OPENZRO_RELAY_PORT/relay"
 
   echo "Letsencrypt was disabled, the Https-endpoints cannot be used anymore"
-  echo " and a reverse-proxy with Https needs to be placed in front of netbird!"
+  echo " and a reverse-proxy with Https needs to be placed in front of openzro!"
   echo "The following forwards have to be setup:"
-  echo "- $NETBIRD_DASHBOARD_ENDPOINT -http-> dashboard:80"
-  echo "- $NETBIRD_MGMT_API_ENDPOINT/api -http-> management:$NETBIRD_MGMT_API_PORT"
-  echo "- $NETBIRD_MGMT_API_ENDPOINT/management.ManagementService/ -grpc-> management:$NETBIRD_MGMT_API_PORT"
-  echo "- $NETBIRD_SIGNAL_ENDPOINT/signalexchange.SignalExchange/ -grpc-> signal:80"
-  echo "- $NETBIRD_RELAY_ENDPOINT/ -http-> relay:33080"
-  echo "You most likely also have to change NETBIRD_MGMT_API_ENDPOINT in base.setup.env and port-mappings in docker-compose.yml.tmpl and rerun this script."
+  echo "- $OPENZRO_DASHBOARD_ENDPOINT -http-> dashboard:80"
+  echo "- $OPENZRO_MGMT_API_ENDPOINT/api -http-> management:$OPENZRO_MGMT_API_PORT"
+  echo "- $OPENZRO_MGMT_API_ENDPOINT/management.ManagementService/ -grpc-> management:$OPENZRO_MGMT_API_PORT"
+  echo "- $OPENZRO_SIGNAL_ENDPOINT/signalexchange.SignalExchange/ -grpc-> signal:80"
+  echo "- $OPENZRO_RELAY_ENDPOINT/ -http-> relay:33080"
+  echo "You most likely also have to change OPENZRO_MGMT_API_ENDPOINT in base.setup.env and port-mappings in docker-compose.yml.tmpl and rerun this script."
   echo " The target of the forwards depends on your setup. Beware of the gRPC protocol instead of http for management and signal!"
   echo "You are also free to remove any occurrences of the Letsencrypt-volume $LETSENCRYPT_VOLUMENAME"
   echo ""
 
-  export NETBIRD_SIGNAL_PROTOCOL="https"
-  unset NETBIRD_LETSENCRYPT_DOMAIN
-  unset NETBIRD_MGMT_API_CERT_FILE
-  unset NETBIRD_MGMT_API_CERT_KEY_FILE
+  export OPENZRO_SIGNAL_PROTOCOL="https"
+  unset OPENZRO_LETSENCRYPT_DOMAIN
+  unset OPENZRO_MGMT_API_CERT_FILE
+  unset OPENZRO_MGMT_API_CERT_KEY_FILE
 fi
 
 # Check if management identity provider is set
-if [ -n "$NETBIRD_MGMT_IDP" ]; then
+if [ -n "$OPENZRO_MGMT_IDP" ]; then
   EXTRA_CONFIG={}
 
-  # extract extra config from all env prefixed with NETBIRD_IDP_MGMT_EXTRA_
-  for var in ${!NETBIRD_IDP_MGMT_EXTRA_*}; do
+  # extract extra config from all env prefixed with OPENZRO_IDP_MGMT_EXTRA_
+  for var in ${!OPENZRO_IDP_MGMT_EXTRA_*}; do
     # convert key snake case to camel case
     key=$(
-      echo "${var#NETBIRD_IDP_MGMT_EXTRA_}" | awk -F "_" \
+      echo "${var#OPENZRO_IDP_MGMT_EXTRA_}" | awk -F "_" \
         '{for (i=1; i<=NF; i++) {output=output substr($i,1,1) tolower(substr($i,2))} print output}'
     )
     value="${!var}"
@@ -208,38 +208,38 @@ if [ -n "$NETBIRD_MGMT_IDP" ]; then
     EXTRA_CONFIG=$(jq --arg k "$key" --arg v "$value" '.[$k] = $v' <<<"$EXTRA_CONFIG")
   done
 
-  export NETBIRD_MGMT_IDP
-  export NETBIRD_IDP_MGMT_CLIENT_ID
-  export NETBIRD_IDP_MGMT_CLIENT_SECRET
-  export NETBIRD_IDP_MGMT_EXTRA_CONFIG=$EXTRA_CONFIG
+  export OPENZRO_MGMT_IDP
+  export OPENZRO_IDP_MGMT_CLIENT_ID
+  export OPENZRO_IDP_MGMT_CLIENT_SECRET
+  export OPENZRO_IDP_MGMT_EXTRA_CONFIG=$EXTRA_CONFIG
 else
-  export NETBIRD_IDP_MGMT_EXTRA_CONFIG={}
+  export OPENZRO_IDP_MGMT_EXTRA_CONFIG={}
 fi
 
-IFS=',' read -r -a REDIRECT_URL_PORTS <<< "$NETBIRD_AUTH_PKCE_REDIRECT_URL_PORTS"
+IFS=',' read -r -a REDIRECT_URL_PORTS <<< "$OPENZRO_AUTH_PKCE_REDIRECT_URL_PORTS"
 REDIRECT_URLS=""
 for port in "${REDIRECT_URL_PORTS[@]}"; do
     REDIRECT_URLS+="\"http://localhost:${port}\","
 done
 
-export NETBIRD_AUTH_PKCE_REDIRECT_URLS=${REDIRECT_URLS%,}
+export OPENZRO_AUTH_PKCE_REDIRECT_URLS=${REDIRECT_URLS%,}
 
 # Remove audience for providers that do not support it
-if [ "$NETBIRD_DASH_AUTH_USE_AUDIENCE" = "false" ]; then
-    export NETBIRD_DASH_AUTH_AUDIENCE=none
-    export NETBIRD_AUTH_PKCE_AUDIENCE=
+if [ "$OPENZRO_DASH_AUTH_USE_AUDIENCE" = "false" ]; then
+    export OPENZRO_DASH_AUTH_AUDIENCE=none
+    export OPENZRO_AUTH_PKCE_AUDIENCE=
 fi
 
 # Read the encryption key
 if test -f 'management.json'; then
     encKey=$(jq -r  ".DataStoreEncryptionKey" management.json)
     if [[ "$encKey" != "null" ]]; then
-        export NETBIRD_DATASTORE_ENC_KEY=$encKey
+        export OPENZRO_DATASTORE_ENC_KEY=$encKey
 
     fi
 fi
 
-env | grep NETBIRD
+env | grep OPENZRO
 
 bkp_postfix="$(date +%s)"
 if test -f "${artifacts_path}/docker-compose.yml"; then

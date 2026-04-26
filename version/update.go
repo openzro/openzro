@@ -15,7 +15,7 @@ const (
 )
 
 var (
-	versionURL = "https://pkgs.netbird.io/releases/latest/version"
+	versionURL = "https://pkgs.openzro.io/releases/latest/version"
 )
 
 // Update fetch the version info periodically and notify the onUpdateListener in case the UI version or the

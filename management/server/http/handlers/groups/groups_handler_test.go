@@ -17,14 +17,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/maps"
 
-	"github.com/netbirdio/netbird/management/server"
-	nbcontext "github.com/netbirdio/netbird/management/server/context"
-	"github.com/netbirdio/netbird/management/server/http/api"
-	"github.com/netbirdio/netbird/management/server/http/util"
-	"github.com/netbirdio/netbird/management/server/mock_server"
-	nbpeer "github.com/netbirdio/netbird/management/server/peer"
-	"github.com/netbirdio/netbird/management/server/status"
-	"github.com/netbirdio/netbird/management/server/types"
+	"github.com/openzro/openzro/management/server"
+	nbcontext "github.com/openzro/openzro/management/server/context"
+	"github.com/openzro/openzro/management/server/http/api"
+	"github.com/openzro/openzro/management/server/http/util"
+	"github.com/openzro/openzro/management/server/mock_server"
+	nbpeer "github.com/openzro/openzro/management/server/peer"
+	"github.com/openzro/openzro/management/server/status"
+	"github.com/openzro/openzro/management/server/types"
 )
 
 var TestPeers = map[string]*nbpeer.Peer{

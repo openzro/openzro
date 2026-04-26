@@ -12,24 +12,24 @@ fi
 cleanInstall() {
     printf "\033[32m Post Install of an clean install\033[0m\n"
     # Step 3 (clean install), enable the service in the proper way for this platform
-    /usr/bin/netbird service install
-    /usr/bin/netbird service start
+    /usr/bin/openzro service install
+    /usr/bin/openzro service start
 }
 
 upgrade() {
     printf "\033[32m Post Install of an upgrade\033[0m\n"
     if [ "${use_systemctl}" = "True" ]; then
       printf "\033[32m Stopping the service\033[0m\n"
-      systemctl stop netbird 2> /dev/null || true
+      systemctl stop openzro 2> /dev/null || true
     fi
-    if [ -e /lib/systemd/system/netbird.service ]; then
-      rm -f /lib/systemd/system/netbird.service
+    if [ -e /lib/systemd/system/openzro.service ]; then
+      rm -f /lib/systemd/system/openzro.service
       systemctl daemon-reload
     fi
     # will trow an error until everyone upgrade
-    /usr/bin/netbird service uninstall 2> /dev/null || true
-    /usr/bin/netbird service install
-    /usr/bin/netbird service start
+    /usr/bin/openzro service uninstall 2> /dev/null || true
+    /usr/bin/openzro service install
+    /usr/bin/openzro service start
 }
 
 # Check if this is a clean install or an upgrade

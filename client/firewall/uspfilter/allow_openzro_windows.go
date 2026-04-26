@@ -10,7 +10,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/internal/statemanager"
+	"github.com/openzro/openzro/client/internal/statemanager"
 )
 
 type action string
@@ -18,7 +18,7 @@ type action string
 const (
 	addRule          action = "add"
 	deleteRule       action = "delete"
-	firewallRuleName        = "Netbird"
+	firewallRuleName        = "Openzro"
 )
 
 // Close cleans up the firewall manager by removing all rules and closing trackers
@@ -68,8 +68,8 @@ func (m *Manager) Close(*statemanager.Manager) error {
 	return nil
 }
 
-// AllowNetbird allows netbird interface traffic
-func (m *Manager) AllowNetbird() error {
+// AllowOpenzro allows openzro interface traffic
+func (m *Manager) AllowOpenzro() error {
 	if !isWindowsFirewallReachable() {
 		return nil
 	}

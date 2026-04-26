@@ -1,6 +1,6 @@
 package peer
 
-// Listener is a callback type about the NetBird network connection state
+// Listener is a callback type about the Openzro network connection state
 type Listener interface {
 	OnConnected()
 	OnDisconnected()

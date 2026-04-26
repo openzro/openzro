@@ -13,7 +13,7 @@ import (
 	"fyne.io/systray"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/version"
+	"github.com/openzro/openzro/version"
 )
 
 type eventHandler struct {
@@ -69,7 +69,7 @@ func (h *eventHandler) handleConnectClick() {
 	go func() {
 		defer h.client.mUp.Enable()
 		if err := h.client.menuUpClick(); err != nil {
-			h.client.app.SendNotification(fyne.NewNotification("Error", "Failed to connect to NetBird service"))
+			h.client.app.SendNotification(fyne.NewNotification("Error", "Failed to connect to Openzro service"))
 		}
 	}()
 }
@@ -79,7 +79,7 @@ func (h *eventHandler) handleDisconnectClick() {
 	go func() {
 		defer h.client.mDown.Enable()
 		if err := h.client.menuDownClick(); err != nil {
-			h.client.app.SendNotification(fyne.NewNotification("Error", "Failed to connect to NetBird daemon"))
+			h.client.app.SendNotification(fyne.NewNotification("Error", "Failed to connect to Openzro daemon"))
 		}
 	}()
 }
@@ -164,7 +164,7 @@ func (h *eventHandler) handleQuitClick() {
 }
 
 func (h *eventHandler) handleGitHubClick() {
-	if err := openURL("https://github.com/netbirdio/netbird"); err != nil {
+	if err := openURL("https://github.com/openzro/openzro"); err != nil {
 		log.Errorf("failed to open GitHub URL: %v", err)
 	}
 }

@@ -10,11 +10,11 @@ import (
 	"golang.zx2c4.com/wireguard/device"
 	"golang.zx2c4.com/wireguard/tun/netstack"
 
-	"github.com/netbirdio/netbird/client/iface/bind"
-	"github.com/netbirdio/netbird/client/iface/configurer"
-	nbnetstack "github.com/netbirdio/netbird/client/iface/netstack"
-	"github.com/netbirdio/netbird/client/iface/wgaddr"
-	nbnet "github.com/netbirdio/netbird/util/net"
+	"github.com/openzro/openzro/client/iface/bind"
+	"github.com/openzro/openzro/client/iface/configurer"
+	nbnetstack "github.com/openzro/openzro/client/iface/netstack"
+	"github.com/openzro/openzro/client/iface/wgaddr"
+	nbnet "github.com/openzro/openzro/util/net"
 )
 
 type TunNetstackDevice struct {
@@ -69,7 +69,7 @@ func (t *TunNetstackDevice) Create() (WGConfigurer, error) {
 	t.device = device.NewDevice(
 		t.filteredDevice,
 		t.iceBind,
-		device.NewLogger(wgLogLevel(), "[netbird] "),
+		device.NewLogger(wgLogLevel(), "[openzro] "),
 	)
 
 	t.configurer = configurer.NewUSPConfigurer(t.device, t.name, t.iceBind.ActivityRecorder())

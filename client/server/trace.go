@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"net/netip"
 
-	fw "github.com/netbirdio/netbird/client/firewall/manager"
-	"github.com/netbirdio/netbird/client/firewall/uspfilter"
-	"github.com/netbirdio/netbird/client/internal"
-	"github.com/netbirdio/netbird/client/proto"
+	fw "github.com/openzro/openzro/client/firewall/manager"
+	"github.com/openzro/openzro/client/firewall/uspfilter"
+	"github.com/openzro/openzro/client/internal"
+	"github.com/openzro/openzro/client/proto"
 )
 
 type packetTracer interface {

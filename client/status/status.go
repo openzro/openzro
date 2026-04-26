@@ -13,16 +13,16 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/netbirdio/netbird/client/anonymize"
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/client/proto"
-	"github.com/netbirdio/netbird/management/domain"
-	"github.com/netbirdio/netbird/version"
+	"github.com/openzro/openzro/client/anonymize"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/client/proto"
+	"github.com/openzro/openzro/management/domain"
+	"github.com/openzro/openzro/version"
 )
 
 type PeerStateDetailOutput struct {
 	FQDN                   string           `json:"fqdn" yaml:"fqdn"`
-	IP                     string           `json:"netbirdIp" yaml:"netbirdIp"`
+	IP                     string           `json:"openzroIp" yaml:"openzroIp"`
 	PubKey                 string           `json:"publicKey" yaml:"publicKey"`
 	Status                 string           `json:"status" yaml:"status"`
 	LastStatusUpdate       time.Time        `json:"lastStatusUpdate" yaml:"lastStatusUpdate"`
@@ -87,7 +87,7 @@ type OutputOverview struct {
 	ManagementState         ManagementStateOutput      `json:"management" yaml:"management"`
 	SignalState             SignalStateOutput          `json:"signal" yaml:"signal"`
 	Relays                  RelayStateOutput           `json:"relays" yaml:"relays"`
-	IP                      string                     `json:"netbirdIp" yaml:"netbirdIp"`
+	IP                      string                     `json:"openzroIp" yaml:"openzroIp"`
 	PubKey                  string                     `json:"publicKey" yaml:"publicKey"`
 	KernelInterface         bool                       `json:"usesKernelInterface" yaml:"usesKernelInterface"`
 	FQDN                    string                     `json:"fqdn" yaml:"fqdn"`
@@ -123,7 +123,7 @@ func ConvertToStatusOutputOverview(resp *proto.StatusResponse, anon bool, status
 
 	overview := OutputOverview{
 		Peers:                   peersOverview,
-		CliVersion:              version.NetbirdVersion(),
+		CliVersion:              version.OpenzroVersion(),
 		DaemonVersion:           resp.GetDaemonVersion(),
 		ManagementState:         managementOverview,
 		SignalState:             signalOverview,
@@ -414,7 +414,7 @@ func ParseGeneralSummary(overview OutputOverview, showURL bool, showRelays bool,
 			"Relays: %s\n"+
 			"Nameservers: %s\n"+
 			"FQDN: %s\n"+
-			"NetBird IP: %s\n"+
+			"Openzro IP: %s\n"+
 			"Interface type: %s\n"+
 			"Quantum resistance: %s\n"+
 			"Lazy connection: %s\n"+
@@ -423,7 +423,7 @@ func ParseGeneralSummary(overview OutputOverview, showURL bool, showRelays bool,
 			"Peers count: %s\n",
 		fmt.Sprintf("%s/%s%s", goos, goarch, goarm),
 		overview.DaemonVersion,
-		version.NetbirdVersion(),
+		version.OpenzroVersion(),
 		overview.ProfileName,
 		managementConnString,
 		signalConnString,
@@ -510,7 +510,7 @@ func parsePeers(peers PeersStateOutput, rosenpassEnabled, rosenpassPermissive bo
 
 		peerString := fmt.Sprintf(
 			"\n %s:\n"+
-				"  NetBird IP: %s\n"+
+				"  Openzro IP: %s\n"+
 				"  Public key: %s\n"+
 				"  Status: %s\n"+
 				"  -- detail --\n"+

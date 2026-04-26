@@ -1,8 +1,8 @@
 package users
 
 import (
-	"github.com/netbirdio/netbird/management/server/permissions/roles"
-	"github.com/netbirdio/netbird/management/server/types"
+	"github.com/openzro/openzro/management/server/permissions/roles"
+	"github.com/openzro/openzro/management/server/types"
 )
 
 // Wrapped UserInfo with Role Permissions

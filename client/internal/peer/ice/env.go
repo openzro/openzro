@@ -10,11 +10,11 @@ import (
 )
 
 const (
-	envICEForceRelayConn            = "NB_ICE_FORCE_RELAY_CONN"
-	envICEKeepAliveIntervalSec      = "NB_ICE_KEEP_ALIVE_INTERVAL_SEC"
-	envICEDisconnectedTimeoutSec    = "NB_ICE_DISCONNECTED_TIMEOUT_SEC"
-	envICEFailedTimeoutSec          = "NB_ICE_FAILED_TIMEOUT_SEC"
-	envICERelayAcceptanceMinWaitSec = "NB_ICE_RELAY_ACCEPTANCE_MIN_WAIT_SEC"
+	envICEForceRelayConn            = "OZ_ICE_FORCE_RELAY_CONN"
+	envICEKeepAliveIntervalSec      = "OZ_ICE_KEEP_ALIVE_INTERVAL_SEC"
+	envICEDisconnectedTimeoutSec    = "OZ_ICE_DISCONNECTED_TIMEOUT_SEC"
+	envICEFailedTimeoutSec          = "OZ_ICE_FAILED_TIMEOUT_SEC"
+	envICERelayAcceptanceMinWaitSec = "OZ_ICE_RELAY_ACCEPTANCE_MIN_WAIT_SEC"
 
 	msgWarnInvalidValue = "invalid value %s set for %s, using default %v"
 )

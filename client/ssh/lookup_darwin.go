@@ -38,7 +38,7 @@ func idUserNameLookup(username string) (*user.User, error) {
 	if !bytes.Contains(out, []byte(username+colon)) {
 		return nil, fmt.Errorf("unable to find user in returned string")
 	}
-	// netbird:********:501:20::0:0:netbird:/Users/netbird:/bin/zsh
+	// openzro:********:501:20::0:0:openzro:/Users/openzro:/bin/zsh
 	parts := strings.SplitN(string(out), colon, 10)
 	userObject := &user.User{
 		Username: parts[0],

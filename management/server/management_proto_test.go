@@ -20,17 +20,17 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 
-	"github.com/netbirdio/netbird/encryption"
-	"github.com/netbirdio/netbird/formatter/hook"
-	mgmtProto "github.com/netbirdio/netbird/management/proto"
-	"github.com/netbirdio/netbird/management/server/activity"
-	"github.com/netbirdio/netbird/management/server/integrations/port_forwarding"
-	"github.com/netbirdio/netbird/management/server/permissions"
-	"github.com/netbirdio/netbird/management/server/settings"
-	"github.com/netbirdio/netbird/management/server/store"
-	"github.com/netbirdio/netbird/management/server/telemetry"
-	"github.com/netbirdio/netbird/management/server/types"
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/encryption"
+	"github.com/openzro/openzro/formatter/hook"
+	mgmtProto "github.com/openzro/openzro/management/proto"
+	"github.com/openzro/openzro/management/server/activity"
+	"github.com/openzro/openzro/management/server/integrations/port_forwarding"
+	"github.com/openzro/openzro/management/server/permissions"
+	"github.com/openzro/openzro/management/server/settings"
+	"github.com/openzro/openzro/management/server/store"
+	"github.com/openzro/openzro/management/server/telemetry"
+	"github.com/openzro/openzro/management/server/types"
+	"github.com/openzro/openzro/util"
 )
 
 type TestingT interface {
@@ -97,7 +97,7 @@ func Test_SyncProtocol(t *testing.T) {
 	mgmtServer, _, mgmtAddr, cleanup, err := startManagementForTest(t, "testdata/store_with_expired_peers.sql", &types.Config{
 		Stuns: []*types.Host{{
 			Proto: "udp",
-			URI:   "stun:stun.netbird.io:3468",
+			URI:   "stun:stun.openzro.io:3468",
 		}},
 		TURNConfig: &types.TURNConfig{
 			TimeBasedCredentials: false,
@@ -105,12 +105,12 @@ func Test_SyncProtocol(t *testing.T) {
 			Secret:               "whatever",
 			Turns: []*types.Host{{
 				Proto: "udp",
-				URI:   "turn:stun.netbird.io:3468",
+				URI:   "turn:stun.openzro.io:3468",
 			}},
 		},
 		Signal: &types.Host{
 			Proto: "http",
-			URI:   "signal.netbird.io:10000",
+			URI:   "signal.openzro.io:10000",
 		},
 		Datadir:    dir,
 		HttpConfig: nil,
@@ -176,64 +176,64 @@ func Test_SyncProtocol(t *testing.T) {
 		return
 	}
 
-	netbirdConfig := syncResp.GetNetbirdConfig()
-	if netbirdConfig == nil {
-		t.Fatal("expecting SyncResponse to have non-nil NetbirdConfig")
+	openzroConfig := syncResp.GetOpenzroConfig()
+	if openzroConfig == nil {
+		t.Fatal("expecting SyncResponse to have non-nil OpenzroConfig")
 	}
 
-	if netbirdConfig.GetSignal() == nil {
-		t.Fatal("expecting SyncResponse to have NetbirdConfig with non-nil Signal config")
+	if openzroConfig.GetSignal() == nil {
+		t.Fatal("expecting SyncResponse to have OpenzroConfig with non-nil Signal config")
 	}
 
 	expectedSignalConfig := &mgmtProto.HostConfig{
-		Uri:      "signal.netbird.io:10000",
+		Uri:      "signal.openzro.io:10000",
 		Protocol: mgmtProto.HostConfig_HTTP,
 	}
 
-	if netbirdConfig.GetSignal().GetUri() != expectedSignalConfig.GetUri() {
-		t.Fatalf("expecting SyncResponse to have NetbirdConfig with expected Signal URI: %v, actual: %v",
+	if openzroConfig.GetSignal().GetUri() != expectedSignalConfig.GetUri() {
+		t.Fatalf("expecting SyncResponse to have OpenzroConfig with expected Signal URI: %v, actual: %v",
 			expectedSignalConfig.GetUri(),
-			netbirdConfig.GetSignal().GetUri())
+			openzroConfig.GetSignal().GetUri())
 	}
 
-	if netbirdConfig.GetSignal().GetProtocol() != expectedSignalConfig.GetProtocol() {
-		t.Fatalf("expecting SyncResponse to have NetbirdConfig with expected Signal Protocol: %v, actual: %v",
+	if openzroConfig.GetSignal().GetProtocol() != expectedSignalConfig.GetProtocol() {
+		t.Fatalf("expecting SyncResponse to have OpenzroConfig with expected Signal Protocol: %v, actual: %v",
 			expectedSignalConfig.GetProtocol().String(),
-			netbirdConfig.GetSignal().GetProtocol())
+			openzroConfig.GetSignal().GetProtocol())
 	}
 
 	expectedStunsConfig := &mgmtProto.HostConfig{
-		Uri:      "stun:stun.netbird.io:3468",
+		Uri:      "stun:stun.openzro.io:3468",
 		Protocol: mgmtProto.HostConfig_UDP,
 	}
 
-	if netbirdConfig.GetStuns()[0].GetUri() != expectedStunsConfig.GetUri() {
-		t.Fatalf("expecting SyncResponse to have NetbirdConfig with expected STUN URI: %v, actual: %v",
+	if openzroConfig.GetStuns()[0].GetUri() != expectedStunsConfig.GetUri() {
+		t.Fatalf("expecting SyncResponse to have OpenzroConfig with expected STUN URI: %v, actual: %v",
 			expectedStunsConfig.GetUri(),
-			netbirdConfig.GetStuns()[0].GetUri())
+			openzroConfig.GetStuns()[0].GetUri())
 	}
 
-	if netbirdConfig.GetStuns()[0].GetProtocol() != expectedStunsConfig.GetProtocol() {
-		t.Fatalf("expecting SyncResponse to have NetbirdConfig with expected STUN Protocol: %v, actual: %v",
+	if openzroConfig.GetStuns()[0].GetProtocol() != expectedStunsConfig.GetProtocol() {
+		t.Fatalf("expecting SyncResponse to have OpenzroConfig with expected STUN Protocol: %v, actual: %v",
 			expectedStunsConfig.GetProtocol(),
-			netbirdConfig.GetStuns()[0].GetProtocol())
+			openzroConfig.GetStuns()[0].GetProtocol())
 	}
 
 	expectedTRUNHost := &mgmtProto.HostConfig{
-		Uri:      "turn:stun.netbird.io:3468",
+		Uri:      "turn:stun.openzro.io:3468",
 		Protocol: mgmtProto.HostConfig_UDP,
 	}
 
-	if netbirdConfig.GetTurns()[0].GetHostConfig().GetUri() != expectedTRUNHost.GetUri() {
-		t.Fatalf("expecting SyncResponse to have NetbirdConfig with expected TURN URI: %v, actual: %v",
+	if openzroConfig.GetTurns()[0].GetHostConfig().GetUri() != expectedTRUNHost.GetUri() {
+		t.Fatalf("expecting SyncResponse to have OpenzroConfig with expected TURN URI: %v, actual: %v",
 			expectedTRUNHost.GetUri(),
-			netbirdConfig.GetTurns()[0].GetHostConfig().GetUri())
+			openzroConfig.GetTurns()[0].GetHostConfig().GetUri())
 	}
 
-	if netbirdConfig.GetTurns()[0].GetHostConfig().GetProtocol() != expectedTRUNHost.GetProtocol() {
-		t.Fatalf("expecting SyncResponse to have NetbirdConfig with expected TURN Protocol: %v, actual: %v",
+	if openzroConfig.GetTurns()[0].GetHostConfig().GetProtocol() != expectedTRUNHost.GetProtocol() {
+		t.Fatalf("expecting SyncResponse to have OpenzroConfig with expected TURN Protocol: %v, actual: %v",
 			expectedTRUNHost.GetProtocol().String(),
-			netbirdConfig.GetTurns()[0].GetHostConfig().GetProtocol())
+			openzroConfig.GetTurns()[0].GetHostConfig().GetProtocol())
 	}
 
 	// ensure backward compatibility
@@ -294,7 +294,7 @@ func loginPeerWithValidSetupKey(key wgtypes.Key, client mgmtProto.ManagementServ
 		Core:           "core",
 		Platform:       "platform",
 		Kernel:         "kernel",
-		NetbirdVersion: "",
+		OpenzroVersion: "",
 	}
 	message, err := encryption.EncryptMessage(*serverKey, key, &mgmtProto.LoginRequest{SetupKey: TestValidSetupKey, Meta: meta})
 	if err != nil {
@@ -447,7 +447,7 @@ func startManagementForTest(t *testing.T, testFile string, config *types.Config)
 		AnyTimes()
 	permissionsManager := permissions.NewManager(store)
 
-	accountManager, err := BuildManager(ctx, store, peersUpdateManager, nil, "", "netbird.selfhosted",
+	accountManager, err := BuildManager(ctx, store, peersUpdateManager, nil, "", "openzro.selfhosted",
 		eventStore, nil, false, MockIntegratedValidator{}, metrics, port_forwarding.NewControllerMock(), settingsMockManager, permissionsManager, false)
 
 	if err != nil {
@@ -494,11 +494,11 @@ func createRawClient(addr string) (mgmtProto.ManagementServiceClient, *grpc.Clie
 func Test_SyncStatusRace(t *testing.T) {
 	t.Skip()
 	if os.Getenv("CI") == "true" {
-		if os.Getenv("NETBIRD_STORE_ENGINE") == "postgres" {
+		if os.Getenv("OPENZRO_STORE_ENGINE") == "postgres" {
 			t.Skip("Skipping on CI and Postgres store")
 		}
 
-		if os.Getenv("NETBIRD_STORE_ENGINE") == "mysql" {
+		if os.Getenv("OPENZRO_STORE_ENGINE") == "mysql" {
 			t.Skip("Skipping on CI and MySQL store")
 		}
 	}
@@ -516,7 +516,7 @@ func testSyncStatusRace(t *testing.T) {
 	mgmtServer, am, mgmtAddr, cleanup, err := startManagementForTest(t, "testdata/store_with_expired_peers.sql", &types.Config{
 		Stuns: []*types.Host{{
 			Proto: "udp",
-			URI:   "stun:stun.netbird.io:3468",
+			URI:   "stun:stun.openzro.io:3468",
 		}},
 		TURNConfig: &types.TURNConfig{
 			TimeBasedCredentials: false,
@@ -524,12 +524,12 @@ func testSyncStatusRace(t *testing.T) {
 			Secret:               "whatever",
 			Turns: []*types.Host{{
 				Proto: "udp",
-				URI:   "turn:stun.netbird.io:3468",
+				URI:   "turn:stun.openzro.io:3468",
 			}},
 		},
 		Signal: &types.Host{
 			Proto: "http",
-			URI:   "signal.netbird.io:10000",
+			URI:   "signal.openzro.io:10000",
 		},
 		Datadir:    dir,
 		HttpConfig: nil,
@@ -661,7 +661,7 @@ func Test_LoginPerformance(t *testing.T) {
 		t.Skip("Skipping test on CI or Windows")
 	}
 
-	t.Setenv("NETBIRD_STORE_ENGINE", "sqlite")
+	t.Setenv("OPENZRO_STORE_ENGINE", "sqlite")
 
 	benchCases := []struct {
 		name     string
@@ -688,7 +688,7 @@ func Test_LoginPerformance(t *testing.T) {
 			mgmtServer, am, _, cleanup, err := startManagementForTest(t, "testdata/store_with_expired_peers.sql", &types.Config{
 				Stuns: []*types.Host{{
 					Proto: "udp",
-					URI:   "stun:stun.netbird.io:3468",
+					URI:   "stun:stun.openzro.io:3468",
 				}},
 				TURNConfig: &types.TURNConfig{
 					TimeBasedCredentials: false,
@@ -696,12 +696,12 @@ func Test_LoginPerformance(t *testing.T) {
 					Secret:               "whatever",
 					Turns: []*types.Host{{
 						Proto: "udp",
-						URI:   "turn:stun.netbird.io:3468",
+						URI:   "turn:stun.openzro.io:3468",
 					}},
 				},
 				Signal: &types.Host{
 					Proto: "http",
-					URI:   "signal.netbird.io:10000",
+					URI:   "signal.openzro.io:10000",
 				},
 				Datadir:    dir,
 				HttpConfig: nil,
@@ -754,7 +754,7 @@ func Test_LoginPerformance(t *testing.T) {
 							Core:           "core",
 							Platform:       "platform",
 							Kernel:         "kernel",
-							NetbirdVersion: "",
+							OpenzroVersion: "",
 						}
 
 						peerLogin := types.PeerLogin{

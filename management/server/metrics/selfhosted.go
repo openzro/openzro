@@ -1,4 +1,4 @@
-// Package metrics gather anonymous information about the usage of NetBird management
+// Package metrics gather anonymous information about the usage of Openzro management
 package metrics
 
 import (
@@ -15,15 +15,15 @@ import (
 	"github.com/hashicorp/go-version"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/management/server/types"
-	nbversion "github.com/netbirdio/netbird/version"
+	"github.com/openzro/openzro/management/server/types"
+	nbversion "github.com/openzro/openzro/version"
 )
 
 const (
 	// PayloadEvent identifies an event type
 	PayloadEvent = "self-hosted stats"
 	// payloadEndpoint metrics defaultEndpoint to send anonymous data
-	payloadEndpoint = "https://metrics.netbird.io"
+	payloadEndpoint = "https://metrics.openzro.io"
 	// defaultPushInterval default interval to push metrics
 	defaultPushInterval = 12 * time.Hour
 	// requestTimeout http request timeout
@@ -102,12 +102,12 @@ func (w *Worker) Run(ctx context.Context) {
 
 func getMetricsInterval(ctx context.Context) time.Duration {
 	interval := defaultPushInterval
-	if os.Getenv("NETBIRD_METRICS_INTERVAL_IN_SECONDS") != "" {
-		newInterval, err := time.ParseDuration(os.Getenv("NETBIRD_METRICS_INTERVAL_IN_SECONDS") + "s")
+	if os.Getenv("OPENZRO_METRICS_INTERVAL_IN_SECONDS") != "" {
+		newInterval, err := time.ParseDuration(os.Getenv("OPENZRO_METRICS_INTERVAL_IN_SECONDS") + "s")
 		if err != nil {
-			log.WithContext(ctx).Errorf("unable to parse NETBIRD_METRICS_INTERVAL_IN_SECONDS, using default interval %v. Error: %v", defaultPushInterval, err)
+			log.WithContext(ctx).Errorf("unable to parse OPENZRO_METRICS_INTERVAL_IN_SECONDS, using default interval %v. Error: %v", defaultPushInterval, err)
 		} else {
-			log.WithContext(ctx).Infof("using NETBIRD_METRICS_INTERVAL_IN_SECONDS %s", newInterval)
+			log.WithContext(ctx).Infof("using OPENZRO_METRICS_INTERVAL_IN_SECONDS %s", newInterval)
 			interval = newInterval
 		}
 	}
@@ -153,7 +153,7 @@ func (w *Worker) sendMetrics(ctx context.Context) error {
 
 	log.WithContext(ctx).Infof("sent anonymous metrics, next push will happen in %s. "+
 		"You can disable these metrics by running with flag --disable-anonymous-metrics,"+
-		" see more information at https://docs.netbird.io/about-netbird/faq#why-and-what-are-the-anonymous-usage-metrics", getMetricsInterval(ctx))
+		" see more information at https://docs.openzro.io/about-openzro/faq#why-and-what-are-the-anonymous-usage-metrics", getMetricsInterval(ctx))
 
 	return nil
 }
@@ -216,7 +216,7 @@ func (w *Worker) generateProperties(ctx context.Context) properties {
 	activeUsersLastDay = make(map[string]struct{})
 	uptime = time.Since(w.startupTime).Seconds()
 	connections := w.connManager.GetAllConnectedPeers()
-	version = nbversion.NetbirdVersion()
+	version = nbversion.OpenzroVersion()
 
 	for _, account := range w.dataSource.GetAllAccounts(ctx) {
 		accounts++

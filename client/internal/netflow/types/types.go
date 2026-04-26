@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/netbirdio/netbird/client/iface/wgaddr"
+	"github.com/openzro/openzro/client/iface/wgaddr"
 )
 
 const ZoneID = 0x1BD0

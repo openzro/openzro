@@ -3,9 +3,9 @@ package types
 import (
 	"net/netip"
 
-	"github.com/netbirdio/netbird/management/client/common"
-	"github.com/netbirdio/netbird/management/server/idp"
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/management/client/common"
+	"github.com/openzro/openzro/management/server/idp"
+	"github.com/openzro/openzro/util"
 )
 
 type (
@@ -111,10 +111,10 @@ type HttpServerConfig struct {
 	ExtraAuthAudience string
 }
 
-// Host represents a Netbird host (e.g. STUN, TURN, Signal)
+// Host represents a Openzro host (e.g. STUN, TURN, Signal)
 type Host struct {
 	Proto Protocol
-	// URI e.g. turns://stun.netbird.io:4430 or signal.netbird.io:10000
+	// URI e.g. turns://stun.openzro.io:4430 or signal.openzro.io:10000
 	URI      string
 	Username string
 	Password string

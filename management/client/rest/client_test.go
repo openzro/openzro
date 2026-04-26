@@ -8,8 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/netbirdio/netbird/management/client/rest"
-	"github.com/netbirdio/netbird/management/server/http/testing/testing_tools"
+	"github.com/openzro/openzro/management/client/rest"
+	"github.com/openzro/openzro/management/server/http/testing/testing_tools"
 )
 
 func withMockClient(callback func(*rest.Client, *http.ServeMux)) {

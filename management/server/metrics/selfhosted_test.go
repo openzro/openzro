@@ -4,14 +4,14 @@ import (
 	"context"
 	"testing"
 
-	nbdns "github.com/netbirdio/netbird/dns"
-	resourceTypes "github.com/netbirdio/netbird/management/server/networks/resources/types"
-	routerTypes "github.com/netbirdio/netbird/management/server/networks/routers/types"
-	networkTypes "github.com/netbirdio/netbird/management/server/networks/types"
-	nbpeer "github.com/netbirdio/netbird/management/server/peer"
-	"github.com/netbirdio/netbird/management/server/posture"
-	"github.com/netbirdio/netbird/management/server/types"
-	"github.com/netbirdio/netbird/route"
+	nbdns "github.com/openzro/openzro/dns"
+	resourceTypes "github.com/openzro/openzro/management/server/networks/resources/types"
+	routerTypes "github.com/openzro/openzro/management/server/networks/routers/types"
+	networkTypes "github.com/openzro/openzro/management/server/networks/types"
+	nbpeer "github.com/openzro/openzro/management/server/peer"
+	"github.com/openzro/openzro/management/server/posture"
+	"github.com/openzro/openzro/management/server/types"
+	"github.com/openzro/openzro/route"
 )
 
 type mockDatasource struct{}

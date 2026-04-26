@@ -13,16 +13,16 @@ remove() {
 
   if [ "${use_systemctl}" = "True" ]; then
     printf "\033[32m Stopping the service\033[0m\n"
-    systemctl stop netbird || true
+    systemctl stop openzro || true
 
-    if [ -e /lib/systemd/system/netbird.service ]; then
-      rm -f /lib/systemd/system/netbird.service
+    if [ -e /lib/systemd/system/openzro.service ]; then
+      rm -f /lib/systemd/system/openzro.service
       systemctl daemon-reload || true
     fi
 
   fi
   printf "\033[32m Uninstalling the service\033[0m\n"
-  /usr/bin/netbird service uninstall || true
+  /usr/bin/openzro service uninstall || true
 
 
   if [ "${use_systemctl}" = "True" ]; then

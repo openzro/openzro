@@ -5,7 +5,7 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/netbirdio/netbird/sharedsock"
+	"github.com/openzro/openzro/sharedsock"
 	log "github.com/sirupsen/logrus"
 )
 

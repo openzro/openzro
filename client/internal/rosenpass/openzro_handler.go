@@ -16,15 +16,15 @@ type wireGuardPeer struct {
 	PublicKey rp.Key
 }
 
-type NetbirdHandler struct {
+type OpenzroHandler struct {
 	ifaceName    string
 	client       *wgctrl.Client
 	peers        map[rp.PeerID]wireGuardPeer
 	presharedKey [32]byte
 }
 
-func NewNetbirdHandler(preSharedKey *[32]byte, wgIfaceName string) (hdlr *NetbirdHandler, err error) {
-	hdlr = &NetbirdHandler{
+func NewOpenzroHandler(preSharedKey *[32]byte, wgIfaceName string) (hdlr *OpenzroHandler, err error) {
+	hdlr = &OpenzroHandler{
 		ifaceName: wgIfaceName,
 		peers:     map[rp.PeerID]wireGuardPeer{},
 	}
@@ -40,29 +40,29 @@ func NewNetbirdHandler(preSharedKey *[32]byte, wgIfaceName string) (hdlr *Netbir
 	return hdlr, nil
 }
 
-func (h *NetbirdHandler) AddPeer(pid rp.PeerID, intf string, pk rp.Key) {
+func (h *OpenzroHandler) AddPeer(pid rp.PeerID, intf string, pk rp.Key) {
 	h.peers[pid] = wireGuardPeer{
 		Interface: intf,
 		PublicKey: pk,
 	}
 }
 
-func (h *NetbirdHandler) RemovePeer(pid rp.PeerID) {
+func (h *OpenzroHandler) RemovePeer(pid rp.PeerID) {
 	delete(h.peers, pid)
 }
 
-func (h *NetbirdHandler) HandshakeCompleted(pid rp.PeerID, key rp.Key) {
+func (h *OpenzroHandler) HandshakeCompleted(pid rp.PeerID, key rp.Key) {
 	log.Debug("Handshake complete")
 	h.outputKey(rp.KeyOutputReasonStale, pid, key)
 }
 
-func (h *NetbirdHandler) HandshakeExpired(pid rp.PeerID) {
+func (h *OpenzroHandler) HandshakeExpired(pid rp.PeerID) {
 	key, _ := rp.GeneratePresharedKey()
 	log.Debug("Handshake expired")
 	h.outputKey(rp.KeyOutputReasonStale, pid, key)
 }
 
-func (h *NetbirdHandler) outputKey(_ rp.KeyOutputReason, pid rp.PeerID, psk rp.Key) {
+func (h *OpenzroHandler) outputKey(_ rp.KeyOutputReason, pid rp.PeerID, psk rp.Key) {
 	wg, ok := h.peers[pid]
 	if !ok {
 		return

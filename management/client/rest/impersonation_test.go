@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/netbirdio/netbird/management/client/rest"
-	"github.com/netbirdio/netbird/management/server/http/api"
+	"github.com/openzro/openzro/management/client/rest"
+	"github.com/openzro/openzro/management/server/http/api"
 )
 
 var (

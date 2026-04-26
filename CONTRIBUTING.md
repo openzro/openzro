@@ -1,6 +1,6 @@
-# Contributing to NetBird
+# Contributing to Openzro
 
-Thanks for your interest in contributing to NetBird. 
+Thanks for your interest in contributing to Openzro. 
 
 There are many ways that you can contribute:
 - Reporting issues
@@ -8,17 +8,17 @@ There are many ways that you can contribute:
 - Sharing use cases in slack or Reddit
 - Bug fix or feature enhancement
 
-If you haven't already, join our slack workspace [here](https://join.slack.com/t/netbirdio/shared_invite/zt-vrahf41g-ik1v7fV8du6t0RwxSrJ96A), we would love to discuss topics that need community contribution and enhancements to existing features.
+If you haven't already, join our slack workspace [here](https://join.slack.com/t/openzro/shared_invite/zt-vrahf41g-ik1v7fV8du6t0RwxSrJ96A), we would love to discuss topics that need community contribution and enhancements to existing features.
 
 ## Contents
 
-- [Contributing to NetBird](#contributing-to-netbird)
+- [Contributing to Openzro](#contributing-to-openzro)
     - [Contents](#contents)
     - [Code of conduct](#code-of-conduct)
     - [Directory structure](#directory-structure)
     - [Development setup](#development-setup)
         - [Requirements](#requirements)
-        - [Local NetBird setup](#local-netbird-setup)
+        - [Local Openzro setup](#local-openzro-setup)
         - [Dev Container Support](#dev-container-support)
         - [Build and start](#build-and-start)
         - [Test suite](#test-suite)
@@ -31,21 +31,21 @@ If you haven't already, join our slack workspace [here](https://join.slack.com/t
 This project and everyone participating in it are governed by the Code of
 Conduct which can be found in the file [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 By participating, you are expected to uphold this code. Please report
-unacceptable behavior to community@netbird.io.
+unacceptable behavior to community@openzro.io.
 
 ## Directory structure
 
-The NetBird project monorepo is organized to maintain most of its individual dependencies code within their directories, except for a few auxiliary or shared packages.
+The Openzro project monorepo is organized to maintain most of its individual dependencies code within their directories, except for a few auxiliary or shared packages.
 
 The most important directories are:
 
 - [/.github](/.github) - Github actions workflow files and issue templates
-- [/client](/client) - NetBird agent code
-- [/client/cmd](/client/cmd) - NetBird agent cli code
-- [/client/internal](/client/internal) - NetBird agent business logic code
-- [/client/proto](/client/proto) - NetBird agent daemon GRPC proto files
-- [/client/server](/client/server) - NetBird agent daemon code for background execution
-- [/client/ui](/client/ui) - NetBird agent UI code
+- [/client](/client) - Openzro agent code
+- [/client/cmd](/client/cmd) - Openzro agent cli code
+- [/client/internal](/client/internal) - Openzro agent business logic code
+- [/client/proto](/client/proto) - Openzro agent daemon GRPC proto files
+- [/client/server](/client/server) - Openzro agent daemon code for background execution
+- [/client/ui](/client/ui) - Openzro agent UI code
 - [/encryption](/encryption) - Contain main encryption code for agent communication
 - [/iface](/iface) - Wireguard® interface code
 - [/infrastructure_files](/infrastructure_files) - Getting started files containing docker and template scripts
@@ -103,31 +103,31 @@ goreleaser build --snapshot --clean
 golangci-lint run
 ```
 
-### Local NetBird setup
+### Local Openzro setup
 
 > **IMPORTANT**: All the steps below have to get executed at least once to get the development setup up and running!
 
-Now that everything NetBird requires to run is installed, the actual NetBird code can be
+Now that everything Openzro requires to run is installed, the actual Openzro code can be
 checked out and set up:
 
-1. [Fork](https://guides.github.com/activities/forking/#fork) the NetBird repository
+1. [Fork](https://guides.github.com/activities/forking/#fork) the Openzro repository
 
 2. Clone your forked repository
 
    ```
-   git clone https://github.com/<your_github_username>/netbird.git
+   git clone https://github.com/<your_github_username>/openzro.git
    ```
 
 3. Go into the repository folder
 
    ```
-   cd netbird
+   cd openzro
    ```
 
-4. Add the original NetBird repository as `upstream` to your forked repository
+4. Add the original Openzro repository as `upstream` to your forked repository
 
    ```
-   git remote add upstream https://github.com/netbirdio/netbird.git
+   git remote add upstream https://github.com/openzro/openzro.git
    ```
 
 5. Install all Go dependencies:
@@ -138,8 +138,8 @@ checked out and set up:
 
 ### Dev Container Support
 
-If you prefer using a dev container for development, NetBird now includes support for dev containers. 
-Dev containers provide a consistent and isolated development environment, making it easier for contributors to get started quickly. Follow the steps below to set up NetBird in a dev container.
+If you prefer using a dev container for development, Openzro now includes support for dev containers. 
+Dev containers provide a consistent and isolated development environment, making it easier for contributors to get started quickly. Follow the steps below to set up Openzro in a dev container.
 
 #### 1. Prerequisites:
 
@@ -149,7 +149,7 @@ Dev containers provide a consistent and isolated development environment, making
 
 #### 2. Clone the Repository:
 
-Clone the repository following previous [Local NetBird setup](#local-netbird-setup).
+Clone the repository following previous [Local Openzro setup](#local-openzro-setup).
 
 #### 3. Open in project in IDE of your choice:
 
@@ -166,7 +166,7 @@ Click on the green "Reopen in Container" button in the bottom-right corner of VS
 
 **Goland**:
 
-Open GoLand and select `"File" > "Open"` to open the NetBird project folder.
+Open GoLand and select `"File" > "Open"` to open the Openzro project folder.
 GoLand will detect the dev container configuration and prompt you to open the project in the container. Accept the prompt.
 
 #### 4. Wait for the Container to Build:
@@ -181,7 +181,7 @@ Once the container is built, you can start developing within the dev container. 
 ### Build and start
 #### Client
 
-To start NetBird, execute:
+To start Openzro, execute:
 ```
 cd client
 CGO_ENABLED=0 go build .
@@ -191,7 +191,7 @@ CGO_ENABLED=0 go build .
 
 > To test the client GUI application on Windows machines with RDP or vituralized environments (e.g. virtualbox or cloud), you need to download and extract the opengl32.dll from https://fdossena.com/?p=mesa/index.frag next to the built application.
 
-To start NetBird the client in the foreground:
+To start Openzro the client in the foreground:
 
 ```
 sudo ./client up --log-level debug --log-file console
@@ -199,53 +199,53 @@ sudo ./client up --log-level debug --log-file console
 > On Windows use a powershell with administrator privileges
 #### Signal service
 
-To start NetBird's signal, execute:
+To start Openzro's signal, execute:
 
 ```
 cd signal
 go build .
 ```
 
-To start NetBird the signal service:
+To start Openzro the signal service:
 
 ```
 ./signal run --log-level debug --log-file console
 ```
 
 #### Management service
-> You may need to generate a configuration file for management. Follow steps 2 to 5 from our [self-hosting guide](https://netbird.io/docs/getting-started/self-hosting).
+> You may need to generate a configuration file for management. Follow steps 2 to 5 from our [self-hosting guide](https://openzro.io/docs/getting-started/self-hosting).
 
-To start NetBird's management, execute:
+To start Openzro's management, execute:
 
 ```
 cd management
 go build .
 ```
 
-To start NetBird the management service:
+To start Openzro the management service:
 
 ```
 ./management management --log-level debug --log-file console --config ./management.json
 ```
 
-#### Windows Netbird Installer
+#### Windows Openzro Installer
 Create dist directory
 ```shell
-mkdir -p dist/netbird_windows_amd64
+mkdir -p dist/openzro_windows_amd64
 ```
 
 UI client
 ```shell
-CC=x86_64-w64-mingw32-gcc CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o netbird-ui.exe -ldflags "-s -w -H windowsgui" ./client/ui
-mv netbird-ui.exe ./dist/netbird_windows_amd64/
+CC=x86_64-w64-mingw32-gcc CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o openzro-ui.exe -ldflags "-s -w -H windowsgui" ./client/ui
+mv openzro-ui.exe ./dist/openzro_windows_amd64/
 ```
 
 Client
 ```shell
-CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o netbird.exe ./client/
-mv netbird.exe ./dist/netbird_windows_amd64/
+CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o openzro.exe ./client/
+mv openzro.exe ./dist/openzro_windows_amd64/
 ```
-> Windows clients have a Wireguard driver requirement. You can download the wintun driver from https://www.wintun.net/builds/wintun-0.14.1.zip, after decompressing, you can copy the file `windtun\bin\ARCH\wintun.dll` to `./dist/netbird_windows_amd64/`.
+> Windows clients have a Wireguard driver requirement. You can download the wintun driver from https://www.wintun.net/builds/wintun-0.14.1.zip, after decompressing, you can copy the file `windtun\bin\ARCH\wintun.dll` to `./dist/openzro_windows_amd64/`.
 
 NSIS compiler
 - [Windows-nsis]( https://nsis.sourceforge.io/Download)
@@ -262,14 +262,14 @@ export APPVER=0.0.0.1
 makensis -V4 client/installer.nsis
 ```
 
-The installer `netbird-installer.exe` will be created in root directory.
+The installer `openzro-installer.exe` will be created in root directory.
 
 ### Test suite
 
 The tests can be started via:
 
 ```
-cd netbird
+cd openzro
 go test -exec sudo ./...
 ```
 > On Windows use a powershell with administrator privileges
@@ -287,10 +287,10 @@ As a critical network service and open-source project, we must enforce a few thi
 
 ## Other project repositories
 
-NetBird project is composed of 3 main repositories:
-- NetBird: This repository, which contains the code for the agents and control plane services.
-- Dashboard: https://github.com/netbirdio/dashboard, contains the Administration UI for the management service
-- Documentations: https://github.com/netbirdio/docs, contains the documentation from https://netbird.io/docs
+Openzro project is composed of 3 main repositories:
+- Openzro: This repository, which contains the code for the agents and control plane services.
+- Dashboard: https://github.com/openzro/dashboard, contains the Administration UI for the management service
+- Documentations: https://github.com/openzro/docs, contains the documentation from https://openzro.io/docs
 
 ## Contributor License Agreement
 

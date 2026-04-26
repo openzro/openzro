@@ -1,7 +1,7 @@
 package manager
 
 import (
-	"github.com/netbirdio/netbird/route"
+	"github.com/openzro/openzro/route"
 )
 
 type RouterPair struct {

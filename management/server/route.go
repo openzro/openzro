@@ -9,15 +9,15 @@ import (
 
 	"github.com/rs/xid"
 
-	"github.com/netbirdio/netbird/management/domain"
-	"github.com/netbirdio/netbird/management/proto"
-	"github.com/netbirdio/netbird/management/server/activity"
-	"github.com/netbirdio/netbird/management/server/permissions/modules"
-	"github.com/netbirdio/netbird/management/server/permissions/operations"
-	"github.com/netbirdio/netbird/management/server/status"
-	"github.com/netbirdio/netbird/management/server/store"
-	"github.com/netbirdio/netbird/management/server/types"
-	"github.com/netbirdio/netbird/route"
+	"github.com/openzro/openzro/management/domain"
+	"github.com/openzro/openzro/management/proto"
+	"github.com/openzro/openzro/management/server/activity"
+	"github.com/openzro/openzro/management/server/permissions/modules"
+	"github.com/openzro/openzro/management/server/permissions/operations"
+	"github.com/openzro/openzro/management/server/status"
+	"github.com/openzro/openzro/management/server/store"
+	"github.com/openzro/openzro/management/server/types"
+	"github.com/openzro/openzro/route"
 )
 
 // GetRoute gets a route object from account and route IDs

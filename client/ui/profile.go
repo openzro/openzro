@@ -20,9 +20,9 @@ import (
 	"fyne.io/systray"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/internal"
-	"github.com/netbirdio/netbird/client/internal/profilemanager"
-	"github.com/netbirdio/netbird/client/proto"
+	"github.com/openzro/openzro/client/internal"
+	"github.com/openzro/openzro/client/internal/profilemanager"
+	"github.com/openzro/openzro/client/proto"
 )
 
 // showProfilesUI creates and displays the Profiles window with a list of existing profiles,
@@ -211,7 +211,7 @@ func (s *serviceClient) showProfilesUI() {
 
 	// Assemble window content
 	content := container.NewBorder(nil, newBtn, nil, nil, list)
-	s.wProfiles = s.app.NewWindow("NetBird Profiles")
+	s.wProfiles = s.app.NewWindow("Openzro Profiles")
 	s.wProfiles.SetContent(content)
 	s.wProfiles.Resize(fyne.NewSize(400, 300))
 	s.wProfiles.SetOnClosed(s.cancel)

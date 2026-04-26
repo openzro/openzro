@@ -11,8 +11,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/iface/bind"
-	"github.com/netbirdio/netbird/client/iface/wgproxy/listener"
+	"github.com/openzro/openzro/client/iface/bind"
+	"github.com/openzro/openzro/client/iface/wgproxy/listener"
 )
 
 type ProxyBind struct {
@@ -43,7 +43,7 @@ func NewProxyBind(bind *bind.ICEBind) *ProxyBind {
 }
 
 // AddTurnConn adds a new connection to the bind.
-// endpoint is the NetBird address of the remote peer. The SetEndpoint return with the address what will be used in the
+// endpoint is the Openzro address of the remote peer. The SetEndpoint return with the address what will be used in the
 // WireGuard configuration.
 func (p *ProxyBind) AddTurnConn(ctx context.Context, nbAddr *net.UDPAddr, remoteConn net.Conn) error {
 	fakeNetIP, err := fakeAddress(nbAddr)

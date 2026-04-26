@@ -14,9 +14,9 @@ import (
 	"github.com/coder/websocket"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/relay/server/listener/ws"
-	"github.com/netbirdio/netbird/util/embeddedroots"
-	nbnet "github.com/netbirdio/netbird/util/net"
+	"github.com/openzro/openzro/relay/server/listener/ws"
+	"github.com/openzro/openzro/util/embeddedroots"
+	nbnet "github.com/openzro/openzro/util/net"
 )
 
 type Dialer struct {

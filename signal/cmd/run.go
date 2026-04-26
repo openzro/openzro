@@ -16,13 +16,13 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"golang.org/x/crypto/acme/autocert"
 
-	"github.com/netbirdio/netbird/signal/metrics"
+	"github.com/openzro/openzro/signal/metrics"
 
-	"github.com/netbirdio/netbird/encryption"
-	"github.com/netbirdio/netbird/signal/proto"
-	"github.com/netbirdio/netbird/signal/server"
-	"github.com/netbirdio/netbird/util"
-	"github.com/netbirdio/netbird/version"
+	"github.com/openzro/openzro/encryption"
+	"github.com/openzro/openzro/signal/proto"
+	"github.com/openzro/openzro/signal/server"
+	"github.com/openzro/openzro/util"
+	"github.com/openzro/openzro/version"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -54,7 +54,7 @@ var (
 
 	runCmd = &cobra.Command{
 		Use:          "run",
-		Short:        "start NetBird Signal Server daemon",
+		Short:        "start Openzro Signal Server daemon",
 		SilenceUsage: true,
 		PreRun: func(cmd *cobra.Command, args []string) {
 			err := util.InitLog(logLevel, logFile)
@@ -141,7 +141,7 @@ var (
 				log.Infof("running gRPC backward compatibility server: %s", compatListener.Addr().String())
 			}
 
-			log.Infof("signal server version %s", version.NetbirdVersion())
+			log.Infof("signal server version %s", version.OpenzroVersion())
 			log.Infof("started Signal Service")
 
 			SetupCloseHandler()

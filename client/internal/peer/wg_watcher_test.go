@@ -7,7 +7,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/iface/configurer"
+	"github.com/openzro/openzro/client/iface/configurer"
 )
 
 type MocWgIface struct {

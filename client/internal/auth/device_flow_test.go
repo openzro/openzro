@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/golang-jwt/jwt"
-	"github.com/netbirdio/netbird/client/internal"
+	"github.com/openzro/openzro/client/internal"
 	"github.com/stretchr/testify/require"
 	"io"
 	"net/http"

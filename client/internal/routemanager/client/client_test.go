@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/client/internal/routemanager/common"
-	"github.com/netbirdio/netbird/client/internal/routemanager/static"
-	"github.com/netbirdio/netbird/route"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/client/internal/routemanager/common"
+	"github.com/openzro/openzro/client/internal/routemanager/static"
+	"github.com/openzro/openzro/route"
 )
 
 func TestGetBestrouteFromStatuses(t *testing.T) {

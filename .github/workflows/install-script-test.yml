@@ -34,4 +34,4 @@ jobs:
           cat release_files/install.sh | sh -x
 
       - name: check cli binary
-        run: command -v netbird
+        run: command -v openzro

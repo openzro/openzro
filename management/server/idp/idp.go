@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/netbirdio/netbird/management/server/telemetry"
+	"github.com/openzro/openzro/management/server/telemetry"
 )
 
 const (
@@ -93,7 +93,7 @@ func (u *UserData) Unmarshal(data []byte) (err error) {
 
 // AppMetadata user app metadata to associate with a profile
 type AppMetadata struct {
-	// WTAccountID is a NetBird (previously Wiretrustee) account id to update in the IDP
+	// WTAccountID is a Openzro (previously Wiretrustee) account id to update in the IDP
 	// maps to wt_account_id when json.marshal
 	WTAccountID     string `json:"wt_account_id,omitempty"`
 	WTPendingInvite *bool  `json:"wt_pending_invite,omitempty"`

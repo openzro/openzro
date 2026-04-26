@@ -13,12 +13,12 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 
-	nbcontext "github.com/netbirdio/netbird/management/server/context"
+	nbcontext "github.com/openzro/openzro/management/server/context"
 
-	"github.com/netbirdio/netbird/management/server/activity"
-	"github.com/netbirdio/netbird/management/server/http/api"
-	"github.com/netbirdio/netbird/management/server/mock_server"
-	"github.com/netbirdio/netbird/management/server/types"
+	"github.com/openzro/openzro/management/server/activity"
+	"github.com/openzro/openzro/management/server/http/api"
+	"github.com/openzro/openzro/management/server/mock_server"
+	"github.com/openzro/openzro/management/server/types"
 )
 
 func initEventsTestData(account string, events ...*activity.Event) *handler {

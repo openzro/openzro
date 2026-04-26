@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/netbirdio/netbird/management/server/http/api"
+	"github.com/openzro/openzro/management/server/http/api"
 )
 
 // PeersAPI APIs for peers, do not use directly
@@ -29,7 +29,7 @@ func PeerIPFilter(ip string) PeersListOption {
 }
 
 // List list all peers
-// See more: https://docs.netbird.io/api/resources/peers#list-all-peers
+// See more: https://docs.openzro.io/api/resources/peers#list-all-peers
 func (a *PeersAPI) List(ctx context.Context, opts ...PeersListOption) ([]api.Peer, error) {
 	query := make(map[string]string)
 	for _, o := range opts {
@@ -48,7 +48,7 @@ func (a *PeersAPI) List(ctx context.Context, opts ...PeersListOption) ([]api.Pee
 }
 
 // Get retrieve a peer
-// See more: https://docs.netbird.io/api/resources/peers#retrieve-a-peer
+// See more: https://docs.openzro.io/api/resources/peers#retrieve-a-peer
 func (a *PeersAPI) Get(ctx context.Context, peerID string) (*api.Peer, error) {
 	resp, err := a.c.NewRequest(ctx, "GET", "/api/peers/"+peerID, nil, nil)
 	if err != nil {
@@ -62,7 +62,7 @@ func (a *PeersAPI) Get(ctx context.Context, peerID string) (*api.Peer, error) {
 }
 
 // Update update information for a peer
-// See more: https://docs.netbird.io/api/resources/peers#update-a-peer
+// See more: https://docs.openzro.io/api/resources/peers#update-a-peer
 func (a *PeersAPI) Update(ctx context.Context, peerID string, request api.PutApiPeersPeerIdJSONRequestBody) (*api.Peer, error) {
 	requestBytes, err := json.Marshal(request)
 	if err != nil {
@@ -80,7 +80,7 @@ func (a *PeersAPI) Update(ctx context.Context, peerID string, request api.PutApi
 }
 
 // Delete delete a peer
-// See more: https://docs.netbird.io/api/resources/peers#delete-a-peer
+// See more: https://docs.openzro.io/api/resources/peers#delete-a-peer
 func (a *PeersAPI) Delete(ctx context.Context, peerID string) error {
 	resp, err := a.c.NewRequest(ctx, "DELETE", "/api/peers/"+peerID, nil, nil)
 	if err != nil {
@@ -94,7 +94,7 @@ func (a *PeersAPI) Delete(ctx context.Context, peerID string) error {
 }
 
 // ListAccessiblePeers list all peers that the specified peer can connect to within the network
-// See more: https://docs.netbird.io/api/resources/peers#list-accessible-peers
+// See more: https://docs.openzro.io/api/resources/peers#list-accessible-peers
 func (a *PeersAPI) ListAccessiblePeers(ctx context.Context, peerID string) ([]api.Peer, error) {
 	resp, err := a.c.NewRequest(ctx, "GET", "/api/peers/"+peerID+"/accessible-peers", nil, nil)
 	if err != nil {

@@ -8,7 +8,7 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/stretchr/testify/require"
 
-	"github.com/netbirdio/netbird/client/iface/device"
+	"github.com/openzro/openzro/client/iface/device"
 )
 
 // TestDNATTranslationCorrectness verifies DNAT translation works correctly

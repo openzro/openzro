@@ -3,7 +3,7 @@
 package bind
 
 import (
-	nbnet "github.com/netbirdio/netbird/util/net"
+	nbnet "github.com/openzro/openzro/util/net"
 )
 
 func (m *UDPMuxDefault) notifyAddressRemoval(addr string) {

@@ -17,10 +17,10 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/skratchdot/open-golang/open"
 
-	"github.com/netbirdio/netbird/client/internal"
-	"github.com/netbirdio/netbird/client/proto"
-	nbstatus "github.com/netbirdio/netbird/client/status"
-	uptypes "github.com/netbirdio/netbird/upload-server/types"
+	"github.com/openzro/openzro/client/internal"
+	"github.com/openzro/openzro/client/proto"
+	nbstatus "github.com/openzro/openzro/client/status"
+	uptypes "github.com/openzro/openzro/upload-server/types"
 )
 
 // Initial state for the debug collection
@@ -49,7 +49,7 @@ type progressUI struct {
 }
 
 func (s *serviceClient) showDebugUI() {
-	w := s.app.NewWindow("NetBird Debug")
+	w := s.app.NewWindow("Openzro Debug")
 	w.SetOnClosed(s.cancel)
 
 	w.Resize(fyne.NewSize(600, 500))
@@ -92,7 +92,7 @@ func (s *serviceClient) showDebugUI() {
 		return validateMinute(s, minutesLabel)
 	}
 
-	noteLabel := widget.NewLabel("Note: NetBird will be brought up and down during collection")
+	noteLabel := widget.NewLabel("Note: Openzro will be brought up and down during collection")
 
 	runForDurationCheck.OnChanged = func(checked bool) {
 		if checked {
@@ -146,7 +146,7 @@ func (s *serviceClient) showDebugUI() {
 	)
 
 	content := container.NewVBox(
-		widget.NewLabel("Create a debug bundle to help troubleshoot issues with NetBird"),
+		widget.NewLabel("Create a debug bundle to help troubleshoot issues with Openzro"),
 		widget.NewLabel(""),
 		anonymizeCheck,
 		systemInfoCheck,
@@ -436,7 +436,7 @@ func (s *serviceClient) collectDebugData(
 		overview := nbstatus.ConvertToStatusOutputOverview(postUpStatus, params.anonymize, "", nil, nil, nil, "", "")
 		postUpStatusOutput = nbstatus.ParseToFullDetailSummary(overview)
 	}
-	headerPostUp := fmt.Sprintf("----- NetBird post-up - Timestamp: %s", time.Now().Format(time.RFC3339))
+	headerPostUp := fmt.Sprintf("----- Openzro post-up - Timestamp: %s", time.Now().Format(time.RFC3339))
 	statusOutput := fmt.Sprintf("%s\n%s", headerPostUp, postUpStatusOutput)
 
 	wg.Wait()
@@ -453,7 +453,7 @@ func (s *serviceClient) collectDebugData(
 		overview := nbstatus.ConvertToStatusOutputOverview(preDownStatus, params.anonymize, "", nil, nil, nil, "", "")
 		preDownStatusOutput = nbstatus.ParseToFullDetailSummary(overview)
 	}
-	headerPreDown := fmt.Sprintf("----- NetBird pre-down - Timestamp: %s - Duration: %s",
+	headerPreDown := fmt.Sprintf("----- Openzro pre-down - Timestamp: %s - Duration: %s",
 		time.Now().Format(time.RFC3339), params.duration)
 	statusOutput = fmt.Sprintf("%s\n%s\n%s", statusOutput, headerPreDown, preDownStatusOutput)
 

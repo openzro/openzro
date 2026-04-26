@@ -4,11 +4,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/netbirdio/netbird/client/internal/profilemanager"
+	"github.com/openzro/openzro/client/internal/profilemanager"
 )
 
 func TestPreferences_DefaultValues(t *testing.T) {
-	cfgFile := filepath.Join(t.TempDir(), "netbird.json")
+	cfgFile := filepath.Join(t.TempDir(), "openzro.json")
 	p := NewPreferences(cfgFile)
 	defaultVar, err := p.GetAdminURL()
 	if err != nil {
@@ -41,7 +41,7 @@ func TestPreferences_DefaultValues(t *testing.T) {
 
 func TestPreferences_ReadUncommitedValues(t *testing.T) {
 	exampleString := "exampleString"
-	cfgFile := filepath.Join(t.TempDir(), "netbird.json")
+	cfgFile := filepath.Join(t.TempDir(), "openzro.json")
 	p := NewPreferences(cfgFile)
 
 	p.SetAdminURL(exampleString)
@@ -78,7 +78,7 @@ func TestPreferences_ReadUncommitedValues(t *testing.T) {
 func TestPreferences_Commit(t *testing.T) {
 	exampleURL := "https://myurl.com:443"
 	examplePresharedKey := "topsecret"
-	cfgFile := filepath.Join(t.TempDir(), "netbird.json")
+	cfgFile := filepath.Join(t.TempDir(), "openzro.json")
 	p := NewPreferences(cfgFile)
 
 	p.SetAdminURL(exampleURL)

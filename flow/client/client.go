@@ -20,9 +20,9 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
 
-	"github.com/netbirdio/netbird/flow/proto"
-	"github.com/netbirdio/netbird/util/embeddedroots"
-	nbgrpc "github.com/netbirdio/netbird/util/grpc"
+	"github.com/openzro/openzro/flow/proto"
+	"github.com/openzro/openzro/util/embeddedroots"
+	nbgrpc "github.com/openzro/openzro/util/grpc"
 )
 
 type GRPCClient struct {

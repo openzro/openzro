@@ -1,9 +1,9 @@
 package cmd
 
 const (
-	defaultMgmtDataDir   = "/var/lib/netbird/"
-	defaultMgmtConfigDir = "/etc/netbird"
-	defaultLogDir        = "/var/log/netbird"
+	defaultMgmtDataDir   = "/var/lib/openzro/"
+	defaultMgmtConfigDir = "/etc/openzro"
+	defaultLogDir        = "/var/log/openzro"
 
 	oldDefaultMgmtDataDir   = "/var/lib/wiretrustee/"
 	oldDefaultMgmtConfigDir = "/etc/wiretrustee"
@@ -14,5 +14,5 @@ const (
 	oldDefaultMgmtConfig = oldDefaultMgmtConfigDir + "/management.json"
 	oldDefaultLogFile    = oldDefaultLogDir + "/management.log"
 
-	defaultSingleAccModeDomain = "netbird.selfhosted"
+	defaultSingleAccModeDomain = "openzro.selfhosted"
 )

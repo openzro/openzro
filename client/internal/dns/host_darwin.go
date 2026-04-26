@@ -14,11 +14,11 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/internal/statemanager"
+	"github.com/openzro/openzro/client/internal/statemanager"
 )
 
 const (
-	netbirdDNSStateKeyFormat            = "State:/Network/Service/NetBird-%s/DNS"
+	openzroDNSStateKeyFormat            = "State:/Network/Service/Openzro-%s/DNS"
 	globalIPv4State                     = "State:/Network/Global/IPv4"
 	primaryServiceStateKeyFormat        = "State:/Network/Service/%s/DNS"
 	keySupplementalMatchDomains         = "SupplementalMatchDomains"
@@ -85,7 +85,7 @@ func (s *systemConfigurator) applyDNSConfig(config HostDNSConfig, stateManager *
 		searchDomains = append(searchDomains, strings.TrimSuffix(""+dConf.Domain, "."))
 	}
 
-	matchKey := getKeyWithInput(netbirdDNSStateKeyFormat, matchSuffix)
+	matchKey := getKeyWithInput(openzroDNSStateKeyFormat, matchSuffix)
 	if len(matchDomains) != 0 {
 		err = s.addMatchDomains(matchKey, strings.Join(matchDomains, " "), config.ServerIP, config.ServerPort)
 	} else {
@@ -96,7 +96,7 @@ func (s *systemConfigurator) applyDNSConfig(config HostDNSConfig, stateManager *
 		return fmt.Errorf("add match domains: %w", err)
 	}
 
-	searchKey := getKeyWithInput(netbirdDNSStateKeyFormat, searchSuffix)
+	searchKey := getKeyWithInput(openzroDNSStateKeyFormat, searchSuffix)
 	if len(searchDomains) != 0 {
 		err = s.addSearchDomains(searchKey, strings.Join(searchDomains, " "), config.ServerIP, config.ServerPort)
 	} else {
@@ -142,7 +142,7 @@ func (s *systemConfigurator) restoreHostDNS() error {
 func (s *systemConfigurator) getRemovableKeysWithDefaults() []string {
 	if len(s.createdKeys) == 0 {
 		// return defaults for startup calls
-		return []string{getKeyWithInput(netbirdDNSStateKeyFormat, searchSuffix), getKeyWithInput(netbirdDNSStateKeyFormat, matchSuffix)}
+		return []string{getKeyWithInput(openzroDNSStateKeyFormat, searchSuffix), getKeyWithInput(openzroDNSStateKeyFormat, matchSuffix)}
 	}
 
 	keys := make([]string, 0, len(s.createdKeys))
@@ -170,7 +170,7 @@ func (s *systemConfigurator) addLocalDNS() error {
 		log.Errorf("Unable to get system DNS configuration")
 		return err
 	}
-	localKey := getKeyWithInput(netbirdDNSStateKeyFormat, localSuffix)
+	localKey := getKeyWithInput(openzroDNSStateKeyFormat, localSuffix)
 	if s.systemDNSSettings.ServerIP.IsValid() && len(s.systemDNSSettings.Domains) != 0 {
 		err := s.addSearchDomains(localKey, strings.Join(s.systemDNSSettings.Domains, " "), s.systemDNSSettings.ServerIP, s.systemDNSSettings.ServerPort)
 		if err != nil {

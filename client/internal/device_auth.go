@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	mgm "github.com/netbirdio/netbird/management/client"
+	mgm "github.com/openzro/openzro/management/client"
 )
 
 // DeviceAuthorizationFlow represents Device Authorization Flow information
@@ -114,7 +114,7 @@ func GetDeviceAuthorizationFlowInfo(ctx context.Context, privateKey string, mgmU
 }
 
 func isDeviceAuthProviderConfigValid(config DeviceAuthProviderConfig) error {
-	errorMSGFormat := "invalid provider configuration received from management: %s value is empty. Contact your NetBird administrator"
+	errorMSGFormat := "invalid provider configuration received from management: %s value is empty. Contact your Openzro administrator"
 	if config.Audience == "" {
 		return fmt.Errorf(errorMSGFormat, "Audience")
 	}

@@ -10,9 +10,9 @@ import (
 	"golang.zx2c4.com/wireguard/tun"
 	"golang.zx2c4.com/wireguard/tun/netstack"
 
-	"github.com/netbirdio/netbird/client/iface/bind"
-	"github.com/netbirdio/netbird/client/iface/configurer"
-	"github.com/netbirdio/netbird/client/iface/wgaddr"
+	"github.com/openzro/openzro/client/iface/bind"
+	"github.com/openzro/openzro/client/iface/configurer"
+	"github.com/openzro/openzro/client/iface/wgaddr"
 )
 
 type USPDevice struct {
@@ -55,7 +55,7 @@ func (t *USPDevice) Create() (WGConfigurer, error) {
 	t.device = device.NewDevice(
 		t.filteredDevice,
 		t.iceBind,
-		device.NewLogger(wgLogLevel(), "[netbird] "),
+		device.NewLogger(wgLogLevel(), "[openzro] "),
 	)
 
 	err = t.assignAddr()

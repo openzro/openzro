@@ -1,8 +1,8 @@
 package desktop
 
-import "github.com/netbirdio/netbird/version"
+import "github.com/openzro/openzro/version"
 
 // GetUIUserAgent returns the Desktop ui user agent
 func GetUIUserAgent() string {
-	return "netbird-desktop-ui/" + version.NetbirdVersion()
+	return "openzro-desktop-ui/" + version.OpenzroVersion()
 }

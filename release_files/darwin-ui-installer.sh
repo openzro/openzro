@@ -2,44 +2,44 @@
 
 export PATH=$PATH:/usr/local/bin:/opt/homebrew/bin
 
-# check if netbird is installed
-NB_BIN=$(which netbird)
-if [ -n "$NB_BIN" ]
+# check if openzro is installed
+OZ_BIN=$(which openzro)
+if [ -n "$OZ_BIN" ]
 then
-  echo "Stopping and uninstalling Netbird daemon"
-  netbird service stop || true
-  netbird service uninstall || true
+  echo "Stopping and uninstalling Openzro daemon"
+  openzro service stop || true
+  openzro service uninstall || true
 fi
 
-# check if netbird is installed
-NB_BIN=$(which netbird)
-if [ -z "$NB_BIN" ]
+# check if openzro is installed
+OZ_BIN=$(which openzro)
+if [ -z "$OZ_BIN" ]
 then
-  echo "Netbird daemon is not installed. Please run: brew install netbirdio/tap/netbird"
+  echo "Openzro daemon is not installed. Please run: brew install openzro/tap/openzro"
   exit 1
 fi
-NB_UI_VERSION=$1
-NB_VERSION=$(netbird version)
-if [ "X-$NB_UI_VERSION" != "X-$NB_VERSION" ]
+OZ_UI_VERSION=$1
+OZ_VERSION=$(openzro version)
+if [ "X-$OZ_UI_VERSION" != "X-$OZ_VERSION" ]
 then
-  echo "Netbird's daemon is running with a different version than the Netbird's UI:"
-  echo "Netbird UI Version: $NB_UI_VERSION"
-  echo "Netbird Daemon Version: $NB_VERSION"
-  echo "Please run: brew install netbirdio/tap/netbird"
+  echo "Openzro's daemon is running with a different version than the Openzro's UI:"
+  echo "Openzro UI Version: $OZ_UI_VERSION"
+  echo "Openzro Daemon Version: $OZ_VERSION"
+  echo "Please run: brew install openzro/tap/openzro"
   echo "to update it"
 fi
 
-if [ -n "$NB_BIN" ]
+if [ -n "$OZ_BIN" ]
 then
-  echo "Stopping NetBird daemon"
-  osascript -e 'quit app "Netbird UI"' 2> /dev/null || true
-  netbird service stop 2> /dev/null || true
+  echo "Stopping Openzro daemon"
+  osascript -e 'quit app "Openzro UI"' 2> /dev/null || true
+  openzro service stop 2> /dev/null || true
 fi
 
-# start netbird daemon service
-echo "Starting Netbird daemon"
-netbird service install 2> /dev/null || true
-netbird service start || true
+# start openzro daemon service
+echo "Starting Openzro daemon"
+openzro service install 2> /dev/null || true
+openzro service start || true
 
 # start app
-open /Applications/Netbird\ UI.app
+open /Applications/Openzro\ UI.app

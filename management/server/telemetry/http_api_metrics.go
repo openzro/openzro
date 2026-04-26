@@ -13,8 +13,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
-	"github.com/netbirdio/netbird/formatter/hook"
-	nbContext "github.com/netbirdio/netbird/management/server/context"
+	"github.com/openzro/openzro/formatter/hook"
+	nbContext "github.com/openzro/openzro/management/server/context"
 )
 
 const (

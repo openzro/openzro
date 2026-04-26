@@ -4,8 +4,8 @@ import (
 	"github.com/pion/ice/v3"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
-	signal "github.com/netbirdio/netbird/signal/client"
-	sProto "github.com/netbirdio/netbird/signal/proto"
+	signal "github.com/openzro/openzro/signal/client"
+	sProto "github.com/openzro/openzro/signal/proto"
 )
 
 type Signaler struct {

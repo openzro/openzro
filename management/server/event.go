@@ -8,16 +8,16 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/management/server/activity"
-	"github.com/netbirdio/netbird/management/server/permissions/modules"
-	"github.com/netbirdio/netbird/management/server/permissions/operations"
-	"github.com/netbirdio/netbird/management/server/status"
-	"github.com/netbirdio/netbird/management/server/store"
-	"github.com/netbirdio/netbird/management/server/types"
+	"github.com/openzro/openzro/management/server/activity"
+	"github.com/openzro/openzro/management/server/permissions/modules"
+	"github.com/openzro/openzro/management/server/permissions/operations"
+	"github.com/openzro/openzro/management/server/status"
+	"github.com/openzro/openzro/management/server/store"
+	"github.com/openzro/openzro/management/server/types"
 )
 
 func isEnabled() bool {
-	response := os.Getenv("NB_EVENT_ACTIVITY_LOG_ENABLED")
+	response := os.Getenv("OZ_EVENT_ACTIVITY_LOG_ENABLED")
 	return response == "" || response == "true"
 }
 

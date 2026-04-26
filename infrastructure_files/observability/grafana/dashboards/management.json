@@ -3507,8 +3507,8 @@
       {
         "current": {
           "selected": false,
-          "text": "netbird-management",
-          "value": "netbird-management"
+          "text": "openzro-management",
+          "value": "openzro-management"
         },
         "datasource": {
           "type": "prometheus",
@@ -3562,7 +3562,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Netbird / Management",
+  "title": "Openzro / Management",
   "uid": "bebypwoziton4b-v4",
   "version": 38,
   "weekStart": ""

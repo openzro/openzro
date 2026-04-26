@@ -1,7 +1,7 @@
-package NetBirdSDK
+package OpenzroSDK
 
 import (
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/util"
 )
 
 // InitializeLog initializes the log file.

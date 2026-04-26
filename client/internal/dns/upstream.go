@@ -19,10 +19,10 @@ import (
 	"github.com/miekg/dns"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/iface"
-	"github.com/netbirdio/netbird/client/internal/dns/types"
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/client/proto"
+	"github.com/openzro/openzro/client/iface"
+	"github.com/openzro/openzro/client/internal/dns/types"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/client/proto"
 )
 
 const (

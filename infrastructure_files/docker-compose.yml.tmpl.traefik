@@ -10,91 +10,91 @@ services:
   # UI dashboard
   dashboard:
     <<: *default
-    image: netbirdio/dashboard:$NETBIRD_DASHBOARD_TAG
+    image: openzro/dashboard:$OPENZRO_DASHBOARD_TAG
     environment:
       # Endpoints
-      - NETBIRD_MGMT_API_ENDPOINT=$NETBIRD_MGMT_API_ENDPOINT
-      - NETBIRD_MGMT_GRPC_API_ENDPOINT=$NETBIRD_MGMT_API_ENDPOINT
+      - OPENZRO_MGMT_API_ENDPOINT=$OPENZRO_MGMT_API_ENDPOINT
+      - OPENZRO_MGMT_GRPC_API_ENDPOINT=$OPENZRO_MGMT_API_ENDPOINT
       # OIDC
-      - AUTH_AUDIENCE=$NETBIRD_DASH_AUTH_AUDIENCE
-      - AUTH_CLIENT_ID=$NETBIRD_AUTH_CLIENT_ID
-      - AUTH_CLIENT_SECRET=$NETBIRD_AUTH_CLIENT_SECRET
-      - AUTH_AUTHORITY=$NETBIRD_AUTH_AUTHORITY
-      - USE_AUTH0=$NETBIRD_USE_AUTH0
-      - AUTH_SUPPORTED_SCOPES=$NETBIRD_AUTH_SUPPORTED_SCOPES
-      - AUTH_REDIRECT_URI=$NETBIRD_AUTH_REDIRECT_URI
-      - AUTH_SILENT_REDIRECT_URI=$NETBIRD_AUTH_SILENT_REDIRECT_URI
-      - NETBIRD_TOKEN_SOURCE=$NETBIRD_TOKEN_SOURCE
+      - AUTH_AUDIENCE=$OPENZRO_DASH_AUTH_AUDIENCE
+      - AUTH_CLIENT_ID=$OPENZRO_AUTH_CLIENT_ID
+      - AUTH_CLIENT_SECRET=$OPENZRO_AUTH_CLIENT_SECRET
+      - AUTH_AUTHORITY=$OPENZRO_AUTH_AUTHORITY
+      - USE_AUTH0=$OPENZRO_USE_AUTH0
+      - AUTH_SUPPORTED_SCOPES=$OPENZRO_AUTH_SUPPORTED_SCOPES
+      - AUTH_REDIRECT_URI=$OPENZRO_AUTH_REDIRECT_URI
+      - AUTH_SILENT_REDIRECT_URI=$OPENZRO_AUTH_SILENT_REDIRECT_URI
+      - OPENZRO_TOKEN_SOURCE=$OPENZRO_TOKEN_SOURCE
       # SSL
       - NGINX_SSL_PORT=443
       # Letsencrypt
-      - LETSENCRYPT_DOMAIN=$NETBIRD_LETSENCRYPT_DOMAIN
-      - LETSENCRYPT_EMAIL=$NETBIRD_LETSENCRYPT_EMAIL
+      - LETSENCRYPT_DOMAIN=$OPENZRO_LETSENCRYPT_DOMAIN
+      - LETSENCRYPT_EMAIL=$OPENZRO_LETSENCRYPT_EMAIL
     volumes:
       - $LETSENCRYPT_VOLUMENAME:/etc/letsencrypt/
     labels:
     - traefik.enable=true
-    - traefik.http.routers.netbird-dashboard.rule=Host(`$NETBIRD_DOMAIN`)
-    - traefik.http.services.netbird-dashboard.loadbalancer.server.port=80
+    - traefik.http.routers.openzro-dashboard.rule=Host(`$OPENZRO_DOMAIN`)
+    - traefik.http.services.openzro-dashboard.loadbalancer.server.port=80
 
   # Signal
   signal:
     <<: *default
-    image: netbirdio/signal:$NETBIRD_SIGNAL_TAG
+    image: openzro/signal:$OPENZRO_SIGNAL_TAG
     volumes:
-      - $SIGNAL_VOLUMENAME:/var/lib/netbird
+      - $SIGNAL_VOLUMENAME:/var/lib/openzro
     labels:
     - traefik.enable=true
-    - traefik.http.routers.netbird-signal.rule=Host(`$NETBIRD_DOMAIN`) && PathPrefix(`/signalexchange.SignalExchange/`)
-    - traefik.http.services.netbird-signal.loadbalancer.server.port=10000
-    - traefik.http.services.netbird-signal.loadbalancer.server.scheme=h2c
+    - traefik.http.routers.openzro-signal.rule=Host(`$OPENZRO_DOMAIN`) && PathPrefix(`/signalexchange.SignalExchange/`)
+    - traefik.http.services.openzro-signal.loadbalancer.server.port=10000
+    - traefik.http.services.openzro-signal.loadbalancer.server.scheme=h2c
 
   # Relay
   relay:
     <<: *default
-    image: netbirdio/relay:$NETBIRD_RELAY_TAG
+    image: openzro/relay:$OPENZRO_RELAY_TAG
     environment:
-    - NB_LOG_LEVEL=info
-    - NB_LISTEN_ADDRESS=:33080
-    - NB_EXPOSED_ADDRESS=$NETBIRD_RELAY_ENDPOINT
+    - OZ_LOG_LEVEL=info
+    - OZ_LISTEN_ADDRESS=:33080
+    - OZ_EXPOSED_ADDRESS=$OPENZRO_RELAY_ENDPOINT
     # todo: change to a secure secret
-    - NB_AUTH_SECRET=$NETBIRD_RELAY_AUTH_SECRET
+    - OZ_AUTH_SECRET=$OPENZRO_RELAY_AUTH_SECRET
     labels:
     - traefik.enable=true
-    - traefik.http.routers.netbird-relay.rule=Host(`$NETBIRD_DOMAIN`) && PathPrefix(`/relay`)
-    - traefik.http.services.netbird-relay.loadbalancer.server.port=33080
+    - traefik.http.routers.openzro-relay.rule=Host(`$OPENZRO_DOMAIN`) && PathPrefix(`/relay`)
+    - traefik.http.services.openzro-relay.loadbalancer.server.port=33080
 
   # Management
   management:
     <<: *default
-    image: netbirdio/management:$NETBIRD_MANAGEMENT_TAG
+    image: openzro/management:$OPENZRO_MANAGEMENT_TAG
     depends_on:
       - dashboard
     volumes:
-      - $MGMT_VOLUMENAME:/var/lib/netbird
+      - $MGMT_VOLUMENAME:/var/lib/openzro
       - $LETSENCRYPT_VOLUMENAME:/etc/letsencrypt:ro
-      - ./management.json:/etc/netbird/management.json
+      - ./management.json:/etc/openzro/management.json
     command: [
       "--port", "33073",
       "--log-file", "console",
       "--log-level", "info",
-      "--disable-anonymous-metrics=$NETBIRD_DISABLE_ANONYMOUS_METRICS",
-      "--single-account-mode-domain=$NETBIRD_MGMT_SINGLE_ACCOUNT_MODE_DOMAIN",
-      "--dns-domain=$NETBIRD_MGMT_DNS_DOMAIN"
+      "--disable-anonymous-metrics=$OPENZRO_DISABLE_ANONYMOUS_METRICS",
+      "--single-account-mode-domain=$OPENZRO_MGMT_SINGLE_ACCOUNT_MODE_DOMAIN",
+      "--dns-domain=$OPENZRO_MGMT_DNS_DOMAIN"
       ]
     labels:
     - traefik.enable=true
-    - traefik.http.routers.netbird-api.rule=Host(`$NETBIRD_DOMAIN`) && PathPrefix(`/api`)
-    - traefik.http.routers.netbird-api.service=netbird-api
-    - traefik.http.services.netbird-api.loadbalancer.server.port=33073
+    - traefik.http.routers.openzro-api.rule=Host(`$OPENZRO_DOMAIN`) && PathPrefix(`/api`)
+    - traefik.http.routers.openzro-api.service=openzro-api
+    - traefik.http.services.openzro-api.loadbalancer.server.port=33073
 
-    - traefik.http.routers.netbird-management.rule=Host(`$NETBIRD_DOMAIN`) && PathPrefix(`/management.ManagementService/`)
-    - traefik.http.routers.netbird-management.service=netbird-management
-    - traefik.http.services.netbird-management.loadbalancer.server.port=33073
-    - traefik.http.services.netbird-management.loadbalancer.server.scheme=h2c
+    - traefik.http.routers.openzro-management.rule=Host(`$OPENZRO_DOMAIN`) && PathPrefix(`/management.ManagementService/`)
+    - traefik.http.routers.openzro-management.service=openzro-management
+    - traefik.http.services.openzro-management.loadbalancer.server.port=33073
+    - traefik.http.services.openzro-management.loadbalancer.server.scheme=h2c
     environment:
-      - NETBIRD_STORE_ENGINE_POSTGRES_DSN=$NETBIRD_STORE_ENGINE_POSTGRES_DSN
-      - NETBIRD_STORE_ENGINE_MYSQL_DSN=$NETBIRD_STORE_ENGINE_MYSQL_DSN
+      - OPENZRO_STORE_ENGINE_POSTGRES_DSN=$OPENZRO_STORE_ENGINE_POSTGRES_DSN
+      - OPENZRO_STORE_ENGINE_MYSQL_DSN=$OPENZRO_STORE_ENGINE_MYSQL_DSN
       
   # Coturn
   coturn:

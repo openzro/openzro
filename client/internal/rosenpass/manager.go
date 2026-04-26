@@ -30,7 +30,7 @@ type Manager struct {
 	rpKeyHash    string
 	preSharedKey *[32]byte
 	rpPeerIDs    map[string]*rp.PeerID
-	rpWgHandler  *NetbirdHandler
+	rpWgHandler  *OpenzroHandler
 	server       *rp.Server
 	lock         sync.Mutex
 	port         int
@@ -109,7 +109,7 @@ func (m *Manager) generateConfig() (rp.Config, error) {
 	cfg.SecretKey = m.ssk
 
 	cfg.Peers = []rp.PeerConfig{}
-	m.rpWgHandler, _ = NewNetbirdHandler(m.preSharedKey, m.ifaceName)
+	m.rpWgHandler, _ = NewOpenzroHandler(m.preSharedKey, m.ifaceName)
 
 	cfg.Handlers = []rp.Handler{m.rpWgHandler}
 

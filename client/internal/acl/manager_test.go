@@ -8,11 +8,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/netbirdio/netbird/client/firewall"
-	"github.com/netbirdio/netbird/client/iface/wgaddr"
-	"github.com/netbirdio/netbird/client/internal/acl/mocks"
-	"github.com/netbirdio/netbird/client/internal/netflow"
-	mgmProto "github.com/netbirdio/netbird/management/proto"
+	"github.com/openzro/openzro/client/firewall"
+	"github.com/openzro/openzro/client/iface/wgaddr"
+	"github.com/openzro/openzro/client/internal/acl/mocks"
+	"github.com/openzro/openzro/client/internal/netflow"
+	mgmProto "github.com/openzro/openzro/management/proto"
 )
 
 var flowLogger = netflow.NewManager(nil, []byte{}, nil).GetLogger()
@@ -133,8 +133,8 @@ func TestDefaultManager(t *testing.T) {
 
 func TestDefaultManagerStateless(t *testing.T) {
 	// stateless currently only in userspace, so we have to disable kernel
-	t.Setenv("NB_WG_KERNEL_DISABLED", "true")
-	t.Setenv("NB_DISABLE_CONNTRACK", "true")
+	t.Setenv("OZ_WG_KERNEL_DISABLED", "true")
+	t.Setenv("OZ_DISABLE_CONNTRACK", "true")
 
 	networkMap := &mgmProto.NetworkMap{
 		FirewallRules: []*mgmProto.FirewallRule{

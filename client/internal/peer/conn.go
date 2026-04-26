@@ -15,18 +15,18 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
-	"github.com/netbirdio/netbird/client/iface/configurer"
-	"github.com/netbirdio/netbird/client/iface/wgproxy"
-	"github.com/netbirdio/netbird/client/internal/peer/conntype"
-	"github.com/netbirdio/netbird/client/internal/peer/dispatcher"
-	"github.com/netbirdio/netbird/client/internal/peer/guard"
-	icemaker "github.com/netbirdio/netbird/client/internal/peer/ice"
-	"github.com/netbirdio/netbird/client/internal/peer/id"
-	"github.com/netbirdio/netbird/client/internal/peer/worker"
-	"github.com/netbirdio/netbird/client/internal/stdnet"
-	relayClient "github.com/netbirdio/netbird/relay/client"
-	"github.com/netbirdio/netbird/route"
-	semaphoregroup "github.com/netbirdio/netbird/util/semaphore-group"
+	"github.com/openzro/openzro/client/iface/configurer"
+	"github.com/openzro/openzro/client/iface/wgproxy"
+	"github.com/openzro/openzro/client/internal/peer/conntype"
+	"github.com/openzro/openzro/client/internal/peer/dispatcher"
+	"github.com/openzro/openzro/client/internal/peer/guard"
+	icemaker "github.com/openzro/openzro/client/internal/peer/ice"
+	"github.com/openzro/openzro/client/internal/peer/id"
+	"github.com/openzro/openzro/client/internal/peer/worker"
+	"github.com/openzro/openzro/client/internal/stdnet"
+	relayClient "github.com/openzro/openzro/relay/client"
+	"github.com/openzro/openzro/route"
+	semaphoregroup "github.com/openzro/openzro/util/semaphore-group"
 )
 
 const (
@@ -174,7 +174,7 @@ func (conn *Conn) Open(engineCtx context.Context) error {
 	conn.handshaker = NewHandshaker(conn.Log, conn.config, conn.signaler, conn.workerICE, conn.workerRelay)
 
 	conn.handshaker.AddOnNewOfferListener(conn.workerRelay.OnNewOffer)
-	if os.Getenv("NB_FORCE_RELAY") != "true" {
+	if os.Getenv("OZ_FORCE_RELAY") != "true" {
 		conn.handshaker.AddOnNewOfferListener(conn.workerICE.OnNewOffer)
 	}
 

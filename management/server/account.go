@@ -23,28 +23,28 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 	"golang.org/x/exp/maps"
 
-	nbdns "github.com/netbirdio/netbird/dns"
-	"github.com/netbirdio/netbird/formatter/hook"
-	"github.com/netbirdio/netbird/management/server/account"
-	"github.com/netbirdio/netbird/management/server/activity"
-	nbcache "github.com/netbirdio/netbird/management/server/cache"
-	nbcontext "github.com/netbirdio/netbird/management/server/context"
-	"github.com/netbirdio/netbird/management/server/geolocation"
-	"github.com/netbirdio/netbird/management/server/idp"
-	"github.com/netbirdio/netbird/management/server/integrations/integrated_validator"
-	"github.com/netbirdio/netbird/management/server/integrations/port_forwarding"
-	nbpeer "github.com/netbirdio/netbird/management/server/peer"
-	"github.com/netbirdio/netbird/management/server/permissions"
-	"github.com/netbirdio/netbird/management/server/permissions/modules"
-	"github.com/netbirdio/netbird/management/server/permissions/operations"
-	"github.com/netbirdio/netbird/management/server/posture"
-	"github.com/netbirdio/netbird/management/server/settings"
-	"github.com/netbirdio/netbird/management/server/status"
-	"github.com/netbirdio/netbird/management/server/store"
-	"github.com/netbirdio/netbird/management/server/telemetry"
-	"github.com/netbirdio/netbird/management/server/types"
-	"github.com/netbirdio/netbird/management/server/util"
-	"github.com/netbirdio/netbird/route"
+	nbdns "github.com/openzro/openzro/dns"
+	"github.com/openzro/openzro/formatter/hook"
+	"github.com/openzro/openzro/management/server/account"
+	"github.com/openzro/openzro/management/server/activity"
+	nbcache "github.com/openzro/openzro/management/server/cache"
+	nbcontext "github.com/openzro/openzro/management/server/context"
+	"github.com/openzro/openzro/management/server/geolocation"
+	"github.com/openzro/openzro/management/server/idp"
+	"github.com/openzro/openzro/management/server/integrations/integrated_validator"
+	"github.com/openzro/openzro/management/server/integrations/port_forwarding"
+	nbpeer "github.com/openzro/openzro/management/server/peer"
+	"github.com/openzro/openzro/management/server/permissions"
+	"github.com/openzro/openzro/management/server/permissions/modules"
+	"github.com/openzro/openzro/management/server/permissions/operations"
+	"github.com/openzro/openzro/management/server/posture"
+	"github.com/openzro/openzro/management/server/settings"
+	"github.com/openzro/openzro/management/server/status"
+	"github.com/openzro/openzro/management/server/store"
+	"github.com/openzro/openzro/management/server/telemetry"
+	"github.com/openzro/openzro/management/server/types"
+	"github.com/openzro/openzro/management/server/util"
+	"github.com/openzro/openzro/route"
 )
 
 const (
@@ -259,7 +259,7 @@ func BuildManager(
 
 func (am *DefaultAccountManager) startWarmup(ctx context.Context) {
 	var initialInterval int64
-	intervalStr := os.Getenv("NB_PEER_UPDATE_INTERVAL_MS")
+	intervalStr := os.Getenv("OZ_PEER_UPDATE_INTERVAL_MS")
 	interval, err := strconv.Atoi(intervalStr)
 	if err != nil {
 		initialInterval = 1
@@ -267,7 +267,7 @@ func (am *DefaultAccountManager) startWarmup(ctx context.Context) {
 	} else {
 		initialInterval = int64(interval) * 10
 		go func() {
-			startupPeriodStr := os.Getenv("NB_PEER_UPDATE_STARTUP_PERIOD_S")
+			startupPeriodStr := os.Getenv("OZ_PEER_UPDATE_STARTUP_PERIOD_S")
 			startupPeriod, err := strconv.Atoi(startupPeriodStr)
 			if err != nil {
 				startupPeriod = 1
@@ -581,7 +581,7 @@ func (am *DefaultAccountManager) warmupIDPCache(ctx context.Context, store cache
 		return nil
 	}
 
-	if delayStr, ok := os.LookupEnv("NB_IDP_CACHE_WARMUP_DELAY"); ok {
+	if delayStr, ok := os.LookupEnv("OZ_IDP_CACHE_WARMUP_DELAY"); ok {
 		delay, err := time.ParseDuration(delayStr)
 		if err != nil {
 			return fmt.Errorf("invalid IDP warmup delay: %w", err)

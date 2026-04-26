@@ -8,8 +8,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/management/server/store"
-	"github.com/netbirdio/netbird/management/server/types"
+	"github.com/openzro/openzro/management/server/store"
+	"github.com/openzro/openzro/management/server/types"
 )
 
 // AccountRequest holds the result channel to return the requested account.
@@ -33,7 +33,7 @@ type AccountRequestBuffer struct {
 }
 
 func NewAccountRequestBuffer(ctx context.Context, store store.Store) *AccountRequestBuffer {
-	bufferIntervalStr := os.Getenv("NB_GET_ACCOUNT_BUFFER_INTERVAL")
+	bufferIntervalStr := os.Getenv("OZ_GET_ACCOUNT_BUFFER_INTERVAL")
 	bufferInterval, err := time.ParseDuration(bufferIntervalStr)
 	if err != nil {
 		if bufferIntervalStr != "" {

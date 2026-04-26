@@ -12,13 +12,13 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	"github.com/netbirdio/netbird/client/iface/netstack"
+	"github.com/openzro/openzro/client/iface/netstack"
 )
 
 const (
 	// these have the same effect, skip socket env supported for backward compatibility
-	envSkipSocketMark   = "NB_SKIP_SOCKET_MARK"
-	envUseLegacyRouting = "NB_USE_LEGACY_ROUTING"
+	envSkipSocketMark   = "OZ_SKIP_SOCKET_MARK"
+	envUseLegacyRouting = "OZ_USE_LEGACY_ROUTING"
 )
 
 var advancedRoutingSupported bool

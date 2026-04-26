@@ -11,9 +11,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/netbirdio/netbird/client/iface"
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/route"
+	"github.com/openzro/openzro/client/iface"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/route"
 )
 
 // send 5 routes, one for server and 4 for clients, one normal and 2 HA and one small

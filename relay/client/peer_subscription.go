@@ -9,7 +9,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/relay/messages"
+	"github.com/openzro/openzro/relay/messages"
 )
 
 const (

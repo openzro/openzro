@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/util"
 )
 
 type ProfileState struct {

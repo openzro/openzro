@@ -6,11 +6,11 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/iface/netstack"
+	"github.com/openzro/openzro/client/iface/netstack"
 )
 
 const (
-	envDisableCustomRouting = "NB_DISABLE_CUSTOM_ROUTING"
+	envDisableCustomRouting = "OZ_DISABLE_CUSTOM_ROUTING"
 )
 
 // CustomRoutingDisabled returns true if custom routing is disabled.

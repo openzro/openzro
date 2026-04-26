@@ -3,7 +3,7 @@ package types
 import (
 	"github.com/rs/xid"
 
-	"github.com/netbirdio/netbird/management/server/http/api"
+	"github.com/openzro/openzro/management/server/http/api"
 )
 
 type Network struct {

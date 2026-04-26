@@ -17,7 +17,7 @@ import (
 	"golang.org/x/net/route"
 	"golang.org/x/sys/unix"
 
-	"github.com/netbirdio/netbird/client/internal/statemanager"
+	"github.com/openzro/openzro/client/internal/statemanager"
 )
 
 func (r *SysOps) SetupRouting(initAddresses []net.IP, stateManager *statemanager.Manager) error {

@@ -6,8 +6,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/netbirdio/netbird/client/internal"
-	mgm "github.com/netbirdio/netbird/management/client/common"
+	"github.com/openzro/openzro/client/internal"
+	mgm "github.com/openzro/openzro/management/client/common"
 )
 
 func TestPromptLogin(t *testing.T) {

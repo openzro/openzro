@@ -11,8 +11,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	mgm "github.com/netbirdio/netbird/management/client"
-	"github.com/netbirdio/netbird/management/client/common"
+	mgm "github.com/openzro/openzro/management/client"
+	"github.com/openzro/openzro/management/client/common"
 )
 
 // PKCEAuthorizationFlow represents PKCE Authorization Flow information
@@ -116,7 +116,7 @@ func GetPKCEAuthorizationFlowInfo(ctx context.Context, privateKey string, mgmURL
 }
 
 func isPKCEProviderConfigValid(config PKCEAuthProviderConfig) error {
-	errorMSGFormat := "invalid provider configuration received from management: %s value is empty. Contact your NetBird administrator"
+	errorMSGFormat := "invalid provider configuration received from management: %s value is empty. Contact your Openzro administrator"
 	if config.ClientID == "" {
 		return fmt.Errorf(errorMSGFormat, "Client ID")
 	}

@@ -9,7 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	"github.com/netbirdio/netbird/client/iface/wgaddr"
+	"github.com/openzro/openzro/client/iface/wgaddr"
 )
 
 type wgLink struct {

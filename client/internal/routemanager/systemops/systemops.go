@@ -8,10 +8,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/netbirdio/netbird/client/iface/wgaddr"
-	"github.com/netbirdio/netbird/client/internal/routemanager/notifier"
-	"github.com/netbirdio/netbird/client/internal/routemanager/refcounter"
-	"github.com/netbirdio/netbird/client/internal/routemanager/vars"
+	"github.com/openzro/openzro/client/iface/wgaddr"
+	"github.com/openzro/openzro/client/internal/routemanager/notifier"
+	"github.com/openzro/openzro/client/internal/routemanager/refcounter"
+	"github.com/openzro/openzro/client/internal/routemanager/vars"
 )
 
 type Nexthop struct {

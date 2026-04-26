@@ -9,8 +9,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
-	"github.com/netbirdio/netbird/client/internal/lazyconn"
-	peerid "github.com/netbirdio/netbird/client/internal/peer/id"
+	"github.com/openzro/openzro/client/internal/lazyconn"
+	peerid "github.com/openzro/openzro/client/internal/peer/id"
 )
 
 type WgInterface interface {

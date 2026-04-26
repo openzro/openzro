@@ -10,11 +10,11 @@ import (
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
 
-	"github.com/netbirdio/netbird/client/internal"
-	"github.com/netbirdio/netbird/client/internal/profilemanager"
-	"github.com/netbirdio/netbird/client/proto"
-	nbstatus "github.com/netbirdio/netbird/client/status"
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/client/internal"
+	"github.com/openzro/openzro/client/internal/profilemanager"
+	"github.com/openzro/openzro/client/proto"
+	nbstatus "github.com/openzro/openzro/client/status"
+	"github.com/openzro/openzro/util"
 )
 
 var (
@@ -32,7 +32,7 @@ var (
 
 var statusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "status of the Netbird Service",
+	Short: "status of the Openzro Service",
 	RunE:  statusFunc,
 }
 
@@ -42,10 +42,10 @@ func init() {
 	statusCmd.PersistentFlags().BoolVarP(&detailFlag, "detail", "d", false, "display detailed status information in human-readable format")
 	statusCmd.PersistentFlags().BoolVar(&jsonFlag, "json", false, "display detailed status information in json format")
 	statusCmd.PersistentFlags().BoolVar(&yamlFlag, "yaml", false, "display detailed status information in yaml format")
-	statusCmd.PersistentFlags().BoolVar(&ipv4Flag, "ipv4", false, "display only NetBird IPv4 of this peer, e.g., --ipv4 will output 100.64.0.33")
+	statusCmd.PersistentFlags().BoolVar(&ipv4Flag, "ipv4", false, "display only Openzro IPv4 of this peer, e.g., --ipv4 will output 100.64.0.33")
 	statusCmd.MarkFlagsMutuallyExclusive("detail", "json", "yaml", "ipv4")
 	statusCmd.PersistentFlags().StringSliceVar(&ipsFilter, "filter-by-ips", []string{}, "filters the detailed output by a list of one or more IPs, e.g., --filter-by-ips 100.64.0.100,100.64.0.200")
-	statusCmd.PersistentFlags().StringSliceVar(&prefixNamesFilter, "filter-by-names", []string{}, "filters the detailed output by a list of one or more peer FQDN or hostnames, e.g., --filter-by-names peer-a,peer-b.netbird.cloud")
+	statusCmd.PersistentFlags().StringSliceVar(&prefixNamesFilter, "filter-by-names", []string{}, "filters the detailed output by a list of one or more peer FQDN or hostnames, e.g., --filter-by-names peer-a,peer-b.openzro.cloud")
 	statusCmd.PersistentFlags().StringVar(&statusFilter, "filter-by-status", "", "filters the detailed output by connection status(idle|connecting|connected), e.g., --filter-by-status connected")
 	statusCmd.PersistentFlags().StringVar(&connectionTypeFilter, "filter-by-connection-type", "", "filters the detailed output by connection type (P2P|Relayed), e.g., --filter-by-connection-type P2P")
 }
@@ -78,10 +78,10 @@ func statusFunc(cmd *cobra.Command, args []string) error {
 		status == string(internal.StatusSessionExpired) {
 		cmd.Printf("Daemon status: %s\n\n"+
 			"Run UP command to log in with SSO (interactive login):\n\n"+
-			" netbird up \n\n"+
+			" openzro up \n\n"+
 			"If you are running a self-hosted version and no SSO provider has been configured in your Management Server,\n"+
-			"you can use a setup-key:\n\n netbird up --management-url <YOUR_MANAGEMENT_URL> --setup-key <YOUR_SETUP_KEY>\n\n"+
-			"More info: https://docs.netbird.io/how-to/register-machines-using-setup-keys\n\n",
+			"you can use a setup-key:\n\n openzro up --management-url <YOUR_MANAGEMENT_URL> --setup-key <YOUR_SETUP_KEY>\n\n"+
+			"More info: https://docs.openzro.io/how-to/register-machines-using-setup-keys\n\n",
 			resp.GetStatus(),
 		)
 		return nil
@@ -125,7 +125,7 @@ func getStatus(ctx context.Context) (*proto.StatusResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to daemon error: %v\n"+
 			"If the daemon is not running please run: "+
-			"\nnetbird service install \nnetbird service start\n", err)
+			"\nopenzro service install \nopenzro service start\n", err)
 	}
 	defer conn.Close()
 

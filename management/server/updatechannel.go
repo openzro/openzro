@@ -7,9 +7,9 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/management/proto"
-	"github.com/netbirdio/netbird/management/server/telemetry"
-	"github.com/netbirdio/netbird/management/server/types"
+	"github.com/openzro/openzro/management/proto"
+	"github.com/openzro/openzro/management/server/telemetry"
+	"github.com/openzro/openzro/management/server/types"
 )
 
 const channelBufferSize = 100

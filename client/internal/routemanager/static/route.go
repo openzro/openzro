@@ -6,9 +6,9 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/internal/routemanager/common"
-	"github.com/netbirdio/netbird/client/internal/routemanager/refcounter"
-	"github.com/netbirdio/netbird/route"
+	"github.com/openzro/openzro/client/internal/routemanager/common"
+	"github.com/openzro/openzro/client/internal/routemanager/refcounter"
+	"github.com/openzro/openzro/route"
 )
 
 type Route struct {

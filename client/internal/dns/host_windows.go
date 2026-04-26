@@ -15,8 +15,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/windows/registry"
 
-	nberrors "github.com/netbirdio/netbird/client/errors"
-	"github.com/netbirdio/netbird/client/internal/statemanager"
+	nberrors "github.com/openzro/openzro/client/errors"
+	"github.com/openzro/openzro/client/internal/statemanager"
 )
 
 var (
@@ -30,9 +30,9 @@ var (
 )
 
 const (
-	dnsPolicyConfigMatchPath    = `SYSTEM\CurrentControlSet\Services\Dnscache\Parameters\DnsPolicyConfig\NetBird-Match`
+	dnsPolicyConfigMatchPath    = `SYSTEM\CurrentControlSet\Services\Dnscache\Parameters\DnsPolicyConfig\Openzro-Match`
 	gpoDnsPolicyRoot            = `SOFTWARE\Policies\Microsoft\Windows NT\DNSClient\DnsPolicyConfig`
-	gpoDnsPolicyConfigMatchPath = gpoDnsPolicyRoot + `\NetBird-Match`
+	gpoDnsPolicyConfigMatchPath = gpoDnsPolicyRoot + `\Openzro-Match`
 
 	dnsPolicyConfigVersionKey           = "Version"
 	dnsPolicyConfigVersionValue         = 2

@@ -13,7 +13,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/netbirdio/netbird/management/server/telemetry"
+	"github.com/openzro/openzro/management/server/telemetry"
 
 	"github.com/golang-jwt/jwt"
 	"github.com/stretchr/testify/assert"

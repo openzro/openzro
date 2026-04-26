@@ -279,7 +279,7 @@ type EncryptedMessage struct {
 	WgPubKey string `protobuf:"bytes,1,opt,name=wgPubKey,proto3" json:"wgPubKey,omitempty"`
 	// encrypted message Body
 	Body []byte `protobuf:"bytes,2,opt,name=body,proto3" json:"body,omitempty"`
-	// Version of the Netbird Management Service protocol
+	// Version of the Openzro Management Service protocol
 	Version int32 `protobuf:"varint,3,opt,name=version,proto3" json:"version,omitempty"`
 }
 
@@ -384,14 +384,14 @@ func (x *SyncRequest) GetMeta() *PeerSystemMeta {
 	return nil
 }
 
-// SyncResponse represents a state that should be applied to the local peer (e.g. Netbird servers config as well as local peer and remote peers configs)
+// SyncResponse represents a state that should be applied to the local peer (e.g. Openzro servers config as well as local peer and remote peers configs)
 type SyncResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
 	// Global config
-	NetbirdConfig *NetbirdConfig `protobuf:"bytes,1,opt,name=netbirdConfig,proto3" json:"netbirdConfig,omitempty"`
+	OpenzroConfig *OpenzroConfig `protobuf:"bytes,1,opt,name=openzroConfig,proto3" json:"openzroConfig,omitempty"`
 	// Deprecated. Use NetworkMap.PeerConfig
 	PeerConfig *PeerConfig `protobuf:"bytes,2,opt,name=peerConfig,proto3" json:"peerConfig,omitempty"`
 	// Deprecated. Use NetworkMap.RemotePeerConfig
@@ -436,9 +436,9 @@ func (*SyncResponse) Descriptor() ([]byte, []int) {
 	return file_management_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *SyncResponse) GetNetbirdConfig() *NetbirdConfig {
+func (x *SyncResponse) GetOpenzroConfig() *OpenzroConfig {
 	if x != nil {
-		return x.NetbirdConfig
+		return x.OpenzroConfig
 	}
 	return nil
 }
@@ -924,7 +924,7 @@ type PeerSystemMeta struct {
 	Core             string            `protobuf:"bytes,4,opt,name=core,proto3" json:"core,omitempty"`
 	Platform         string            `protobuf:"bytes,5,opt,name=platform,proto3" json:"platform,omitempty"`
 	OS               string            `protobuf:"bytes,6,opt,name=OS,proto3" json:"OS,omitempty"`
-	NetbirdVersion   string            `protobuf:"bytes,7,opt,name=netbirdVersion,proto3" json:"netbirdVersion,omitempty"`
+	OpenzroVersion   string            `protobuf:"bytes,7,opt,name=openzroVersion,proto3" json:"openzroVersion,omitempty"`
 	UiVersion        string            `protobuf:"bytes,8,opt,name=uiVersion,proto3" json:"uiVersion,omitempty"`
 	KernelVersion    string            `protobuf:"bytes,9,opt,name=kernelVersion,proto3" json:"kernelVersion,omitempty"`
 	OSVersion        string            `protobuf:"bytes,10,opt,name=OSVersion,proto3" json:"OSVersion,omitempty"`
@@ -1011,9 +1011,9 @@ func (x *PeerSystemMeta) GetOS() string {
 	return ""
 }
 
-func (x *PeerSystemMeta) GetNetbirdVersion() string {
+func (x *PeerSystemMeta) GetOpenzroVersion() string {
 	if x != nil {
-		return x.NetbirdVersion
+		return x.OpenzroVersion
 	}
 	return ""
 }
@@ -1094,7 +1094,7 @@ type LoginResponse struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Global config
-	NetbirdConfig *NetbirdConfig `protobuf:"bytes,1,opt,name=netbirdConfig,proto3" json:"netbirdConfig,omitempty"`
+	OpenzroConfig *OpenzroConfig `protobuf:"bytes,1,opt,name=openzroConfig,proto3" json:"openzroConfig,omitempty"`
 	// Peer local config
 	PeerConfig *PeerConfig `protobuf:"bytes,2,opt,name=peerConfig,proto3" json:"peerConfig,omitempty"`
 	// Posture checks to be evaluated by client
@@ -1133,9 +1133,9 @@ func (*LoginResponse) Descriptor() ([]byte, []int) {
 	return file_management_proto_rawDescGZIP(), []int{10}
 }
 
-func (x *LoginResponse) GetNetbirdConfig() *NetbirdConfig {
+func (x *LoginResponse) GetOpenzroConfig() *OpenzroConfig {
 	if x != nil {
-		return x.NetbirdConfig
+		return x.OpenzroConfig
 	}
 	return nil
 }
@@ -1163,7 +1163,7 @@ type ServerKeyResponse struct {
 	Key string `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
 	// Key expiration timestamp after which the key should be fetched again by the client
 	ExpiresAt *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=expiresAt,proto3" json:"expiresAt,omitempty"`
-	// Version of the Netbird Management Service protocol
+	// Version of the Openzro Management Service protocol
 	Version int32 `protobuf:"varint,3,opt,name=version,proto3" json:"version,omitempty"`
 }
 
@@ -1258,8 +1258,8 @@ func (*Empty) Descriptor() ([]byte, []int) {
 	return file_management_proto_rawDescGZIP(), []int{12}
 }
 
-// NetbirdConfig is a common configuration of any Netbird peer. It contains STUN, TURN, Signal and Management servers configurations
-type NetbirdConfig struct {
+// OpenzroConfig is a common configuration of any Openzro peer. It contains STUN, TURN, Signal and Management servers configurations
+type OpenzroConfig struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
@@ -1274,8 +1274,8 @@ type NetbirdConfig struct {
 	Flow   *FlowConfig  `protobuf:"bytes,5,opt,name=flow,proto3" json:"flow,omitempty"`
 }
 
-func (x *NetbirdConfig) Reset() {
-	*x = NetbirdConfig{}
+func (x *OpenzroConfig) Reset() {
+	*x = OpenzroConfig{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_management_proto_msgTypes[13]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1283,13 +1283,13 @@ func (x *NetbirdConfig) Reset() {
 	}
 }
 
-func (x *NetbirdConfig) String() string {
+func (x *OpenzroConfig) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*NetbirdConfig) ProtoMessage() {}
+func (*OpenzroConfig) ProtoMessage() {}
 
-func (x *NetbirdConfig) ProtoReflect() protoreflect.Message {
+func (x *OpenzroConfig) ProtoReflect() protoreflect.Message {
 	mi := &file_management_proto_msgTypes[13]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1301,40 +1301,40 @@ func (x *NetbirdConfig) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use NetbirdConfig.ProtoReflect.Descriptor instead.
-func (*NetbirdConfig) Descriptor() ([]byte, []int) {
+// Deprecated: Use OpenzroConfig.ProtoReflect.Descriptor instead.
+func (*OpenzroConfig) Descriptor() ([]byte, []int) {
 	return file_management_proto_rawDescGZIP(), []int{13}
 }
 
-func (x *NetbirdConfig) GetStuns() []*HostConfig {
+func (x *OpenzroConfig) GetStuns() []*HostConfig {
 	if x != nil {
 		return x.Stuns
 	}
 	return nil
 }
 
-func (x *NetbirdConfig) GetTurns() []*ProtectedHostConfig {
+func (x *OpenzroConfig) GetTurns() []*ProtectedHostConfig {
 	if x != nil {
 		return x.Turns
 	}
 	return nil
 }
 
-func (x *NetbirdConfig) GetSignal() *HostConfig {
+func (x *OpenzroConfig) GetSignal() *HostConfig {
 	if x != nil {
 		return x.Signal
 	}
 	return nil
 }
 
-func (x *NetbirdConfig) GetRelay() *RelayConfig {
+func (x *OpenzroConfig) GetRelay() *RelayConfig {
 	if x != nil {
 		return x.Relay
 	}
 	return nil
 }
 
-func (x *NetbirdConfig) GetFlow() *FlowConfig {
+func (x *OpenzroConfig) GetFlow() *FlowConfig {
 	if x != nil {
 		return x.Flow
 	}
@@ -1347,7 +1347,7 @@ type HostConfig struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// URI of the resource e.g. turns://stun.netbird.io:4430 or signal.netbird.io:10000
+	// URI of the resource e.g. turns://stun.openzro.io:4430 or signal.openzro.io:10000
 	Uri      string              `protobuf:"bytes,1,opt,name=uri,proto3" json:"uri,omitempty"`
 	Protocol HostConfig_Protocol `protobuf:"varint,2,opt,name=protocol,proto3,enum=management.HostConfig_Protocol" json:"protocol,omitempty"`
 }
@@ -1639,9 +1639,9 @@ type PeerConfig struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// Peer's virtual IP address within the Netbird VPN (a Wireguard address config)
+	// Peer's virtual IP address within the Openzro VPN (a Wireguard address config)
 	Address string `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
-	// Netbird DNS server (a Wireguard DNS config)
+	// Openzro DNS server (a Wireguard DNS config)
 	Dns string `protobuf:"bytes,2,opt,name=dns,proto3" json:"dns,omitempty"`
 	// SSHConfig of the peer.
 	SshConfig *SSHConfig `protobuf:"bytes,3,opt,name=sshConfig,proto3" json:"sshConfig,omitempty"`
@@ -3895,7 +3895,7 @@ var file_management_proto_goTypes = []interface{}{
 	(*LoginResponse)(nil),                  // 15: management.LoginResponse
 	(*ServerKeyResponse)(nil),              // 16: management.ServerKeyResponse
 	(*Empty)(nil),                          // 17: management.Empty
-	(*NetbirdConfig)(nil),                  // 18: management.NetbirdConfig
+	(*OpenzroConfig)(nil),                  // 18: management.OpenzroConfig
 	(*HostConfig)(nil),                     // 19: management.HostConfig
 	(*RelayConfig)(nil),                    // 20: management.RelayConfig
 	(*FlowConfig)(nil),                     // 21: management.FlowConfig
@@ -3927,7 +3927,7 @@ var file_management_proto_goTypes = []interface{}{
 }
 var file_management_proto_depIdxs = []int32{
 	14, // 0: management.SyncRequest.meta:type_name -> management.PeerSystemMeta
-	18, // 1: management.SyncResponse.netbirdConfig:type_name -> management.NetbirdConfig
+	18, // 1: management.SyncResponse.openzroConfig:type_name -> management.OpenzroConfig
 	23, // 2: management.SyncResponse.peerConfig:type_name -> management.PeerConfig
 	25, // 3: management.SyncResponse.remotePeers:type_name -> management.RemotePeerConfig
 	24, // 4: management.SyncResponse.NetworkMap:type_name -> management.NetworkMap
@@ -3939,15 +3939,15 @@ var file_management_proto_depIdxs = []int32{
 	11, // 10: management.PeerSystemMeta.environment:type_name -> management.Environment
 	12, // 11: management.PeerSystemMeta.files:type_name -> management.File
 	13, // 12: management.PeerSystemMeta.flags:type_name -> management.Flags
-	18, // 13: management.LoginResponse.netbirdConfig:type_name -> management.NetbirdConfig
+	18, // 13: management.LoginResponse.openzroConfig:type_name -> management.OpenzroConfig
 	23, // 14: management.LoginResponse.peerConfig:type_name -> management.PeerConfig
 	40, // 15: management.LoginResponse.Checks:type_name -> management.Checks
 	45, // 16: management.ServerKeyResponse.expiresAt:type_name -> google.protobuf.Timestamp
-	19, // 17: management.NetbirdConfig.stuns:type_name -> management.HostConfig
-	22, // 18: management.NetbirdConfig.turns:type_name -> management.ProtectedHostConfig
-	19, // 19: management.NetbirdConfig.signal:type_name -> management.HostConfig
-	20, // 20: management.NetbirdConfig.relay:type_name -> management.RelayConfig
-	21, // 21: management.NetbirdConfig.flow:type_name -> management.FlowConfig
+	19, // 17: management.OpenzroConfig.stuns:type_name -> management.HostConfig
+	22, // 18: management.OpenzroConfig.turns:type_name -> management.ProtectedHostConfig
+	19, // 19: management.OpenzroConfig.signal:type_name -> management.HostConfig
+	20, // 20: management.OpenzroConfig.relay:type_name -> management.RelayConfig
+	21, // 21: management.OpenzroConfig.flow:type_name -> management.FlowConfig
 	3,  // 22: management.HostConfig.protocol:type_name -> management.HostConfig.Protocol
 	46, // 23: management.FlowConfig.interval:type_name -> google.protobuf.Duration
 	19, // 24: management.ProtectedHostConfig.hostConfig:type_name -> management.HostConfig
@@ -4163,7 +4163,7 @@ func file_management_proto_init() {
 			}
 		}
 		file_management_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*NetbirdConfig); i {
+			switch v := v.(*OpenzroConfig); i {
 			case 0:
 				return &v.state
 			case 1:

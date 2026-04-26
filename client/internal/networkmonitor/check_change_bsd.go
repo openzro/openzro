@@ -13,7 +13,7 @@ import (
 	"golang.org/x/net/route"
 	"golang.org/x/sys/unix"
 
-	"github.com/netbirdio/netbird/client/internal/routemanager/systemops"
+	"github.com/openzro/openzro/client/internal/routemanager/systemops"
 )
 
 func checkChange(ctx context.Context, nexthopv4, nexthopv6 systemops.Nexthop) error {

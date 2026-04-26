@@ -17,14 +17,14 @@ import (
 	gstatus "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/durationpb"
 
-	"github.com/netbirdio/netbird/client/iface"
-	"github.com/netbirdio/netbird/client/internal"
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/client/internal/profilemanager"
-	"github.com/netbirdio/netbird/client/proto"
-	"github.com/netbirdio/netbird/client/system"
-	"github.com/netbirdio/netbird/management/domain"
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/client/iface"
+	"github.com/openzro/openzro/client/internal"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/client/internal/profilemanager"
+	"github.com/openzro/openzro/client/proto"
+	"github.com/openzro/openzro/client/system"
+	"github.com/openzro/openzro/management/domain"
+	"github.com/openzro/openzro/util"
 )
 
 const (
@@ -53,7 +53,7 @@ var (
 
 	upCmd = &cobra.Command{
 		Use:   "up",
-		Short: "install, login and start Netbird client",
+		Short: "install, login and start Openzro client",
 		RunE:  upFunc,
 	}
 )
@@ -79,7 +79,7 @@ func init() {
 
 	upCmd.PersistentFlags().BoolVar(&noBrowser, noBrowserFlag, false, noBrowserDesc)
 	upCmd.PersistentFlags().StringVar(&profileName, profileNameFlag, "", profileNameDesc)
-	upCmd.PersistentFlags().StringVarP(&configPath, "config", "c", "", "(DEPRECATED) Netbird config file location")
+	upCmd.PersistentFlags().StringVarP(&configPath, "config", "c", "", "(DEPRECATED) Openzro config file location")
 
 }
 
@@ -206,7 +206,7 @@ func runInDaemonMode(ctx context.Context, cmd *cobra.Command, pm *profilemanager
 	if err != nil {
 		return fmt.Errorf("failed to connect to daemon error: %v\n"+
 			"If the daemon is not running please run: "+
-			"\nnetbird service install \nnetbird service start\n", err)
+			"\nopenzro service install \nopenzro service start\n", err)
 	}
 	defer func() {
 		err := conn.Close()

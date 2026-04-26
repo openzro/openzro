@@ -6,8 +6,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/netbirdio/netbird/management/domain"
-	"github.com/netbirdio/netbird/management/server/status"
+	"github.com/openzro/openzro/management/domain"
+	"github.com/openzro/openzro/management/server/status"
 )
 
 // Windows has some limitation regarding metric size that differ from Unix-like systems.

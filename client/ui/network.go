@@ -19,7 +19,7 @@ import (
 	"fyne.io/systray"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/proto"
+	"github.com/openzro/openzro/client/proto"
 )
 
 const (

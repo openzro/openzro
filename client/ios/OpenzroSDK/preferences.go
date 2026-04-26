@@ -1,7 +1,7 @@
-package NetBirdSDK
+package OpenzroSDK
 
 import (
-	"github.com/netbirdio/netbird/client/internal/profilemanager"
+	"github.com/openzro/openzro/client/internal/profilemanager"
 )
 
 // Preferences export a subset of the internal config for gomobile

@@ -53,7 +53,7 @@ message Body {
   string payload = 2;
   // wgListenPort is an actual WireGuard listen port
   uint32 wgListenPort = 3;
-  string netBirdVersion = 4;
+  string openzroVersion = 4;
   Mode mode = 5;
 
   // featuresSupported list of supported features by the client of this protocol

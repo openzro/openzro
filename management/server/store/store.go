@@ -22,19 +22,19 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
-	"github.com/netbirdio/netbird/dns"
-	"github.com/netbirdio/netbird/management/server/telemetry"
-	"github.com/netbirdio/netbird/management/server/testutil"
-	"github.com/netbirdio/netbird/management/server/types"
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/dns"
+	"github.com/openzro/openzro/management/server/telemetry"
+	"github.com/openzro/openzro/management/server/testutil"
+	"github.com/openzro/openzro/management/server/types"
+	"github.com/openzro/openzro/util"
 
-	"github.com/netbirdio/netbird/management/server/migration"
-	resourceTypes "github.com/netbirdio/netbird/management/server/networks/resources/types"
-	routerTypes "github.com/netbirdio/netbird/management/server/networks/routers/types"
-	networkTypes "github.com/netbirdio/netbird/management/server/networks/types"
-	nbpeer "github.com/netbirdio/netbird/management/server/peer"
-	"github.com/netbirdio/netbird/management/server/posture"
-	"github.com/netbirdio/netbird/route"
+	"github.com/openzro/openzro/management/server/migration"
+	resourceTypes "github.com/openzro/openzro/management/server/networks/resources/types"
+	routerTypes "github.com/openzro/openzro/management/server/networks/routers/types"
+	networkTypes "github.com/openzro/openzro/management/server/networks/types"
+	nbpeer "github.com/openzro/openzro/management/server/peer"
+	"github.com/openzro/openzro/management/server/posture"
+	"github.com/openzro/openzro/route"
 )
 
 type LockingStrength string
@@ -199,15 +199,15 @@ type Store interface {
 }
 
 const (
-	postgresDsnEnv = "NETBIRD_STORE_ENGINE_POSTGRES_DSN"
-	mysqlDsnEnv    = "NETBIRD_STORE_ENGINE_MYSQL_DSN"
+	postgresDsnEnv = "OPENZRO_STORE_ENGINE_POSTGRES_DSN"
+	mysqlDsnEnv    = "OPENZRO_STORE_ENGINE_MYSQL_DSN"
 )
 
 var supportedEngines = []types.Engine{types.SqliteStoreEngine, types.PostgresStoreEngine, types.MysqlStoreEngine}
 
 func getStoreEngineFromEnv() types.Engine {
-	// NETBIRD_STORE_ENGINE supposed to be used in tests. Otherwise, rely on the config file.
-	kind, ok := os.LookupEnv("NETBIRD_STORE_ENGINE")
+	// OPENZRO_STORE_ENGINE supposed to be used in tests. Otherwise, rely on the config file.
+	kind, ok := os.LookupEnv("OPENZRO_STORE_ENGINE")
 	if !ok {
 		return ""
 	}
@@ -277,7 +277,7 @@ func checkFileStoreEngine(kind types.Engine, dataDir string) error {
 		storeFile := filepath.Join(dataDir, storeFileName)
 		if util.FileExists(storeFile) {
 			return fmt.Errorf("%s is not supported. Please refer to the documentation for migrating to SQLite: "+
-				"https://docs.netbird.io/selfhosted/sqlite-store#migrating-from-json-store-to-sq-lite-store", types.FileStoreEngine)
+				"https://docs.openzro.io/selfhosted/sqlite-store#migrating-from-json-store-to-sq-lite-store", types.FileStoreEngine)
 		}
 	}
 	return nil

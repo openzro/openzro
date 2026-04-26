@@ -11,12 +11,12 @@ import (
 func Test_LocalWTVersion(t *testing.T) {
 	got := GetInfo(context.TODO())
 	want := "development"
-	assert.Equal(t, want, got.NetbirdVersion)
+	assert.Equal(t, want, got.OpenzroVersion)
 }
 
 func Test_UIVersion(t *testing.T) {
 	ctx := context.Background()
-	want := "netbird-desktop-ui/development"
+	want := "openzro-desktop-ui/development"
 	ctx = metadata.NewOutgoingContext(ctx, map[string][]string{
 		"user-agent": {want},
 	})

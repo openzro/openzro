@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/netbirdio/netbird/client/iface/wgproxy/ebpf"
-	udpProxy "github.com/netbirdio/netbird/client/iface/wgproxy/udp"
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/client/iface/wgproxy/ebpf"
+	udpProxy "github.com/openzro/openzro/client/iface/wgproxy/udp"
+	"github.com/openzro/openzro/util"
 )
 
 func TestMain(m *testing.M) {

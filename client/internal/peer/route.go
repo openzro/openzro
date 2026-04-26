@@ -7,7 +7,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/route"
+	"github.com/openzro/openzro/route"
 )
 
 // routeEntry holds the route prefix and the corresponding resource ID.

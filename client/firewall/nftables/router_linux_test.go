@@ -15,8 +15,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	firewall "github.com/netbirdio/netbird/client/firewall/manager"
-	"github.com/netbirdio/netbird/client/firewall/test"
+	firewall "github.com/openzro/openzro/client/firewall/manager"
+	"github.com/openzro/openzro/client/firewall/test"
 )
 
 const (
@@ -690,12 +690,12 @@ func createWorkTable() (*nftables.Table, error) {
 	}
 
 	for _, t := range tables {
-		if t.Name == tableNameNetbird {
+		if t.Name == tableNameOpenzro {
 			sConn.DelTable(t)
 		}
 	}
 
-	table := sConn.AddTable(&nftables.Table{Name: tableNameNetbird, Family: nftables.TableFamilyIPv4})
+	table := sConn.AddTable(&nftables.Table{Name: tableNameOpenzro, Family: nftables.TableFamilyIPv4})
 	err = sConn.Flush()
 
 	return table, err
@@ -713,7 +713,7 @@ func deleteWorkTable() {
 	}
 
 	for _, t := range tables {
-		if t.Name == tableNameNetbird {
+		if t.Name == tableNameOpenzro {
 			sConn.DelTable(t)
 		}
 	}

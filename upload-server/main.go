@@ -5,8 +5,8 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/netbirdio/netbird/upload-server/server"
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/upload-server/server"
+	"github.com/openzro/openzro/util"
 )
 
 func main() {

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/netbirdio/netbird/client/iface/wgaddr"
+	"github.com/openzro/openzro/client/iface/wgaddr"
 )
 
 type InterfaceState struct {

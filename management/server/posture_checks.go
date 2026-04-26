@@ -9,13 +9,13 @@ import (
 	"github.com/rs/xid"
 	"golang.org/x/exp/maps"
 
-	"github.com/netbirdio/netbird/management/server/activity"
-	"github.com/netbirdio/netbird/management/server/permissions/modules"
-	"github.com/netbirdio/netbird/management/server/permissions/operations"
-	"github.com/netbirdio/netbird/management/server/posture"
-	"github.com/netbirdio/netbird/management/server/status"
-	"github.com/netbirdio/netbird/management/server/store"
-	"github.com/netbirdio/netbird/management/server/types"
+	"github.com/openzro/openzro/management/server/activity"
+	"github.com/openzro/openzro/management/server/permissions/modules"
+	"github.com/openzro/openzro/management/server/permissions/operations"
+	"github.com/openzro/openzro/management/server/posture"
+	"github.com/openzro/openzro/management/server/status"
+	"github.com/openzro/openzro/management/server/store"
+	"github.com/openzro/openzro/management/server/types"
 )
 
 func (am *DefaultAccountManager) GetPostureChecks(ctx context.Context, accountID, postureChecksID, userID string) (*posture.Checks, error) {

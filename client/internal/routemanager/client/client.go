@@ -8,15 +8,15 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	nbdns "github.com/netbirdio/netbird/client/internal/dns"
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/client/internal/routemanager/common"
-	"github.com/netbirdio/netbird/client/internal/routemanager/dnsinterceptor"
-	"github.com/netbirdio/netbird/client/internal/routemanager/dynamic"
-	"github.com/netbirdio/netbird/client/internal/routemanager/iface"
-	"github.com/netbirdio/netbird/client/internal/routemanager/static"
-	"github.com/netbirdio/netbird/client/proto"
-	"github.com/netbirdio/netbird/route"
+	nbdns "github.com/openzro/openzro/client/internal/dns"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/client/internal/routemanager/common"
+	"github.com/openzro/openzro/client/internal/routemanager/dnsinterceptor"
+	"github.com/openzro/openzro/client/internal/routemanager/dynamic"
+	"github.com/openzro/openzro/client/internal/routemanager/iface"
+	"github.com/openzro/openzro/client/internal/routemanager/static"
+	"github.com/openzro/openzro/client/proto"
+	"github.com/openzro/openzro/route"
 )
 
 const (

@@ -6,15 +6,15 @@ import (
 
 	"github.com/rs/xid"
 
-	"github.com/netbirdio/netbird/management/proto"
-	"github.com/netbirdio/netbird/management/server/permissions/modules"
-	"github.com/netbirdio/netbird/management/server/permissions/operations"
-	"github.com/netbirdio/netbird/management/server/store"
-	"github.com/netbirdio/netbird/management/server/types"
+	"github.com/openzro/openzro/management/proto"
+	"github.com/openzro/openzro/management/server/permissions/modules"
+	"github.com/openzro/openzro/management/server/permissions/operations"
+	"github.com/openzro/openzro/management/server/store"
+	"github.com/openzro/openzro/management/server/types"
 
-	"github.com/netbirdio/netbird/management/server/activity"
-	"github.com/netbirdio/netbird/management/server/posture"
-	"github.com/netbirdio/netbird/management/server/status"
+	"github.com/openzro/openzro/management/server/activity"
+	"github.com/openzro/openzro/management/server/posture"
+	"github.com/openzro/openzro/management/server/status"
 )
 
 // GetPolicy from the store

@@ -17,7 +17,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// DefaultSSHPort is the default SSH port of the NetBird's embedded SSH server
+// DefaultSSHPort is the default SSH port of the Openzro's embedded SSH server
 const DefaultSSHPort = 44338
 
 // TerminalTimeout is the timeout for terminal session to be ready
@@ -43,7 +43,7 @@ type Server interface {
 	AddAuthorizedKey(peer, newKey string) error
 }
 
-// DefaultServer is the embedded NetBird SSH server
+// DefaultServer is the embedded Openzro SSH server
 type DefaultServer struct {
 	listener net.Listener
 	// authorizedKeys is ssh pub key indexed by peer WireGuard public key

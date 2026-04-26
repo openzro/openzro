@@ -7,13 +7,13 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/netbirdio/netbird/management/server/account"
-	nbcontext "github.com/netbirdio/netbird/management/server/context"
-	"github.com/netbirdio/netbird/management/server/http/api"
-	"github.com/netbirdio/netbird/management/server/http/util"
-	"github.com/netbirdio/netbird/management/server/settings"
-	"github.com/netbirdio/netbird/management/server/status"
-	"github.com/netbirdio/netbird/management/server/types"
+	"github.com/openzro/openzro/management/server/account"
+	nbcontext "github.com/openzro/openzro/management/server/context"
+	"github.com/openzro/openzro/management/server/http/api"
+	"github.com/openzro/openzro/management/server/http/util"
+	"github.com/openzro/openzro/management/server/settings"
+	"github.com/openzro/openzro/management/server/status"
+	"github.com/openzro/openzro/management/server/types"
 )
 
 // handler is a handler that handles the server.Account HTTP endpoints

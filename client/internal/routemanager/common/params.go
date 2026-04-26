@@ -3,14 +3,14 @@ package common
 import (
 	"time"
 
-	"github.com/netbirdio/netbird/client/firewall/manager"
-	"github.com/netbirdio/netbird/client/internal/dns"
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/client/internal/peerstore"
-	"github.com/netbirdio/netbird/client/internal/routemanager/fakeip"
-	"github.com/netbirdio/netbird/client/internal/routemanager/iface"
-	"github.com/netbirdio/netbird/client/internal/routemanager/refcounter"
-	"github.com/netbirdio/netbird/route"
+	"github.com/openzro/openzro/client/firewall/manager"
+	"github.com/openzro/openzro/client/internal/dns"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/client/internal/peerstore"
+	"github.com/openzro/openzro/client/internal/routemanager/fakeip"
+	"github.com/openzro/openzro/client/internal/routemanager/iface"
+	"github.com/openzro/openzro/client/internal/routemanager/refcounter"
+	"github.com/openzro/openzro/route"
 )
 
 type HandlerParams struct {

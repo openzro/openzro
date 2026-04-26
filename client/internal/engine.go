@@ -24,45 +24,45 @@ import (
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"google.golang.org/protobuf/proto"
 
-	nberrors "github.com/netbirdio/netbird/client/errors"
-	"github.com/netbirdio/netbird/client/firewall"
-	firewallManager "github.com/netbirdio/netbird/client/firewall/manager"
-	"github.com/netbirdio/netbird/client/iface"
-	"github.com/netbirdio/netbird/client/iface/bind"
-	"github.com/netbirdio/netbird/client/iface/device"
-	nbnetstack "github.com/netbirdio/netbird/client/iface/netstack"
-	"github.com/netbirdio/netbird/client/internal/acl"
-	"github.com/netbirdio/netbird/client/internal/dns"
-	"github.com/netbirdio/netbird/client/internal/dnsfwd"
-	"github.com/netbirdio/netbird/client/internal/ingressgw"
-	"github.com/netbirdio/netbird/client/internal/netflow"
-	nftypes "github.com/netbirdio/netbird/client/internal/netflow/types"
-	"github.com/netbirdio/netbird/client/internal/networkmonitor"
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/client/internal/peer/guard"
-	icemaker "github.com/netbirdio/netbird/client/internal/peer/ice"
-	"github.com/netbirdio/netbird/client/internal/peerstore"
-	"github.com/netbirdio/netbird/client/internal/profilemanager"
-	"github.com/netbirdio/netbird/client/internal/relay"
-	"github.com/netbirdio/netbird/client/internal/rosenpass"
-	"github.com/netbirdio/netbird/client/internal/routemanager"
-	"github.com/netbirdio/netbird/client/internal/routemanager/systemops"
-	"github.com/netbirdio/netbird/client/internal/statemanager"
-	cProto "github.com/netbirdio/netbird/client/proto"
-	"github.com/netbirdio/netbird/management/domain"
-	semaphoregroup "github.com/netbirdio/netbird/util/semaphore-group"
+	nberrors "github.com/openzro/openzro/client/errors"
+	"github.com/openzro/openzro/client/firewall"
+	firewallManager "github.com/openzro/openzro/client/firewall/manager"
+	"github.com/openzro/openzro/client/iface"
+	"github.com/openzro/openzro/client/iface/bind"
+	"github.com/openzro/openzro/client/iface/device"
+	nbnetstack "github.com/openzro/openzro/client/iface/netstack"
+	"github.com/openzro/openzro/client/internal/acl"
+	"github.com/openzro/openzro/client/internal/dns"
+	"github.com/openzro/openzro/client/internal/dnsfwd"
+	"github.com/openzro/openzro/client/internal/ingressgw"
+	"github.com/openzro/openzro/client/internal/netflow"
+	nftypes "github.com/openzro/openzro/client/internal/netflow/types"
+	"github.com/openzro/openzro/client/internal/networkmonitor"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/client/internal/peer/guard"
+	icemaker "github.com/openzro/openzro/client/internal/peer/ice"
+	"github.com/openzro/openzro/client/internal/peerstore"
+	"github.com/openzro/openzro/client/internal/profilemanager"
+	"github.com/openzro/openzro/client/internal/relay"
+	"github.com/openzro/openzro/client/internal/rosenpass"
+	"github.com/openzro/openzro/client/internal/routemanager"
+	"github.com/openzro/openzro/client/internal/routemanager/systemops"
+	"github.com/openzro/openzro/client/internal/statemanager"
+	cProto "github.com/openzro/openzro/client/proto"
+	"github.com/openzro/openzro/management/domain"
+	semaphoregroup "github.com/openzro/openzro/util/semaphore-group"
 
-	nbssh "github.com/netbirdio/netbird/client/ssh"
-	"github.com/netbirdio/netbird/client/system"
-	nbdns "github.com/netbirdio/netbird/dns"
-	mgm "github.com/netbirdio/netbird/management/client"
-	mgmProto "github.com/netbirdio/netbird/management/proto"
-	auth "github.com/netbirdio/netbird/relay/auth/hmac"
-	relayClient "github.com/netbirdio/netbird/relay/client"
-	"github.com/netbirdio/netbird/route"
-	signal "github.com/netbirdio/netbird/signal/client"
-	sProto "github.com/netbirdio/netbird/signal/proto"
-	"github.com/netbirdio/netbird/util"
+	nbssh "github.com/openzro/openzro/client/ssh"
+	"github.com/openzro/openzro/client/system"
+	nbdns "github.com/openzro/openzro/dns"
+	mgm "github.com/openzro/openzro/management/client"
+	mgmProto "github.com/openzro/openzro/management/proto"
+	auth "github.com/openzro/openzro/relay/auth/hmac"
+	relayClient "github.com/openzro/openzro/relay/client"
+	"github.com/openzro/openzro/route"
+	signal "github.com/openzro/openzro/signal/client"
+	sProto "github.com/openzro/openzro/signal/proto"
+	"github.com/openzro/openzro/util"
 )
 
 // PeerConnectionTimeoutMax is a timeout of an initial connection attempt to a remote peer.
@@ -82,7 +82,7 @@ type EngineConfig struct {
 	WgPort      int
 	WgIfaceName string
 
-	// WgAddr is a Wireguard local address (Netbird Network IP)
+	// WgAddr is a Wireguard local address (Openzro Network IP)
 	WgAddr string
 
 	// WgPrivateKey is a Wireguard private key of our peer (it MUST never leave the machine)
@@ -259,7 +259,7 @@ func NewEngine(
 
 func (e *Engine) Stop() error {
 	if e == nil {
-		// this seems to be a very odd case but there was the possibility if the netbird down command comes before the engine is fully started
+		// this seems to be a very odd case but there was the possibility if the openzro down command comes before the engine is fully started
 		log.Debugf("tried stopping engine that is nil")
 		return nil
 	}
@@ -324,7 +324,7 @@ func (e *Engine) Stop() error {
 		e.flowManager.Close()
 	}
 
-	log.Infof("stopped Netbird Engine")
+	log.Infof("stopped Openzro Engine")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -658,8 +658,8 @@ func (e *Engine) handleSync(update *mgmProto.SyncResponse) error {
 	e.syncMsgMux.Lock()
 	defer e.syncMsgMux.Unlock()
 
-	if update.GetNetbirdConfig() != nil {
-		wCfg := update.GetNetbirdConfig()
+	if update.GetOpenzroConfig() != nil {
+		wCfg := update.GetOpenzroConfig()
 		err := e.updateTURNs(wCfg.GetTurns())
 		if err != nil {
 			return fmt.Errorf("update TURNs: %w", err)
@@ -1353,7 +1353,7 @@ func (e *Engine) receiveSignalEvents() {
 						Pwd:   remoteCred.Pwd,
 					},
 					WgListenPort:    int(msg.GetBody().GetWgListenPort()),
-					Version:         msg.GetBody().GetNetBirdVersion(),
+					Version:         msg.GetBody().GetOpenzroVersion(),
 					RosenpassPubKey: rosenpassPubKey,
 					RosenpassAddr:   rosenpassAddr,
 					RelaySrvAddress: msg.GetBody().GetRelayServerAddress(),
@@ -1376,7 +1376,7 @@ func (e *Engine) receiveSignalEvents() {
 						Pwd:   remoteCred.Pwd,
 					},
 					WgListenPort:    int(msg.GetBody().GetWgListenPort()),
-					Version:         msg.GetBody().GetNetBirdVersion(),
+					Version:         msg.GetBody().GetOpenzroVersion(),
 					RosenpassPubKey: rosenpassPubKey,
 					RosenpassAddr:   rosenpassAddr,
 					RelaySrvAddress: msg.GetBody().GetRelayServerAddress(),
@@ -1461,10 +1461,10 @@ func (e *Engine) parseNATExternalIPMappings() []string {
 }
 
 func (e *Engine) close() {
-	log.Debugf("removing Netbird interface %s", e.config.WgIfaceName)
+	log.Debugf("removing Openzro interface %s", e.config.WgIfaceName)
 	if e.wgInterface != nil {
 		if err := e.wgInterface.Close(); err != nil {
-			log.Errorf("failed closing Netbird interface %s %v", e.config.WgIfaceName, err)
+			log.Errorf("failed closing Openzro interface %s %v", e.config.WgIfaceName, err)
 		}
 		e.wgInterface = nil
 		e.statusRecorder.SetWgIface(nil)

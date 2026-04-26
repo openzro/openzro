@@ -7,7 +7,7 @@ import (
 	"context"
 	"runtime"
 
-	"github.com/netbirdio/netbird/version"
+	"github.com/openzro/openzro/version"
 )
 
 // GetInfo retrieves and parses the system information
@@ -19,7 +19,7 @@ func GetInfo(ctx context.Context) *Info {
 
 	gio := &Info{Kernel: sysName, OSVersion: swVersion, Platform: "unknown", OS: sysName, GoOS: runtime.GOOS, CPUs: runtime.NumCPU(), KernelVersion: swVersion}
 	gio.Hostname = extractDeviceName(ctx, "hostname")
-	gio.NetbirdVersion = version.NetbirdVersion()
+	gio.OpenzroVersion = version.OpenzroVersion()
 	gio.UIVersion = extractUserAgent(ctx)
 
 	return gio

@@ -3,7 +3,7 @@ package main
 import (
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/relay/cmd"
+	"github.com/openzro/openzro/relay/cmd"
 )
 
 func main() {

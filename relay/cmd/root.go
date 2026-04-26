@@ -16,11 +16,11 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"github.com/netbirdio/netbird/encryption"
-	"github.com/netbirdio/netbird/relay/auth"
-	"github.com/netbirdio/netbird/relay/server"
-	"github.com/netbirdio/netbird/signal/metrics"
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/encryption"
+	"github.com/openzro/openzro/relay/auth"
+	"github.com/openzro/openzro/relay/server"
+	"github.com/openzro/openzro/signal/metrics"
+	"github.com/openzro/openzro/util"
 )
 
 type Config struct {
@@ -65,7 +65,7 @@ var (
 	rootCmd     = &cobra.Command{
 		Use:           "relay",
 		Short:         "Relay service",
-		Long:          "Relay service for Netbird agents",
+		Long:          "Relay service for Openzro agents",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE:          execute,

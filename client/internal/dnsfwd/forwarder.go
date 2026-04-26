@@ -15,10 +15,10 @@ import (
 	"github.com/miekg/dns"
 	log "github.com/sirupsen/logrus"
 
-	nberrors "github.com/netbirdio/netbird/client/errors"
-	firewall "github.com/netbirdio/netbird/client/firewall/manager"
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/route"
+	nberrors "github.com/openzro/openzro/client/errors"
+	firewall "github.com/openzro/openzro/client/firewall/manager"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/route"
 )
 
 const errResolveFailed = "failed to resolve query for domain=%s: %v"

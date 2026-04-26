@@ -1,33 +1,33 @@
 # build & run locally with:
 #   cd "$(git rev-parse --show-toplevel)"
-#   CGO_ENABLED=0 go build -o netbird ./client
-#   podman build -t localhost/netbird:latest -f client/Dockerfile --ignorefile .dockerignore-client .
-#   podman run --rm -it --cap-add={BPF,NET_ADMIN,NET_RAW} localhost/netbird:latest
+#   CGO_ENABLED=0 go build -o openzro ./client
+#   podman build -t localhost/openzro:latest -f client/Dockerfile --ignorefile .dockerignore-client .
+#   podman run --rm -it --cap-add={BPF,NET_ADMIN,NET_RAW} localhost/openzro:latest
 
 FROM alpine:3.22.0
 
 RUN apk add --no-cache \
       bash \
       ca-certificates \
-    && adduser -D -h /var/lib/netbird netbird
+    && adduser -D -h /var/lib/openzro openzro
 
-WORKDIR /var/lib/netbird
-USER netbird:netbird
+WORKDIR /var/lib/openzro
+USER openzro:openzro
 
 ENV \
-    NETBIRD_BIN="/usr/local/bin/netbird" \
-    NB_USE_NETSTACK_MODE="true" \
-    NB_ENABLE_NETSTACK_LOCAL_FORWARDING="true" \
-    NB_CONFIG="/var/lib/netbird/config.json" \
-    NB_STATE_DIR="/var/lib/netbird" \
-    NB_DAEMON_ADDR="unix:///var/lib/netbird/netbird.sock" \
-    NB_LOG_FILE="console,/var/lib/netbird/client.log" \
-    NB_DISABLE_DNS="true" \
-    NB_ENTRYPOINT_SERVICE_TIMEOUT="5" \
-    NB_ENTRYPOINT_LOGIN_TIMEOUT="1"
+    OPENZRO_BIN="/usr/local/bin/openzro" \
+    OZ_USE_NETSTACK_MODE="true" \
+    OZ_ENABLE_NETSTACK_LOCAL_FORWARDING="true" \
+    OZ_CONFIG="/var/lib/openzro/config.json" \
+    OZ_STATE_DIR="/var/lib/openzro" \
+    OZ_DAEMON_ADDR="unix:///var/lib/openzro/openzro.sock" \
+    OZ_LOG_FILE="console,/var/lib/openzro/client.log" \
+    OZ_DISABLE_DNS="true" \
+    OZ_ENTRYPOINT_SERVICE_TIMEOUT="5" \
+    OZ_ENTRYPOINT_LOGIN_TIMEOUT="1"
 
-ENTRYPOINT [ "/usr/local/bin/netbird-entrypoint.sh" ]
+ENTRYPOINT [ "/usr/local/bin/openzro-entrypoint.sh" ]
 
-ARG NETBIRD_BINARY=netbird
-COPY client/netbird-entrypoint.sh /usr/local/bin/netbird-entrypoint.sh
-COPY "${NETBIRD_BINARY}"  /usr/local/bin/netbird
+ARG OPENZRO_BINARY=openzro
+COPY client/openzro-entrypoint.sh /usr/local/bin/openzro-entrypoint.sh
+COPY "${OPENZRO_BINARY}"  /usr/local/bin/openzro

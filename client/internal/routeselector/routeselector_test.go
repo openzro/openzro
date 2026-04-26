@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/netbirdio/netbird/client/internal/routeselector"
-	"github.com/netbirdio/netbird/route"
+	"github.com/openzro/openzro/client/internal/routeselector"
+	"github.com/openzro/openzro/route"
 )
 
 func TestRouteSelector_SelectRoutes(t *testing.T) {

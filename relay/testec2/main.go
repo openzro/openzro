@@ -13,7 +13,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/util"
 )
 
 const (

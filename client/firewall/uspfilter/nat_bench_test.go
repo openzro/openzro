@@ -12,7 +12,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/iface/device"
+	"github.com/openzro/openzro/client/iface/device"
 )
 
 // BenchmarkDNATTranslation measures the performance of DNAT operations

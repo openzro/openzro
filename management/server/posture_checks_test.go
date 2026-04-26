@@ -8,10 +8,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/netbirdio/netbird/management/server/store"
-	"github.com/netbirdio/netbird/management/server/types"
+	"github.com/openzro/openzro/management/server/store"
+	"github.com/openzro/openzro/management/server/types"
 
-	"github.com/netbirdio/netbird/management/server/posture"
+	"github.com/openzro/openzro/management/server/posture"
 )
 
 const (
@@ -151,7 +151,7 @@ func TestPostureCheckAccountPeersUpdate(t *testing.T) {
 		Checks: posture.ChecksDefinition{
 			ProcessCheck: &posture.ProcessCheck{
 				Processes: []posture.Process{
-					{LinuxPath: "/usr/bin/netbird", MacPath: "/usr/local/bin/netbird"},
+					{LinuxPath: "/usr/bin/openzro", MacPath: "/usr/local/bin/openzro"},
 				},
 			},
 		},
@@ -250,7 +250,7 @@ func TestPostureCheckAccountPeersUpdate(t *testing.T) {
 			},
 			ProcessCheck: &posture.ProcessCheck{
 				Processes: []posture.Process{
-					{LinuxPath: "/usr/bin/netbird", MacPath: "/usr/local/bin/netbird"},
+					{LinuxPath: "/usr/bin/openzro", MacPath: "/usr/local/bin/openzro"},
 				},
 			},
 		}
@@ -421,7 +421,7 @@ func TestPostureCheckAccountPeersUpdate(t *testing.T) {
 			ProcessCheck: &posture.ProcessCheck{
 				Processes: []posture.Process{
 					{
-						LinuxPath: "/usr/bin/netbird",
+						LinuxPath: "/usr/bin/openzro",
 					},
 				},
 			},

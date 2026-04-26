@@ -11,8 +11,8 @@ import (
 	"github.com/quic-go/quic-go"
 	log "github.com/sirupsen/logrus"
 
-	quictls "github.com/netbirdio/netbird/relay/tls"
-	nbnet "github.com/netbirdio/netbird/util/net"
+	quictls "github.com/openzro/openzro/relay/tls"
+	nbnet "github.com/openzro/openzro/util/net"
 )
 
 type Dialer struct {

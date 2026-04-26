@@ -7,14 +7,14 @@ import (
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/management/server/account"
-	nbcontext "github.com/netbirdio/netbird/management/server/context"
-	nbpeer "github.com/netbirdio/netbird/management/server/peer"
+	"github.com/openzro/openzro/management/server/account"
+	nbcontext "github.com/openzro/openzro/management/server/context"
+	nbpeer "github.com/openzro/openzro/management/server/peer"
 
-	"github.com/netbirdio/netbird/management/server/http/api"
-	"github.com/netbirdio/netbird/management/server/http/util"
-	"github.com/netbirdio/netbird/management/server/status"
-	"github.com/netbirdio/netbird/management/server/types"
+	"github.com/openzro/openzro/management/server/http/api"
+	"github.com/openzro/openzro/management/server/http/util"
+	"github.com/openzro/openzro/management/server/status"
+	"github.com/openzro/openzro/management/server/types"
 )
 
 // handler is a handler that returns groups of the account

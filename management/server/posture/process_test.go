@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/netbirdio/netbird/management/server/peer"
+	"github.com/openzro/openzro/management/server/peer"
 )
 
 func TestProcessCheck_Check(t *testing.T) {
@@ -256,9 +256,9 @@ func TestProcessCheck_Validate(t *testing.T) {
 			check: ProcessCheck{
 				Processes: []Process{
 					{
-						LinuxPath:   "/usr/local/bin/netbird",
-						MacPath:     "/usr/local/bin/netbird",
-						WindowsPath: "C:\\ProgramData\\NetBird\\netbird.exe",
+						LinuxPath:   "/usr/local/bin/openzro",
+						MacPath:     "/usr/local/bin/openzro",
+						WindowsPath: "C:\\ProgramData\\Openzro\\openzro.exe",
 					},
 				},
 			},
@@ -269,7 +269,7 @@ func TestProcessCheck_Validate(t *testing.T) {
 			check: ProcessCheck{
 				Processes: []Process{
 					{
-						LinuxPath: "/usr/local/bin/netbird",
+						LinuxPath: "/usr/local/bin/openzro",
 					},
 				},
 			},
@@ -280,7 +280,7 @@ func TestProcessCheck_Validate(t *testing.T) {
 			check: ProcessCheck{
 				Processes: []Process{
 					{
-						MacPath: "/Applications/NetBird.app/Contents/MacOS/netbird",
+						MacPath: "/Applications/Openzro.app/Contents/MacOS/openzro",
 					},
 				},
 			},
@@ -291,7 +291,7 @@ func TestProcessCheck_Validate(t *testing.T) {
 			check: ProcessCheck{
 				Processes: []Process{
 					{
-						WindowsPath: "C:\\ProgramData\\NetBird\\netbird.exe",
+						WindowsPath: "C:\\ProgramData\\Openzro\\openzro.exe",
 					},
 				},
 			},

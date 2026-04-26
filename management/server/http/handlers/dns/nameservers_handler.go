@@ -8,12 +8,12 @@ import (
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
 
-	nbdns "github.com/netbirdio/netbird/dns"
-	"github.com/netbirdio/netbird/management/server/account"
-	nbcontext "github.com/netbirdio/netbird/management/server/context"
-	"github.com/netbirdio/netbird/management/server/http/api"
-	"github.com/netbirdio/netbird/management/server/http/util"
-	"github.com/netbirdio/netbird/management/server/status"
+	nbdns "github.com/openzro/openzro/dns"
+	"github.com/openzro/openzro/management/server/account"
+	nbcontext "github.com/openzro/openzro/management/server/context"
+	"github.com/openzro/openzro/management/server/http/api"
+	"github.com/openzro/openzro/management/server/http/util"
+	"github.com/openzro/openzro/management/server/status"
 )
 
 // nameserversHandler is the nameserver group handler of the account

@@ -6,7 +6,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/internal/lazyconn"
+	"github.com/openzro/openzro/client/internal/lazyconn"
 )
 
 func TestNewListener(t *testing.T) {

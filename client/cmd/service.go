@@ -13,13 +13,13 @@ import (
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 
-	"github.com/netbirdio/netbird/client/internal"
-	"github.com/netbirdio/netbird/client/server"
+	"github.com/openzro/openzro/client/internal"
+	"github.com/openzro/openzro/client/server"
 )
 
 var serviceCmd = &cobra.Command{
 	Use:   "service",
-	Short: "manages Netbird service",
+	Short: "manages Openzro service",
 }
 
 var (
@@ -36,15 +36,15 @@ type program struct {
 }
 
 func init() {
-	defaultServiceName := "netbird"
+	defaultServiceName := "openzro"
 	if runtime.GOOS == "windows" {
-		defaultServiceName = "Netbird"
+		defaultServiceName = "Openzro"
 	}
 
 	serviceCmd.AddCommand(runCmd, startCmd, stopCmd, restartCmd, svcStatusCmd, installCmd, uninstallCmd, reconfigureCmd)
 	serviceCmd.PersistentFlags().BoolVar(&profilesDisabled, "disable-profiles", false, "Disables profiles feature. If enabled, the client will not be able to change or edit any profile.")
 
-	rootCmd.PersistentFlags().StringVarP(&serviceName, "service", "s", defaultServiceName, "Netbird system service name")
+	rootCmd.PersistentFlags().StringVarP(&serviceName, "service", "s", defaultServiceName, "Openzro system service name")
 	serviceEnvDesc := `Sets extra environment variables for the service. ` +
 		`You can specify a comma-separated list of KEY=VALUE pairs. ` +
 		`E.g. --service-env LOG_LEVEL=debug,CUSTOM_VAR=value`
@@ -63,8 +63,8 @@ func newProgram(ctx context.Context, cancel context.CancelFunc) *program {
 func newSVCConfig() (*service.Config, error) {
 	config := &service.Config{
 		Name:        serviceName,
-		DisplayName: "Netbird",
-		Description: "Netbird mesh network client",
+		DisplayName: "Openzro",
+		Description: "Openzro mesh network client",
 		Option:      make(service.KeyValue),
 		EnvVars:     make(map[string]string),
 	}

@@ -25,28 +25,28 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
-	"github.com/netbirdio/netbird/management/server/integrations/port_forwarding"
-	"github.com/netbirdio/netbird/management/server/mock_server"
-	"github.com/netbirdio/netbird/management/server/permissions"
-	"github.com/netbirdio/netbird/management/server/settings"
-	"github.com/netbirdio/netbird/management/server/status"
+	"github.com/openzro/openzro/management/server/integrations/port_forwarding"
+	"github.com/openzro/openzro/management/server/mock_server"
+	"github.com/openzro/openzro/management/server/permissions"
+	"github.com/openzro/openzro/management/server/settings"
+	"github.com/openzro/openzro/management/server/status"
 
-	"github.com/netbirdio/netbird/management/server/util"
+	"github.com/openzro/openzro/management/server/util"
 
-	resourceTypes "github.com/netbirdio/netbird/management/server/networks/resources/types"
-	routerTypes "github.com/netbirdio/netbird/management/server/networks/routers/types"
-	networkTypes "github.com/netbirdio/netbird/management/server/networks/types"
+	resourceTypes "github.com/openzro/openzro/management/server/networks/resources/types"
+	routerTypes "github.com/openzro/openzro/management/server/networks/routers/types"
+	networkTypes "github.com/openzro/openzro/management/server/networks/types"
 
-	nbdns "github.com/netbirdio/netbird/dns"
-	"github.com/netbirdio/netbird/management/domain"
-	"github.com/netbirdio/netbird/management/proto"
-	"github.com/netbirdio/netbird/management/server/activity"
-	nbpeer "github.com/netbirdio/netbird/management/server/peer"
-	"github.com/netbirdio/netbird/management/server/posture"
-	"github.com/netbirdio/netbird/management/server/store"
-	"github.com/netbirdio/netbird/management/server/telemetry"
-	"github.com/netbirdio/netbird/management/server/types"
-	nbroute "github.com/netbirdio/netbird/route"
+	nbdns "github.com/openzro/openzro/dns"
+	"github.com/openzro/openzro/management/domain"
+	"github.com/openzro/openzro/management/proto"
+	"github.com/openzro/openzro/management/server/activity"
+	nbpeer "github.com/openzro/openzro/management/server/peer"
+	"github.com/openzro/openzro/management/server/posture"
+	"github.com/openzro/openzro/management/server/store"
+	"github.com/openzro/openzro/management/server/telemetry"
+	"github.com/openzro/openzro/management/server/types"
+	nbroute "github.com/openzro/openzro/route"
 )
 
 func TestPeer_LoginExpired(t *testing.T) {
@@ -1045,7 +1045,7 @@ func TestUpdateAccountPeers(t *testing.T) {
 
 			for _, channel := range peerChannels {
 				update := <-channel
-				assert.Nil(t, update.Update.NetbirdConfig)
+				assert.Nil(t, update.Update.OpenzroConfig)
 				assert.Equal(t, tc.peers, len(update.NetworkMap.Peers))
 				assert.Equal(t, tc.peers*2, len(update.NetworkMap.FirewallRules))
 			}
@@ -1157,7 +1157,7 @@ func TestToSyncResponse(t *testing.T) {
 		{
 			Checks: posture.ChecksDefinition{
 				ProcessCheck: &posture.ProcessCheck{
-					Processes: []posture.Process{{LinuxPath: "/usr/bin/netbird"}},
+					Processes: []posture.Process{{LinuxPath: "/usr/bin/openzro"}},
 				},
 			},
 		},
@@ -1171,13 +1171,13 @@ func TestToSyncResponse(t *testing.T) {
 	assert.Equal(t, "192.168.1.1/24", response.PeerConfig.Address)
 	assert.Equal(t, "peer1.example.com", response.PeerConfig.Fqdn)
 	assert.Equal(t, true, response.PeerConfig.SshConfig.SshEnabled)
-	// assert netbird config
-	assert.Equal(t, "signal.uri", response.NetbirdConfig.Signal.Uri)
-	assert.Equal(t, proto.HostConfig_HTTPS, response.NetbirdConfig.Signal.GetProtocol())
-	assert.Equal(t, "stun.uri", response.NetbirdConfig.Stuns[0].Uri)
-	assert.Equal(t, "turn.uri", response.NetbirdConfig.Turns[0].HostConfig.GetUri())
-	assert.Equal(t, "turn-user", response.NetbirdConfig.Turns[0].User)
-	assert.Equal(t, "turn-pass", response.NetbirdConfig.Turns[0].Password)
+	// assert openzro config
+	assert.Equal(t, "signal.uri", response.OpenzroConfig.Signal.Uri)
+	assert.Equal(t, proto.HostConfig_HTTPS, response.OpenzroConfig.Signal.GetProtocol())
+	assert.Equal(t, "stun.uri", response.OpenzroConfig.Stuns[0].Uri)
+	assert.Equal(t, "turn.uri", response.OpenzroConfig.Turns[0].HostConfig.GetUri())
+	assert.Equal(t, "turn-user", response.OpenzroConfig.Turns[0].User)
+	assert.Equal(t, "turn-pass", response.OpenzroConfig.Turns[0].Password)
 	// assert RemotePeers
 	assert.Equal(t, 1, len(response.RemotePeers))
 	assert.Equal(t, "192.168.1.2/32", response.RemotePeers[0].AllowedIps[0])
@@ -1241,7 +1241,7 @@ func TestToSyncResponse(t *testing.T) {
 	assert.Equal(t, "80", response.NetworkMap.FirewallRules[0].Port)
 	// assert posture checks
 	assert.Equal(t, 1, len(response.Checks))
-	assert.Equal(t, "/usr/bin/netbird", response.Checks[0].Files[0])
+	assert.Equal(t, "/usr/bin/openzro", response.Checks[0].Files[0])
 	// assert network map ForwardingRules
 	assert.Equal(t, 1, len(response.NetworkMap.ForwardingRules))
 	assert.Equal(t, proto.RuleProtocol_TCP, response.NetworkMap.ForwardingRules[0].Protocol)
@@ -1273,7 +1273,7 @@ func Test_RegisterPeerByUser(t *testing.T) {
 	settingsMockManager := settings.NewMockManager(ctrl)
 	permissionsManager := permissions.NewManager(s)
 
-	am, err := BuildManager(context.Background(), s, NewPeersUpdateManager(nil), nil, "", "netbird.cloud", eventStore, nil, false, MockIntegratedValidator{}, metrics, port_forwarding.NewControllerMock(), settingsMockManager, permissionsManager, false)
+	am, err := BuildManager(context.Background(), s, NewPeersUpdateManager(nil), nil, "", "openzro.cloud", eventStore, nil, false, MockIntegratedValidator{}, metrics, port_forwarding.NewControllerMock(), settingsMockManager, permissionsManager, false)
 	assert.NoError(t, err)
 
 	existingAccountID := "bf1c8084-ba50-4ce7-9439-34653001fc3b"
@@ -1353,7 +1353,7 @@ func Test_RegisterPeerBySetupKey(t *testing.T) {
 		AnyTimes()
 	permissionsManager := permissions.NewManager(s)
 
-	am, err := BuildManager(context.Background(), s, NewPeersUpdateManager(nil), nil, "", "netbird.cloud", eventStore, nil, false, MockIntegratedValidator{}, metrics, port_forwarding.NewControllerMock(), settingsMockManager, permissionsManager, false)
+	am, err := BuildManager(context.Background(), s, NewPeersUpdateManager(nil), nil, "", "openzro.cloud", eventStore, nil, false, MockIntegratedValidator{}, metrics, port_forwarding.NewControllerMock(), settingsMockManager, permissionsManager, false)
 	assert.NoError(t, err)
 
 	existingAccountID := "bf1c8084-ba50-4ce7-9439-34653001fc3b"
@@ -1496,7 +1496,7 @@ func Test_RegisterPeerRollbackOnFailure(t *testing.T) {
 
 	permissionsManager := permissions.NewManager(s)
 
-	am, err := BuildManager(context.Background(), s, NewPeersUpdateManager(nil), nil, "", "netbird.cloud", eventStore, nil, false, MockIntegratedValidator{}, metrics, port_forwarding.NewControllerMock(), settingsMockManager, permissionsManager, false)
+	am, err := BuildManager(context.Background(), s, NewPeersUpdateManager(nil), nil, "", "openzro.cloud", eventStore, nil, false, MockIntegratedValidator{}, metrics, port_forwarding.NewControllerMock(), settingsMockManager, permissionsManager, false)
 	assert.NoError(t, err)
 
 	existingAccountID := "bf1c8084-ba50-4ce7-9439-34653001fc3b"
@@ -1570,7 +1570,7 @@ func Test_LoginPeer(t *testing.T) {
 		AnyTimes()
 	permissionsManager := permissions.NewManager(s)
 
-	am, err := BuildManager(context.Background(), s, NewPeersUpdateManager(nil), nil, "", "netbird.cloud", eventStore, nil, false, MockIntegratedValidator{}, metrics, port_forwarding.NewControllerMock(), settingsMockManager, permissionsManager, false)
+	am, err := BuildManager(context.Background(), s, NewPeersUpdateManager(nil), nil, "", "openzro.cloud", eventStore, nil, false, MockIntegratedValidator{}, metrics, port_forwarding.NewControllerMock(), settingsMockManager, permissionsManager, false)
 	assert.NoError(t, err)
 
 	existingAccountID := "bf1c8084-ba50-4ce7-9439-34653001fc3b"
@@ -2146,7 +2146,7 @@ func Test_IsUniqueConstraintError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("NETBIRD_STORE_ENGINE", string(tt.engine))
+			t.Setenv("OPENZRO_STORE_ENGINE", string(tt.engine))
 			s, cleanup, err := store.NewTestStoreFromSQL(context.Background(), "testdata/extended-store.sql", t.TempDir())
 			if err != nil {
 				t.Fatalf("Error when creating store: %s", err)
@@ -2164,7 +2164,7 @@ func Test_IsUniqueConstraintError(t *testing.T) {
 }
 
 func Test_AddPeer(t *testing.T) {
-	t.Setenv("NETBIRD_STORE_ENGINE", string(types.PostgresStoreEngine))
+	t.Setenv("OPENZRO_STORE_ENGINE", string(types.PostgresStoreEngine))
 	manager, err := createManager(t)
 	if err != nil {
 		t.Fatal(err)

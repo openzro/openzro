@@ -9,9 +9,9 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	"github.com/netbirdio/netbird/management/server/activity"
-	"github.com/netbirdio/netbird/management/server/migration"
-	"github.com/netbirdio/netbird/management/server/testutil"
+	"github.com/openzro/openzro/management/server/activity"
+	"github.com/openzro/openzro/management/server/migration"
+	"github.com/openzro/openzro/management/server/testutil"
 )
 
 const (

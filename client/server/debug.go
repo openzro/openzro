@@ -14,10 +14,10 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/internal/debug"
-	"github.com/netbirdio/netbird/client/proto"
-	mgmProto "github.com/netbirdio/netbird/management/proto"
-	"github.com/netbirdio/netbird/upload-server/types"
+	"github.com/openzro/openzro/client/internal/debug"
+	"github.com/openzro/openzro/client/proto"
+	mgmProto "github.com/openzro/openzro/management/proto"
+	"github.com/openzro/openzro/upload-server/types"
 )
 
 const maxBundleUploadSize = 50 * 1024 * 1024

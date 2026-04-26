@@ -83,7 +83,7 @@ service DaemonService {
 
 
 message LoginRequest {
-  // setupKey netbird setup key.
+  // setupKey openzro setup key.
   string setupKey = 1;
 
   // This is the old PreSharedKey field which will be deprecated in favor of optionalPreSharedKey field that is defined as optional
@@ -185,7 +185,7 @@ message StatusResponse{
   // status of the server.
   string status = 1;
   FullStatus fullStatus = 2;
-  // NetBird daemon version
+  // Openzro daemon version
   string daemonVersion = 3;
 }
 

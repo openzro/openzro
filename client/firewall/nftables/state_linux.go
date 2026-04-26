@@ -3,7 +3,7 @@ package nftables
 import (
 	"fmt"
 
-	"github.com/netbirdio/netbird/client/iface/wgaddr"
+	"github.com/openzro/openzro/client/iface/wgaddr"
 )
 
 type InterfaceState struct {

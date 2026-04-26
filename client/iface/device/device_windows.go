@@ -11,9 +11,9 @@ import (
 	"golang.zx2c4.com/wireguard/tun/netstack"
 	"golang.zx2c4.com/wireguard/windows/tunnel/winipcfg"
 
-	"github.com/netbirdio/netbird/client/iface/bind"
-	"github.com/netbirdio/netbird/client/iface/configurer"
-	"github.com/netbirdio/netbird/client/iface/wgaddr"
+	"github.com/openzro/openzro/client/iface/bind"
+	"github.com/openzro/openzro/client/iface/configurer"
+	"github.com/openzro/openzro/client/iface/wgaddr"
 )
 
 const defaultWindowsGUIDSTring = "{f2f29e61-d91f-4d76-8151-119b20c4bdeb}"
@@ -70,7 +70,7 @@ func (t *TunDevice) Create() (WGConfigurer, error) {
 	t.device = device.NewDevice(
 		t.filteredDevice,
 		t.iceBind,
-		device.NewLogger(wgLogLevel(), "[netbird] "),
+		device.NewLogger(wgLogLevel(), "[openzro] "),
 	)
 
 	luid := winipcfg.LUID(t.nativeTunDevice.LUID())

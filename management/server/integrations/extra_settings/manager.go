@@ -3,7 +3,7 @@ package extra_settings
 import (
 	"context"
 
-	"github.com/netbirdio/netbird/management/server/types"
+	"github.com/openzro/openzro/management/server/types"
 )
 
 type Manager interface {

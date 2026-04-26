@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/netbirdio/netbird/client/internal/profilemanager"
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/client/internal/profilemanager"
+	"github.com/openzro/openzro/util"
 )
 
 func TestLogin(t *testing.T) {

@@ -11,7 +11,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	relayAuth "github.com/netbirdio/netbird/relay/auth/hmac"
+	relayAuth "github.com/openzro/openzro/relay/auth/hmac"
 )
 
 var (

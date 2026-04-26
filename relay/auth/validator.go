@@ -3,8 +3,8 @@ package auth
 import (
 	"time"
 
-	auth "github.com/netbirdio/netbird/relay/auth/hmac"
-	authv2 "github.com/netbirdio/netbird/relay/auth/hmac/v2"
+	auth "github.com/openzro/openzro/relay/auth/hmac"
+	authv2 "github.com/openzro/openzro/relay/auth/hmac/v2"
 )
 
 type TimedHMACValidator struct {

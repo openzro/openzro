@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/netbirdio/netbird/client/iface"
+	"github.com/openzro/openzro/client/iface"
 )
 
 func TestInitCommands(t *testing.T) {
@@ -41,7 +41,7 @@ func TestInitCommands(t *testing.T) {
 
 func TestSetFlagsFromEnvVars(t *testing.T) {
 	var cmd = &cobra.Command{
-		Use:          "netbird",
+		Use:          "openzro",
 		Long:         "test",
 		SilenceUsage: true,
 		Run: func(cmd *cobra.Command, args []string) {
@@ -55,13 +55,13 @@ func TestSetFlagsFromEnvVars(t *testing.T) {
 	cmd.PersistentFlags().BoolVar(&rosenpassEnabled, enableRosenpassFlag, false, "Enable Rosenpass feature Rosenpass.")
 	cmd.PersistentFlags().Uint16Var(&wireguardPort, wireguardPortFlag, iface.DefaultWgPort, "Wireguard interface listening port")
 
-	t.Setenv("NB_EXTERNAL_IP_MAP", "abc,dec")
-	t.Setenv("NB_INTERFACE_NAME", "test-name")
-	t.Setenv("NB_ENABLE_ROSENPASS", "true")
-	t.Setenv("NB_WIREGUARD_PORT", "10000")
+	t.Setenv("OZ_EXTERNAL_IP_MAP", "abc,dec")
+	t.Setenv("OZ_INTERFACE_NAME", "test-name")
+	t.Setenv("OZ_ENABLE_ROSENPASS", "true")
+	t.Setenv("OZ_WIREGUARD_PORT", "10000")
 	err := cmd.Execute()
 	if err != nil {
-		t.Fatalf("expected no error while running netbird command, got %v", err)
+		t.Fatalf("expected no error while running openzro command, got %v", err)
 	}
 	if len(natExternalIPs) != 2 {
 		t.Errorf("expected 2 external ips, got %d", len(natExternalIPs))

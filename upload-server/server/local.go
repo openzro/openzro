@@ -10,11 +10,11 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/upload-server/types"
+	"github.com/openzro/openzro/upload-server/types"
 )
 
 const (
-	defaultDir = "/var/lib/netbird"
+	defaultDir = "/var/lib/openzro"
 	putHandler = "/{dir}/{file}"
 )
 

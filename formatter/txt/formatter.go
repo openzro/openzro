@@ -5,7 +5,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/formatter/levels"
+	"github.com/openzro/openzro/formatter/levels"
 )
 
 // TextFormatter formats logs into text with included source code's path

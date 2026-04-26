@@ -13,7 +13,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/util"
 )
 
 var (
@@ -31,19 +31,19 @@ var (
 
 func init() {
 
-	DefaultConfigPathDir = "/var/lib/netbird/"
-	oldDefaultConfigPathDir = "/etc/netbird/"
+	DefaultConfigPathDir = "/var/lib/openzro/"
+	oldDefaultConfigPathDir = "/etc/openzro/"
 
-	if stateDir := os.Getenv("NB_STATE_DIR"); stateDir != "" {
+	if stateDir := os.Getenv("OZ_STATE_DIR"); stateDir != "" {
 		DefaultConfigPathDir = stateDir
 	} else {
 		switch runtime.GOOS {
 		case "windows":
-			oldDefaultConfigPathDir = filepath.Join(os.Getenv("PROGRAMDATA"), "Netbird")
+			oldDefaultConfigPathDir = filepath.Join(os.Getenv("PROGRAMDATA"), "Openzro")
 			DefaultConfigPathDir = oldDefaultConfigPathDir
 
 		case "freebsd":
-			oldDefaultConfigPathDir = "/var/db/netbird/"
+			oldDefaultConfigPathDir = "/var/db/openzro/"
 			DefaultConfigPathDir = oldDefaultConfigPathDir
 		}
 	}
@@ -337,7 +337,7 @@ func (s *ServiceManager) ListProfiles(username string) ([]Profile, error) {
 // GetStatePath returns the path to the state file based on the operating system
 // It returns an empty string if the path cannot be determined.
 func (s *ServiceManager) GetStatePath() string {
-	if path := os.Getenv("NB_DNS_STATE_FILE"); path != "" {
+	if path := os.Getenv("OZ_DNS_STATE_FILE"); path != "" {
 		return path
 	}
 

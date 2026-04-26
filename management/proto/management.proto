@@ -53,7 +53,7 @@ message EncryptedMessage {
 
   // encrypted message Body
   bytes body = 2;
-  // Version of the Netbird Management Service protocol
+  // Version of the Openzro Management Service protocol
   int32 version = 3;
 }
 
@@ -62,11 +62,11 @@ message SyncRequest {
   PeerSystemMeta meta = 1;
 }
 
-// SyncResponse represents a state that should be applied to the local peer (e.g. Netbird servers config as well as local peer and remote peers configs)
+// SyncResponse represents a state that should be applied to the local peer (e.g. Openzro servers config as well as local peer and remote peers configs)
 message SyncResponse {
 
   // Global config
-  NetbirdConfig netbirdConfig = 1;
+  OpenzroConfig openzroConfig = 1;
 
   // Deprecated. Use NetworkMap.PeerConfig
   PeerConfig peerConfig = 2;
@@ -153,7 +153,7 @@ message PeerSystemMeta {
   string core = 4;
   string platform = 5;
   string OS = 6;
-  string netbirdVersion = 7;
+  string openzroVersion = 7;
   string uiVersion = 8;
   string kernelVersion = 9;
   string OSVersion = 10;
@@ -168,7 +168,7 @@ message PeerSystemMeta {
 
 message LoginResponse {
   // Global config
-  NetbirdConfig netbirdConfig = 1;
+  OpenzroConfig openzroConfig = 1;
   // Peer local config
   PeerConfig peerConfig = 2;
   // Posture checks to be evaluated by client
@@ -180,14 +180,14 @@ message ServerKeyResponse {
   string key = 1;
   // Key expiration timestamp after which the key should be fetched again by the client
   google.protobuf.Timestamp expiresAt = 2;
-  // Version of the Netbird Management Service protocol
+  // Version of the Openzro Management Service protocol
   int32 version = 3;
 }
 
 message Empty {}
 
-// NetbirdConfig is a common configuration of any Netbird peer. It contains STUN, TURN, Signal and Management servers configurations
-message NetbirdConfig {
+// OpenzroConfig is a common configuration of any Openzro peer. It contains STUN, TURN, Signal and Management servers configurations
+message OpenzroConfig {
   // a list of STUN servers
   repeated HostConfig stuns = 1;
   // a list of TURN servers
@@ -203,7 +203,7 @@ message NetbirdConfig {
 
 // HostConfig describes connection properties of some server (e.g. STUN, Signal, Management)
 message HostConfig {
-  // URI of the resource e.g. turns://stun.netbird.io:4430 or signal.netbird.io:10000
+  // URI of the resource e.g. turns://stun.openzro.io:4430 or signal.openzro.io:10000
   string uri = 1;
   Protocol protocol = 2;
 
@@ -248,9 +248,9 @@ message ProtectedHostConfig {
 // PeerConfig represents a configuration of a "our" peer.
 // The properties are used to configure local Wireguard
 message PeerConfig {
-  // Peer's virtual IP address within the Netbird VPN (a Wireguard address config)
+  // Peer's virtual IP address within the Openzro VPN (a Wireguard address config)
   string  address = 1;
-  // Netbird DNS server (a Wireguard DNS config)
+  // Openzro DNS server (a Wireguard DNS config)
   string dns = 2;
 
   // SSHConfig of the peer.

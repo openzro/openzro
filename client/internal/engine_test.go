@@ -26,40 +26,40 @@ import (
 	wgdevice "golang.zx2c4.com/wireguard/device"
 	"golang.zx2c4.com/wireguard/tun/netstack"
 
-	"github.com/netbirdio/management-integrations/integrations"
+	"github.com/openzro/management-integrations/integrations"
 
-	"github.com/netbirdio/netbird/client/iface"
-	"github.com/netbirdio/netbird/client/iface/bind"
-	"github.com/netbirdio/netbird/client/iface/configurer"
-	"github.com/netbirdio/netbird/client/iface/device"
-	"github.com/netbirdio/netbird/client/iface/wgaddr"
-	"github.com/netbirdio/netbird/client/iface/wgproxy"
-	"github.com/netbirdio/netbird/client/internal/dns"
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/client/internal/peer/guard"
-	icemaker "github.com/netbirdio/netbird/client/internal/peer/ice"
-	"github.com/netbirdio/netbird/client/internal/profilemanager"
-	"github.com/netbirdio/netbird/client/internal/routemanager"
-	"github.com/netbirdio/netbird/client/ssh"
-	"github.com/netbirdio/netbird/client/system"
-	nbdns "github.com/netbirdio/netbird/dns"
-	mgmt "github.com/netbirdio/netbird/management/client"
-	mgmtProto "github.com/netbirdio/netbird/management/proto"
-	"github.com/netbirdio/netbird/management/server"
-	"github.com/netbirdio/netbird/management/server/activity"
-	"github.com/netbirdio/netbird/management/server/integrations/port_forwarding"
-	"github.com/netbirdio/netbird/management/server/permissions"
-	"github.com/netbirdio/netbird/management/server/settings"
-	"github.com/netbirdio/netbird/management/server/store"
-	"github.com/netbirdio/netbird/management/server/telemetry"
-	"github.com/netbirdio/netbird/management/server/types"
-	"github.com/netbirdio/netbird/monotime"
-	relayClient "github.com/netbirdio/netbird/relay/client"
-	"github.com/netbirdio/netbird/route"
-	signal "github.com/netbirdio/netbird/signal/client"
-	"github.com/netbirdio/netbird/signal/proto"
-	signalServer "github.com/netbirdio/netbird/signal/server"
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/client/iface"
+	"github.com/openzro/openzro/client/iface/bind"
+	"github.com/openzro/openzro/client/iface/configurer"
+	"github.com/openzro/openzro/client/iface/device"
+	"github.com/openzro/openzro/client/iface/wgaddr"
+	"github.com/openzro/openzro/client/iface/wgproxy"
+	"github.com/openzro/openzro/client/internal/dns"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/client/internal/peer/guard"
+	icemaker "github.com/openzro/openzro/client/internal/peer/ice"
+	"github.com/openzro/openzro/client/internal/profilemanager"
+	"github.com/openzro/openzro/client/internal/routemanager"
+	"github.com/openzro/openzro/client/ssh"
+	"github.com/openzro/openzro/client/system"
+	nbdns "github.com/openzro/openzro/dns"
+	mgmt "github.com/openzro/openzro/management/client"
+	mgmtProto "github.com/openzro/openzro/management/proto"
+	"github.com/openzro/openzro/management/server"
+	"github.com/openzro/openzro/management/server/activity"
+	"github.com/openzro/openzro/management/server/integrations/port_forwarding"
+	"github.com/openzro/openzro/management/server/permissions"
+	"github.com/openzro/openzro/management/server/settings"
+	"github.com/openzro/openzro/management/server/store"
+	"github.com/openzro/openzro/management/server/telemetry"
+	"github.com/openzro/openzro/management/server/types"
+	"github.com/openzro/openzro/monotime"
+	relayClient "github.com/openzro/openzro/relay/client"
+	"github.com/openzro/openzro/route"
+	signal "github.com/openzro/openzro/signal/client"
+	"github.com/openzro/openzro/signal/proto"
+	signalServer "github.com/openzro/openzro/signal/server"
+	"github.com/openzro/openzro/util"
 )
 
 var (
@@ -843,10 +843,10 @@ func TestEngine_UpdateNetworkMapWithDNSUpdate(t *testing.T) {
 					ServiceEnable: true,
 					CustomZones: []*mgmtProto.CustomZone{
 						{
-							Domain: "netbird.cloud.",
+							Domain: "openzro.cloud.",
 							Records: []*mgmtProto.SimpleRecord{
 								{
-									Name:  "peer-a.netbird.cloud.",
+									Name:  "peer-a.openzro.cloud.",
 									Type:  1,
 									Class: nbdns.DefaultClass,
 									TTL:   300,
@@ -875,10 +875,10 @@ func TestEngine_UpdateNetworkMapWithDNSUpdate(t *testing.T) {
 			expectedZonesLen: 1,
 			expectedZones: []nbdns.CustomZone{
 				{
-					Domain: "netbird.cloud.",
+					Domain: "openzro.cloud.",
 					Records: []nbdns.SimpleRecord{
 						{
-							Name:  "peer-a.netbird.cloud.",
+							Name:  "peer-a.openzro.cloud.",
 							Type:  1,
 							Class: nbdns.DefaultClass,
 							TTL:   300,
@@ -1565,7 +1565,7 @@ func startManagement(t *testing.T, dataDir, testFile string) (*grpc.Server, stri
 
 	permissionsManager := permissions.NewManager(store)
 
-	accountManager, err := server.BuildManager(context.Background(), store, peersUpdateManager, nil, "", "netbird.selfhosted", eventStore, nil, false, ia, metrics, port_forwarding.NewControllerMock(), settingsMockManager, permissionsManager, false)
+	accountManager, err := server.BuildManager(context.Background(), store, peersUpdateManager, nil, "", "openzro.selfhosted", eventStore, nil, false, ia, metrics, port_forwarding.NewControllerMock(), settingsMockManager, permissionsManager, false)
 	if err != nil {
 		return nil, "", err
 	}

@@ -13,9 +13,9 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/system/detect_cloud"
-	"github.com/netbirdio/netbird/client/system/detect_platform"
-	"github.com/netbirdio/netbird/version"
+	"github.com/openzro/openzro/client/system/detect_cloud"
+	"github.com/openzro/openzro/client/system/detect_platform"
+	"github.com/openzro/openzro/version"
 )
 
 // GetInfo retrieves and parses the system information
@@ -46,7 +46,7 @@ func GetInfo(ctx context.Context) *Info {
 		OSVersion:      osVersion,
 		Hostname:       extractDeviceName(ctx, systemHostname),
 		CPUs:           runtime.NumCPU(),
-		NetbirdVersion: version.NetbirdVersion(),
+		OpenzroVersion: version.OpenzroVersion(),
 		UIVersion:      extractUserAgent(ctx),
 		KernelVersion:  osInfo[1],
 		Environment:    env,

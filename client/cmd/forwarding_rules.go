@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
 
-	"github.com/netbirdio/netbird/client/proto"
+	"github.com/openzro/openzro/client/proto"
 )
 
 var forwardingRulesCmd = &cobra.Command{
@@ -20,7 +20,7 @@ var forwardingRulesListCmd = &cobra.Command{
 	Use:     "list",
 	Aliases: []string{"ls"},
 	Short:   "List forwarding rules",
-	Example: "  netbird forwarding list",
+	Example: "  openzro forwarding list",
 	Long:    "Commands to list forwarding rules.",
 	RunE:    listForwardingRules,
 }

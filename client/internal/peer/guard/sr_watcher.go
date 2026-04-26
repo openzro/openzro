@@ -6,8 +6,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/internal/peer/ice"
-	"github.com/netbirdio/netbird/client/internal/stdnet"
+	"github.com/openzro/openzro/client/internal/peer/ice"
+	"github.com/openzro/openzro/client/internal/stdnet"
 )
 
 type chNotifier interface {

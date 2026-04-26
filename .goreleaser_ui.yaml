@@ -1,10 +1,10 @@
 version: 2
 
-project_name: netbird-ui
+project_name: openzro-ui
 builds:
-  - id: netbird-ui
+  - id: openzro-ui
     dir: client/ui
-    binary: netbird-ui
+    binary: openzro-ui
     env:
       - CGO_ENABLED=1
     goos:
@@ -12,12 +12,12 @@ builds:
     goarch:
       - amd64
     ldflags:
-      - -s -w -X github.com/netbirdio/netbird/version.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
+      - -s -w -X github.com/openzro/openzro/version.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
     mod_timestamp: "{{ .CommitTimestamp }}"
 
-  - id: netbird-ui-windows
+  - id: openzro-ui-windows
     dir: client/ui
-    binary: netbird-ui
+    binary: openzro-ui
     env:
       - CGO_ENABLED=1
       - CC=x86_64-w64-mingw32-gcc
@@ -26,7 +26,7 @@ builds:
     goarch:
       - amd64
     ldflags:
-      - -s -w -X github.com/netbirdio/netbird/version.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
+      - -s -w -X github.com/openzro/openzro/version.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
       - -H windowsgui
     mod_timestamp: "{{ .CommitTimestamp }}"
 
@@ -34,55 +34,55 @@ archives:
   - id: linux-arch
     name_template: "{{ .ProjectName }}-linux_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     builds:
-      - netbird-ui
+      - openzro-ui
   - id: windows-arch
     name_template: "{{ .ProjectName }}-windows_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     builds:
-      - netbird-ui-windows
+      - openzro-ui-windows
 
 nfpms:
-  - maintainer: Netbird <dev@netbird.io>
-    description: Netbird client UI.
-    homepage: https://netbird.io/
-    id: netbird-ui-deb
-    package_name: netbird-ui
+  - maintainer: Openzro <dev@openzro.io>
+    description: Openzro client UI.
+    homepage: https://openzro.io/
+    id: openzro-ui-deb
+    package_name: openzro-ui
     builds:
-      - netbird-ui
+      - openzro-ui
     formats:
       - deb
     scripts:
       postinstall: "release_files/ui-post-install.sh"
     contents:
-      - src: client/ui/build/netbird.desktop
-        dst: /usr/share/applications/netbird.desktop
-      - src: client/ui/assets/netbird.png
-        dst: /usr/share/pixmaps/netbird.png
+      - src: client/ui/build/openzro.desktop
+        dst: /usr/share/applications/openzro.desktop
+      - src: client/ui/assets/openzro.png
+        dst: /usr/share/pixmaps/openzro.png
     dependencies:
-      - netbird
+      - openzro
 
-  - maintainer: Netbird <dev@netbird.io>
-    description: Netbird client UI.
-    homepage: https://netbird.io/
-    id: netbird-ui-rpm
-    package_name: netbird-ui
+  - maintainer: Openzro <dev@openzro.io>
+    description: Openzro client UI.
+    homepage: https://openzro.io/
+    id: openzro-ui-rpm
+    package_name: openzro-ui
     builds:
-      - netbird-ui
+      - openzro-ui
     formats:
       - rpm
     scripts:
       postinstall: "release_files/ui-post-install.sh"
     contents:
-      - src: client/ui/build/netbird.desktop
-        dst: /usr/share/applications/netbird.desktop
-      - src: client/ui/assets/netbird.png
-        dst: /usr/share/pixmaps/netbird.png
+      - src: client/ui/build/openzro.desktop
+        dst: /usr/share/applications/openzro.desktop
+      - src: client/ui/assets/openzro.png
+        dst: /usr/share/pixmaps/openzro.png
     dependencies:
-      - netbird
+      - openzro
 
 uploads:
   - name: debian
     ids:
-      - netbird-ui-deb
+      - openzro-ui-deb
     mode: archive
     target: https://pkgs.wiretrustee.com/debian/pool/{{ .ArtifactName }};deb.distribution=stable;deb.component=main;deb.architecture={{ if .Arm }}armhf{{ else }}{{ .Arch }}{{ end }};deb.package=
     username: dev@wiretrustee.com
@@ -90,7 +90,7 @@ uploads:
 
   - name: yum
     ids:
-      - netbird-ui-rpm
+      - openzro-ui-rpm
     mode: archive
     target: https://pkgs.wiretrustee.com/yum/{{ .Arch }}{{ if .Arm }}{{ .Arm }}{{ end }}
     username: dev@wiretrustee.com

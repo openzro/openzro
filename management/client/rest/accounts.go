@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/netbirdio/netbird/management/server/http/api"
+	"github.com/openzro/openzro/management/server/http/api"
 )
 
 // AccountsAPI APIs for accounts, do not use directly
@@ -14,7 +14,7 @@ type AccountsAPI struct {
 }
 
 // List list all accounts, only returns one account always
-// See more: https://docs.netbird.io/api/resources/accounts#list-all-accounts
+// See more: https://docs.openzro.io/api/resources/accounts#list-all-accounts
 func (a *AccountsAPI) List(ctx context.Context) ([]api.Account, error) {
 	resp, err := a.c.NewRequest(ctx, "GET", "/api/accounts", nil, nil)
 	if err != nil {
@@ -28,7 +28,7 @@ func (a *AccountsAPI) List(ctx context.Context) ([]api.Account, error) {
 }
 
 // Update update account settings
-// See more: https://docs.netbird.io/api/resources/accounts#update-an-account
+// See more: https://docs.openzro.io/api/resources/accounts#update-an-account
 func (a *AccountsAPI) Update(ctx context.Context, accountID string, request api.PutApiAccountsAccountIdJSONRequestBody) (*api.Account, error) {
 	requestBytes, err := json.Marshal(request)
 	if err != nil {
@@ -46,7 +46,7 @@ func (a *AccountsAPI) Update(ctx context.Context, accountID string, request api.
 }
 
 // Delete delete account
-// See more: https://docs.netbird.io/api/resources/accounts#delete-an-account
+// See more: https://docs.openzro.io/api/resources/accounts#delete-an-account
 func (a *AccountsAPI) Delete(ctx context.Context, accountID string) error {
 	resp, err := a.c.NewRequest(ctx, "DELETE", "/api/accounts/"+accountID, nil, nil)
 	if err != nil {

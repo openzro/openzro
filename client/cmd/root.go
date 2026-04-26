@@ -22,7 +22,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/netbirdio/netbird/client/internal/profilemanager"
+	"github.com/openzro/openzro/client/internal/profilemanager"
 )
 
 const (
@@ -75,7 +75,7 @@ var (
 	profilesDisabled        bool
 
 	rootCmd = &cobra.Command{
-		Use:          "netbird",
+		Use:          "openzro",
 		Short:        "",
 		Long:         "",
 		SilenceUsage: true,
@@ -88,21 +88,21 @@ func Execute() error {
 }
 
 func init() {
-	defaultConfigPathDir = "/etc/netbird/"
-	defaultLogFileDir = "/var/log/netbird/"
+	defaultConfigPathDir = "/etc/openzro/"
+	defaultLogFileDir = "/var/log/openzro/"
 
 	oldDefaultConfigPathDir = "/etc/wiretrustee/"
 	oldDefaultLogFileDir = "/var/log/wiretrustee/"
 
 	switch runtime.GOOS {
 	case "windows":
-		defaultConfigPathDir = os.Getenv("PROGRAMDATA") + "\\Netbird\\"
-		defaultLogFileDir = os.Getenv("PROGRAMDATA") + "\\Netbird\\"
+		defaultConfigPathDir = os.Getenv("PROGRAMDATA") + "\\Openzro\\"
+		defaultLogFileDir = os.Getenv("PROGRAMDATA") + "\\Openzro\\"
 
 		oldDefaultConfigPathDir = os.Getenv("PROGRAMDATA") + "\\Wiretrustee\\"
 		oldDefaultLogFileDir = os.Getenv("PROGRAMDATA") + "\\Wiretrustee\\"
 	case "freebsd":
-		defaultConfigPathDir = "/var/db/netbird/"
+		defaultConfigPathDir = "/var/db/openzro/"
 	}
 
 	defaultConfigPath = defaultConfigPathDir + "config.json"
@@ -111,7 +111,7 @@ func init() {
 	oldDefaultConfigPath = oldDefaultConfigPathDir + "config.json"
 	oldDefaultLogFile = oldDefaultLogFileDir + "client.log"
 
-	defaultDaemonAddr := "unix:///var/run/netbird.sock"
+	defaultDaemonAddr := "unix:///var/run/openzro.sock"
 	if runtime.GOOS == "windows" {
 		defaultDaemonAddr = "tcp://127.0.0.1:41731"
 	}
@@ -119,15 +119,15 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&daemonAddr, "daemon-addr", defaultDaemonAddr, "Daemon service address to serve CLI requests [unix|tcp]://[path|host:port]")
 	rootCmd.PersistentFlags().StringVarP(&managementURL, "management-url", "m", "", fmt.Sprintf("Management Service URL [http|https]://[host]:[port] (default \"%s\")", profilemanager.DefaultManagementURL))
 	rootCmd.PersistentFlags().StringVar(&adminURL, "admin-url", "", fmt.Sprintf("Admin Panel URL [http|https]://[host]:[port] (default \"%s\")", profilemanager.DefaultAdminURL))
-	rootCmd.PersistentFlags().StringVarP(&logLevel, "log-level", "l", "info", "sets Netbird log level")
-	rootCmd.PersistentFlags().StringSliceVar(&logFiles, "log-file", []string{defaultLogFile}, "sets Netbird log paths written to simultaneously. If `console` is specified the log will be output to stdout. If `syslog` is specified the log will be sent to syslog daemon. You can pass the flag multiple times or separate entries by `,` character")
+	rootCmd.PersistentFlags().StringVarP(&logLevel, "log-level", "l", "info", "sets Openzro log level")
+	rootCmd.PersistentFlags().StringSliceVar(&logFiles, "log-file", []string{defaultLogFile}, "sets Openzro log paths written to simultaneously. If `console` is specified the log will be output to stdout. If `syslog` is specified the log will be sent to syslog daemon. You can pass the flag multiple times or separate entries by `,` character")
 	rootCmd.PersistentFlags().StringVarP(&setupKey, "setup-key", "k", "", "Setup key obtained from the Management Service Dashboard (used to register peer)")
 	rootCmd.PersistentFlags().StringVar(&setupKeyPath, "setup-key-file", "", "The path to a setup key obtained from the Management Service Dashboard (used to register peer) This is ignored if the setup-key flag is provided.")
 	rootCmd.MarkFlagsMutuallyExclusive("setup-key", "setup-key-file")
 	rootCmd.PersistentFlags().StringVar(&preSharedKey, preSharedKeyFlag, "", "Sets Wireguard PreSharedKey property. If set, then only peers that have the same key can communicate.")
 	rootCmd.PersistentFlags().StringVarP(&hostName, "hostname", "n", "", "Sets a custom hostname for the device")
-	rootCmd.PersistentFlags().BoolVarP(&anonymizeFlag, "anonymize", "A", false, "anonymize IP addresses and non-netbird.io domains in logs and status output")
-	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", defaultConfigPath, "(DEPRECATED)  Netbird config file location")
+	rootCmd.PersistentFlags().BoolVarP(&anonymizeFlag, "anonymize", "A", false, "anonymize IP addresses and non-openzro.io domains in logs and status output")
+	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", defaultConfigPath, "(DEPRECATED)  Openzro config file location")
 
 	rootCmd.AddCommand(upCmd)
 	rootCmd.AddCommand(downCmd)
@@ -165,7 +165,7 @@ func init() {
 			`or --external-ip-map ""`,
 	)
 	upCmd.PersistentFlags().StringVar(&customDNSAddress, dnsResolverAddress, "",
-		`Sets a custom address for NetBird's local DNS resolver. `+
+		`Sets a custom address for Openzro's local DNS resolver. `+
 			`If set, the agent won't attempt to discover the best ip and port to listen on. `+
 			`An empty string "" clears the previous configuration. `+
 			`E.g. --dns-resolver-address 127.0.0.1:5053 or --dns-resolver-address ""`,
@@ -206,7 +206,7 @@ func SetFlagsFromEnvVars(cmd *cobra.Command) {
 			}
 		}
 
-		newEnvVar := FlagNameToEnvVar(f.Name, "NB_")
+		newEnvVar := FlagNameToEnvVar(f.Name, "OZ_")
 
 		if value, present := os.LookupEnv(newEnvVar); present {
 			err := flags.Set(f.Name, value)
@@ -218,7 +218,7 @@ func SetFlagsFromEnvVars(cmd *cobra.Command) {
 }
 
 // FlagNameToEnvVar converts flag name to environment var name adding a prefix,
-// replacing dashes and making all uppercase (e.g. setup-keys is converted to NB_SETUP_KEYS according to the input prefix)
+// replacing dashes and making all uppercase (e.g. setup-keys is converted to OZ_SETUP_KEYS according to the input prefix)
 func FlagNameToEnvVar(cmdFlag string, prefix string) string {
 	parsed := strings.ReplaceAll(cmdFlag, "-", "_")
 	upper := strings.ToUpper(parsed)
@@ -274,7 +274,7 @@ func getSetupKeyFromFile(setupKeyPath string) (string, error) {
 func handleRebrand(cmd *cobra.Command) error {
 	var err error
 	if slices.Contains(logFiles, defaultLogFile) {
-		if migrateToNetbird(oldDefaultLogFile, defaultLogFile) {
+		if migrateToOpenzro(oldDefaultLogFile, defaultLogFile) {
 			cmd.Printf("will copy Log dir %s and its content to %s\n", oldDefaultLogFileDir, defaultLogFileDir)
 			err = cpDir(oldDefaultLogFileDir, defaultLogFileDir)
 			if err != nil {
@@ -282,7 +282,7 @@ func handleRebrand(cmd *cobra.Command) error {
 			}
 		}
 	}
-	if migrateToNetbird(oldDefaultConfigPath, defaultConfigPath) {
+	if migrateToOpenzro(oldDefaultConfigPath, defaultConfigPath) {
 		cmd.Printf("will copy Config dir %s and its content to %s\n", oldDefaultConfigPathDir, defaultConfigPathDir)
 		err = cpDir(oldDefaultConfigPathDir, defaultConfigPathDir)
 		if err != nil {
@@ -369,7 +369,7 @@ func cpDir(src string, dst string) error {
 	return nil
 }
 
-func migrateToNetbird(oldPath, newPath string) bool {
+func migrateToOpenzro(oldPath, newPath string) bool {
 	_, errOld := os.Stat(oldPath)
 	_, errNew := os.Stat(newPath)
 
@@ -388,7 +388,7 @@ func getClient(cmd *cobra.Command) (*grpc.ClientConn, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to daemon error: %v\n"+
 			"If the daemon is not running please run: "+
-			"\nnetbird service install \nnetbird service start\n", err)
+			"\nopenzro service install \nopenzro service start\n", err)
 	}
 
 	return conn, nil

@@ -1,7 +1,7 @@
 package types
 
 import (
-	"github.com/netbirdio/netbird/management/proto"
+	"github.com/openzro/openzro/management/proto"
 )
 
 // PolicyUpdateOperationType operation type

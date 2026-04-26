@@ -5,8 +5,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/iface/freebsd"
-	"github.com/netbirdio/netbird/client/iface/wgaddr"
+	"github.com/openzro/openzro/client/iface/freebsd"
+	"github.com/openzro/openzro/client/iface/wgaddr"
 )
 
 type wgLink struct {

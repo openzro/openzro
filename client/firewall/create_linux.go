@@ -11,12 +11,12 @@ import (
 	"github.com/google/nftables"
 	log "github.com/sirupsen/logrus"
 
-	nbiptables "github.com/netbirdio/netbird/client/firewall/iptables"
-	firewall "github.com/netbirdio/netbird/client/firewall/manager"
-	nbnftables "github.com/netbirdio/netbird/client/firewall/nftables"
-	"github.com/netbirdio/netbird/client/firewall/uspfilter"
-	nftypes "github.com/netbirdio/netbird/client/internal/netflow/types"
-	"github.com/netbirdio/netbird/client/internal/statemanager"
+	nbiptables "github.com/openzro/openzro/client/firewall/iptables"
+	firewall "github.com/openzro/openzro/client/firewall/manager"
+	nbnftables "github.com/openzro/openzro/client/firewall/nftables"
+	"github.com/openzro/openzro/client/firewall/uspfilter"
+	nftypes "github.com/openzro/openzro/client/internal/netflow/types"
+	"github.com/openzro/openzro/client/internal/statemanager"
 )
 
 const (
@@ -29,15 +29,15 @@ const (
 )
 
 // SKIP_NFTABLES_ENV is the environment variable to skip nftables check
-const SKIP_NFTABLES_ENV = "NB_SKIP_NFTABLES_CHECK"
+const SKIP_NFTABLES_ENV = "OZ_SKIP_NFTABLES_CHECK"
 
 // FWType is the type for the firewall type
 type FWType int
 
 func NewFirewall(iface IFaceMapper, stateManager *statemanager.Manager, flowLogger nftypes.FlowLogger, disableServerRoutes bool) (firewall.Manager, error) {
 	// on the linux system we try to user nftables or iptables
-	// in any case, because we need to allow netbird interface traffic
-	// so we use AllowNetbird traffic from these firewall managers
+	// in any case, because we need to allow openzro interface traffic
+	// so we use AllowOpenzro traffic from these firewall managers
 	// for the userspace packet filtering firewall
 	fm, err := createNativeFirewall(iface, stateManager, disableServerRoutes)
 
@@ -90,8 +90,8 @@ func createUserspaceFirewall(iface IFaceMapper, fm firewall.Manager, disableServ
 		return nil, fmt.Errorf("create userspace firewall: %s", errUsp)
 	}
 
-	if err := fm.AllowNetbird(); err != nil {
-		log.Errorf("failed to allow netbird interface traffic: %v", err)
+	if err := fm.AllowOpenzro(); err != nil {
+		log.Errorf("failed to allow openzro interface traffic: %v", err)
 	}
 	return fm, nil
 }

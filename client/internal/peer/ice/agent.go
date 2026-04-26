@@ -8,7 +8,7 @@ import (
 	"github.com/pion/randutil"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/internal/stdnet"
+	"github.com/openzro/openzro/client/internal/stdnet"
 )
 
 const (

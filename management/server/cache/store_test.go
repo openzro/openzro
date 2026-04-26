@@ -11,7 +11,7 @@ import (
 
 	testcontainersredis "github.com/testcontainers/testcontainers-go/modules/redis"
 
-	"github.com/netbirdio/netbird/management/server/cache"
+	"github.com/openzro/openzro/management/server/cache"
 )
 
 func TestMemoryStore(t *testing.T) {

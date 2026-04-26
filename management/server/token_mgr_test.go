@@ -13,15 +13,15 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/netbirdio/netbird/management/proto"
-	"github.com/netbirdio/netbird/management/server/settings"
-	"github.com/netbirdio/netbird/management/server/types"
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/management/proto"
+	"github.com/openzro/openzro/management/server/settings"
+	"github.com/openzro/openzro/management/server/types"
+	"github.com/openzro/openzro/util"
 )
 
 var TurnTestHost = &types.Host{
 	Proto:    types.UDP,
-	URI:      "turn:turn.netbird.io:77777",
+	URI:      "turn:turn.openzro.io:77777",
 	Username: "username",
 	Password: "",
 }
@@ -137,7 +137,7 @@ loop:
 	var firstRelayUpdate, secondRelayUpdate *proto.RelayConfig
 
 	for _, update := range updates {
-		if turns := update.Update.GetNetbirdConfig().GetTurns(); len(turns) > 0 {
+		if turns := update.Update.GetOpenzroConfig().GetTurns(); len(turns) > 0 {
 			turnUpdates++
 			if turnUpdates == 1 {
 				firstTurnUpdate = turns[0]
@@ -145,9 +145,9 @@ loop:
 				secondTurnUpdate = turns[0]
 			}
 		}
-		if relay := update.Update.GetNetbirdConfig().GetRelay(); relay != nil {
+		if relay := update.Update.GetOpenzroConfig().GetRelay(); relay != nil {
 			// avoid updating on turn updates since they also send relay credentials
-			if update.Update.GetNetbirdConfig().GetTurns() == nil {
+			if update.Update.GetOpenzroConfig().GetTurns() == nil {
 				relayUpdates++
 				if relayUpdates == 1 {
 					firstRelayUpdate = relay

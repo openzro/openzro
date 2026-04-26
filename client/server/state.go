@@ -8,10 +8,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	nberrors "github.com/netbirdio/netbird/client/errors"
-	"github.com/netbirdio/netbird/client/internal"
-	"github.com/netbirdio/netbird/client/internal/statemanager"
-	"github.com/netbirdio/netbird/client/proto"
+	nberrors "github.com/openzro/openzro/client/errors"
+	"github.com/openzro/openzro/client/internal"
+	"github.com/openzro/openzro/client/internal/statemanager"
+	"github.com/openzro/openzro/client/proto"
 )
 
 // ListStates returns a list of all saved states
@@ -38,7 +38,7 @@ func (s *Server) ListStates(_ context.Context, _ *proto.ListStatesRequest) (*pro
 // CleanState handles cleaning of states (performing cleanup operations)
 func (s *Server) CleanState(ctx context.Context, req *proto.CleanStateRequest) (*proto.CleanStateResponse, error) {
 	if s.connectClient.Status() == internal.StatusConnected || s.connectClient.Status() == internal.StatusConnecting {
-		return nil, status.Errorf(codes.FailedPrecondition, "cannot clean state while connecting or connected, run 'netbird down' first.")
+		return nil, status.Errorf(codes.FailedPrecondition, "cannot clean state while connecting or connected, run 'openzro down' first.")
 	}
 
 	statePath := s.profileManager.GetStatePath()
@@ -81,7 +81,7 @@ func (s *Server) CleanState(ctx context.Context, req *proto.CleanStateRequest) (
 // DeleteState handles deletion of states without cleanup
 func (s *Server) DeleteState(ctx context.Context, req *proto.DeleteStateRequest) (*proto.DeleteStateResponse, error) {
 	if s.connectClient.Status() == internal.StatusConnected || s.connectClient.Status() == internal.StatusConnecting {
-		return nil, status.Errorf(codes.FailedPrecondition, "cannot clean state while connecting or connected, run 'netbird down' first.")
+		return nil, status.Errorf(codes.FailedPrecondition, "cannot clean state while connecting or connected, run 'openzro down' first.")
 	}
 
 	mgr := statemanager.New(s.profileManager.GetStatePath())

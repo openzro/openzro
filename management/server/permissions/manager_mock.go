@@ -9,10 +9,10 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	modules "github.com/netbirdio/netbird/management/server/permissions/modules"
-	operations "github.com/netbirdio/netbird/management/server/permissions/operations"
-	roles "github.com/netbirdio/netbird/management/server/permissions/roles"
-	types "github.com/netbirdio/netbird/management/server/types"
+	modules "github.com/openzro/openzro/management/server/permissions/modules"
+	operations "github.com/openzro/openzro/management/server/permissions/operations"
+	roles "github.com/openzro/openzro/management/server/permissions/roles"
+	types "github.com/openzro/openzro/management/server/types"
 )
 
 // MockManager is a mock of Manager interface.

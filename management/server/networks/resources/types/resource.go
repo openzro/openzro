@@ -8,13 +8,13 @@ import (
 
 	"github.com/rs/xid"
 
-	nbDomain "github.com/netbirdio/netbird/management/domain"
-	routerTypes "github.com/netbirdio/netbird/management/server/networks/routers/types"
-	networkTypes "github.com/netbirdio/netbird/management/server/networks/types"
-	nbpeer "github.com/netbirdio/netbird/management/server/peer"
-	"github.com/netbirdio/netbird/route"
+	nbDomain "github.com/openzro/openzro/management/domain"
+	routerTypes "github.com/openzro/openzro/management/server/networks/routers/types"
+	networkTypes "github.com/openzro/openzro/management/server/networks/types"
+	nbpeer "github.com/openzro/openzro/management/server/peer"
+	"github.com/openzro/openzro/route"
 
-	"github.com/netbirdio/netbird/management/server/http/api"
+	"github.com/openzro/openzro/management/server/http/api"
 )
 
 type NetworkResourceType string

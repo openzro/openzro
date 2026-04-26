@@ -10,16 +10,16 @@ import (
 	"github.com/nadoo/ipset"
 	log "github.com/sirupsen/logrus"
 
-	firewall "github.com/netbirdio/netbird/client/firewall/manager"
-	"github.com/netbirdio/netbird/client/internal/statemanager"
-	nbnet "github.com/netbirdio/netbird/util/net"
+	firewall "github.com/openzro/openzro/client/firewall/manager"
+	"github.com/openzro/openzro/client/internal/statemanager"
+	nbnet "github.com/openzro/openzro/util/net"
 )
 
 const (
 	tableName = "filter"
 
 	// rules chains contains the effective ACL rules
-	chainNameInputRules = "NETBIRD-ACL-INPUT"
+	chainNameInputRules = "OPENZRO-ACL-INPUT"
 )
 
 type aclEntries map[string][][]string
@@ -270,7 +270,7 @@ func (m *aclManager) cleanChains() error {
 }
 
 func (m *aclManager) createDefaultChains() error {
-	// chain netbird-acl-input-rules
+	// chain openzro-acl-input-rules
 	if err := m.iptablesClient.NewChain(tableName, chainNameInputRules); err != nil {
 		log.Debugf("failed to create '%s' chain: %s", chainNameInputRules, err)
 		return err

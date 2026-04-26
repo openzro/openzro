@@ -6,16 +6,16 @@ import (
 
 	"github.com/rs/xid"
 
-	"github.com/netbirdio/netbird/management/server/account"
-	"github.com/netbirdio/netbird/management/server/activity"
-	"github.com/netbirdio/netbird/management/server/networks/resources"
-	"github.com/netbirdio/netbird/management/server/networks/routers"
-	"github.com/netbirdio/netbird/management/server/networks/types"
-	"github.com/netbirdio/netbird/management/server/permissions"
-	"github.com/netbirdio/netbird/management/server/permissions/modules"
-	"github.com/netbirdio/netbird/management/server/permissions/operations"
-	"github.com/netbirdio/netbird/management/server/status"
-	"github.com/netbirdio/netbird/management/server/store"
+	"github.com/openzro/openzro/management/server/account"
+	"github.com/openzro/openzro/management/server/activity"
+	"github.com/openzro/openzro/management/server/networks/resources"
+	"github.com/openzro/openzro/management/server/networks/routers"
+	"github.com/openzro/openzro/management/server/networks/types"
+	"github.com/openzro/openzro/management/server/permissions"
+	"github.com/openzro/openzro/management/server/permissions/modules"
+	"github.com/openzro/openzro/management/server/permissions/operations"
+	"github.com/openzro/openzro/management/server/status"
+	"github.com/openzro/openzro/management/server/store"
 )
 
 type Manager interface {

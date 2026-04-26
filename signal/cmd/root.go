@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/netbirdio/netbird/version"
+	"github.com/openzro/openzro/version"
 )
 
 const (
@@ -22,10 +22,10 @@ var (
 	logFile        string
 
 	rootCmd = &cobra.Command{
-		Use:     "netbird-signal",
+		Use:     "openzro-signal",
 		Short:   "",
 		Long:    "",
-		Version: version.NetbirdVersion(),
+		Version: version.OpenzroVersion(),
 	}
 
 	// Execution control channel for stopCh signal
@@ -39,15 +39,15 @@ func Execute() error {
 
 func init() {
 	stopCh = make(chan int)
-	defaultLogFile = "/var/log/netbird/signal.log"
-	defaultSignalSSLDir = "/var/lib/netbird/"
+	defaultLogFile = "/var/log/openzro/signal.log"
+	defaultSignalSSLDir = "/var/lib/openzro/"
 
 	if runtime.GOOS == "windows" {
-		defaultLogFile = os.Getenv("PROGRAMDATA") + "\\Netbird\\" + "signal.log"
+		defaultLogFile = os.Getenv("PROGRAMDATA") + "\\Openzro\\" + "signal.log"
 	}
 
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "")
-	rootCmd.PersistentFlags().StringVar(&logFile, "log-file", defaultLogFile, "sets Netbird log path. If console is specified the log will be output to stdout")
+	rootCmd.PersistentFlags().StringVar(&logFile, "log-file", defaultLogFile, "sets Openzro log path. If console is specified the log will be output to stdout")
 	rootCmd.AddCommand(runCmd)
 }
 

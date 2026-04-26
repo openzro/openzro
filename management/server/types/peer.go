@@ -3,7 +3,7 @@ package types
 import (
 	"net"
 
-	nbpeer "github.com/netbirdio/netbird/management/server/peer"
+	nbpeer "github.com/openzro/openzro/management/server/peer"
 )
 
 // PeerSync used as a data object between the gRPC API and Manager on Sync request.

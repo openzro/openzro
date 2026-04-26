@@ -12,8 +12,8 @@ import (
 	"github.com/hashicorp/go-multierror"
 	log "github.com/sirupsen/logrus"
 
-	nberrors "github.com/netbirdio/netbird/client/errors"
-	"github.com/netbirdio/netbird/client/iface/wgaddr"
+	nberrors "github.com/openzro/openzro/client/errors"
+	"github.com/openzro/openzro/client/iface/wgaddr"
 )
 
 const (

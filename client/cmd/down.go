@@ -4,17 +4,17 @@ import (
 	"context"
 	"time"
 
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/util"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"github.com/netbirdio/netbird/client/proto"
+	"github.com/openzro/openzro/client/proto"
 )
 
 var downCmd = &cobra.Command{
 	Use:   "down",
-	Short: "down netbird connections",
+	Short: "down openzro connections",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		SetFlagsFromEnvVars(rootCmd)
 

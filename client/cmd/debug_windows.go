@@ -10,21 +10,21 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/windows"
 
-	"github.com/netbirdio/netbird/client/internal"
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/client/internal/profilemanager"
+	"github.com/openzro/openzro/client/internal"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/client/internal/profilemanager"
 )
 
 const (
-	envListenEvent        = "NB_LISTEN_DEBUG_EVENT"
-	debugTriggerEventName = `Global\NetbirdDebugTriggerEvent`
+	envListenEvent        = "OZ_LISTEN_DEBUG_EVENT"
+	debugTriggerEventName = `Global\OpenzroDebugTriggerEvent`
 
 	waitTimeout = 5 * time.Second
 )
 
 // SetupDebugHandler sets up a Windows event to listen for a signal to generate a debug bundle.
 // Example usage with PowerShell:
-// $evt = [System.Threading.EventWaitHandle]::OpenExisting("Global\NetbirdDebugTriggerEvent")
+// $evt = [System.Threading.EventWaitHandle]::OpenExisting("Global\OpenzroDebugTriggerEvent")
 // $evt.Set()
 // $evt.Close()
 func SetupDebugHandler(

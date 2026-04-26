@@ -17,7 +17,7 @@ func init() {
 }
 
 func pprofAddr() string {
-	listenAddr := os.Getenv("NB_PPROF_ADDR")
+	listenAddr := os.Getenv("OZ_PPROF_ADDR")
 	if listenAddr == "" {
 		return "localhost:6969"
 	}

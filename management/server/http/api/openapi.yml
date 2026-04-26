@@ -1,9 +1,9 @@
 openapi: 3.1.0
 servers:
-  - url: https://api.netbird.io
+  - url: https://api.openzro.io
     description: Default server
 info:
-  title: NetBird REST API
+  title: Openzro REST API
   description: API to manipulate groups, rules, policies and retrieve information about peers and users
   version: 0.0.1
 tags:
@@ -46,7 +46,7 @@ components:
         domain:
           description: Account domain
           type: string
-          example: netbird.io
+          example: openzro.io
         domain_category:
           description: Account domain category
           type: string
@@ -184,13 +184,13 @@ components:
         email:
           description: User's email address
           type: string
-          example: demo@netbird.io
+          example: demo@openzro.io
         name:
           description: User's name from idp provider
           type: string
           example: Tom Schulz
         role:
-          description: User's NetBird account role
+          description: User's Openzro account role
           type: string
           example: admin
         status:
@@ -263,7 +263,7 @@ components:
       type: object
       properties:
         role:
-          description: User's NetBird account role
+          description: User's Openzro account role
           type: string
           example: admin
         auto_groups:
@@ -286,13 +286,13 @@ components:
         email:
           description: User's Email to send invite to
           type: string
-          example: demo@netbird.io
+          example: demo@openzro.io
         name:
           description: User's full name
           type: string
           example: Tom Schulz
         role:
-          description: User's NetBird account role
+          description: User's Openzro account role
           type: string
           example: admin
         auto_groups:
@@ -365,7 +365,7 @@ components:
               type: boolean
               example: true
             last_seen:
-              description: Last time peer connected to Netbird's management service
+              description: Last time peer connected to Openzro's management service
               type: string
               format: date-time
               example: "2023-05-05T10:05:26.420578Z"
@@ -407,9 +407,9 @@ components:
               type: string
               example: 0.14.0
             dns_label:
-              description: Peer's DNS label is the parsed peer name for domain resolution. It is used to form an FQDN by appending the account's domain to the peer label. e.g. peer-dns-label.netbird.cloud
+              description: Peer's DNS label is the parsed peer name for domain resolution. It is used to form an FQDN by appending the account's domain to the peer label. e.g. peer-dns-label.openzro.cloud
               type: string
-              example: stage-host-1.netbird.cloud
+              example: stage-host-1.openzro.cloud
             login_expiration_enabled:
               description: Indicates whether peer login expiration has been enabled or not
               type: boolean
@@ -484,9 +484,9 @@ components:
               type: string
               example: 10.64.0.1
             dns_label:
-              description: Peer's DNS label is the parsed peer name for domain resolution. It is used to form an FQDN by appending the account's domain to the peer label. e.g. peer-dns-label.netbird.cloud
+              description: Peer's DNS label is the parsed peer name for domain resolution. It is used to form an FQDN by appending the account's domain to the peer label. e.g. peer-dns-label.openzro.cloud
               type: string
-              example: stage-host-1.netbird.cloud
+              example: stage-host-1.openzro.cloud
             user_id:
               description: User ID of the user that enrolled this peer
               type: string
@@ -508,7 +508,7 @@ components:
               type: boolean
               example: true
             last_seen:
-              description: Last time peer connected to Netbird's management service
+              description: Last time peer connected to Openzro's management service
               type: string
               format: date-time
               example: "2023-05-05T10:05:26.420578Z"
@@ -1051,7 +1051,7 @@ components:
         description:
           description: Posture check friendly description
           type: string
-          example: This checks if the peer is running required NetBird's version
+          example: This checks if the peer is running required Openzro's version
         checks:
           $ref: '#/components/schemas/Checks'
       required:
@@ -1073,7 +1073,7 @@ components:
         process_check:
           $ref: '#/components/schemas/ProcessCheck'
     NBVersionCheck:
-      description: Posture check for the version of NetBird
+      description: Posture check for the version of Openzro
       type: object
       $ref: '#/components/schemas/MinVersionCheck'
     OSVersionCheck:
@@ -1177,15 +1177,15 @@ components:
         linux_path:
           description: Path to the process executable file in a Linux operating system
           type: string
-          example: "/usr/local/bin/netbird"
+          example: "/usr/local/bin/openzro"
         mac_path:
           description: Path to the process executable file in a Mac operating system
           type: string
-          example: "/Applications/NetBird.app/Contents/MacOS/netbird"
+          example: "/Applications/Openzro.app/Contents/MacOS/openzro"
         windows_path:
           description: Path to the process executable file in a Windows operating system
           type: string
-          example: "C:\ProgramData\NetBird\netbird.exe"
+          example: "C:\ProgramData\Openzro\openzro.exe"
     Location:
       description: Describe geographical location information
       type: object
@@ -1242,7 +1242,7 @@ components:
         description:
           description: Posture check friendly description
           type: string
-          example: This checks if the peer is running required NetBird's version
+          example: This checks if the peer is running required Openzro's version
         checks:
           $ref: '#/components/schemas/Checks'
       required:
@@ -1659,7 +1659,7 @@ components:
         initiator_email:
           description: The e-mail address of the initiator of the event. E.g., an e-mail of a user that triggered the event.
           type: string
-          example: demo@netbird.io
+          example: demo@openzro.io
         target_id:
           description: The ID of the target of the event. E.g., an ID of the peer that a user removed.
           type: string
@@ -1959,7 +1959,7 @@ components:
         email:
           type: string
           description: "Email of the user who initiated the event (if any)."
-          example: "alice@netbird.io"
+          example: "alice@openzro.io"
         name:
             type: string
             description: "Name of the user who initiated the event (if any)."

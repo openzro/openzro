@@ -130,7 +130,7 @@ wait_api() {
 create_new_project() {
   INSTANCE_URL=$1
   PAT=$2
-  PROJECT_NAME="NETBIRD"
+  PROJECT_NAME="OPENZRO"
 
   RESPONSE=$(
     curl -sS -X POST "$INSTANCE_URL/management/v1/projects" \
@@ -200,9 +200,9 @@ create_service_user() {
       -H "Authorization: Bearer $PAT" \
       -H "Content-Type: application/json" \
       -d '{
-            "userName": "netbird-service-account",
-            "name": "Netbird Service Account",
-            "description": "Netbird Service Account for IDP management",
+            "userName": "openzro-service-account",
+            "name": "Openzro Service Account",
+            "description": "Openzro Service Account for IDP management",
             "accessTokenType": "ACCESS_TOKEN_TYPE_JWT"
       }'
   )
@@ -329,8 +329,8 @@ delete_auto_service_user() {
 }
 
 init_zitadel() {
-  echo -e "\nInitializing Zitadel with NetBird's applications\n"
-  INSTANCE_URL="$NETBIRD_HTTP_PROTOCOL://$NETBIRD_DOMAIN"
+  echo -e "\nInitializing Zitadel with Openzro's applications\n"
+  INSTANCE_URL="$OPENZRO_HTTP_PROTOCOL://$OPENZRO_DOMAIN"
 
   TOKEN_PATH=./machinekey/zitadel-admin-sa.token
 
@@ -351,8 +351,8 @@ init_zitadel() {
   PROJECT_ID=$(create_new_project "$INSTANCE_URL" "$PAT")
 
   ZITADEL_DEV_MODE=false
-  BASE_REDIRECT_URL=$NETBIRD_HTTP_PROTOCOL://$NETBIRD_DOMAIN
-  if [[ $NETBIRD_HTTP_PROTOCOL == "http" ]]; then
+  BASE_REDIRECT_URL=$OPENZRO_HTTP_PROTOCOL://$OPENZRO_DOMAIN
+  if [[ $OPENZRO_HTTP_PROTOCOL == "http" ]]; then
     ZITADEL_DEV_MODE=true
   fi
 
@@ -372,7 +372,7 @@ init_zitadel() {
 
   DATE=$(add_organization_user_manager "$INSTANCE_URL" "$PAT" "$MACHINE_USER_ID")
 
-  ZITADEL_ADMIN_USERNAME="admin@$NETBIRD_DOMAIN"
+  ZITADEL_ADMIN_USERNAME="admin@$OPENZRO_DOMAIN"
   ZITADEL_ADMIN_PASSWORD="$(openssl rand -base64 32 | sed 's/=//g')@"
 
   HUMAN_USER_ID=$(create_admin_user "$INSTANCE_URL" "$PAT" "$ZITADEL_ADMIN_USERNAME" "$ZITADEL_ADMIN_PASSWORD")
@@ -388,10 +388,10 @@ init_zitadel() {
       echo "Please remove it manually"
   fi
 
-  export NETBIRD_AUTH_CLIENT_ID=$DASHBOARD_APPLICATION_CLIENT_ID
-  export NETBIRD_AUTH_CLIENT_ID_CLI=$CLI_APPLICATION_CLIENT_ID
-  export NETBIRD_IDP_MGMT_CLIENT_ID=$SERVICE_USER_CLIENT_ID
-  export NETBIRD_IDP_MGMT_CLIENT_SECRET=$SERVICE_USER_CLIENT_SECRET
+  export OPENZRO_AUTH_CLIENT_ID=$DASHBOARD_APPLICATION_CLIENT_ID
+  export OPENZRO_AUTH_CLIENT_ID_CLI=$CLI_APPLICATION_CLIENT_ID
+  export OPENZRO_IDP_MGMT_CLIENT_ID=$SERVICE_USER_CLIENT_ID
+  export OPENZRO_IDP_MGMT_CLIENT_SECRET=$SERVICE_USER_CLIENT_SECRET
   export ZITADEL_ADMIN_USERNAME
   export ZITADEL_ADMIN_PASSWORD
 }
@@ -399,25 +399,25 @@ init_zitadel() {
 check_nb_domain() {
   DOMAIN=$1
   if [ "$DOMAIN-x" == "-x" ]; then
-    echo "The NETBIRD_DOMAIN variable cannot be empty." > /dev/stderr
+    echo "The OPENZRO_DOMAIN variable cannot be empty." > /dev/stderr
     return 1
   fi
 
-  if [ "$DOMAIN" == "netbird.example.com" ]; then
-    echo "The NETBIRD_DOMAIN cannot be netbird.example.com" > /dev/stderr
+  if [ "$DOMAIN" == "openzro.example.com" ]; then
+    echo "The OPENZRO_DOMAIN cannot be openzro.example.com" > /dev/stderr
     return 1
   fi
   return 0
 }
 
 read_nb_domain() {
-  READ_NETBIRD_DOMAIN=""
-  echo -n "Enter the domain you want to use for NetBird (e.g. netbird.my-domain.com): " > /dev/stderr
-  read -r READ_NETBIRD_DOMAIN < /dev/tty
-  if ! check_nb_domain "$READ_NETBIRD_DOMAIN"; then
+  READ_OPENZRO_DOMAIN=""
+  echo -n "Enter the domain you want to use for Openzro (e.g. openzro.my-domain.com): " > /dev/stderr
+  read -r READ_OPENZRO_DOMAIN < /dev/tty
+  if ! check_nb_domain "$READ_OPENZRO_DOMAIN"; then
     read_nb_domain
   fi
-  echo "$READ_NETBIRD_DOMAIN"
+  echo "$READ_OPENZRO_DOMAIN"
 }
 
 get_turn_external_ip() {
@@ -434,29 +434,29 @@ initEnvironment() {
   ZITADEL_EXTERNALSECURE="false"
   ZITADEL_TLS_MODE="disabled"
   ZITADEL_MASTERKEY="$(openssl rand -base64 32 | head -c 32)"
-  NETBIRD_PORT=80
-  NETBIRD_HTTP_PROTOCOL="http"
-  NETBIRD_RELAY_PROTO="rel"
+  OPENZRO_PORT=80
+  OPENZRO_HTTP_PROTOCOL="http"
+  OPENZRO_RELAY_PROTO="rel"
   TURN_USER="self"
   TURN_PASSWORD=$(openssl rand -base64 32 | sed 's/=//g')
-  NETBIRD_RELAY_AUTH_SECRET=$(openssl rand -base64 32 | sed 's/=//g')
+  OPENZRO_RELAY_AUTH_SECRET=$(openssl rand -base64 32 | sed 's/=//g')
   TURN_MIN_PORT=49152
   TURN_MAX_PORT=65535
   TURN_EXTERNAL_IP_CONFIG=$(get_turn_external_ip)
 
-  if ! check_nb_domain "$NETBIRD_DOMAIN"; then
-    NETBIRD_DOMAIN=$(read_nb_domain)
+  if ! check_nb_domain "$OPENZRO_DOMAIN"; then
+    OPENZRO_DOMAIN=$(read_nb_domain)
   fi
 
-  if [ "$NETBIRD_DOMAIN" == "use-ip" ]; then
-    NETBIRD_DOMAIN=$(get_main_ip_address)
+  if [ "$OPENZRO_DOMAIN" == "use-ip" ]; then
+    OPENZRO_DOMAIN=$(get_main_ip_address)
   else
     ZITADEL_EXTERNALSECURE="true"
     ZITADEL_TLS_MODE="external"
-    NETBIRD_PORT=443
-    CADDY_SECURE_DOMAIN=", $NETBIRD_DOMAIN:$NETBIRD_PORT"
-    NETBIRD_HTTP_PROTOCOL="https"
-    NETBIRD_RELAY_PROTO="rels"
+    OPENZRO_PORT=443
+    CADDY_SECURE_DOMAIN=", $OPENZRO_DOMAIN:$OPENZRO_PORT"
+    OPENZRO_HTTP_PROTOCOL="https"
+    OPENZRO_RELAY_PROTO="rels"
   fi
 
   if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -510,16 +510,16 @@ initEnvironment() {
   $DOCKER_COMPOSE_COMMAND up -d caddy zitadel
   init_zitadel
 
-  echo -e "\nRendering NetBird files...\n"
+  echo -e "\nRendering Openzro files...\n"
   renderTurnServerConf > turnserver.conf
   renderManagementJson > management.json
   renderDashboardEnv > dashboard.env
   renderRelayEnv > relay.env
 
-  echo -e "\nStarting NetBird services\n"
+  echo -e "\nStarting Openzro services\n"
   $DOCKER_COMPOSE_COMMAND up -d
   echo -e "\nDone!\n"
-  echo "You can access the NetBird dashboard at $NETBIRD_HTTP_PROTOCOL://$NETBIRD_DOMAIN"
+  echo "You can access the Openzro dashboard at $OPENZRO_HTTP_PROTOCOL://$OPENZRO_DOMAIN"
   echo "Login with the following credentials:"
   echo "Username: $ZITADEL_ADMIN_USERNAME" | tee .env
   echo "Password: $ZITADEL_ADMIN_PASSWORD" | tee -a .env
@@ -635,14 +635,14 @@ renderManagementJson() {
     "Stuns": [
         {
             "Proto": "udp",
-            "URI": "stun:$NETBIRD_DOMAIN:3478"
+            "URI": "stun:$OPENZRO_DOMAIN:3478"
         }
     ],
     "TURNConfig": {
         "Turns": [
             {
                 "Proto": "udp",
-                "URI": "turn:$NETBIRD_DOMAIN:3478",
+                "URI": "turn:$OPENZRO_DOMAIN:3478",
                 "Username": "$TURN_USER",
                 "Password": "$TURN_PASSWORD"
             }
@@ -650,44 +650,44 @@ renderManagementJson() {
         "TimeBasedCredentials": false
     },
     "Relay": {
-        "Addresses": ["$NETBIRD_RELAY_PROTO://$NETBIRD_DOMAIN:$NETBIRD_PORT"],
+        "Addresses": ["$OPENZRO_RELAY_PROTO://$OPENZRO_DOMAIN:$OPENZRO_PORT"],
         "CredentialsTTL": "24h",
-        "Secret": "$NETBIRD_RELAY_AUTH_SECRET"
+        "Secret": "$OPENZRO_RELAY_AUTH_SECRET"
     },
     "Signal": {
-        "Proto": "$NETBIRD_HTTP_PROTOCOL",
-        "URI": "$NETBIRD_DOMAIN:$NETBIRD_PORT"
+        "Proto": "$OPENZRO_HTTP_PROTOCOL",
+        "URI": "$OPENZRO_DOMAIN:$OPENZRO_PORT"
     },
     "HttpConfig": {
-        "AuthIssuer": "$NETBIRD_HTTP_PROTOCOL://$NETBIRD_DOMAIN",
-        "AuthAudience": "$NETBIRD_AUTH_CLIENT_ID",
-        "OIDCConfigEndpoint":"$NETBIRD_HTTP_PROTOCOL://$NETBIRD_DOMAIN/.well-known/openid-configuration"
+        "AuthIssuer": "$OPENZRO_HTTP_PROTOCOL://$OPENZRO_DOMAIN",
+        "AuthAudience": "$OPENZRO_AUTH_CLIENT_ID",
+        "OIDCConfigEndpoint":"$OPENZRO_HTTP_PROTOCOL://$OPENZRO_DOMAIN/.well-known/openid-configuration"
     },
     "IdpManagerConfig": {
         "ManagerType": "zitadel",
         "ClientConfig": {
-            "Issuer": "$NETBIRD_HTTP_PROTOCOL://$NETBIRD_DOMAIN",
-            "TokenEndpoint": "$NETBIRD_HTTP_PROTOCOL://$NETBIRD_DOMAIN/oauth/v2/token",
-            "ClientID": "$NETBIRD_IDP_MGMT_CLIENT_ID",
-            "ClientSecret": "$NETBIRD_IDP_MGMT_CLIENT_SECRET",
+            "Issuer": "$OPENZRO_HTTP_PROTOCOL://$OPENZRO_DOMAIN",
+            "TokenEndpoint": "$OPENZRO_HTTP_PROTOCOL://$OPENZRO_DOMAIN/oauth/v2/token",
+            "ClientID": "$OPENZRO_IDP_MGMT_CLIENT_ID",
+            "ClientSecret": "$OPENZRO_IDP_MGMT_CLIENT_SECRET",
             "GrantType": "client_credentials"
         },
         "ExtraConfig": {
-            "ManagementEndpoint": "$NETBIRD_HTTP_PROTOCOL://$NETBIRD_DOMAIN/management/v1"
+            "ManagementEndpoint": "$OPENZRO_HTTP_PROTOCOL://$OPENZRO_DOMAIN/management/v1"
         }
     },
   "DeviceAuthorizationFlow": {
       "Provider": "hosted",
       "ProviderConfig": {
-          "Audience": "$NETBIRD_AUTH_CLIENT_ID_CLI",
-          "ClientID": "$NETBIRD_AUTH_CLIENT_ID_CLI",
+          "Audience": "$OPENZRO_AUTH_CLIENT_ID_CLI",
+          "ClientID": "$OPENZRO_AUTH_CLIENT_ID_CLI",
           "Scope": "openid"
       }
     },
     "PKCEAuthorizationFlow": {
         "ProviderConfig": {
-            "Audience": "$NETBIRD_AUTH_CLIENT_ID_CLI",
-            "ClientID": "$NETBIRD_AUTH_CLIENT_ID_CLI",
+            "Audience": "$OPENZRO_AUTH_CLIENT_ID_CLI",
+            "ClientID": "$OPENZRO_AUTH_CLIENT_ID_CLI",
             "Scope": "openid profile email offline_access",
             "RedirectURLs": ["http://localhost:53000/","http://localhost:54000/"]
         }
@@ -699,12 +699,12 @@ EOF
 renderDashboardEnv() {
   cat <<EOF
 # Endpoints
-NETBIRD_MGMT_API_ENDPOINT=$NETBIRD_HTTP_PROTOCOL://$NETBIRD_DOMAIN
-NETBIRD_MGMT_GRPC_API_ENDPOINT=$NETBIRD_HTTP_PROTOCOL://$NETBIRD_DOMAIN
+OPENZRO_MGMT_API_ENDPOINT=$OPENZRO_HTTP_PROTOCOL://$OPENZRO_DOMAIN
+OPENZRO_MGMT_GRPC_API_ENDPOINT=$OPENZRO_HTTP_PROTOCOL://$OPENZRO_DOMAIN
 # OIDC
-AUTH_AUDIENCE=$NETBIRD_AUTH_CLIENT_ID
-AUTH_CLIENT_ID=$NETBIRD_AUTH_CLIENT_ID
-AUTH_AUTHORITY=$NETBIRD_HTTP_PROTOCOL://$NETBIRD_DOMAIN
+AUTH_AUDIENCE=$OPENZRO_AUTH_CLIENT_ID
+AUTH_CLIENT_ID=$OPENZRO_AUTH_CLIENT_ID
+AUTH_AUTHORITY=$OPENZRO_HTTP_PROTOCOL://$OPENZRO_DOMAIN
 USE_AUTH0=false
 AUTH_SUPPORTED_SCOPES="openid profile email offline_access"
 AUTH_REDIRECT_URI=/nb-auth
@@ -722,8 +722,8 @@ ZITADEL_LOG_LEVEL=debug
 ZITADEL_MASTERKEY=$ZITADEL_MASTERKEY
 ZITADEL_EXTERNALSECURE=$ZITADEL_EXTERNALSECURE
 ZITADEL_TLS_ENABLED="false"
-ZITADEL_EXTERNALPORT=$NETBIRD_PORT
-ZITADEL_EXTERNALDOMAIN=$NETBIRD_DOMAIN
+ZITADEL_EXTERNALPORT=$OPENZRO_PORT
+ZITADEL_EXTERNALDOMAIN=$OPENZRO_DOMAIN
 ZITADEL_FIRSTINSTANCE_PATPATH=/machinekey/zitadel-admin-sa.token
 ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_USERNAME=zitadel-admin-sa
 ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_NAME=Admin
@@ -771,10 +771,10 @@ EOF
 
 renderRelayEnv() {
   cat <<EOF
-NB_LOG_LEVEL=info
-NB_LISTEN_ADDRESS=:80
-NB_EXPOSED_ADDRESS=$NETBIRD_RELAY_PROTO://$NETBIRD_DOMAIN:$NETBIRD_PORT
-NB_AUTH_SECRET=$NETBIRD_RELAY_AUTH_SECRET
+OZ_LOG_LEVEL=info
+OZ_LISTEN_ADDRESS=:80
+OZ_EXPOSED_ADDRESS=$OPENZRO_RELAY_PROTO://$OPENZRO_DOMAIN:$OPENZRO_PORT
+OZ_AUTH_SECRET=$OPENZRO_RELAY_AUTH_SECRET
 EOF
 }
 
@@ -785,13 +785,13 @@ services:
   caddy:
     image: caddy
     restart: unless-stopped
-    networks: [ netbird ]
+    networks: [ openzro ]
     ports:
       - '443:443'
       - '443:443/udp'
       - '80:80'
     volumes:
-      - netbird_caddy_data:/data
+      - openzro_caddy_data:/data
       - ./Caddyfile:/etc/caddy/Caddyfile
     logging:
       driver: "json-file"
@@ -800,9 +800,9 @@ services:
         max-file: "2"
   # UI dashboard
   dashboard:
-    image: netbirdio/dashboard:latest
+    image: openzro/dashboard:latest
     restart: unless-stopped
-    networks: [netbird]
+    networks: [openzro]
     env_file:
       - ./dashboard.env
     logging:
@@ -812,9 +812,9 @@ services:
         max-file: "2"
   # Signal
   signal:
-    image: netbirdio/signal:latest
+    image: openzro/signal:latest
     restart: unless-stopped
-    networks: [netbird]
+    networks: [openzro]
     logging:
       driver: "json-file"
       options:
@@ -822,9 +822,9 @@ services:
         max-file: "2"
   # Relay
   relay:
-    image: netbirdio/relay:latest
+    image: openzro/relay:latest
     restart: unless-stopped
-    networks: [netbird]
+    networks: [openzro]
     env_file:
       - ./relay.env
     logging:
@@ -834,19 +834,19 @@ services:
         max-file: "2"
   # Management
   management:
-    image: netbirdio/management:latest
+    image: openzro/management:latest
     restart: unless-stopped
-    networks: [netbird]
+    networks: [openzro]
     volumes:
-      - netbird_management:/var/lib/netbird
-      - ./management.json:/etc/netbird/management.json
+      - openzro_management:/var/lib/openzro
+      - ./management.json:/etc/openzro/management.json
     command: [
       "--port", "80",
       "--log-file", "console",
       "--log-level", "info",
       "--disable-anonymous-metrics=false",
-      "--single-account-mode-domain=netbird.selfhosted",
-      "--dns-domain=netbird.selfhosted",
+      "--single-account-mode-domain=openzro.selfhosted",
+      "--dns-domain=openzro.selfhosted",
       "--idp-sign-key-refresh-enabled",
     ]
     logging:
@@ -858,7 +858,7 @@ services:
   coturn:
     image: coturn/coturn
     restart: unless-stopped
-    #domainname: netbird.relay.selfhosted
+    #domainname: openzro.relay.selfhosted
     volumes:
       - ./turnserver.conf:/etc/turnserver.conf:ro
     network_mode: host
@@ -872,7 +872,7 @@ services:
   # Zitadel - identity provider
   zitadel:
     restart: 'always'
-    networks: [netbird]
+    networks: [openzro]
     image: 'ghcr.io/zitadel/zitadel:v2.64.1'
     command: 'start-from-init --masterkeyFromEnv --tlsMode $ZITADEL_TLS_MODE'
     env_file:
@@ -882,20 +882,20 @@ services:
         condition: 'service_healthy'
     volumes:
       - ./machinekey:/machinekey
-      - netbird_zitadel_certs:/zdb-certs:ro
+      - openzro_zitadel_certs:/zdb-certs:ro
     logging:
       driver: "json-file"
       options:
         max-size: "500m"
         max-file: "2"
 $ZDB
-  netbird_zdb_data:
-  netbird_management:
-  netbird_caddy_data:
-  netbird_zitadel_certs:
+  openzro_zdb_data:
+  openzro_management:
+  openzro_caddy_data:
+  openzro_zitadel_certs:
 
 networks:
-  netbird:
+  openzro:
 EOF
 }
 
@@ -904,13 +904,13 @@ renderDockerComposeCockroachDB() {
   # CockroachDB for Zitadel
   zdb:
     restart: 'always'
-    networks: [netbird]
+    networks: [openzro]
     image: 'cockroachdb/cockroach:latest-v23.2'
     command: 'start-single-node --advertise-addr zdb'
     volumes:
-      - netbird_zdb_data:/cockroach/cockroach-data
-      - netbird_zdb_certs:/cockroach/certs
-      - netbird_zitadel_certs:/zitadel-certs
+      - openzro_zdb_data:/cockroach/cockroach-data
+      - openzro_zdb_certs:/cockroach/certs
+      - openzro_zitadel_certs:/zitadel-certs
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8080/health?ready=1" ]
       interval: '10s'
@@ -924,7 +924,7 @@ renderDockerComposeCockroachDB() {
         max-file: "2"
 
 volumes:
-  netbird_zdb_certs:
+  openzro_zdb_certs:
 EOF
 }
 
@@ -933,12 +933,12 @@ renderDockerComposePostgres() {
   # Postgres for Zitadel
   zdb:
     restart: 'always'
-    networks: [netbird]
+    networks: [openzro]
     image: 'postgres:16-alpine'
     env_file:
       - ./zdb.env
     volumes:
-      - netbird_zdb_data:/var/lib/postgresql/data:rw
+      - openzro_zdb_data:/var/lib/postgresql/data:rw
     healthcheck:
       test: ["CMD-SHELL", "pg_isready", "-d", "db_prod"]
       interval: 5s

@@ -15,14 +15,14 @@ import (
 	"github.com/gorilla/mux"
 	"golang.org/x/exp/maps"
 
-	nbcontext "github.com/netbirdio/netbird/management/server/context"
-	"github.com/netbirdio/netbird/management/server/http/api"
-	nbpeer "github.com/netbirdio/netbird/management/server/peer"
-	"github.com/netbirdio/netbird/management/server/types"
+	nbcontext "github.com/openzro/openzro/management/server/context"
+	"github.com/openzro/openzro/management/server/http/api"
+	nbpeer "github.com/openzro/openzro/management/server/peer"
+	"github.com/openzro/openzro/management/server/types"
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/netbirdio/netbird/management/server/mock_server"
+	"github.com/openzro/openzro/management/server/mock_server"
 )
 
 const (
@@ -153,7 +153,7 @@ func initTestMetaData(peers ...*nbpeer.Peer) *Handler {
 				}, nil
 			},
 			GetDNSDomainFunc: func(settings *types.Settings) string {
-				return "netbird.selfhosted"
+				return "openzro.selfhosted"
 			},
 			GetAccountFunc: func(ctx context.Context, accountID string) (*types.Account, error) {
 				return account, nil

@@ -9,8 +9,8 @@ import (
 	"github.com/coreos/go-iptables/iptables"
 	"github.com/stretchr/testify/require"
 
-	fw "github.com/netbirdio/netbird/client/firewall/manager"
-	"github.com/netbirdio/netbird/client/iface/wgaddr"
+	fw "github.com/openzro/openzro/client/firewall/manager"
+	"github.com/openzro/openzro/client/iface/wgaddr"
 )
 
 var ifaceMock = &iFaceMock{

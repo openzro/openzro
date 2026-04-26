@@ -11,8 +11,8 @@ import (
 	"github.com/pion/turn/v3"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/internal/stdnet"
-	nbnet "github.com/netbirdio/netbird/util/net"
+	"github.com/openzro/openzro/client/internal/stdnet"
+	nbnet "github.com/openzro/openzro/util/net"
 )
 
 // ProbeResult holds the info about the result of a relay probe request

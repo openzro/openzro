@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/netbirdio/netbird/client/internal/netflow/types"
+	"github.com/openzro/openzro/client/internal/netflow/types"
 )
 
 func NewMemoryStore() *Memory {

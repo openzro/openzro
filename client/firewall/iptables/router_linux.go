@@ -13,13 +13,13 @@ import (
 	"github.com/nadoo/ipset"
 	log "github.com/sirupsen/logrus"
 
-	nberrors "github.com/netbirdio/netbird/client/errors"
-	firewall "github.com/netbirdio/netbird/client/firewall/manager"
-	nbid "github.com/netbirdio/netbird/client/internal/acl/id"
-	"github.com/netbirdio/netbird/client/internal/routemanager/ipfwdstate"
-	"github.com/netbirdio/netbird/client/internal/routemanager/refcounter"
-	"github.com/netbirdio/netbird/client/internal/statemanager"
-	nbnet "github.com/netbirdio/netbird/util/net"
+	nberrors "github.com/openzro/openzro/client/errors"
+	firewall "github.com/openzro/openzro/client/firewall/manager"
+	nbid "github.com/openzro/openzro/client/internal/acl/id"
+	"github.com/openzro/openzro/client/internal/routemanager/ipfwdstate"
+	"github.com/openzro/openzro/client/internal/routemanager/refcounter"
+	"github.com/openzro/openzro/client/internal/statemanager"
+	nbnet "github.com/openzro/openzro/util/net"
 )
 
 // constants needed to manage and create iptable rules
@@ -30,11 +30,11 @@ const (
 
 	chainPOSTROUTING        = "POSTROUTING"
 	chainPREROUTING         = "PREROUTING"
-	chainRTNAT              = "NETBIRD-RT-NAT"
-	chainRTFWDIN            = "NETBIRD-RT-FWD-IN"
-	chainRTFWDOUT           = "NETBIRD-RT-FWD-OUT"
-	chainRTPRE              = "NETBIRD-RT-PRE"
-	chainRTRDR              = "NETBIRD-RT-RDR"
+	chainRTNAT              = "OPENZRO-RT-NAT"
+	chainRTFWDIN            = "OPENZRO-RT-FWD-IN"
+	chainRTFWDOUT           = "OPENZRO-RT-FWD-OUT"
+	chainRTPRE              = "OPENZRO-RT-PRE"
+	chainRTRDR              = "OPENZRO-RT-RDR"
 	routingFinalForwardJump = "ACCEPT"
 	routingFinalNatJump     = "MASQUERADE"
 
@@ -249,7 +249,7 @@ func (r *router) deleteIpSet(setName string) error {
 // AddNatRule inserts an iptables rule pair into the nat chain
 func (r *router) AddNatRule(pair firewall.RouterPair) error {
 	if r.legacyManagement {
-		log.Warnf("This peer is connected to a NetBird Management service with an older version. Allowing all traffic for %s", pair.Destination)
+		log.Warnf("This peer is connected to a Openzro Management service with an older version. Allowing all traffic for %s", pair.Destination)
 		if err := r.addLegacyRouteRule(pair); err != nil {
 			return fmt.Errorf("add legacy routing rule: %w", err)
 		}

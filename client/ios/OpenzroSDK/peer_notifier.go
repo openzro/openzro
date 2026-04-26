@@ -1,4 +1,4 @@
-package NetBirdSDK
+package OpenzroSDK
 
 // PeerInfo describe information about the peers. It designed for the UI usage
 type PeerInfo struct {

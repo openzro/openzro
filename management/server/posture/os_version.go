@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/go-version"
 	log "github.com/sirupsen/logrus"
 
-	nbpeer "github.com/netbirdio/netbird/management/server/peer"
+	nbpeer "github.com/openzro/openzro/management/server/peer"
 )
 
 type MinVersionCheck struct {

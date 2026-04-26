@@ -10,9 +10,9 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/internal"
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/client/internal/profilemanager"
+	"github.com/openzro/openzro/client/internal"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/client/internal/profilemanager"
 )
 
 func SetupDebugHandler(

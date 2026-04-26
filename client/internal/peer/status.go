@@ -16,14 +16,14 @@ import (
 	gstatus "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	firewall "github.com/netbirdio/netbird/client/firewall/manager"
-	"github.com/netbirdio/netbird/client/iface/configurer"
-	"github.com/netbirdio/netbird/client/internal/ingressgw"
-	"github.com/netbirdio/netbird/client/internal/relay"
-	"github.com/netbirdio/netbird/client/proto"
-	"github.com/netbirdio/netbird/management/domain"
-	relayClient "github.com/netbirdio/netbird/relay/client"
-	"github.com/netbirdio/netbird/route"
+	firewall "github.com/openzro/openzro/client/firewall/manager"
+	"github.com/openzro/openzro/client/iface/configurer"
+	"github.com/openzro/openzro/client/internal/ingressgw"
+	"github.com/openzro/openzro/client/internal/relay"
+	"github.com/openzro/openzro/client/proto"
+	"github.com/openzro/openzro/management/domain"
+	relayClient "github.com/openzro/openzro/relay/client"
+	"github.com/openzro/openzro/route"
 )
 
 const eventQueueSize = 10

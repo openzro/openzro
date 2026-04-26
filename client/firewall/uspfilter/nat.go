@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/gopacket/layers"
 
-	firewall "github.com/netbirdio/netbird/client/firewall/manager"
+	firewall "github.com/openzro/openzro/client/firewall/manager"
 )
 
 var ErrIPv4Only = errors.New("only IPv4 is supported for DNAT")

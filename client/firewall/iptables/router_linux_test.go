@@ -12,9 +12,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	firewall "github.com/netbirdio/netbird/client/firewall/manager"
-	"github.com/netbirdio/netbird/client/firewall/test"
-	nbnet "github.com/netbirdio/netbird/util/net"
+	firewall "github.com/openzro/openzro/client/firewall/manager"
+	"github.com/openzro/openzro/client/firewall/test"
+	nbnet "github.com/openzro/openzro/util/net"
 )
 
 func isIptablesSupported() bool {
@@ -396,14 +396,14 @@ func TestFindSetNameInRule(t *testing.T) {
 		{
 			name: "Basic rule with two sets",
 			rule: []string{
-				"-A", "NETBIRD-RT-FWD-IN", "-p", "tcp", "-m", "set", "--match-set", "nb-2e5a2a05", "src",
+				"-A", "OPENZRO-RT-FWD-IN", "-p", "tcp", "-m", "set", "--match-set", "nb-2e5a2a05", "src",
 				"-m", "set", "--match-set", "nb-349ae051", "dst", "-m", "tcp", "--dport", "8080", "-j", "ACCEPT",
 			},
 			expected: []string{"nb-2e5a2a05", "nb-349ae051"},
 		},
 		{
 			name:     "No sets",
-			rule:     []string{"-A", "NETBIRD-RT-FWD-IN", "-p", "tcp", "-j", "ACCEPT"},
+			rule:     []string{"-A", "OPENZRO-RT-FWD-IN", "-p", "tcp", "-j", "ACCEPT"},
 			expected: []string{},
 		},
 		{

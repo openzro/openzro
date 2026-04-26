@@ -11,7 +11,7 @@ import (
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"github.com/okta/okta-sdk-golang/v2/okta/query"
 
-	"github.com/netbirdio/netbird/management/server/telemetry"
+	"github.com/openzro/openzro/management/server/telemetry"
 )
 
 // OktaManager okta manager client instance.

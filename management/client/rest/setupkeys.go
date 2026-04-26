@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/netbirdio/netbird/management/server/http/api"
+	"github.com/openzro/openzro/management/server/http/api"
 )
 
 // SetupKeysAPI APIs for Setup keys, do not use directly
@@ -14,7 +14,7 @@ type SetupKeysAPI struct {
 }
 
 // List list all setup keys
-// See more: https://docs.netbird.io/api/resources/setup-keys#list-all-setup-keys
+// See more: https://docs.openzro.io/api/resources/setup-keys#list-all-setup-keys
 func (a *SetupKeysAPI) List(ctx context.Context) ([]api.SetupKey, error) {
 	resp, err := a.c.NewRequest(ctx, "GET", "/api/setup-keys", nil, nil)
 	if err != nil {
@@ -28,7 +28,7 @@ func (a *SetupKeysAPI) List(ctx context.Context) ([]api.SetupKey, error) {
 }
 
 // Get get setup key info
-// See more: https://docs.netbird.io/api/resources/setup-keys#retrieve-a-setup-key
+// See more: https://docs.openzro.io/api/resources/setup-keys#retrieve-a-setup-key
 func (a *SetupKeysAPI) Get(ctx context.Context, setupKeyID string) (*api.SetupKey, error) {
 	resp, err := a.c.NewRequest(ctx, "GET", "/api/setup-keys/"+setupKeyID, nil, nil)
 	if err != nil {
@@ -42,7 +42,7 @@ func (a *SetupKeysAPI) Get(ctx context.Context, setupKeyID string) (*api.SetupKe
 }
 
 // Create generate new Setup Key
-// See more: https://docs.netbird.io/api/resources/setup-keys#create-a-setup-key
+// See more: https://docs.openzro.io/api/resources/setup-keys#create-a-setup-key
 func (a *SetupKeysAPI) Create(ctx context.Context, request api.PostApiSetupKeysJSONRequestBody) (*api.SetupKeyClear, error) {
 	path := "/api/setup-keys"
 
@@ -62,7 +62,7 @@ func (a *SetupKeysAPI) Create(ctx context.Context, request api.PostApiSetupKeysJ
 }
 
 // Update generate new Setup Key
-// See more: https://docs.netbird.io/api/resources/setup-keys#update-a-setup-key
+// See more: https://docs.openzro.io/api/resources/setup-keys#update-a-setup-key
 func (a *SetupKeysAPI) Update(ctx context.Context, setupKeyID string, request api.PutApiSetupKeysKeyIdJSONRequestBody) (*api.SetupKey, error) {
 	requestBytes, err := json.Marshal(request)
 	if err != nil {
@@ -80,7 +80,7 @@ func (a *SetupKeysAPI) Update(ctx context.Context, setupKeyID string, request ap
 }
 
 // Delete delete setup key
-// See more: https://docs.netbird.io/api/resources/setup-keys#delete-a-setup-key
+// See more: https://docs.openzro.io/api/resources/setup-keys#delete-a-setup-key
 func (a *SetupKeysAPI) Delete(ctx context.Context, setupKeyID string) error {
 	resp, err := a.c.NewRequest(ctx, "DELETE", "/api/setup-keys/"+setupKeyID, nil, nil)
 	if err != nil {

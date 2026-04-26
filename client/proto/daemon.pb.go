@@ -233,7 +233,7 @@ func (*EmptyRequest) Descriptor() ([]byte, []int) {
 
 type LoginRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// setupKey netbird setup key.
+	// setupKey openzro setup key.
 	SetupKey string `protobuf:"bytes,1,opt,name=setupKey,proto3" json:"setupKey,omitempty"`
 	// This is the old PreSharedKey field which will be deprecated in favor of optionalPreSharedKey field that is defined as optional
 	// to allow clearing of preshared key while being able to persist in the config file.
@@ -839,7 +839,7 @@ type StatusResponse struct {
 	// status of the server.
 	Status     string      `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
 	FullStatus *FullStatus `protobuf:"bytes,2,opt,name=fullStatus,proto3" json:"fullStatus,omitempty"`
-	// NetBird daemon version
+	// Openzro daemon version
 	DaemonVersion string `protobuf:"bytes,3,opt,name=daemonVersion,proto3" json:"daemonVersion,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

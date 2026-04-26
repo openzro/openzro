@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Openzro
+Exec=/usr/bin/openzro-ui
+Icon=openzro
+Type=Application
+Terminal=false
+Categories=Utility;
+Keywords=openzro;

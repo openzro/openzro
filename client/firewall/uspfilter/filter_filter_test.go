@@ -11,11 +11,11 @@ import (
 	"github.com/stretchr/testify/require"
 	wgdevice "golang.zx2c4.com/wireguard/device"
 
-	fw "github.com/netbirdio/netbird/client/firewall/manager"
-	"github.com/netbirdio/netbird/client/iface/device"
-	"github.com/netbirdio/netbird/client/iface/mocks"
-	"github.com/netbirdio/netbird/client/iface/wgaddr"
-	"github.com/netbirdio/netbird/management/domain"
+	fw "github.com/openzro/openzro/client/firewall/manager"
+	"github.com/openzro/openzro/client/iface/device"
+	"github.com/openzro/openzro/client/iface/mocks"
+	"github.com/openzro/openzro/client/iface/wgaddr"
+	"github.com/openzro/openzro/management/domain"
 )
 
 func TestPeerACLFiltering(t *testing.T) {

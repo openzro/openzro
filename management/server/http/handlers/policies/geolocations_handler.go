@@ -6,15 +6,15 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/netbirdio/netbird/management/server/account"
-	nbcontext "github.com/netbirdio/netbird/management/server/context"
-	"github.com/netbirdio/netbird/management/server/geolocation"
-	"github.com/netbirdio/netbird/management/server/http/api"
-	"github.com/netbirdio/netbird/management/server/http/util"
-	"github.com/netbirdio/netbird/management/server/permissions"
-	"github.com/netbirdio/netbird/management/server/permissions/modules"
-	"github.com/netbirdio/netbird/management/server/permissions/operations"
-	"github.com/netbirdio/netbird/management/server/status"
+	"github.com/openzro/openzro/management/server/account"
+	nbcontext "github.com/openzro/openzro/management/server/context"
+	"github.com/openzro/openzro/management/server/geolocation"
+	"github.com/openzro/openzro/management/server/http/api"
+	"github.com/openzro/openzro/management/server/http/util"
+	"github.com/openzro/openzro/management/server/permissions"
+	"github.com/openzro/openzro/management/server/permissions/modules"
+	"github.com/openzro/openzro/management/server/permissions/operations"
+	"github.com/openzro/openzro/management/server/status"
 )
 
 var (
@@ -85,7 +85,7 @@ func (l *geolocationsHandler) getCitiesByCountry(w http.ResponseWriter, r *http.
 
 	if l.geolocationManager == nil {
 		util.WriteError(r.Context(), status.Errorf(status.PreconditionFailed, "Geo location database is not initialized. "+
-			"Check the self-hosted Geo database documentation at https://docs.netbird.io/selfhosted/geo-support"), w)
+			"Check the self-hosted Geo database documentation at https://docs.openzro.io/selfhosted/geo-support"), w)
 		return
 	}
 

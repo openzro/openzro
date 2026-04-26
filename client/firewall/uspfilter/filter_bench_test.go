@@ -15,9 +15,9 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/stretchr/testify/require"
 
-	fw "github.com/netbirdio/netbird/client/firewall/manager"
-	"github.com/netbirdio/netbird/client/firewall/uspfilter/conntrack"
-	"github.com/netbirdio/netbird/client/iface/device"
+	fw "github.com/openzro/openzro/client/firewall/manager"
+	"github.com/openzro/openzro/client/firewall/uspfilter/conntrack"
+	"github.com/openzro/openzro/client/iface/device"
 )
 
 // generateRandomIPs generates n different random IPs in the 100.64.0.0/10 range
@@ -161,9 +161,9 @@ func BenchmarkCoreFiltering(b *testing.B) {
 			b.Run(fmt.Sprintf("%s_%s", sc.name, proto.name), func(b *testing.B) {
 				// Configure stateful/stateless mode
 				if !sc.stateful {
-					require.NoError(b, os.Setenv("NB_DISABLE_CONNTRACK", "1"))
+					require.NoError(b, os.Setenv("OZ_DISABLE_CONNTRACK", "1"))
 				} else {
-					require.NoError(b, os.Setenv("NB_CONNTRACK_TIMEOUT", "1m"))
+					require.NoError(b, os.Setenv("OZ_CONNTRACK_TIMEOUT", "1m"))
 				}
 
 				// Create manager and basic setup
@@ -289,7 +289,7 @@ func BenchmarkRoutedNetworkReturn(b *testing.B) {
 			proto: layers.IPProtocolTCP,
 			state: "new",
 			setupFunc: func(m *Manager) {
-				b.Setenv("NB_DISABLE_CONNTRACK", "1")
+				b.Setenv("OZ_DISABLE_CONNTRACK", "1")
 			},
 			genPackets: func(srcIP, dstIP net.IP) ([]byte, []byte) {
 				return generatePacket(b, srcIP, dstIP, 1024, 80, layers.IPProtocolTCP),
@@ -302,7 +302,7 @@ func BenchmarkRoutedNetworkReturn(b *testing.B) {
 			proto: layers.IPProtocolTCP,
 			state: "established",
 			setupFunc: func(m *Manager) {
-				b.Setenv("NB_DISABLE_CONNTRACK", "1")
+				b.Setenv("OZ_DISABLE_CONNTRACK", "1")
 			},
 			genPackets: func(srcIP, dstIP net.IP) ([]byte, []byte) {
 				// Generate packets with ACK flag for established connection
@@ -316,7 +316,7 @@ func BenchmarkRoutedNetworkReturn(b *testing.B) {
 			proto: layers.IPProtocolUDP,
 			state: "new",
 			setupFunc: func(m *Manager) {
-				b.Setenv("NB_DISABLE_CONNTRACK", "1")
+				b.Setenv("OZ_DISABLE_CONNTRACK", "1")
 			},
 			genPackets: func(srcIP, dstIP net.IP) ([]byte, []byte) {
 				return generatePacket(b, srcIP, dstIP, 1024, 80, layers.IPProtocolUDP),
@@ -329,7 +329,7 @@ func BenchmarkRoutedNetworkReturn(b *testing.B) {
 			proto: layers.IPProtocolUDP,
 			state: "established",
 			setupFunc: func(m *Manager) {
-				b.Setenv("NB_DISABLE_CONNTRACK", "1")
+				b.Setenv("OZ_DISABLE_CONNTRACK", "1")
 			},
 			genPackets: func(srcIP, dstIP net.IP) ([]byte, []byte) {
 				return generatePacket(b, srcIP, dstIP, 1024, 80, layers.IPProtocolUDP),
@@ -342,7 +342,7 @@ func BenchmarkRoutedNetworkReturn(b *testing.B) {
 			proto: layers.IPProtocolTCP,
 			state: "new",
 			setupFunc: func(m *Manager) {
-				require.NoError(b, os.Unsetenv("NB_DISABLE_CONNTRACK"))
+				require.NoError(b, os.Unsetenv("OZ_DISABLE_CONNTRACK"))
 			},
 			genPackets: func(srcIP, dstIP net.IP) ([]byte, []byte) {
 				return generatePacket(b, srcIP, dstIP, 1024, 80, layers.IPProtocolTCP),
@@ -355,7 +355,7 @@ func BenchmarkRoutedNetworkReturn(b *testing.B) {
 			proto: layers.IPProtocolTCP,
 			state: "established",
 			setupFunc: func(m *Manager) {
-				require.NoError(b, os.Unsetenv("NB_DISABLE_CONNTRACK"))
+				require.NoError(b, os.Unsetenv("OZ_DISABLE_CONNTRACK"))
 			},
 			genPackets: func(srcIP, dstIP net.IP) ([]byte, []byte) {
 				// Generate established TCP packets (ACK flag)
@@ -369,7 +369,7 @@ func BenchmarkRoutedNetworkReturn(b *testing.B) {
 			proto: layers.IPProtocolTCP,
 			state: "post_handshake",
 			setupFunc: func(m *Manager) {
-				require.NoError(b, os.Unsetenv("NB_DISABLE_CONNTRACK"))
+				require.NoError(b, os.Unsetenv("OZ_DISABLE_CONNTRACK"))
 			},
 			genPackets: func(srcIP, dstIP net.IP) ([]byte, []byte) {
 				// Generate packets with PSH+ACK flags for data transfer
@@ -383,7 +383,7 @@ func BenchmarkRoutedNetworkReturn(b *testing.B) {
 			proto: layers.IPProtocolUDP,
 			state: "new",
 			setupFunc: func(m *Manager) {
-				require.NoError(b, os.Unsetenv("NB_DISABLE_CONNTRACK"))
+				require.NoError(b, os.Unsetenv("OZ_DISABLE_CONNTRACK"))
 			},
 			genPackets: func(srcIP, dstIP net.IP) ([]byte, []byte) {
 				return generatePacket(b, srcIP, dstIP, 1024, 80, layers.IPProtocolUDP),
@@ -396,7 +396,7 @@ func BenchmarkRoutedNetworkReturn(b *testing.B) {
 			proto: layers.IPProtocolUDP,
 			state: "established",
 			setupFunc: func(m *Manager) {
-				require.NoError(b, os.Unsetenv("NB_DISABLE_CONNTRACK"))
+				require.NoError(b, os.Unsetenv("OZ_DISABLE_CONNTRACK"))
 			},
 			genPackets: func(srcIP, dstIP net.IP) ([]byte, []byte) {
 				return generatePacket(b, srcIP, dstIP, 1024, 80, layers.IPProtocolUDP),
@@ -530,9 +530,9 @@ func BenchmarkLongLivedConnections(b *testing.B) {
 		b.Run(sc.name, func(b *testing.B) {
 			// Configure stateful/stateless mode
 			if !sc.stateful {
-				b.Setenv("NB_DISABLE_CONNTRACK", "1")
+				b.Setenv("OZ_DISABLE_CONNTRACK", "1")
 			} else {
-				require.NoError(b, os.Unsetenv("NB_DISABLE_CONNTRACK"))
+				require.NoError(b, os.Unsetenv("OZ_DISABLE_CONNTRACK"))
 			}
 
 			manager, _ := Create(&IFaceMock{
@@ -613,9 +613,9 @@ func BenchmarkShortLivedConnections(b *testing.B) {
 		b.Run(sc.name, func(b *testing.B) {
 			// Configure stateful/stateless mode
 			if !sc.stateful {
-				b.Setenv("NB_DISABLE_CONNTRACK", "1")
+				b.Setenv("OZ_DISABLE_CONNTRACK", "1")
 			} else {
-				require.NoError(b, os.Unsetenv("NB_DISABLE_CONNTRACK"))
+				require.NoError(b, os.Unsetenv("OZ_DISABLE_CONNTRACK"))
 			}
 
 			manager, _ := Create(&IFaceMock{
@@ -724,9 +724,9 @@ func BenchmarkParallelLongLivedConnections(b *testing.B) {
 		b.Run(sc.name, func(b *testing.B) {
 			// Configure stateful/stateless mode
 			if !sc.stateful {
-				b.Setenv("NB_DISABLE_CONNTRACK", "1")
+				b.Setenv("OZ_DISABLE_CONNTRACK", "1")
 			} else {
-				require.NoError(b, os.Unsetenv("NB_DISABLE_CONNTRACK"))
+				require.NoError(b, os.Unsetenv("OZ_DISABLE_CONNTRACK"))
 			}
 
 			manager, _ := Create(&IFaceMock{
@@ -804,9 +804,9 @@ func BenchmarkParallelShortLivedConnections(b *testing.B) {
 		b.Run(sc.name, func(b *testing.B) {
 			// Configure stateful/stateless mode
 			if !sc.stateful {
-				b.Setenv("NB_DISABLE_CONNTRACK", "1")
+				b.Setenv("OZ_DISABLE_CONNTRACK", "1")
 			} else {
-				require.NoError(b, os.Unsetenv("NB_DISABLE_CONNTRACK"))
+				require.NoError(b, os.Unsetenv("OZ_DISABLE_CONNTRACK"))
 			}
 
 			manager, _ := Create(&IFaceMock{

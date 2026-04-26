@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 
-	"github.com/netbirdio/netbird/signal/metrics"
+	"github.com/openzro/openzro/signal/metrics"
 )
 
 func TestRegistry_ShouldNotDeregisterWhenHasNewerStreamRegistered(t *testing.T) {

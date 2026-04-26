@@ -8,10 +8,10 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	firewall "github.com/netbirdio/netbird/client/firewall/manager"
-	"github.com/netbirdio/netbird/client/firewall/uspfilter"
-	nftypes "github.com/netbirdio/netbird/client/internal/netflow/types"
-	"github.com/netbirdio/netbird/client/internal/statemanager"
+	firewall "github.com/openzro/openzro/client/firewall/manager"
+	"github.com/openzro/openzro/client/firewall/uspfilter"
+	nftypes "github.com/openzro/openzro/client/internal/netflow/types"
+	"github.com/openzro/openzro/client/internal/statemanager"
 )
 
 // NewFirewall creates a firewall manager instance
@@ -25,9 +25,9 @@ func NewFirewall(iface IFaceMapper, _ *statemanager.Manager, flowLogger nftypes.
 	if err != nil {
 		return nil, err
 	}
-	err = fm.AllowNetbird()
+	err = fm.AllowOpenzro()
 	if err != nil {
-		log.Warnf("failed to allow netbird interface traffic: %v", err)
+		log.Warnf("failed to allow openzro interface traffic: %v", err)
 	}
 	return fm, nil
 }

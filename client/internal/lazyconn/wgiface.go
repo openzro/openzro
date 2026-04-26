@@ -7,7 +7,7 @@ import (
 
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
-	"github.com/netbirdio/netbird/monotime"
+	"github.com/openzro/openzro/monotime"
 )
 
 type WGIface interface {

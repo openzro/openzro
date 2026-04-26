@@ -8,7 +8,7 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 
-	mocks "github.com/netbirdio/netbird/client/iface/mocks"
+	mocks "github.com/openzro/openzro/client/iface/mocks"
 )
 
 func TestDeviceWrapperRead(t *testing.T) {

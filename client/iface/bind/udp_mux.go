@@ -17,7 +17,7 @@ import (
 )
 
 /*
- Most of this code was copied from https://github.com/pion/ice and modified to fulfill NetBird's requirements
+ Most of this code was copied from https://github.com/pion/ice and modified to fulfill Openzro's requirements
 */
 
 const receiveMTU = 8192

@@ -36,17 +36,17 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/netbirdio/netbird/client/iface"
-	"github.com/netbirdio/netbird/client/internal"
-	"github.com/netbirdio/netbird/client/internal/profilemanager"
-	"github.com/netbirdio/netbird/client/proto"
-	"github.com/netbirdio/netbird/client/ui/desktop"
-	"github.com/netbirdio/netbird/client/ui/event"
-	"github.com/netbirdio/netbird/client/ui/process"
+	"github.com/openzro/openzro/client/iface"
+	"github.com/openzro/openzro/client/internal"
+	"github.com/openzro/openzro/client/internal/profilemanager"
+	"github.com/openzro/openzro/client/proto"
+	"github.com/openzro/openzro/client/ui/desktop"
+	"github.com/openzro/openzro/client/ui/event"
+	"github.com/openzro/openzro/client/ui/process"
 
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/util"
 
-	"github.com/netbirdio/netbird/version"
+	"github.com/openzro/openzro/version"
 )
 
 const (
@@ -75,8 +75,8 @@ func main() {
 	}
 
 	// Create the Fyne application.
-	a := app.NewWithID("NetBird")
-	a.SetIcon(fyne.NewStaticResource("netbird", iconDisconnected))
+	a := app.NewWithID("Openzro")
+	a.SetIcon(fyne.NewStaticResource("openzro", iconDisconnected))
 
 	// Show error message window if needed.
 	if flags.errorMsg != "" {
@@ -135,7 +135,7 @@ type cliFlags struct {
 func parseFlags() *cliFlags {
 	var flags cliFlags
 
-	defaultDaemonAddr := "unix:///var/run/netbird.sock"
+	defaultDaemonAddr := "unix:///var/run/openzro.sock"
 	if runtime.GOOS == "windows" {
 		defaultDaemonAddr = "tcp://127.0.0.1:41731"
 	}
@@ -145,7 +145,7 @@ func parseFlags() *cliFlags {
 	flag.BoolVar(&flags.showProfiles, "profiles", false, "run profiles window")
 	flag.BoolVar(&flags.showDebug, "debug", false, "run debug window")
 	flag.StringVar(&flags.errorMsg, "error-msg", "", "displays an error message window")
-	flag.BoolVar(&flags.saveLogsInFile, "use-log-file", false, fmt.Sprintf("save logs in a file: %s/netbird-ui-PID.log", os.TempDir()))
+	flag.BoolVar(&flags.saveLogsInFile, "use-log-file", false, fmt.Sprintf("save logs in a file: %s/openzro-ui-PID.log", os.TempDir()))
 	flag.BoolVar(&flags.showLoginURL, "login-url", false, "show login URL in a popup window")
 	flag.Parse()
 	return &flags
@@ -153,7 +153,7 @@ func parseFlags() *cliFlags {
 
 // initLogFile initializes logging into a file.
 func initLogFile() (string, error) {
-	logFile := path.Join(os.TempDir(), fmt.Sprintf("netbird-ui-%d.log", os.Getpid()))
+	logFile := path.Join(os.TempDir(), fmt.Sprintf("openzro-ui-%d.log", os.Getpid()))
 	return logFile, util.InitLog("trace", logFile)
 }
 
@@ -169,7 +169,7 @@ func watchSettingsChanges(a fyne.App, client *serviceClient) {
 // showErrorMessage displays an error message in a simple window.
 func showErrorMessage(msg string) {
 	a := app.New()
-	w := a.NewWindow("NetBird Error")
+	w := a.NewWindow("Openzro Error")
 	label := widget.NewLabel(msg)
 	label.Wrapping = fyne.TextWrapWord
 	w.SetContent(label)
@@ -178,22 +178,22 @@ func showErrorMessage(msg string) {
 	a.Run()
 }
 
-//go:embed assets/netbird-systemtray-connected-macos.png
+//go:embed assets/openzro-systemtray-connected-macos.png
 var iconConnectedMacOS []byte
 
-//go:embed assets/netbird-systemtray-disconnected-macos.png
+//go:embed assets/openzro-systemtray-disconnected-macos.png
 var iconDisconnectedMacOS []byte
 
-//go:embed assets/netbird-systemtray-update-disconnected-macos.png
+//go:embed assets/openzro-systemtray-update-disconnected-macos.png
 var iconUpdateDisconnectedMacOS []byte
 
-//go:embed assets/netbird-systemtray-update-connected-macos.png
+//go:embed assets/openzro-systemtray-update-connected-macos.png
 var iconUpdateConnectedMacOS []byte
 
-//go:embed assets/netbird-systemtray-connecting-macos.png
+//go:embed assets/openzro-systemtray-connecting-macos.png
 var iconConnectingMacOS []byte
 
-//go:embed assets/netbird-systemtray-error-macos.png
+//go:embed assets/openzro-systemtray-error-macos.png
 var iconErrorMacOS []byte
 
 //go:embed assets/connected.png
@@ -393,7 +393,7 @@ func (s *serviceClient) updateIcon() {
 
 func (s *serviceClient) showSettingsUI() {
 	// add settings window UI elements.
-	s.wSettings = s.app.NewWindow("NetBird Settings")
+	s.wSettings = s.app.NewWindow("Openzro Settings")
 	s.wSettings.SetOnClosed(s.cancel)
 
 	s.iMngURL = widget.NewEntry()
@@ -406,7 +406,7 @@ func (s *serviceClient) showSettingsUI() {
 
 	s.sRosenpassPermissive = widget.NewCheck("Enable Rosenpass permissive mode", nil)
 
-	s.sNetworkMonitor = widget.NewCheck("Restarts NetBird when the network changes", nil)
+	s.sNetworkMonitor = widget.NewCheck("Restarts Openzro when the network changes", nil)
 	s.sDisableDNS = widget.NewCheck("Keeps system DNS settings unchanged", nil)
 	s.sDisableClientRoutes = widget.NewCheck("This peer won't route traffic to other peers", nil)
 	s.sDisableServerRoutes = widget.NewCheck("This peer won't act as router for others", nil)
@@ -710,7 +710,7 @@ func (s *serviceClient) updateStatus() error {
 			} else {
 				systray.SetTemplateIcon(iconConnectedMacOS, s.icConnected)
 			}
-			systray.SetTooltip("NetBird (Connected)")
+			systray.SetTooltip("Openzro (Connected)")
 			s.mStatus.SetTitle("Connected")
 			s.mStatus.SetIcon(s.icConnectedDot)
 			s.mUp.Disable()
@@ -770,7 +770,7 @@ func (s *serviceClient) setDisconnectedStatus() {
 	} else {
 		systray.SetTemplateIcon(iconDisconnectedMacOS, s.icDisconnected)
 	}
-	systray.SetTooltip("NetBird (Disconnected)")
+	systray.SetTooltip("Openzro (Disconnected)")
 	s.mStatus.SetTitle("Disconnected")
 	s.mStatus.SetIcon(s.icDisconnectedDot)
 	s.mDown.Disable()
@@ -783,7 +783,7 @@ func (s *serviceClient) setDisconnectedStatus() {
 func (s *serviceClient) setConnectingStatus() {
 	s.connected = false
 	systray.SetTemplateIcon(iconConnectingMacOS, s.icConnecting)
-	systray.SetTooltip("NetBird (Connecting)")
+	systray.SetTooltip("Openzro (Connecting)")
 	s.mStatus.SetTitle("Connecting")
 	s.mUp.Disable()
 	s.mDown.Enable()
@@ -793,7 +793,7 @@ func (s *serviceClient) setConnectingStatus() {
 
 func (s *serviceClient) onTrayReady() {
 	systray.SetTemplateIcon(iconDisconnectedMacOS, s.icDisconnected)
-	systray.SetTooltip("NetBird")
+	systray.SetTooltip("Openzro")
 
 	// setup systray menu items
 	s.mStatus = systray.AddMenuItem("Disconnected", "Disconnected")
@@ -849,7 +849,7 @@ func (s *serviceClient) onTrayReady() {
 
 	s.mGitHub = s.mAbout.AddSubMenuItem("GitHub", "GitHub")
 
-	versionString := normalizedVersion(version.NetbirdVersion())
+	versionString := normalizedVersion(version.OpenzroVersion())
 	s.mVersionUI = s.mAbout.AddSubMenuItem(fmt.Sprintf("GUI: %s", versionString), fmt.Sprintf("GUI Version: %s", versionString))
 	s.mVersionUI.Disable()
 
@@ -1225,15 +1225,15 @@ func (s *serviceClient) updateConfig() error {
 // showLoginURL creates a borderless window styled like a pop-up in the top-right corner using s.wLoginURL.
 func (s *serviceClient) showLoginURL() {
 
-	resIcon := fyne.NewStaticResource("netbird.png", iconAbout)
+	resIcon := fyne.NewStaticResource("openzro.png", iconAbout)
 
 	if s.wLoginURL == nil {
-		s.wLoginURL = s.app.NewWindow("NetBird Session Expired")
+		s.wLoginURL = s.app.NewWindow("Openzro Session Expired")
 		s.wLoginURL.Resize(fyne.NewSize(400, 200))
 		s.wLoginURL.SetIcon(resIcon)
 	}
 	// add a description label
-	label := widget.NewLabel("Your NetBird session has expired.\nPlease re-authenticate to continue using NetBird.")
+	label := widget.NewLabel("Your Openzro session has expired.\nPlease re-authenticate to continue using Openzro.")
 
 	btn := widget.NewButtonWithIcon("Re-authenticate", theme.ViewRefreshIcon(), func() {
 

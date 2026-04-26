@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/netbirdio/netbird/client/iface/wgproxy/ebpf"
+	"github.com/openzro/openzro/client/iface/wgproxy/ebpf"
 )
 
 func TestProxyCloseByRemoteConnEBPF(t *testing.T) {

@@ -3,7 +3,7 @@ package port_forwarding
 import (
 	"context"
 
-	nbtypes "github.com/netbirdio/netbird/management/server/types"
+	nbtypes "github.com/openzro/openzro/management/server/types"
 )
 
 type Controller interface {

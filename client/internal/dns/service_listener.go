@@ -12,8 +12,8 @@ import (
 	"github.com/miekg/dns"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/internal/ebpf"
-	ebpfMgr "github.com/netbirdio/netbird/client/internal/ebpf/manager"
+	"github.com/openzro/openzro/client/internal/ebpf"
+	ebpfMgr "github.com/openzro/openzro/client/internal/ebpf/manager"
 )
 
 const (

@@ -17,29 +17,29 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/exp/maps"
 
-	nberrors "github.com/netbirdio/netbird/client/errors"
-	firewall "github.com/netbirdio/netbird/client/firewall/manager"
-	"github.com/netbirdio/netbird/client/iface/configurer"
-	"github.com/netbirdio/netbird/client/iface/netstack"
-	"github.com/netbirdio/netbird/client/internal/dns"
-	"github.com/netbirdio/netbird/client/internal/listener"
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/client/internal/peerstore"
-	"github.com/netbirdio/netbird/client/internal/routemanager/client"
-	"github.com/netbirdio/netbird/client/internal/routemanager/common"
-	"github.com/netbirdio/netbird/client/internal/routemanager/fakeip"
-	"github.com/netbirdio/netbird/client/internal/routemanager/iface"
-	"github.com/netbirdio/netbird/client/internal/routemanager/notifier"
-	"github.com/netbirdio/netbird/client/internal/routemanager/refcounter"
-	"github.com/netbirdio/netbird/client/internal/routemanager/server"
-	"github.com/netbirdio/netbird/client/internal/routemanager/systemops"
-	"github.com/netbirdio/netbird/client/internal/routemanager/vars"
-	"github.com/netbirdio/netbird/client/internal/routeselector"
-	"github.com/netbirdio/netbird/client/internal/statemanager"
-	relayClient "github.com/netbirdio/netbird/relay/client"
-	"github.com/netbirdio/netbird/route"
-	nbnet "github.com/netbirdio/netbird/util/net"
-	"github.com/netbirdio/netbird/version"
+	nberrors "github.com/openzro/openzro/client/errors"
+	firewall "github.com/openzro/openzro/client/firewall/manager"
+	"github.com/openzro/openzro/client/iface/configurer"
+	"github.com/openzro/openzro/client/iface/netstack"
+	"github.com/openzro/openzro/client/internal/dns"
+	"github.com/openzro/openzro/client/internal/listener"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/client/internal/peerstore"
+	"github.com/openzro/openzro/client/internal/routemanager/client"
+	"github.com/openzro/openzro/client/internal/routemanager/common"
+	"github.com/openzro/openzro/client/internal/routemanager/fakeip"
+	"github.com/openzro/openzro/client/internal/routemanager/iface"
+	"github.com/openzro/openzro/client/internal/routemanager/notifier"
+	"github.com/openzro/openzro/client/internal/routemanager/refcounter"
+	"github.com/openzro/openzro/client/internal/routemanager/server"
+	"github.com/openzro/openzro/client/internal/routemanager/systemops"
+	"github.com/openzro/openzro/client/internal/routemanager/vars"
+	"github.com/openzro/openzro/client/internal/routeselector"
+	"github.com/openzro/openzro/client/internal/statemanager"
+	relayClient "github.com/openzro/openzro/relay/client"
+	"github.com/openzro/openzro/route"
+	nbnet "github.com/openzro/openzro/util/net"
+	"github.com/openzro/openzro/version"
 )
 
 // Manager is a route manager interface
@@ -559,7 +559,7 @@ func isRouteSupported(route *route.Route) bool {
 	// we skip this prefix management
 	if route.Network.Bits() <= vars.MinRangeBits {
 		log.Warnf("This agent version: %s, doesn't support default routes, received %s, skipping this prefix",
-			version.NetbirdVersion(), route.Network)
+			version.OpenzroVersion(), route.Network)
 		return false
 	}
 	return true

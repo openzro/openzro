@@ -6,11 +6,11 @@ import (
 	"sync"
 
 	"github.com/hashicorp/go-multierror"
-	nberrors "github.com/netbirdio/netbird/client/errors"
-	"github.com/netbirdio/netbird/relay/server/listener"
-	"github.com/netbirdio/netbird/relay/server/listener/quic"
-	"github.com/netbirdio/netbird/relay/server/listener/ws"
-	quictls "github.com/netbirdio/netbird/relay/tls"
+	nberrors "github.com/openzro/openzro/client/errors"
+	"github.com/openzro/openzro/relay/server/listener"
+	"github.com/openzro/openzro/relay/server/listener/quic"
+	"github.com/openzro/openzro/relay/server/listener/ws"
+	quictls "github.com/openzro/openzro/relay/tls"
 	log "github.com/sirupsen/logrus"
 )
 

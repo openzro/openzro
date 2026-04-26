@@ -8,7 +8,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/netbirdio/netbird/management/server/http/util"
+	"github.com/openzro/openzro/management/server/http/util"
 )
 
 // Client Management service HTTP REST API Client
@@ -17,56 +17,56 @@ type Client struct {
 	authHeader    string
 	httpClient    HttpClient
 
-	// Accounts NetBird account APIs
-	// see more: https://docs.netbird.io/api/resources/accounts
+	// Accounts Openzro account APIs
+	// see more: https://docs.openzro.io/api/resources/accounts
 	Accounts *AccountsAPI
 
-	// Users NetBird users APIs
-	// see more: https://docs.netbird.io/api/resources/users
+	// Users Openzro users APIs
+	// see more: https://docs.openzro.io/api/resources/users
 	Users *UsersAPI
 
-	// Tokens NetBird tokens APIs
-	// see more: https://docs.netbird.io/api/resources/tokens
+	// Tokens Openzro tokens APIs
+	// see more: https://docs.openzro.io/api/resources/tokens
 	Tokens *TokensAPI
 
-	// Peers NetBird peers APIs
-	// see more: https://docs.netbird.io/api/resources/peers
+	// Peers Openzro peers APIs
+	// see more: https://docs.openzro.io/api/resources/peers
 	Peers *PeersAPI
 
-	// SetupKeys NetBird setup keys APIs
-	// see more: https://docs.netbird.io/api/resources/setup-keys
+	// SetupKeys Openzro setup keys APIs
+	// see more: https://docs.openzro.io/api/resources/setup-keys
 	SetupKeys *SetupKeysAPI
 
-	// Groups NetBird groups APIs
-	// see more: https://docs.netbird.io/api/resources/groups
+	// Groups Openzro groups APIs
+	// see more: https://docs.openzro.io/api/resources/groups
 	Groups *GroupsAPI
 
-	// Policies NetBird policies APIs
-	// see more: https://docs.netbird.io/api/resources/policies
+	// Policies Openzro policies APIs
+	// see more: https://docs.openzro.io/api/resources/policies
 	Policies *PoliciesAPI
 
-	// PostureChecks NetBird posture checks APIs
-	// see more: https://docs.netbird.io/api/resources/posture-checks
+	// PostureChecks Openzro posture checks APIs
+	// see more: https://docs.openzro.io/api/resources/posture-checks
 	PostureChecks *PostureChecksAPI
 
-	// Networks NetBird networks APIs
-	// see more: https://docs.netbird.io/api/resources/networks
+	// Networks Openzro networks APIs
+	// see more: https://docs.openzro.io/api/resources/networks
 	Networks *NetworksAPI
 
-	// Routes NetBird routes APIs
-	// see more: https://docs.netbird.io/api/resources/routes
+	// Routes Openzro routes APIs
+	// see more: https://docs.openzro.io/api/resources/routes
 	Routes *RoutesAPI
 
-	// DNS NetBird DNS APIs
-	// see more: https://docs.netbird.io/api/resources/routes
+	// DNS Openzro DNS APIs
+	// see more: https://docs.openzro.io/api/resources/routes
 	DNS *DNSAPI
 
-	// GeoLocation NetBird Geo Location APIs
-	// see more: https://docs.netbird.io/api/resources/geo-locations
+	// GeoLocation Openzro Geo Location APIs
+	// see more: https://docs.openzro.io/api/resources/geo-locations
 	GeoLocation *GeoLocationAPI
 
-	// Events NetBird Events APIs
-	// see more: https://docs.netbird.io/api/resources/events
+	// Events Openzro Events APIs
+	// see more: https://docs.openzro.io/api/resources/events
 	Events *EventsAPI
 }
 

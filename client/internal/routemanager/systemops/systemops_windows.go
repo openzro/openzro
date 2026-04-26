@@ -18,7 +18,7 @@ import (
 	"github.com/yusufpapurcu/wmi"
 	"golang.org/x/sys/windows"
 
-	"github.com/netbirdio/netbird/client/internal/statemanager"
+	"github.com/openzro/openzro/client/internal/statemanager"
 )
 
 const InfiniteLifetime = 0xffffffff
@@ -748,7 +748,7 @@ func windowsProtocolToString(protocol uint32) string {
 }
 
 func isCacheDisabled() bool {
-	return os.Getenv("NB_DISABLE_ROUTE_CACHE") == "true"
+	return os.Getenv("OZ_DISABLE_ROUTE_CACHE") == "true"
 }
 
 func parseIPPrefix(prefix IP_ADDRESS_PREFIX, idx int) netip.Prefix {

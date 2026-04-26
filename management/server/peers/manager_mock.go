@@ -9,7 +9,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	peer "github.com/netbirdio/netbird/management/server/peer"
+	peer "github.com/openzro/openzro/management/server/peer"
 )
 
 // MockManager is a mock of Manager interface.

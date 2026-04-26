@@ -17,9 +17,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/netbirdio/netbird/management/server"
-	"github.com/netbirdio/netbird/management/server/http/api"
-	"github.com/netbirdio/netbird/management/server/http/testing/testing_tools"
+	"github.com/openzro/openzro/management/server"
+	"github.com/openzro/openzro/management/server/http/api"
+	"github.com/openzro/openzro/management/server/http/testing/testing_tools"
 )
 
 const moduleUsers = "users"
@@ -157,7 +157,7 @@ func TestMain(m *testing.M) {
 
 	if exitCode == 0 && os.Getenv("CI") == "true" {
 		runID := os.Getenv("GITHUB_RUN_ID")
-		storeEngine := os.Getenv("NETBIRD_STORE_ENGINE")
+		storeEngine := os.Getenv("OPENZRO_STORE_ENGINE")
 		err := push.New("http://localhost:9091", "api_benchmark").
 			Collector(testing_tools.BenchmarkDuration).
 			Grouping("ci_run", runID).

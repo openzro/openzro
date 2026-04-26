@@ -15,10 +15,10 @@ import (
 )
 
 const (
-	geoLiteCityTarGZURL     = "https://pkgs.netbird.io/geolocation-dbs/GeoLite2-City/download?suffix=tar.gz"
-	geoLiteCityZipURL       = "https://pkgs.netbird.io/geolocation-dbs/GeoLite2-City-CSV/download?suffix=zip"
-	geoLiteCitySha256TarURL = "https://pkgs.netbird.io/geolocation-dbs/GeoLite2-City/download?suffix=tar.gz.sha256"
-	geoLiteCitySha256ZipURL = "https://pkgs.netbird.io/geolocation-dbs/GeoLite2-City-CSV/download?suffix=zip.sha256"
+	geoLiteCityTarGZURL     = "https://pkgs.openzro.io/geolocation-dbs/GeoLite2-City/download?suffix=tar.gz"
+	geoLiteCityZipURL       = "https://pkgs.openzro.io/geolocation-dbs/GeoLite2-City-CSV/download?suffix=zip"
+	geoLiteCitySha256TarURL = "https://pkgs.openzro.io/geolocation-dbs/GeoLite2-City/download?suffix=tar.gz.sha256"
+	geoLiteCitySha256ZipURL = "https://pkgs.openzro.io/geolocation-dbs/GeoLite2-City-CSV/download?suffix=zip.sha256"
 	geoLiteCityMMDB         = "GeoLite2-City.mmdb"
 	geoLiteCityCSV          = "GeoLite2-City-Locations-en.csv"
 )

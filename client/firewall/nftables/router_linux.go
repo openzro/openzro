@@ -17,20 +17,20 @@ import (
 	"github.com/hashicorp/go-multierror"
 	log "github.com/sirupsen/logrus"
 
-	nberrors "github.com/netbirdio/netbird/client/errors"
-	firewall "github.com/netbirdio/netbird/client/firewall/manager"
-	nbid "github.com/netbirdio/netbird/client/internal/acl/id"
-	"github.com/netbirdio/netbird/client/internal/routemanager/ipfwdstate"
-	"github.com/netbirdio/netbird/client/internal/routemanager/refcounter"
-	nbnet "github.com/netbirdio/netbird/util/net"
+	nberrors "github.com/openzro/openzro/client/errors"
+	firewall "github.com/openzro/openzro/client/firewall/manager"
+	nbid "github.com/openzro/openzro/client/internal/acl/id"
+	"github.com/openzro/openzro/client/internal/routemanager/ipfwdstate"
+	"github.com/openzro/openzro/client/internal/routemanager/refcounter"
+	nbnet "github.com/openzro/openzro/util/net"
 )
 
 const (
 	tableNat               = "nat"
 	chainNameNatPrerouting = "PREROUTING"
-	chainNameRoutingFw     = "netbird-rt-fwd"
-	chainNameRoutingNat    = "netbird-rt-postrouting"
-	chainNameRoutingRdr    = "netbird-rt-redirect"
+	chainNameRoutingFw     = "openzro-rt-fwd"
+	chainNameRoutingNat    = "openzro-rt-postrouting"
+	chainNameRoutingRdr    = "openzro-rt-redirect"
 	chainNameForward       = "FORWARD"
 
 	userDataAcceptForwardRuleIif = "frwacceptiif"
@@ -578,7 +578,7 @@ func (r *router) AddNatRule(pair firewall.RouterPair) error {
 	}
 
 	if r.legacyManagement {
-		log.Warnf("This peer is connected to a NetBird Management service with an older version. Allowing all traffic for %s", pair.Destination)
+		log.Warnf("This peer is connected to a Openzro Management service with an older version. Allowing all traffic for %s", pair.Destination)
 		if err := r.addLegacyRouteRule(pair); err != nil {
 			return fmt.Errorf("add legacy routing rule: %w", err)
 		}

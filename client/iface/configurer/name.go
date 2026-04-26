@@ -2,5 +2,5 @@
 
 package configurer
 
-// WgInterfaceDefault is a default interface name of Netbird
+// WgInterfaceDefault is a default interface name of Openzro
 const WgInterfaceDefault = "wt0"

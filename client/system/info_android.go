@@ -12,7 +12,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/version"
+	"github.com/openzro/openzro/version"
 )
 
 // GetInfo retrieves and parses the system information
@@ -36,7 +36,7 @@ func GetInfo(ctx context.Context) *Info {
 		OSVersion:          osVersion(),
 		Hostname:           extractDeviceName(ctx, "android"),
 		CPUs:               runtime.NumCPU(),
-		NetbirdVersion:     version.NetbirdVersion(),
+		OpenzroVersion:     version.OpenzroVersion(),
 		UIVersion:          extractUIVersion(ctx),
 		KernelVersion:      kernelVersion,
 		SystemSerialNumber: serial(),

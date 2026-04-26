@@ -6,8 +6,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/netbirdio/netbird/signal/proto"
-	"github.com/netbirdio/netbird/version"
+	"github.com/openzro/openzro/signal/proto"
+	"github.com/openzro/openzro/version"
 
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
@@ -60,7 +60,7 @@ func MarshalCredential(myKey wgtypes.Key, myPort int, remoteKey string, credenti
 			Type:           t,
 			Payload:        fmt.Sprintf("%s:%s", credential.UFrag, credential.Pwd),
 			WgListenPort:   uint32(myPort),
-			NetBirdVersion: version.NetbirdVersion(),
+			OpenzroVersion: version.OpenzroVersion(),
 			RosenpassConfig: &proto.RosenpassConfig{
 				RosenpassPubKey:     rosenpassPubKey,
 				RosenpassServerAddr: rosenpassAddr,

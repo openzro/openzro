@@ -24,30 +24,30 @@ import (
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	"github.com/netbirdio/netbird/client/anonymize"
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/client/internal/profilemanager"
-	mgmProto "github.com/netbirdio/netbird/management/proto"
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/client/anonymize"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/client/internal/profilemanager"
+	mgmProto "github.com/openzro/openzro/management/proto"
+	"github.com/openzro/openzro/util"
 )
 
-const readmeContent = `Netbird debug bundle
+const readmeContent = `Openzro debug bundle
 This debug bundle contains the following files.
 If the --anonymize flag is set, the files are anonymized to protect sensitive information.
 
-status.txt: Anonymized status information of the NetBird client.
-client.log: Most recent, anonymized client log file of the NetBird client.
-netbird.err: Most recent, anonymized stderr log file of the NetBird client.
-netbird.out: Most recent, anonymized stdout log file of the NetBird client.
+status.txt: Anonymized status information of the Openzro client.
+client.log: Most recent, anonymized client log file of the Openzro client.
+openzro.err: Most recent, anonymized stderr log file of the Openzro client.
+openzro.out: Most recent, anonymized stdout log file of the Openzro client.
 routes.txt: Detailed system routing table in tabular format including destination, gateway, interface, metrics, and protocol information, if --system-info flag was provided.
 interfaces.txt: Anonymized network interface information, if --system-info flag was provided.
 ip_rules.txt: Detailed IP routing rules in tabular format including priority, source, destination, interfaces, table, and action information (Linux only), if --system-info flag was provided.
 iptables.txt: Anonymized iptables rules with packet counters, if --system-info flag was provided.
 nftables.txt: Anonymized nftables rules with packet counters, if --system-info flag was provided.
 resolved_domains.txt: Anonymized resolved domain IP addresses from the status recorder.
-config.txt: Anonymized configuration information of the NetBird client.
+config.txt: Anonymized configuration information of the Openzro client.
 network_map.json: Anonymized network map containing peer configurations, routes, DNS settings, and firewall rules.
-state.json: Anonymized client state dump containing netbird states.
+state.json: Anonymized client state dump containing openzro states.
 mutex.prof: Mutex profiling information.
 goroutine.prof: Goroutine profiling information.
 block.prof: Block profiling information.
@@ -70,7 +70,7 @@ Reoccuring IP addresses are replaced with the same anonymized address.
 Note: The anonymized IP addresses in the status file do not match those in the log and routes files. However, the anonymized IP addresses are consistent within the status file and across the routes and log files.
 
 Domains
-All domain names (except for the netbird domains) are replaced with randomly generated strings ending in ".domain". Anonymized domains are consistent across all files in the bundle.
+All domain names (except for the openzro domains) are replaced with randomly generated strings ending in ".domain". Anonymized domains are consistent across all files in the bundle.
 Reoccuring domain names are replaced with the same anonymized domain.
 
 Network Map
@@ -84,7 +84,7 @@ The network_map.json file contains the following anonymized information:
 SSH keys in the network map are replaced with a placeholder value. All IP addresses and domains in the network map follow the same anonymization rules as described above.
 
 State File
-The state.json file contains anonymized internal state information of the NetBird client, including:
+The state.json file contains anonymized internal state information of the Openzro client, including:
 - DNS settings and configuration
 - Firewall rules
 - Exclusion routes
@@ -97,7 +97,7 @@ The state file follows the same anonymization rules as other files:
 - Technical identifiers and non-sensitive data remain unchanged
 
 Mutex, Goroutines, Block, and Heap Profiling Files
-The goroutine, block, mutex, and heap profiling files contain process information that might help the NetBird team diagnose performance or memory issues. The information in these files doesn't contain personal data.
+The goroutine, block, mutex, and heap profiling files contain process information that might help the Openzro team diagnose performance or memory issues. The information in these files doesn't contain personal data.
 You can check each using the following go command:
 
 go tool pprof -http=:8088 <profile_name>.prof
@@ -117,14 +117,14 @@ The routes.txt file contains detailed routing table information in a tabular for
 - Protocol: Routing protocol (kernel, static, dhcp, etc.)
 - Scope: Route scope (global, link, host, etc.)
 - Type: Route type (unicast, local, broadcast, etc.)
-- Table: Routing table name (main, local, netbird, etc.)
+- Table: Routing table name (main, local, openzro, etc.)
 
 The table format provides a comprehensive view of the system's routing configuration, including information from multiple routing tables on Linux systems. This is valuable for troubleshooting routing issues and understanding traffic flow.
 
 For anonymized routes, IP addresses are replaced as described above. The prefix length remains unchanged. Note that for prefixes, the anonymized IP might not be a network address, but the prefix length is still correct. Interface names are anonymized using string anonymization.
 
 Resolved Domains
-The resolved_domains.txt file contains information about domain names that have been resolved to IP addresses by NetBird's DNS resolver. This includes:
+The resolved_domains.txt file contains information about domain names that have been resolved to IP addresses by Openzro's DNS resolver. This includes:
 - Original domain patterns that were configured for routing
 - Resolved domain names that matched those patterns
 - IP address prefixes that were resolved for each domain
@@ -143,7 +143,7 @@ The interfaces.txt file contains information about network interfaces, including
 The IP addresses in the interfaces file are anonymized using the same process as described above. Interface names, indexes, MTUs, and flags are not anonymized.
 
 Configuration
-The config.txt file contains anonymized configuration information of the NetBird client. Sensitive information such as private keys and SSH keys are excluded. The following fields are anonymized:
+The config.txt file contains anonymized configuration information of the Openzro client. Sensitive information such as private keys and SSH keys are excluded. The following fields are anonymized:
 - ManagementURL
 - AdminURL
 - NATExternalIPs
@@ -177,7 +177,7 @@ The ip_rules.txt file contains detailed IP routing rule information:
 - To: Destination IP prefix or "all" if unspecified
 - IIF: Input interface name or "-" if unspecified
 - OIF: Output interface name or "-" if unspecified
-- Table: Target routing table name (main, local, netbird, etc.)
+- Table: Target routing table name (main, local, openzro, etc.)
 - Action: Rule action (lookup, goto, blackhole, etc.)
 - Mark: Firewall mark value in hex format or "-" if unspecified
 
@@ -188,11 +188,11 @@ For anonymized rules, IP addresses and prefixes are replaced as described above.
 
 const (
 	clientLogFile = "client.log"
-	errorLogFile  = "netbird.err"
-	stdoutLogFile = "netbird.out"
+	errorLogFile  = "openzro.err"
+	stdoutLogFile = "openzro.out"
 
-	darwinErrorLogPath  = "/var/log/netbird.out.log"
-	darwinStdoutLogPath = "/var/log/netbird.err.log"
+	darwinErrorLogPath  = "/var/log/openzro.out.log"
+	darwinStdoutLogPath = "/var/log/openzro.err.log"
 )
 
 type BundleGenerator struct {
@@ -250,7 +250,7 @@ func NewBundleGenerator(deps GeneratorDependencies, cfg BundleConfig) *BundleGen
 
 // Generate creates a debug bundle and returns the location.
 func (g *BundleGenerator) Generate() (resp string, err error) {
-	bundlePath, err := os.CreateTemp("", "netbird.debug.*.zip")
+	bundlePath, err := os.CreateTemp("", "openzro.debug.*.zip")
 	if err != nil {
 		return "", fmt.Errorf("create zip file: %w", err)
 	}
@@ -419,7 +419,7 @@ func (g *BundleGenerator) addConfig() error {
 }
 
 func (g *BundleGenerator) addCommonConfigFields(configContent *strings.Builder) {
-	configContent.WriteString("NetBird Client Configuration:\n\n")
+	configContent.WriteString("Openzro Client Configuration:\n\n")
 
 	configContent.WriteString(fmt.Sprintf("WgIface: %s\n", g.internalConfig.WgIface))
 	configContent.WriteString(fmt.Sprintf("WgPort: %d\n", g.internalConfig.WgPort))

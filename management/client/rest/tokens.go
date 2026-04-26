@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/netbirdio/netbird/management/server/http/api"
+	"github.com/openzro/openzro/management/server/http/api"
 )
 
 // TokensAPI APIs for PATs, do not use directly
@@ -14,7 +14,7 @@ type TokensAPI struct {
 }
 
 // List list user tokens
-// See more: https://docs.netbird.io/api/resources/tokens#list-all-tokens
+// See more: https://docs.openzro.io/api/resources/tokens#list-all-tokens
 func (a *TokensAPI) List(ctx context.Context, userID string) ([]api.PersonalAccessToken, error) {
 	resp, err := a.c.NewRequest(ctx, "GET", "/api/users/"+userID+"/tokens", nil, nil)
 	if err != nil {
@@ -28,7 +28,7 @@ func (a *TokensAPI) List(ctx context.Context, userID string) ([]api.PersonalAcce
 }
 
 // Get get user token info
-// See more: https://docs.netbird.io/api/resources/tokens#retrieve-a-token
+// See more: https://docs.openzro.io/api/resources/tokens#retrieve-a-token
 func (a *TokensAPI) Get(ctx context.Context, userID, tokenID string) (*api.PersonalAccessToken, error) {
 	resp, err := a.c.NewRequest(ctx, "GET", "/api/users/"+userID+"/tokens/"+tokenID, nil, nil)
 	if err != nil {
@@ -42,7 +42,7 @@ func (a *TokensAPI) Get(ctx context.Context, userID, tokenID string) (*api.Perso
 }
 
 // Create generate new PAT for user
-// See more: https://docs.netbird.io/api/resources/tokens#create-a-token
+// See more: https://docs.openzro.io/api/resources/tokens#create-a-token
 func (a *TokensAPI) Create(ctx context.Context, userID string, request api.PostApiUsersUserIdTokensJSONRequestBody) (*api.PersonalAccessTokenGenerated, error) {
 	requestBytes, err := json.Marshal(request)
 	if err != nil {
@@ -60,7 +60,7 @@ func (a *TokensAPI) Create(ctx context.Context, userID string, request api.PostA
 }
 
 // Delete delete user token
-// See more: https://docs.netbird.io/api/resources/tokens#delete-a-token
+// See more: https://docs.openzro.io/api/resources/tokens#delete-a-token
 func (a *TokensAPI) Delete(ctx context.Context, userID, tokenID string) error {
 	resp, err := a.c.NewRequest(ctx, "DELETE", "/api/users/"+userID+"/tokens/"+tokenID, nil, nil)
 	if err != nil {
