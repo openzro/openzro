@@ -1,0 +1,64 @@
+# openZro — local HA dependencies for development.
+#
+# Brings up the three services an openZro deployment can need:
+#   - Postgres   (always required by management when STORE_ENGINE=postgres)
+#   - Valkey     (Redis-compatible; one of the supported HA brokers)
+#   - NATS       (alternative HA broker, with JetStream enabled for locks)
+#
+# Use exactly one of Valkey or NATS depending on which OPENZRO_*_URL you
+# point management/signal at. Both are exposed for convenience so a
+# developer can switch between them without restarting the compose stack.
+#
+# Started by `make dev.deps.up`.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: openzro-dev-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: openzro
+      POSTGRES_PASSWORD: openzro
+      POSTGRES_DB: openzro
+    ports:
+      - "5432:5432"
+    volumes:
+      - openzro-dev-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openzro -d openzro"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: openzro-dev-valkey
+    restart: unless-stopped
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  nats:
+    image: nats:2-alpine
+    container_name: openzro-dev-nats
+    restart: unless-stopped
+    # JetStream is required by the cluster.Coordinator NATS backend
+    # (KV bucket holds distributed locks). -m 8222 enables the HTTP
+    # monitoring port for inspection.
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222" # client
+      - "8222:8222" # http monitoring
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz | grep -q ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  openzro-dev-postgres:
