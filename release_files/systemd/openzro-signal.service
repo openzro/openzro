@@ -1,5 +1,5 @@
 [Unit]
-Description=Openzro Signal
+Description=openZro Signal
 Documentation=https://openzro.io/docs
 After=network-online.target syslog.target
 Wants=network-online.target

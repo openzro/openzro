@@ -1,6 +1,6 @@
-# Contributing to Openzro
+# Contributing to openZro
 
-Thanks for your interest in contributing to Openzro. 
+Thanks for your interest in contributing to openZro. 
 
 There are many ways that you can contribute:
 - Reporting issues
@@ -12,13 +12,13 @@ If you haven't already, join our slack workspace [here](https://join.slack.com/t
 
 ## Contents
 
-- [Contributing to Openzro](#contributing-to-openzro)
+- [Contributing to openZro](#contributing-to-openzro)
     - [Contents](#contents)
     - [Code of conduct](#code-of-conduct)
     - [Directory structure](#directory-structure)
     - [Development setup](#development-setup)
         - [Requirements](#requirements)
-        - [Local Openzro setup](#local-openzro-setup)
+        - [Local openZro setup](#local-openzro-setup)
         - [Dev Container Support](#dev-container-support)
         - [Build and start](#build-and-start)
         - [Test suite](#test-suite)
@@ -35,17 +35,17 @@ unacceptable behavior to community@openzro.io.
 
 ## Directory structure
 
-The Openzro project monorepo is organized to maintain most of its individual dependencies code within their directories, except for a few auxiliary or shared packages.
+The openZro project monorepo is organized to maintain most of its individual dependencies code within their directories, except for a few auxiliary or shared packages.
 
 The most important directories are:
 
 - [/.github](/.github) - Github actions workflow files and issue templates
-- [/client](/client) - Openzro agent code
-- [/client/cmd](/client/cmd) - Openzro agent cli code
-- [/client/internal](/client/internal) - Openzro agent business logic code
-- [/client/proto](/client/proto) - Openzro agent daemon GRPC proto files
-- [/client/server](/client/server) - Openzro agent daemon code for background execution
-- [/client/ui](/client/ui) - Openzro agent UI code
+- [/client](/client) - openZro agent code
+- [/client/cmd](/client/cmd) - openZro agent cli code
+- [/client/internal](/client/internal) - openZro agent business logic code
+- [/client/proto](/client/proto) - openZro agent daemon GRPC proto files
+- [/client/server](/client/server) - openZro agent daemon code for background execution
+- [/client/ui](/client/ui) - openZro agent UI code
 - [/encryption](/encryption) - Contain main encryption code for agent communication
 - [/iface](/iface) - Wireguard® interface code
 - [/infrastructure_files](/infrastructure_files) - Getting started files containing docker and template scripts
@@ -103,14 +103,14 @@ goreleaser build --snapshot --clean
 golangci-lint run
 ```
 
-### Local Openzro setup
+### Local openZro setup
 
 > **IMPORTANT**: All the steps below have to get executed at least once to get the development setup up and running!
 
-Now that everything Openzro requires to run is installed, the actual Openzro code can be
+Now that everything openZro requires to run is installed, the actual openZro code can be
 checked out and set up:
 
-1. [Fork](https://guides.github.com/activities/forking/#fork) the Openzro repository
+1. [Fork](https://guides.github.com/activities/forking/#fork) the openZro repository
 
 2. Clone your forked repository
 
@@ -124,7 +124,7 @@ checked out and set up:
    cd openzro
    ```
 
-4. Add the original Openzro repository as `upstream` to your forked repository
+4. Add the original openZro repository as `upstream` to your forked repository
 
    ```
    git remote add upstream https://github.com/openzro/openzro.git
@@ -138,8 +138,8 @@ checked out and set up:
 
 ### Dev Container Support
 
-If you prefer using a dev container for development, Openzro now includes support for dev containers. 
-Dev containers provide a consistent and isolated development environment, making it easier for contributors to get started quickly. Follow the steps below to set up Openzro in a dev container.
+If you prefer using a dev container for development, openZro now includes support for dev containers. 
+Dev containers provide a consistent and isolated development environment, making it easier for contributors to get started quickly. Follow the steps below to set up openZro in a dev container.
 
 #### 1. Prerequisites:
 
@@ -149,7 +149,7 @@ Dev containers provide a consistent and isolated development environment, making
 
 #### 2. Clone the Repository:
 
-Clone the repository following previous [Local Openzro setup](#local-openzro-setup).
+Clone the repository following previous [Local openZro setup](#local-openzro-setup).
 
 #### 3. Open in project in IDE of your choice:
 
@@ -166,7 +166,7 @@ Click on the green "Reopen in Container" button in the bottom-right corner of VS
 
 **Goland**:
 
-Open GoLand and select `"File" > "Open"` to open the Openzro project folder.
+Open GoLand and select `"File" > "Open"` to open the openZro project folder.
 GoLand will detect the dev container configuration and prompt you to open the project in the container. Accept the prompt.
 
 #### 4. Wait for the Container to Build:
@@ -181,7 +181,7 @@ Once the container is built, you can start developing within the dev container. 
 ### Build and start
 #### Client
 
-To start Openzro, execute:
+To start openZro, execute:
 ```
 cd client
 CGO_ENABLED=0 go build .
@@ -191,7 +191,7 @@ CGO_ENABLED=0 go build .
 
 > To test the client GUI application on Windows machines with RDP or vituralized environments (e.g. virtualbox or cloud), you need to download and extract the opengl32.dll from https://fdossena.com/?p=mesa/index.frag next to the built application.
 
-To start Openzro the client in the foreground:
+To start openZro the client in the foreground:
 
 ```
 sudo ./client up --log-level debug --log-file console
@@ -199,14 +199,14 @@ sudo ./client up --log-level debug --log-file console
 > On Windows use a powershell with administrator privileges
 #### Signal service
 
-To start Openzro's signal, execute:
+To start openZro's signal, execute:
 
 ```
 cd signal
 go build .
 ```
 
-To start Openzro the signal service:
+To start openZro the signal service:
 
 ```
 ./signal run --log-level debug --log-file console
@@ -215,20 +215,20 @@ To start Openzro the signal service:
 #### Management service
 > You may need to generate a configuration file for management. Follow steps 2 to 5 from our [self-hosting guide](https://openzro.io/docs/getting-started/self-hosting).
 
-To start Openzro's management, execute:
+To start openZro's management, execute:
 
 ```
 cd management
 go build .
 ```
 
-To start Openzro the management service:
+To start openZro the management service:
 
 ```
 ./management management --log-level debug --log-file console --config ./management.json
 ```
 
-#### Windows Openzro Installer
+#### Windows openZro Installer
 Create dist directory
 ```shell
 mkdir -p dist/openzro_windows_amd64
@@ -287,8 +287,8 @@ As a critical network service and open-source project, we must enforce a few thi
 
 ## Other project repositories
 
-Openzro project is composed of 3 main repositories:
-- Openzro: This repository, which contains the code for the agents and control plane services.
+openZro project is composed of 3 main repositories:
+- openZro: This repository, which contains the code for the agents and control plane services.
 - Dashboard: https://github.com/openzro/dashboard, contains the Administration UI for the management service
 - Documentations: https://github.com/openzro/docs, contains the documentation from https://openzro.io/docs
 

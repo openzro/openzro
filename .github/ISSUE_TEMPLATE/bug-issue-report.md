@@ -23,11 +23,11 @@ Steps to reproduce the behavior:
 
 A clear and concise description of what you expected to happen.
 
-**Are you using Openzro Cloud?**
+**Are you using openZro Cloud?**
 
-Please specify whether you use Openzro Cloud or self-host Openzro's control plane.
+Please specify whether you use openZro Cloud or self-host openZro's control plane.
 
-**Openzro version**
+**openZro version**
 
 `openzro version`
 
@@ -63,9 +63,9 @@ Add any other context about the problem here.
 
 **Have you tried these troubleshooting steps?**
 - [ ] Reviewed [client troubleshooting](https://docs.openzro.io/how-to/troubleshooting-client) (if applicable)
-- [ ] Checked for newer Openzro versions
+- [ ] Checked for newer openZro versions
 - [ ] Searched for similar issues on GitHub (including closed ones)
-- [ ] Restarted the Openzro client
+- [ ] Restarted the openZro client
 - [ ] Disabled other VPN software
 - [ ] Checked firewall settings
 

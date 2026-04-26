@@ -23,15 +23,15 @@ Steps to reproduce the behavior:
 
 A clear and concise description of what you expected to happen.
 
-**Are you using Openzro Cloud?**
+**Are you using openZro Cloud?**
 
-Please specify whether you use Openzro Cloud or self-host Openzro's control plane.
+Please specify whether you use openZro Cloud or self-host openZro's control plane.
 
-**Openzro version**
+**openZro version**
 
 `openzro version`
 
-**Openzro status -d output:**
+**openZro status -d output:**
 
 If applicable, add the `openzro status -d' command output.
 

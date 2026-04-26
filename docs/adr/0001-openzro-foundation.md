@@ -52,7 +52,7 @@ openzro must be a **drop-in self-hostable zero-trust overlay** with feature pari
 - Env vars: `NB_*`, `NETBIRD_*` → `OZ_*`, `OPENZRO_*`
 - Config paths: `/etc/netbird`, `~/.config/netbird`, `/var/lib/netbird` → `/etc/openzro`, etc. (no compat shim — this is a clean fork, not a drop-in replacement)
 - Domains: `netbird.io` → `openzro.io`
-- Brand casing: `openzro` (lowercase identifier), `Openzro` (Title case for prose/UI)
+- Brand casing: `openzro` (lowercase identifier), `openZro` (Title case for prose/UI)
 - Upstream `LICENSE` and `AUTHORS` are **not** rewritten — they retain "Copyright (c) 2022 NetBird GmbH & AUTHORS" verbatim as required by BSD-3.
 
 #### 3.2 Repository layout

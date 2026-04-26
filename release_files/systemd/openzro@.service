@@ -1,5 +1,5 @@
 [Unit]
-Description=Openzro Client (%i)
+Description=openZro Client (%i)
 Documentation=https://openzro.io/docs
 After=network-online.target syslog.target NetworkManager.service
 Wants=network-online.target

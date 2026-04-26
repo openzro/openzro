@@ -1,5 +1,5 @@
 [Unit]
-Description=Openzro Management
+Description=openZro Management
 Documentation=https://openzro.io/docs
 After=network-online.target syslog.target
 Wants=network-online.target
