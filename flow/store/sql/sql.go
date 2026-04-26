@@ -115,6 +115,12 @@ func (s *Store) Query(ctx context.Context, f store.Filter) ([]*store.Event, erro
 	if f.DestIP != "" {
 		q = q.Where("dest_ip = ?", f.DestIP)
 	}
+	if f.SourcePort != nil {
+		q = q.Where("source_port = ?", *f.SourcePort)
+	}
+	if f.DestPort != nil {
+		q = q.Where("dest_port = ?", *f.DestPort)
+	}
 	if f.Protocol != nil {
 		q = q.Where("protocol = ?", *f.Protocol)
 	}
