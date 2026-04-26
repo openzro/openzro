@@ -72,7 +72,7 @@ func NewGRPCMetrics(ctx context.Context, meter metric.Meter) (*GRPCMetrics, erro
 
 	// We use histogram here as we have multiple channel at the same time and we want to see a slice at any given time
 	// Then we should be able to extract min, manx, mean and the percentiles.
-	// TODO(yury): This needs custom bucketing as we are interested in the values from 0 to server.channelBufferSize (100)
+	// TODO: bucketing should track 0 .. OPENZRO_PEER_UPDATE_CHANNEL_BUFFER_SIZE (default 1000).
 	channelQueue, err := meter.Int64Histogram(
 		"management.grpc.updatechannel.queue",
 		metric.WithDescription("Number of update messages piling up in the update channel queue"),

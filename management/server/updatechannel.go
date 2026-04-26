@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -12,7 +14,35 @@ import (
 	"github.com/openzro/openzro/management/server/types"
 )
 
-const channelBufferSize = 100
+const (
+	// defaultChannelBufferSize is the per-peer update queue size used when
+	// peerUpdateChannelBufferSizeEnv is not set. Upstream's hardcoded value
+	// of 100 silently drops updates in any account with high churn or more
+	// than ~100 peers (see SendUpdate's `default:` branch below). 1000 is
+	// roughly the smallest value that does not cause noticeable drops in
+	// realistic large accounts; deployments that need more can override via
+	// the environment variable.
+	defaultChannelBufferSize       = 1000
+	peerUpdateChannelBufferSizeEnv = "OPENZRO_PEER_UPDATE_CHANNEL_BUFFER_SIZE"
+)
+
+// channelBufferSize is resolved once at package init and used for every
+// new per-peer channel created by CreateChannel.
+var channelBufferSize = resolveChannelBufferSize()
+
+func resolveChannelBufferSize() int {
+	v := os.Getenv(peerUpdateChannelBufferSizeEnv)
+	if v == "" {
+		return defaultChannelBufferSize
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n <= 0 {
+		log.Warnf("ignoring invalid %s=%q; using default %d", peerUpdateChannelBufferSizeEnv, v, defaultChannelBufferSize)
+		return defaultChannelBufferSize
+	}
+	log.Infof("%s set to %d (overriding default %d)", peerUpdateChannelBufferSizeEnv, n, defaultChannelBufferSize)
+	return n
+}
 
 type UpdateMessage struct {
 	Update     *proto.SyncResponse
@@ -57,8 +87,13 @@ func (p *PeersUpdateManager) SendUpdate(ctx context.Context, peerID string, upda
 		case channel <- update:
 			log.WithContext(ctx).Debugf("update was sent to channel for peer %s", peerID)
 		default:
+			// A drop here means the peer will miss this update entirely —
+			// the next snapshot will reconcile state, but until then the
+			// peer's view is stale. Log loudly so operators can see this
+			// and either investigate the slow consumer or raise
+			// OPENZRO_PEER_UPDATE_CHANNEL_BUFFER_SIZE.
 			dropped = true
-			log.WithContext(ctx).Warnf("channel for peer %s is %d full or closed", peerID, len(channel))
+			log.WithContext(ctx).Errorf("dropped update for peer %s: channel full (%d/%d)", peerID, len(channel), channelBufferSize)
 		}
 	} else {
 		log.WithContext(ctx).Debugf("peer %s has no channel", peerID)
@@ -84,7 +119,6 @@ func (p *PeersUpdateManager) CreateChannel(ctx context.Context, peerID string) c
 		delete(p.peerChannels, peerID)
 		close(channel)
 	}
-	// mbragin: todo shouldn't it be more? or configurable?
 	channel := make(chan *UpdateMessage, channelBufferSize)
 	p.peerChannels[peerID] = channel
 

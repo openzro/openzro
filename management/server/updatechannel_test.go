@@ -40,7 +40,7 @@ func TestSendUpdate(t *testing.T) {
 		t.Error("Update wasn't send")
 	}
 
-	for range [channelBufferSize]int{} {
+	for range channelBufferSize {
 		peersUpdater.SendUpdate(context.Background(), peer, update1)
 	}
 
@@ -52,7 +52,7 @@ func TestSendUpdate(t *testing.T) {
 
 	peersUpdater.SendUpdate(context.Background(), peer, update2)
 	timeout := time.After(5 * time.Second)
-	for range [channelBufferSize]int{} {
+	for range channelBufferSize {
 		select {
 		case <-timeout:
 			t.Error("timed out reading previously sent updates")
