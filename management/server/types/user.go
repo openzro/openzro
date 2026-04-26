@@ -93,6 +93,22 @@ type User struct {
 	Issued string `gorm:"default:api"`
 
 	IntegrationReference integration_reference.IntegrationReference `gorm:"embedded;embeddedPrefix:integration_ref_"`
+
+	// SCIMUserName is the userName attribute from a SCIM provisioning
+	// request (typically an email). Populated only for users created
+	// via the /scim/v2 API; empty for IdP-roundtripped or
+	// service users. Indexed because SCIM clients look users up by
+	// userName via filter expressions.
+	SCIMUserName string `gorm:"size:255;index:idx_users_scim_username"`
+
+	// SCIMDisplayName is the displayName / name.formatted from SCIM.
+	SCIMDisplayName string `gorm:"size:255"`
+
+	// SCIMExternalID is the IdP's stable reference for this user
+	// (the externalId attribute). Some IdPs send it, others do not;
+	// when present it lets operators correlate back from openZro to
+	// their directory.
+	SCIMExternalID string `gorm:"size:255;index"`
 }
 
 // IsBlocked returns true if the user is blocked, false otherwise
@@ -140,10 +156,21 @@ func (u *User) ToUserInfo(userData *idp.UserData) (*UserInfo, error) {
 	}
 
 	if userData == nil {
+		// SCIM-provisioned users carry their identity locally; fall
+		// back to those fields before the (empty) service-user-style
+		// branch so the dashboard renders email/name correctly.
+		email := ""
+		name := u.ServiceUserName
+		if u.SCIMUserName != "" {
+			email = u.SCIMUserName
+			if u.SCIMDisplayName != "" {
+				name = u.SCIMDisplayName
+			}
+		}
 		return &UserInfo{
 			ID:            u.Id,
-			Email:         "",
-			Name:          u.ServiceUserName,
+			Email:         email,
+			Name:          name,
 			Role:          string(u.Role),
 			AutoGroups:    u.AutoGroups,
 			Status:        string(UserStatusActive),
@@ -198,6 +225,9 @@ func (u *User) Copy() *User {
 		CreatedAt:            u.CreatedAt,
 		Issued:               u.Issued,
 		IntegrationReference: u.IntegrationReference,
+		SCIMUserName:         u.SCIMUserName,
+		SCIMDisplayName:      u.SCIMDisplayName,
+		SCIMExternalID:       u.SCIMExternalID,
 	}
 }
 

@@ -360,6 +360,9 @@ func TestUser_Copy(t *testing.T) {
 			ID:              0,
 			IntegrationType: "test",
 		},
+		SCIMUserName:    "scim-user",
+		SCIMDisplayName: "SCIM User",
+		SCIMExternalID:  "external-id",
 	}
 
 	err := validateStruct(user)

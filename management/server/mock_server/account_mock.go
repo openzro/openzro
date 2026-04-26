@@ -58,6 +58,22 @@ type MockAccountManager struct {
 	DeletePolicyFunc                      func(ctx context.Context, accountID, policyID, userID string) error
 	ListPoliciesFunc                      func(ctx context.Context, accountID, userID string) ([]*types.Policy, error)
 	GetUsersFromAccountFunc               func(ctx context.Context, accountID, userID string) (map[string]*types.UserInfo, error)
+
+	SCIMCreateUserFunc     func(ctx context.Context, accountID, callerID string, input account.SCIMUserInput) (*types.User, error)
+	SCIMReplaceUserFunc    func(ctx context.Context, accountID, callerID, userID string, input account.SCIMUserInput) (*types.User, error)
+	SCIMPatchUserFunc      func(ctx context.Context, accountID, callerID, userID string, patch account.SCIMUserPatch) (*types.User, error)
+	SCIMDeactivateUserFunc func(ctx context.Context, accountID, callerID, userID string) error
+	SCIMListUsersFunc      func(ctx context.Context, accountID, callerID, userNameFilter string, startIndex, count int) ([]*types.User, int, error)
+	SCIMGetUserFunc        func(ctx context.Context, accountID, callerID, userID string) (*types.User, error)
+
+	SCIMCreateGroupFunc       func(ctx context.Context, accountID, callerID, displayName string, memberUserIDs []string) (*types.Group, error)
+	SCIMReplaceGroupFunc      func(ctx context.Context, accountID, callerID, groupID, displayName string, memberUserIDs []string) (*types.Group, error)
+	SCIMRenameGroupFunc       func(ctx context.Context, accountID, callerID, groupID, newName string) (*types.Group, error)
+	SCIMAddGroupMemberFunc    func(ctx context.Context, accountID, callerID, groupID, userID string) error
+	SCIMRemoveGroupMemberFunc func(ctx context.Context, accountID, callerID, groupID, userID string) error
+	SCIMDeleteGroupFunc       func(ctx context.Context, accountID, callerID, groupID string) error
+	SCIMListGroupsFunc        func(ctx context.Context, accountID, callerID, displayNameFilter string, startIndex, count int) ([]*types.Group, int, error)
+	SCIMGetGroupFunc          func(ctx context.Context, accountID, callerID, groupID string) (*types.Group, []string, error)
 	UpdatePeerMetaFunc                    func(ctx context.Context, peerID string, meta nbpeer.PeerSystemMeta) error
 	UpdatePeerFunc                        func(ctx context.Context, accountID, userID string, peer *nbpeer.Peer) (*nbpeer.Peer, error)
 	CreateRouteFunc                       func(ctx context.Context, accountID string, prefix netip.Prefix, networkType route.NetworkType, domains domain.List, peer string, peerGroups []string, description string, netID route.NetID, masquerade bool, metric int, groups, accessControlGroupIDs []string, enabled bool, userID string, keepRoute bool) (*route.Route, error)
@@ -190,6 +206,104 @@ func (am *MockAccountManager) GetUsersFromAccount(ctx context.Context, accountID
 		return am.GetUsersFromAccountFunc(ctx, accountID, userID)
 	}
 	return nil, status.Errorf(codes.Unimplemented, "method GetUsersFromAccount is not implemented")
+}
+
+func (am *MockAccountManager) SCIMCreateUser(ctx context.Context, accountID, callerID string, input account.SCIMUserInput) (*types.User, error) {
+	if am.SCIMCreateUserFunc != nil {
+		return am.SCIMCreateUserFunc(ctx, accountID, callerID, input)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method SCIMCreateUser is not implemented")
+}
+
+func (am *MockAccountManager) SCIMReplaceUser(ctx context.Context, accountID, callerID, userID string, input account.SCIMUserInput) (*types.User, error) {
+	if am.SCIMReplaceUserFunc != nil {
+		return am.SCIMReplaceUserFunc(ctx, accountID, callerID, userID, input)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method SCIMReplaceUser is not implemented")
+}
+
+func (am *MockAccountManager) SCIMPatchUser(ctx context.Context, accountID, callerID, userID string, patch account.SCIMUserPatch) (*types.User, error) {
+	if am.SCIMPatchUserFunc != nil {
+		return am.SCIMPatchUserFunc(ctx, accountID, callerID, userID, patch)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method SCIMPatchUser is not implemented")
+}
+
+func (am *MockAccountManager) SCIMDeactivateUser(ctx context.Context, accountID, callerID, userID string) error {
+	if am.SCIMDeactivateUserFunc != nil {
+		return am.SCIMDeactivateUserFunc(ctx, accountID, callerID, userID)
+	}
+	return status.Errorf(codes.Unimplemented, "method SCIMDeactivateUser is not implemented")
+}
+
+func (am *MockAccountManager) SCIMListUsers(ctx context.Context, accountID, callerID, userNameFilter string, startIndex, count int) ([]*types.User, int, error) {
+	if am.SCIMListUsersFunc != nil {
+		return am.SCIMListUsersFunc(ctx, accountID, callerID, userNameFilter, startIndex, count)
+	}
+	return nil, 0, status.Errorf(codes.Unimplemented, "method SCIMListUsers is not implemented")
+}
+
+func (am *MockAccountManager) SCIMGetUser(ctx context.Context, accountID, callerID, userID string) (*types.User, error) {
+	if am.SCIMGetUserFunc != nil {
+		return am.SCIMGetUserFunc(ctx, accountID, callerID, userID)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method SCIMGetUser is not implemented")
+}
+
+func (am *MockAccountManager) SCIMCreateGroup(ctx context.Context, accountID, callerID, displayName string, memberUserIDs []string) (*types.Group, error) {
+	if am.SCIMCreateGroupFunc != nil {
+		return am.SCIMCreateGroupFunc(ctx, accountID, callerID, displayName, memberUserIDs)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method SCIMCreateGroup is not implemented")
+}
+
+func (am *MockAccountManager) SCIMReplaceGroup(ctx context.Context, accountID, callerID, groupID, displayName string, memberUserIDs []string) (*types.Group, error) {
+	if am.SCIMReplaceGroupFunc != nil {
+		return am.SCIMReplaceGroupFunc(ctx, accountID, callerID, groupID, displayName, memberUserIDs)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method SCIMReplaceGroup is not implemented")
+}
+
+func (am *MockAccountManager) SCIMRenameGroup(ctx context.Context, accountID, callerID, groupID, newName string) (*types.Group, error) {
+	if am.SCIMRenameGroupFunc != nil {
+		return am.SCIMRenameGroupFunc(ctx, accountID, callerID, groupID, newName)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method SCIMRenameGroup is not implemented")
+}
+
+func (am *MockAccountManager) SCIMAddGroupMember(ctx context.Context, accountID, callerID, groupID, userID string) error {
+	if am.SCIMAddGroupMemberFunc != nil {
+		return am.SCIMAddGroupMemberFunc(ctx, accountID, callerID, groupID, userID)
+	}
+	return status.Errorf(codes.Unimplemented, "method SCIMAddGroupMember is not implemented")
+}
+
+func (am *MockAccountManager) SCIMRemoveGroupMember(ctx context.Context, accountID, callerID, groupID, userID string) error {
+	if am.SCIMRemoveGroupMemberFunc != nil {
+		return am.SCIMRemoveGroupMemberFunc(ctx, accountID, callerID, groupID, userID)
+	}
+	return status.Errorf(codes.Unimplemented, "method SCIMRemoveGroupMember is not implemented")
+}
+
+func (am *MockAccountManager) SCIMDeleteGroup(ctx context.Context, accountID, callerID, groupID string) error {
+	if am.SCIMDeleteGroupFunc != nil {
+		return am.SCIMDeleteGroupFunc(ctx, accountID, callerID, groupID)
+	}
+	return status.Errorf(codes.Unimplemented, "method SCIMDeleteGroup is not implemented")
+}
+
+func (am *MockAccountManager) SCIMListGroups(ctx context.Context, accountID, callerID, displayNameFilter string, startIndex, count int) ([]*types.Group, int, error) {
+	if am.SCIMListGroupsFunc != nil {
+		return am.SCIMListGroupsFunc(ctx, accountID, callerID, displayNameFilter, startIndex, count)
+	}
+	return nil, 0, status.Errorf(codes.Unimplemented, "method SCIMListGroups is not implemented")
+}
+
+func (am *MockAccountManager) SCIMGetGroup(ctx context.Context, accountID, callerID, groupID string) (*types.Group, []string, error) {
+	if am.SCIMGetGroupFunc != nil {
+		return am.SCIMGetGroupFunc(ctx, accountID, callerID, groupID)
+	}
+	return nil, nil, status.Errorf(codes.Unimplemented, "method SCIMGetGroup is not implemented")
 }
 
 // DeletePeer mock implementation of DeletePeer from server.AccountManager interface
