@@ -22,6 +22,27 @@ import (
 
 type ExternalCacheManager nbcache.UserDataCache
 
+// SCIMUserInput is the manager-layer projection of a SCIM Users
+// create or replace request. The SCIM HTTP handler parses the wire
+// format into this struct.
+type SCIMUserInput struct {
+	UserName    string
+	DisplayName string
+	ExternalID  string
+	Active      bool
+	AutoGroups  []string
+}
+
+// SCIMUserPatch projects a SCIM PATCH operation set. nil pointers
+// mean "do not change". The handler converts SCIM PatchOp into this
+// shape.
+type SCIMUserPatch struct {
+	UserName    *string
+	DisplayName *string
+	Active      *bool
+	AutoGroups  *[]string
+}
+
 type Manager interface {
 	GetOrCreateAccountByUser(ctx context.Context, userId, domain string) (*types.Account, error)
 	GetAccount(ctx context.Context, accountID string) (*types.Account, error)
@@ -59,6 +80,28 @@ type Manager interface {
 	GetPAT(ctx context.Context, accountID string, initiatorUserID string, targetUserID string, tokenID string) (*types.PersonalAccessToken, error)
 	GetAllPATs(ctx context.Context, accountID string, initiatorUserID string, targetUserID string) ([]*types.PersonalAccessToken, error)
 	GetUsersFromAccount(ctx context.Context, accountID, userID string) (map[string]*types.UserInfo, error)
+
+	// SCIM v2 Users surface — bypasses the IdP roundtrip because the
+	// IdP is the caller. See management/server/user_scim.go.
+	SCIMCreateUser(ctx context.Context, accountID, callerID string, input SCIMUserInput) (*types.User, error)
+	SCIMReplaceUser(ctx context.Context, accountID, callerID, userID string, input SCIMUserInput) (*types.User, error)
+	SCIMPatchUser(ctx context.Context, accountID, callerID, userID string, patch SCIMUserPatch) (*types.User, error)
+	SCIMDeactivateUser(ctx context.Context, accountID, callerID, userID string) error
+	SCIMListUsers(ctx context.Context, accountID, callerID, userNameFilter string, startIndex, count int) ([]*types.User, int, error)
+	SCIMGetUser(ctx context.Context, accountID, callerID, userID string) (*types.User, error)
+
+	// SCIM v2 Groups surface — see management/server/group_scim.go.
+	// Membership is mapped from SCIM "members" (user IDs) onto the
+	// users' AutoGroups list. The Group.Peers field stays
+	// peer-centric.
+	SCIMCreateGroup(ctx context.Context, accountID, callerID, displayName string, memberUserIDs []string) (*types.Group, error)
+	SCIMReplaceGroup(ctx context.Context, accountID, callerID, groupID, displayName string, memberUserIDs []string) (*types.Group, error)
+	SCIMRenameGroup(ctx context.Context, accountID, callerID, groupID, newName string) (*types.Group, error)
+	SCIMAddGroupMember(ctx context.Context, accountID, callerID, groupID, userID string) error
+	SCIMRemoveGroupMember(ctx context.Context, accountID, callerID, groupID, userID string) error
+	SCIMDeleteGroup(ctx context.Context, accountID, callerID, groupID string) error
+	SCIMListGroups(ctx context.Context, accountID, callerID, displayNameFilter string, startIndex, count int) ([]*types.Group, int, error)
+	SCIMGetGroup(ctx context.Context, accountID, callerID, groupID string) (*types.Group, []string, error)
 	GetGroup(ctx context.Context, accountId, groupID, userID string) (*types.Group, error)
 	GetAllGroups(ctx context.Context, accountID, userID string) ([]*types.Group, error)
 	GetGroupByName(ctx context.Context, groupName, accountID string) (*types.Group, error)

@@ -38,15 +38,16 @@ type authnScheme struct {
 	Primary          bool   `json:"primary,omitempty"`
 }
 
-// handleServiceProviderConfig advertises the read-only first-cut: no
-// PATCH yet, no bulk, no filter. As mutating endpoints land here, the
-// `Supported: true` switches flip without changing the route.
+// handleServiceProviderConfig advertises capabilities. Patch and
+// userName-equality filter are now supported; bulk operations and
+// sort are not. Most IdPs (Okta, Entra, JumpCloud) are happy with
+// this profile.
 func (h *Handler) handleServiceProviderConfig(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, ServiceProviderConfig{
 		Schemas:        []string{SchemaServiceProvider},
-		Patch:          supportedFlag{false},
+		Patch:          supportedFlag{true},
 		Bulk:           bulkConfig{Supported: false, MaxOperations: 0, MaxPayloadSize: 0},
-		Filter:         filterConfig{Supported: false, MaxResults: 0},
+		Filter:         filterConfig{Supported: true, MaxResults: 1000},
 		ChangePassword: supportedFlag{false},
 		Sort:           supportedFlag{false},
 		ETag:           supportedFlag{false},
@@ -72,8 +73,7 @@ type resourceType struct {
 	Meta         ResourceMeta `json:"meta"`
 }
 
-// handleResourceTypes returns the resource catalog. Today only Users;
-// Groups arrives with the next iteration.
+// handleResourceTypes returns the resource catalog: Users + Groups.
 func (h *Handler) handleResourceTypes(w http.ResponseWriter, _ *http.Request) {
 	resources := []any{
 		resourceType{
@@ -86,6 +86,18 @@ func (h *Handler) handleResourceTypes(w http.ResponseWriter, _ *http.Request) {
 			Meta: ResourceMeta{
 				ResourceType: "ResourceType",
 				Location:     "/scim/v2/ResourceTypes/User",
+			},
+		},
+		resourceType{
+			Schemas:     []string{SchemaResourceTypeURN},
+			ID:          "Group",
+			Name:        "Group",
+			Endpoint:    "/Groups",
+			Description: "Group",
+			Schema:      SchemaGroupURN,
+			Meta: ResourceMeta{
+				ResourceType: "ResourceType",
+				Location:     "/scim/v2/ResourceTypes/Group",
 			},
 		},
 	}
@@ -103,6 +115,7 @@ func (h *Handler) handleResourceTypes(w http.ResponseWriter, _ *http.Request) {
 func (h *Handler) handleSchemas(w http.ResponseWriter, _ *http.Request) {
 	resources := []any{
 		map[string]any{"id": SchemaUserURN, "name": "User"},
+		map[string]any{"id": SchemaGroupURN, "name": "Group"},
 	}
 	writeJSON(w, http.StatusOK, ListResponse{
 		Schemas:      []string{SchemaListResponseURN},
