@@ -4,6 +4,7 @@ import { RestrictedAccess } from "@components/ui/RestrictedAccess";
 import { VerticalTabs } from "@components/VerticalTabs";
 import {
   AlertOctagonIcon,
+  CableIcon,
   FolderGit2Icon,
   LockIcon,
   MonitorSmartphoneIcon,
@@ -20,6 +21,7 @@ import AuthenticationTab from "@/modules/settings/AuthenticationTab";
 import ClientSettingsTab from "@/modules/settings/ClientSettingsTab";
 import DangerZoneTab from "@/modules/settings/DangerZoneTab";
 import GroupsTab from "@/modules/settings/GroupsTab";
+import IntegrationsTab from "@/modules/settings/IntegrationsTab";
 import NetworkSettingsTab from "@/modules/settings/NetworkSettingsTab";
 import PermissionsTab from "@/modules/settings/PermissionsTab";
 
@@ -69,6 +71,10 @@ export default function OpenzroSettings() {
                 <MonitorSmartphoneIcon size={14} />
                 Clients
               </VerticalTabs.Trigger>
+              <VerticalTabs.Trigger value="integrations">
+                <CableIcon size={14} />
+                Integrations
+              </VerticalTabs.Trigger>
             </>
           )}
 
@@ -84,6 +90,7 @@ export default function OpenzroSettings() {
             {account && <GroupsTab account={account} />}
             {account && <NetworkSettingsTab account={account} />}
             {account && <ClientSettingsTab account={account} />}
+            {account && <IntegrationsTab account={account} />}
             {account && <DangerZoneTab account={account} />}
           </div>
         </RestrictedAccess>
