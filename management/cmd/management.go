@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -42,6 +43,7 @@ import (
 	"github.com/openzro/openzro/encryption"
 	"github.com/openzro/openzro/formatter/hook"
 	flowProto "github.com/openzro/openzro/flow/proto"
+	flowFactory "github.com/openzro/openzro/flow/store/factory"
 	mgmtProto "github.com/openzro/openzro/management/proto"
 	"github.com/openzro/openzro/management/server"
 	"github.com/openzro/openzro/management/server/auth"
@@ -55,7 +57,8 @@ import (
 	"github.com/openzro/openzro/management/server/networks/resources"
 	"github.com/openzro/openzro/management/server/networks/routers"
 	"github.com/openzro/openzro/management/server/settings"
-	"github.com/openzro/openzro/management/server/store"
+	mgmtStore "github.com/openzro/openzro/management/server/store"
+	flowstore "github.com/openzro/openzro/flow/store"
 	"github.com/openzro/openzro/management/server/telemetry"
 	"github.com/openzro/openzro/management/server/users"
 	"github.com/openzro/openzro/util"
@@ -167,7 +170,7 @@ var (
 				return err
 			}
 
-			store, err := store.NewStore(ctx, config.StoreConfig.Engine, config.Datadir, appMetrics, false)
+			store, err := mgmtStore.NewStore(ctx, config.StoreConfig.Engine, config.Datadir, appMetrics, false)
 			if err != nil {
 				return fmt.Errorf("failed creating Store: %s: %v", config.Datadir, err)
 			}
@@ -309,7 +312,29 @@ var (
 				return fmt.Errorf("failed creating gRPC API handler: %v", err)
 			}
 			mgmtProto.RegisterManagementServiceServer(gRPCAPIHandler, srv)
-			flowProto.RegisterFlowServiceServer(gRPCAPIHandler, server.NewFlowService())
+
+			// Flow events: build the configured hot store (or nil for
+			// engine=none) and wire FlowService to it. The peer
+			// resolver runs against the management's primary store —
+			// see ADR-0002 for the design.
+			flowBuilt, err := flowFactory.NewFromEnv(ctx)
+			if err != nil {
+				return fmt.Errorf("flow store: %w", err)
+			}
+			var flowStore flowstore.Store
+			if flowBuilt != nil {
+				flowStore = flowBuilt.Store
+				defer func() { _ = flowBuilt.Close() }()
+			}
+			peerResolver := func(ctx context.Context, pubKeyBytes []byte) (string, string, error) {
+				key := base64.StdEncoding.EncodeToString(pubKeyBytes)
+				peer, err := store.GetPeerByPeerPubKey(ctx, mgmtStore.LockingStrengthShare, key)
+				if err != nil {
+					return "", "", err
+				}
+				return peer.ID, peer.AccountID, nil
+			}
+			flowProto.RegisterFlowServiceServer(gRPCAPIHandler, server.NewFlowService(flowStore, peerResolver))
 
 			installationID, err := getInstallationID(ctx, store)
 			if err != nil {
@@ -438,7 +463,7 @@ func notifyStop(ctx context.Context, msg string) {
 	}
 }
 
-func getInstallationID(ctx context.Context, store store.Store) (string, error) {
+func getInstallationID(ctx context.Context, store mgmtStore.Store) (string, error) {
 	installationID := store.GetInstallationID()
 	if installationID != "" {
 		return installationID, nil
