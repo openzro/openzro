@@ -8,8 +8,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel"
 
-	"github.com/netbirdio/netbird/relay/auth/allow"
-	"github.com/netbirdio/netbird/relay/server"
+	"github.com/openzro/openzro/relay/auth/allow"
+	"github.com/openzro/openzro/relay/server"
 )
 
 func TestEmptyURL(t *testing.T) {

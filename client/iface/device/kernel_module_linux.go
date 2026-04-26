@@ -34,7 +34,7 @@ const (
 	live                      status = 5
 	inuse                     status = 6
 	defaultModuleDir                 = "/lib/modules"
-	envDisableWireGuardKernel        = "NB_WG_KERNEL_DISABLED"
+	envDisableWireGuardKernel        = "OZ_WG_KERNEL_DISABLED"
 )
 
 type module struct {

@@ -3,10 +3,10 @@
 package iface
 
 import (
-	"github.com/netbirdio/netbird/client/iface/bind"
-	"github.com/netbirdio/netbird/client/iface/device"
-	"github.com/netbirdio/netbird/client/iface/wgaddr"
-	"github.com/netbirdio/netbird/client/iface/wgproxy"
+	"github.com/openzro/openzro/client/iface/bind"
+	"github.com/openzro/openzro/client/iface/device"
+	"github.com/openzro/openzro/client/iface/wgaddr"
+	"github.com/openzro/openzro/client/iface/wgproxy"
 )
 
 // NewWGIFace Creates a new WireGuard interface instance

@@ -14,13 +14,13 @@ func TestAddPeer(t *testing.T) {
 	key := "abc"
 	ip := "100.108.254.1"
 	status := NewRecorder("https://mgm")
-	err := status.AddPeer(key, "abc.netbird", ip)
+	err := status.AddPeer(key, "abc.openzro", ip)
 	assert.NoError(t, err, "shouldn't return error")
 
 	_, exists := status.peers[key]
 	assert.True(t, exists, "value was found")
 
-	err = status.AddPeer(key, "abc.netbird", ip)
+	err = status.AddPeer(key, "abc.openzro", ip)
 
 	assert.Error(t, err, "should return error on duplicate")
 }
@@ -29,7 +29,7 @@ func TestGetPeer(t *testing.T) {
 	key := "abc"
 	ip := "100.108.254.1"
 	status := NewRecorder("https://mgm")
-	err := status.AddPeer(key, "abc.netbird", ip)
+	err := status.AddPeer(key, "abc.openzro", ip)
 	assert.NoError(t, err, "shouldn't return error")
 
 	peerStatus, err := status.GetPeer(key)
@@ -44,7 +44,7 @@ func TestGetPeer(t *testing.T) {
 func TestUpdatePeerState(t *testing.T) {
 	key := "abc"
 	ip := "10.10.10.10"
-	fqdn := "peer-a.netbird.local"
+	fqdn := "peer-a.openzro.local"
 	status := NewRecorder("https://mgm")
 	_ = status.AddPeer(key, fqdn, ip)
 
@@ -64,7 +64,7 @@ func TestUpdatePeerState(t *testing.T) {
 
 func TestStatus_UpdatePeerFQDN(t *testing.T) {
 	key := "abc"
-	fqdn := "peer-a.netbird.local"
+	fqdn := "peer-a.openzro.local"
 	status := NewRecorder("https://mgm")
 	peerState := State{
 		PubKey: key,
@@ -85,7 +85,7 @@ func TestGetPeerStateChangeNotifierLogic(t *testing.T) {
 	key := "abc"
 	ip := "10.10.10.10"
 	status := NewRecorder("https://mgm")
-	_ = status.AddPeer(key, "abc.netbird", ip)
+	_ = status.AddPeer(key, "abc.openzro", ip)
 
 	sub := status.SubscribeToPeerStateChanges(context.Background(), key)
 	assert.NotNil(t, sub, "channel shouldn't be nil")

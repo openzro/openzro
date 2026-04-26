@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	// ControlPlaneMark is the fwmark value used to mark packets that should not be routed through the NetBird interface to
+	// ControlPlaneMark is the fwmark value used to mark packets that should not be routed through the Openzro interface to
 	// avoid routing loops.
 	// This includes all control plane traffic (mgmt, signal, flows), relay, ICE/stun/turn and everything that is emitted by the wireguard socket.
 	// It doesn't collide with the other marks, as the others are used for data plane traffic only.
@@ -32,10 +32,10 @@ const (
 	// PreroutingFwmarkRedirected is applied to packets that are were redirected (input -> forward, e.g. by Docker or Podman) for special handling.
 	PreroutingFwmarkRedirected = 0x1BD20
 
-	// PreroutingFwmarkMasquerade is applied to packets that arrive from the NetBird interface and should be masqueraded.
+	// PreroutingFwmarkMasquerade is applied to packets that arrive from the Openzro interface and should be masqueraded.
 	PreroutingFwmarkMasquerade = 0x1BD21
 
-	// PreroutingFwmarkMasqueradeReturn is applied to packets that will leave through the NetBird interface and should be masqueraded.
+	// PreroutingFwmarkMasqueradeReturn is applied to packets that will leave through the Openzro interface and should be masqueraded.
 	PreroutingFwmarkMasqueradeReturn = 0x1BD22
 )
 

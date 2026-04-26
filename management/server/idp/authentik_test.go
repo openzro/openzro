@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/netbirdio/netbird/management/server/telemetry"
+	"github.com/openzro/openzro/management/server/telemetry"
 )
 
 func TestNewAuthentikManager(t *testing.T) {
@@ -27,7 +27,7 @@ func TestNewAuthentikManager(t *testing.T) {
 		Username:      "username",
 		Password:      "password",
 		TokenEndpoint: "https://localhost:8080/application/o/token/",
-		Issuer:        "https://localhost:8080/application/o/netbird/",
+		Issuer:        "https://localhost:8080/application/o/openzro/",
 		GrantType:     "client_credentials",
 	}
 

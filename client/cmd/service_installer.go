@@ -13,7 +13,7 @@ import (
 	"github.com/kardianos/service"
 	"github.com/spf13/cobra"
 
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/util"
 )
 
 var ErrGetServiceStatus = fmt.Errorf("failed to get service status")
@@ -95,7 +95,7 @@ func createServiceConfigForInstall() (*service.Config, error) {
 
 var installCmd = &cobra.Command{
 	Use:   "install",
-	Short: "installs Netbird service",
+	Short: "installs Openzro service",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := setupServiceCommand(cmd); err != nil {
 			return err
@@ -118,14 +118,14 @@ var installCmd = &cobra.Command{
 			return fmt.Errorf("install service: %w", err)
 		}
 
-		cmd.Println("Netbird service has been installed")
+		cmd.Println("Openzro service has been installed")
 		return nil
 	},
 }
 
 var uninstallCmd = &cobra.Command{
 	Use:   "uninstall",
-	Short: "uninstalls Netbird service from system",
+	Short: "uninstalls Openzro service from system",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := setupServiceCommand(cmd); err != nil {
 			return err
@@ -148,15 +148,15 @@ var uninstallCmd = &cobra.Command{
 			return fmt.Errorf("uninstall service: %w", err)
 		}
 
-		cmd.Println("Netbird service has been uninstalled")
+		cmd.Println("Openzro service has been uninstalled")
 		return nil
 	},
 }
 
 var reconfigureCmd = &cobra.Command{
 	Use:   "reconfigure",
-	Short: "reconfigures Netbird service with new settings",
-	Long: `Reconfigures the Netbird service with new settings without manual uninstall/install.
+	Short: "reconfigures Openzro service with new settings",
+	Long: `Reconfigures the Openzro service with new settings without manual uninstall/install.
 This command will temporarily stop the service, update its configuration, and restart it if it was running.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := setupServiceCommand(cmd); err != nil {
@@ -182,7 +182,7 @@ This command will temporarily stop the service, update its configuration, and re
 		}
 
 		if wasRunning {
-			cmd.Println("Stopping Netbird service...")
+			cmd.Println("Stopping Openzro service...")
 			if err := s.Stop(); err != nil {
 				cmd.Printf("Warning: failed to stop service: %v\n", err)
 			}
@@ -199,13 +199,13 @@ This command will temporarily stop the service, update its configuration, and re
 		}
 
 		if wasRunning {
-			cmd.Println("Starting Netbird service...")
+			cmd.Println("Starting Openzro service...")
 			if err := s.Start(); err != nil {
 				return fmt.Errorf("start service after reconfigure: %w", err)
 			}
-			cmd.Println("Netbird service has been reconfigured and started")
+			cmd.Println("Openzro service has been reconfigured and started")
 		} else {
-			cmd.Println("Netbird service has been reconfigured")
+			cmd.Println("Openzro service has been reconfigured")
 		}
 
 		return nil

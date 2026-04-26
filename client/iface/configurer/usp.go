@@ -16,9 +16,9 @@ import (
 	"golang.zx2c4.com/wireguard/device"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
-	"github.com/netbirdio/netbird/client/iface/bind"
-	"github.com/netbirdio/netbird/monotime"
-	nbnet "github.com/netbirdio/netbird/util/net"
+	"github.com/openzro/openzro/client/iface/bind"
+	"github.com/openzro/openzro/monotime"
+	nbnet "github.com/openzro/openzro/util/net"
 )
 
 const (

@@ -13,14 +13,14 @@ import (
 	"github.com/google/nftables/expr"
 	log "github.com/sirupsen/logrus"
 
-	firewall "github.com/netbirdio/netbird/client/firewall/manager"
-	"github.com/netbirdio/netbird/client/iface/wgaddr"
-	"github.com/netbirdio/netbird/client/internal/statemanager"
+	firewall "github.com/openzro/openzro/client/firewall/manager"
+	"github.com/openzro/openzro/client/iface/wgaddr"
+	"github.com/openzro/openzro/client/internal/statemanager"
 )
 
 const (
-	// tableNameNetbird is the name of the table that is used for filtering by the Netbird client
-	tableNameNetbird = "netbird"
+	// tableNameOpenzro is the name of the table that is used for filtering by the Openzro client
+	tableNameOpenzro = "openzro"
 
 	tableNameFilter = "filter"
 	chainNameInput  = "INPUT"
@@ -50,7 +50,7 @@ func Create(wgIface iFaceMapper) (*Manager, error) {
 		wgIface: wgIface,
 	}
 
-	workTable := &nftables.Table{Name: tableNameNetbird, Family: nftables.TableFamilyIPv4}
+	workTable := &nftables.Table{Name: tableNameOpenzro, Family: nftables.TableFamilyIPv4}
 
 	var err error
 	m.router, err = newRouter(workTable, wgIface)
@@ -86,7 +86,7 @@ func (m *Manager) Init(stateManager *statemanager.Manager) error {
 
 	// We only need to record minimal interface state for potential recreation.
 	// Unlike iptables, which requires tracking individual rules, nftables maintains
-	// a known state (our netbird table plus a few static rules). This allows for easy
+	// a known state (our openzro table plus a few static rules). This allows for easy
 	// cleanup using Close() without needing to store specific rules.
 	if err := stateManager.UpdateState(&ShutdownState{
 		InterfaceState: &InterfaceState{
@@ -188,8 +188,8 @@ func (m *Manager) RemoveNatRule(pair firewall.RouterPair) error {
 	return m.router.RemoveNatRule(pair)
 }
 
-// AllowNetbird allows netbird interface traffic
-func (m *Manager) AllowNetbird() error {
+// AllowOpenzro allows openzro interface traffic
+func (m *Manager) AllowOpenzro() error {
 	if !m.wgIface.IsUserspaceBind() {
 		return nil
 	}
@@ -216,7 +216,7 @@ func (m *Manager) AllowNetbird() error {
 	}
 
 	if chain == nil {
-		log.Debugf("chain INPUT not found. Skipping add allow netbird rule")
+		log.Debugf("chain INPUT not found. Skipping add allow openzro rule")
 		return nil
 	}
 
@@ -225,16 +225,16 @@ func (m *Manager) AllowNetbird() error {
 		return fmt.Errorf("failed to get rules for the INPUT chain: %v", err)
 	}
 
-	if rule := m.detectAllowNetbirdRule(rules); rule != nil {
-		log.Debugf("allow netbird rule already exists: %v", rule)
+	if rule := m.detectAllowOpenzroRule(rules); rule != nil {
+		log.Debugf("allow openzro rule already exists: %v", rule)
 		return nil
 	}
 
-	m.applyAllowNetbirdRules(chain)
+	m.applyAllowOpenzroRules(chain)
 
 	err = m.rConn.Flush()
 	if err != nil {
-		return fmt.Errorf("failed to flush allow input netbird rules: %v", err)
+		return fmt.Errorf("failed to flush allow input openzro rules: %v", err)
 	}
 
 	return nil
@@ -250,16 +250,16 @@ func (m *Manager) Close(stateManager *statemanager.Manager) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	if err := m.resetNetbirdInputRules(); err != nil {
-		return fmt.Errorf("reset netbird input rules: %v", err)
+	if err := m.resetOpenzroInputRules(); err != nil {
+		return fmt.Errorf("reset openzro input rules: %v", err)
 	}
 
 	if err := m.router.Reset(); err != nil {
 		return fmt.Errorf("reset router: %v", err)
 	}
 
-	if err := m.cleanupNetbirdTables(); err != nil {
-		return fmt.Errorf("cleanup netbird tables: %v", err)
+	if err := m.cleanupOpenzroTables(); err != nil {
+		return fmt.Errorf("cleanup openzro tables: %v", err)
 	}
 
 	if err := m.rConn.Flush(); err != nil {
@@ -273,18 +273,18 @@ func (m *Manager) Close(stateManager *statemanager.Manager) error {
 	return nil
 }
 
-func (m *Manager) resetNetbirdInputRules() error {
+func (m *Manager) resetOpenzroInputRules() error {
 	chains, err := m.rConn.ListChains()
 	if err != nil {
 		return fmt.Errorf("list chains: %w", err)
 	}
 
-	m.deleteNetbirdInputRules(chains)
+	m.deleteOpenzroInputRules(chains)
 
 	return nil
 }
 
-func (m *Manager) deleteNetbirdInputRules(chains []*nftables.Chain) {
+func (m *Manager) deleteOpenzroInputRules(chains []*nftables.Chain) {
 	for _, c := range chains {
 		if c.Table.Name == tableNameFilter && c.Name == chainNameInput {
 			rules, err := m.rConn.GetRules(c.Table, c)
@@ -300,7 +300,7 @@ func (m *Manager) deleteNetbirdInputRules(chains []*nftables.Chain) {
 
 func (m *Manager) deleteMatchingRules(rules []*nftables.Rule) {
 	for _, r := range rules {
-		if bytes.Equal(r.UserData, []byte(allowNetbirdInputRuleID)) {
+		if bytes.Equal(r.UserData, []byte(allowOpenzroInputRuleID)) {
 			if err := m.rConn.DelRule(r); err != nil {
 				log.Errorf("delete rule: %v", err)
 			}
@@ -308,14 +308,14 @@ func (m *Manager) deleteMatchingRules(rules []*nftables.Rule) {
 	}
 }
 
-func (m *Manager) cleanupNetbirdTables() error {
+func (m *Manager) cleanupOpenzroTables() error {
 	tables, err := m.rConn.ListTables()
 	if err != nil {
 		return fmt.Errorf("list tables: %w", err)
 	}
 
 	for _, t := range tables {
-		if t.Name == tableNameNetbird {
+		if t.Name == tableNameOpenzro {
 			m.rConn.DelTable(t)
 		}
 	}
@@ -383,17 +383,17 @@ func (m *Manager) createWorkTable() (*nftables.Table, error) {
 	}
 
 	for _, t := range tables {
-		if t.Name == tableNameNetbird {
+		if t.Name == tableNameOpenzro {
 			m.rConn.DelTable(t)
 		}
 	}
 
-	table := m.rConn.AddTable(&nftables.Table{Name: tableNameNetbird, Family: nftables.TableFamilyIPv4})
+	table := m.rConn.AddTable(&nftables.Table{Name: tableNameOpenzro, Family: nftables.TableFamilyIPv4})
 	err = m.rConn.Flush()
 	return table, err
 }
 
-func (m *Manager) applyAllowNetbirdRules(chain *nftables.Chain) {
+func (m *Manager) applyAllowOpenzroRules(chain *nftables.Chain) {
 	rule := &nftables.Rule{
 		Table: chain.Table,
 		Chain: chain,
@@ -408,12 +408,12 @@ func (m *Manager) applyAllowNetbirdRules(chain *nftables.Chain) {
 				Kind: expr.VerdictAccept,
 			},
 		},
-		UserData: []byte(allowNetbirdInputRuleID),
+		UserData: []byte(allowOpenzroInputRuleID),
 	}
 	_ = m.rConn.InsertRule(rule)
 }
 
-func (m *Manager) detectAllowNetbirdRule(existedRules []*nftables.Rule) *nftables.Rule {
+func (m *Manager) detectAllowOpenzroRule(existedRules []*nftables.Rule) *nftables.Rule {
 	ifName := ifname(m.wgIface.Name())
 	for _, rule := range existedRules {
 		if rule.Table.Name == tableNameFilter && rule.Chain.Name == chainNameInput {

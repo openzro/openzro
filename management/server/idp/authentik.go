@@ -15,7 +15,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"goauthentik.io/api/v3"
 
-	"github.com/netbirdio/netbird/management/server/telemetry"
+	"github.com/openzro/openzro/management/server/telemetry"
 )
 
 // AuthentikManager authentik manager client instance.

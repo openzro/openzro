@@ -7,8 +7,8 @@ import (
 
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
-	"github.com/netbirdio/netbird/client/iface/configurer"
-	"github.com/netbirdio/netbird/monotime"
+	"github.com/openzro/openzro/client/iface/configurer"
+	"github.com/openzro/openzro/monotime"
 )
 
 type WGConfigurer interface {

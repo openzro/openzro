@@ -7,10 +7,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/netbirdio/netbird/client/anonymize"
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/client/internal/routemanager/systemops"
-	"github.com/netbirdio/netbird/management/domain"
+	"github.com/openzro/openzro/client/anonymize"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/client/internal/routemanager/systemops"
+	"github.com/openzro/openzro/management/domain"
 )
 
 func formatInterfaces(interfaces []net.Interface, anonymize bool, anonymizer *anonymize.Anonymizer) string {

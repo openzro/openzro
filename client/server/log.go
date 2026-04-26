@@ -3,7 +3,7 @@ package server
 import (
 	"strings"
 
-	"github.com/netbirdio/netbird/client/proto"
+	"github.com/openzro/openzro/client/proto"
 )
 
 func ParseLogLevel(level string) proto.LogLevel {

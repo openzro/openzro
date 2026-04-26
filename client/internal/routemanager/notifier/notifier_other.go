@@ -5,8 +5,8 @@ package notifier
 import (
 	"net/netip"
 
-	"github.com/netbirdio/netbird/client/internal/listener"
-	"github.com/netbirdio/netbird/route"
+	"github.com/openzro/openzro/client/internal/listener"
+	"github.com/openzro/openzro/route"
 )
 
 type Notifier struct{}

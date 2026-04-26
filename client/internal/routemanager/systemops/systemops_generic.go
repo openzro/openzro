@@ -16,13 +16,13 @@ import (
 	"github.com/libp2p/go-netroute"
 	log "github.com/sirupsen/logrus"
 
-	nberrors "github.com/netbirdio/netbird/client/errors"
-	"github.com/netbirdio/netbird/client/iface/netstack"
-	"github.com/netbirdio/netbird/client/internal/routemanager/refcounter"
-	"github.com/netbirdio/netbird/client/internal/routemanager/util"
-	"github.com/netbirdio/netbird/client/internal/routemanager/vars"
-	"github.com/netbirdio/netbird/client/internal/statemanager"
-	nbnet "github.com/netbirdio/netbird/util/net"
+	nberrors "github.com/openzro/openzro/client/errors"
+	"github.com/openzro/openzro/client/iface/netstack"
+	"github.com/openzro/openzro/client/internal/routemanager/refcounter"
+	"github.com/openzro/openzro/client/internal/routemanager/util"
+	"github.com/openzro/openzro/client/internal/routemanager/vars"
+	"github.com/openzro/openzro/client/internal/statemanager"
+	nbnet "github.com/openzro/openzro/util/net"
 )
 
 const localSubnetsCacheTTL = 15 * time.Minute

@@ -15,17 +15,17 @@ import (
 	"github.com/rs/xid"
 	log "github.com/sirupsen/logrus"
 
-	nbdns "github.com/netbirdio/netbird/dns"
-	"github.com/netbirdio/netbird/management/domain"
-	resourceTypes "github.com/netbirdio/netbird/management/server/networks/resources/types"
-	routerTypes "github.com/netbirdio/netbird/management/server/networks/routers/types"
-	networkTypes "github.com/netbirdio/netbird/management/server/networks/types"
-	nbpeer "github.com/netbirdio/netbird/management/server/peer"
-	"github.com/netbirdio/netbird/management/server/posture"
-	"github.com/netbirdio/netbird/management/server/status"
-	"github.com/netbirdio/netbird/management/server/telemetry"
-	"github.com/netbirdio/netbird/management/server/util"
-	"github.com/netbirdio/netbird/route"
+	nbdns "github.com/openzro/openzro/dns"
+	"github.com/openzro/openzro/management/domain"
+	resourceTypes "github.com/openzro/openzro/management/server/networks/resources/types"
+	routerTypes "github.com/openzro/openzro/management/server/networks/routers/types"
+	networkTypes "github.com/openzro/openzro/management/server/networks/types"
+	nbpeer "github.com/openzro/openzro/management/server/peer"
+	"github.com/openzro/openzro/management/server/posture"
+	"github.com/openzro/openzro/management/server/status"
+	"github.com/openzro/openzro/management/server/telemetry"
+	"github.com/openzro/openzro/management/server/util"
+	"github.com/openzro/openzro/route"
 )
 
 const (

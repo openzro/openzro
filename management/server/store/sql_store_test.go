@@ -20,33 +20,33 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	nbdns "github.com/netbirdio/netbird/dns"
-	resourceTypes "github.com/netbirdio/netbird/management/server/networks/resources/types"
-	routerTypes "github.com/netbirdio/netbird/management/server/networks/routers/types"
-	networkTypes "github.com/netbirdio/netbird/management/server/networks/types"
-	nbpeer "github.com/netbirdio/netbird/management/server/peer"
-	"github.com/netbirdio/netbird/management/server/posture"
-	"github.com/netbirdio/netbird/management/server/status"
-	"github.com/netbirdio/netbird/management/server/types"
-	"github.com/netbirdio/netbird/management/server/util"
-	nbroute "github.com/netbirdio/netbird/route"
-	route2 "github.com/netbirdio/netbird/route"
+	nbdns "github.com/openzro/openzro/dns"
+	resourceTypes "github.com/openzro/openzro/management/server/networks/resources/types"
+	routerTypes "github.com/openzro/openzro/management/server/networks/routers/types"
+	networkTypes "github.com/openzro/openzro/management/server/networks/types"
+	nbpeer "github.com/openzro/openzro/management/server/peer"
+	"github.com/openzro/openzro/management/server/posture"
+	"github.com/openzro/openzro/management/server/status"
+	"github.com/openzro/openzro/management/server/types"
+	"github.com/openzro/openzro/management/server/util"
+	nbroute "github.com/openzro/openzro/route"
+	route2 "github.com/openzro/openzro/route"
 )
 
 func runTestForAllEngines(t *testing.T, testDataFile string, f func(t *testing.T, store Store)) {
 	t.Helper()
 	for _, engine := range supportedEngines {
-		if os.Getenv("NETBIRD_STORE_ENGINE") != "" && os.Getenv("NETBIRD_STORE_ENGINE") != string(engine) {
+		if os.Getenv("OPENZRO_STORE_ENGINE") != "" && os.Getenv("OPENZRO_STORE_ENGINE") != string(engine) {
 			continue
 		}
-		t.Setenv("NETBIRD_STORE_ENGINE", string(engine))
+		t.Setenv("OPENZRO_STORE_ENGINE", string(engine))
 		store, cleanUp, err := NewTestStoreFromSQL(context.Background(), testDataFile, t.TempDir())
 		t.Cleanup(cleanUp)
 		assert.NoError(t, err)
 		t.Run(string(engine), func(t *testing.T) {
 			f(t, store)
 		})
-		os.Unsetenv("NETBIRD_STORE_ENGINE")
+		os.Unsetenv("OPENZRO_STORE_ENGINE")
 	}
 }
 
@@ -294,7 +294,7 @@ func TestSqlite_DeleteAccount(t *testing.T) {
 		t.Skip("The SQLite store is not properly supported by Windows yet")
 	}
 
-	t.Setenv("NETBIRD_STORE_ENGINE", string(types.SqliteStoreEngine))
+	t.Setenv("OPENZRO_STORE_ENGINE", string(types.SqliteStoreEngine))
 	store, cleanUp, err := NewTestStoreFromSQL(context.Background(), "", t.TempDir())
 	t.Cleanup(cleanUp)
 	assert.NoError(t, err)
@@ -641,7 +641,7 @@ func TestMigrate(t *testing.T) {
 	}
 
 	// TODO: figure out why this fails on postgres
-	t.Setenv("NETBIRD_STORE_ENGINE", string(types.SqliteStoreEngine))
+	t.Setenv("OPENZRO_STORE_ENGINE", string(types.SqliteStoreEngine))
 
 	store, cleanUp, err := NewTestStoreFromSQL(context.Background(), "", t.TempDir())
 	t.Cleanup(cleanUp)
@@ -750,7 +750,7 @@ func TestPostgresql_NewStore(t *testing.T) {
 		t.Skip("skip CI tests on darwin and windows")
 	}
 
-	t.Setenv("NETBIRD_STORE_ENGINE", string(types.PostgresStoreEngine))
+	t.Setenv("OPENZRO_STORE_ENGINE", string(types.PostgresStoreEngine))
 	store, cleanUp, err := NewTestStoreFromSQL(context.Background(), "", t.TempDir())
 	t.Cleanup(cleanUp)
 	assert.NoError(t, err)
@@ -765,7 +765,7 @@ func TestPostgresql_SaveAccount(t *testing.T) {
 		t.Skip("skip CI tests on darwin and windows")
 	}
 
-	t.Setenv("NETBIRD_STORE_ENGINE", string(types.PostgresStoreEngine))
+	t.Setenv("OPENZRO_STORE_ENGINE", string(types.PostgresStoreEngine))
 	store, cleanUp, err := NewTestStoreFromSQL(context.Background(), "", t.TempDir())
 	t.Cleanup(cleanUp)
 	assert.NoError(t, err)
@@ -838,7 +838,7 @@ func TestPostgresql_DeleteAccount(t *testing.T) {
 		t.Skip("skip CI tests on darwin and windows")
 	}
 
-	t.Setenv("NETBIRD_STORE_ENGINE", string(types.PostgresStoreEngine))
+	t.Setenv("OPENZRO_STORE_ENGINE", string(types.PostgresStoreEngine))
 	store, cleanUp, err := NewTestStoreFromSQL(context.Background(), "", t.TempDir())
 	t.Cleanup(cleanUp)
 	assert.NoError(t, err)
@@ -914,7 +914,7 @@ func TestPostgresql_TestGetAccountByPrivateDomain(t *testing.T) {
 		t.Skip("skip CI tests on darwin and windows")
 	}
 
-	t.Setenv("NETBIRD_STORE_ENGINE", string(types.PostgresStoreEngine))
+	t.Setenv("OPENZRO_STORE_ENGINE", string(types.PostgresStoreEngine))
 	store, cleanUp, err := NewTestStoreFromSQL(context.Background(), "../testdata/store.sql", t.TempDir())
 	t.Cleanup(cleanUp)
 	assert.NoError(t, err)
@@ -934,7 +934,7 @@ func TestPostgresql_GetTokenIDByHashedToken(t *testing.T) {
 		t.Skip("skip CI tests on darwin and windows")
 	}
 
-	t.Setenv("NETBIRD_STORE_ENGINE", string(types.PostgresStoreEngine))
+	t.Setenv("OPENZRO_STORE_ENGINE", string(types.PostgresStoreEngine))
 	store, cleanUp, err := NewTestStoreFromSQL(context.Background(), "../testdata/store.sql", t.TempDir())
 	t.Cleanup(cleanUp)
 	assert.NoError(t, err)
@@ -948,7 +948,7 @@ func TestPostgresql_GetTokenIDByHashedToken(t *testing.T) {
 }
 
 func TestSqlite_GetTakenIPs(t *testing.T) {
-	t.Setenv("NETBIRD_STORE_ENGINE", string(types.SqliteStoreEngine))
+	t.Setenv("OPENZRO_STORE_ENGINE", string(types.SqliteStoreEngine))
 	store, cleanup, err := NewTestStoreFromSQL(context.Background(), "../testdata/extended-store.sql", t.TempDir())
 	defer cleanup()
 	if err != nil {
@@ -1088,7 +1088,7 @@ func Test_AddPeerWithSameIP(t *testing.T) {
 }
 
 func TestSqlite_GetAccountNetwork(t *testing.T) {
-	t.Setenv("NETBIRD_STORE_ENGINE", string(types.SqliteStoreEngine))
+	t.Setenv("OPENZRO_STORE_ENGINE", string(types.SqliteStoreEngine))
 	store, cleanup, err := NewTestStoreFromSQL(context.Background(), "../testdata/extended-store.sql", t.TempDir())
 	t.Cleanup(cleanup)
 	if err != nil {
@@ -1111,7 +1111,7 @@ func TestSqlite_GetAccountNetwork(t *testing.T) {
 }
 
 func TestSqlite_GetSetupKeyBySecret(t *testing.T) {
-	t.Setenv("NETBIRD_STORE_ENGINE", string(types.SqliteStoreEngine))
+	t.Setenv("OPENZRO_STORE_ENGINE", string(types.SqliteStoreEngine))
 	store, cleanup, err := NewTestStoreFromSQL(context.Background(), "../testdata/extended-store.sql", t.TempDir())
 	t.Cleanup(cleanup)
 	if err != nil {
@@ -1136,7 +1136,7 @@ func TestSqlite_GetSetupKeyBySecret(t *testing.T) {
 }
 
 func TestSqlite_incrementSetupKeyUsage(t *testing.T) {
-	t.Setenv("NETBIRD_STORE_ENGINE", string(types.SqliteStoreEngine))
+	t.Setenv("OPENZRO_STORE_ENGINE", string(types.SqliteStoreEngine))
 	store, cleanup, err := NewTestStoreFromSQL(context.Background(), "../testdata/extended-store.sql", t.TempDir())
 	t.Cleanup(cleanup)
 	if err != nil {
@@ -1172,7 +1172,7 @@ func TestSqlite_incrementSetupKeyUsage(t *testing.T) {
 }
 
 func TestSqlite_CreateAndGetObjectInTransaction(t *testing.T) {
-	t.Setenv("NETBIRD_STORE_ENGINE", string(types.SqliteStoreEngine))
+	t.Setenv("OPENZRO_STORE_ENGINE", string(types.SqliteStoreEngine))
 	store, cleanup, err := NewTestStoreFromSQL(context.Background(), "../testdata/extended-store.sql", t.TempDir())
 	t.Cleanup(cleanup)
 	if err != nil {
@@ -1277,7 +1277,7 @@ func TestSqlite_GetGroupByName(t *testing.T) {
 }
 
 func Test_DeleteSetupKeySuccessfully(t *testing.T) {
-	t.Setenv("NETBIRD_STORE_ENGINE", string(types.SqliteStoreEngine))
+	t.Setenv("OPENZRO_STORE_ENGINE", string(types.SqliteStoreEngine))
 	store, cleanup, err := NewTestStoreFromSQL(context.Background(), "../testdata/extended-store.sql", t.TempDir())
 	t.Cleanup(cleanup)
 	require.NoError(t, err)
@@ -1293,7 +1293,7 @@ func Test_DeleteSetupKeySuccessfully(t *testing.T) {
 }
 
 func Test_DeleteSetupKeyFailsForNonExistingKey(t *testing.T) {
-	t.Setenv("NETBIRD_STORE_ENGINE", string(types.SqliteStoreEngine))
+	t.Setenv("OPENZRO_STORE_ENGINE", string(types.SqliteStoreEngine))
 	store, cleanup, err := NewTestStoreFromSQL(context.Background(), "../testdata/extended-store.sql", t.TempDir())
 	t.Cleanup(cleanup)
 	require.NoError(t, err)

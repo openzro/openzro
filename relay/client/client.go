@@ -9,12 +9,12 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	auth "github.com/netbirdio/netbird/relay/auth/hmac"
-	"github.com/netbirdio/netbird/relay/client/dialer"
-	"github.com/netbirdio/netbird/relay/client/dialer/quic"
-	"github.com/netbirdio/netbird/relay/client/dialer/ws"
-	"github.com/netbirdio/netbird/relay/healthcheck"
-	"github.com/netbirdio/netbird/relay/messages"
+	auth "github.com/openzro/openzro/relay/auth/hmac"
+	"github.com/openzro/openzro/relay/client/dialer"
+	"github.com/openzro/openzro/relay/client/dialer/quic"
+	"github.com/openzro/openzro/relay/client/dialer/ws"
+	"github.com/openzro/openzro/relay/healthcheck"
+	"github.com/openzro/openzro/relay/messages"
 )
 
 const (

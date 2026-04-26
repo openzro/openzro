@@ -3,10 +3,10 @@ package formatter
 import (
 	"github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/formatter/hook"
-	"github.com/netbirdio/netbird/formatter/logcat"
-	"github.com/netbirdio/netbird/formatter/syslog"
-	"github.com/netbirdio/netbird/formatter/txt"
+	"github.com/openzro/openzro/formatter/hook"
+	"github.com/openzro/openzro/formatter/logcat"
+	"github.com/openzro/openzro/formatter/syslog"
+	"github.com/openzro/openzro/formatter/txt"
 )
 
 // SetTextFormatter set the text formatter for given logger.

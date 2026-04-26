@@ -14,7 +14,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/internal/routemanager/systemops"
+	"github.com/openzro/openzro/client/internal/routemanager/systemops"
 )
 
 const (

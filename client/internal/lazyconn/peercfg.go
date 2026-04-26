@@ -5,7 +5,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/internal/peer/id"
+	"github.com/openzro/openzro/client/internal/peer/id"
 )
 
 type PeerConfig struct {

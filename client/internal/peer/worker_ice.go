@@ -12,12 +12,12 @@ import (
 	"github.com/pion/stun/v2"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/iface"
-	"github.com/netbirdio/netbird/client/iface/bind"
-	"github.com/netbirdio/netbird/client/internal/peer/conntype"
-	icemaker "github.com/netbirdio/netbird/client/internal/peer/ice"
-	"github.com/netbirdio/netbird/client/internal/stdnet"
-	"github.com/netbirdio/netbird/route"
+	"github.com/openzro/openzro/client/iface"
+	"github.com/openzro/openzro/client/iface/bind"
+	"github.com/openzro/openzro/client/internal/peer/conntype"
+	icemaker "github.com/openzro/openzro/client/internal/peer/ice"
+	"github.com/openzro/openzro/client/internal/stdnet"
+	"github.com/openzro/openzro/route"
 )
 
 type ICEConnInfo struct {

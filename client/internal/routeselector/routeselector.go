@@ -9,8 +9,8 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"golang.org/x/exp/maps"
 
-	"github.com/netbirdio/netbird/client/errors"
-	"github.com/netbirdio/netbird/route"
+	"github.com/openzro/openzro/client/errors"
+	"github.com/openzro/openzro/route"
 )
 
 type RouteSelector struct {

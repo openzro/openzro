@@ -3,12 +3,12 @@ package routemanager
 import (
 	"context"
 
-	firewall "github.com/netbirdio/netbird/client/firewall/manager"
-	"github.com/netbirdio/netbird/client/iface"
-	"github.com/netbirdio/netbird/client/internal/listener"
-	"github.com/netbirdio/netbird/client/internal/routeselector"
-	"github.com/netbirdio/netbird/client/internal/statemanager"
-	"github.com/netbirdio/netbird/route"
+	firewall "github.com/openzro/openzro/client/firewall/manager"
+	"github.com/openzro/openzro/client/iface"
+	"github.com/openzro/openzro/client/internal/listener"
+	"github.com/openzro/openzro/client/internal/routeselector"
+	"github.com/openzro/openzro/client/internal/statemanager"
+	"github.com/openzro/openzro/route"
 )
 
 // MockManager is the mock instance of a route manager

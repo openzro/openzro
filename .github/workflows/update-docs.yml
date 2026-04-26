@@ -16,7 +16,7 @@ jobs:
         uses: benc-uk/workflow-dispatch@v1
         with:
           workflow: generate api pages
-          repo: netbirdio/docs
+          repo: openzro/docs
           ref: "refs/heads/main"
           token: ${{ secrets.SIGN_GITHUB_TOKEN }}
           inputs: '{ "tag": "${{ github.ref }}" }'

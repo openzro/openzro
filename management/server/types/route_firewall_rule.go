@@ -1,8 +1,8 @@
 package types
 
 import (
-	"github.com/netbirdio/netbird/management/domain"
-	"github.com/netbirdio/netbird/route"
+	"github.com/openzro/openzro/management/domain"
+	"github.com/openzro/openzro/route"
 )
 
 // RouteFirewallRule a firewall rule applicable for a routed network.

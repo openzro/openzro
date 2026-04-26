@@ -9,11 +9,11 @@ import (
 
 	"github.com/golang-jwt/jwt"
 
-	"github.com/netbirdio/netbird/base62"
-	nbjwt "github.com/netbirdio/netbird/management/server/auth/jwt"
-	nbcontext "github.com/netbirdio/netbird/management/server/context"
-	"github.com/netbirdio/netbird/management/server/store"
-	"github.com/netbirdio/netbird/management/server/types"
+	"github.com/openzro/openzro/base62"
+	nbjwt "github.com/openzro/openzro/management/server/auth/jwt"
+	nbcontext "github.com/openzro/openzro/management/server/context"
+	"github.com/openzro/openzro/management/server/store"
+	"github.com/openzro/openzro/management/server/types"
 )
 
 var _ Manager = (*manager)(nil)

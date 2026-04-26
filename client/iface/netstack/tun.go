@@ -10,7 +10,7 @@ import (
 	"golang.zx2c4.com/wireguard/tun/netstack"
 )
 
-const EnvSkipProxy = "NB_NETSTACK_SKIP_PROXY"
+const EnvSkipProxy = "OZ_NETSTACK_SKIP_PROXY"
 
 type NetStackTun struct { //nolint:revive
 	address       netip.Addr

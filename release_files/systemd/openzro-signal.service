@@ -1,21 +1,21 @@
 [Unit]
-Description=Netbird Management
-Documentation=https://netbird.io/docs
+Description=Openzro Signal
+Documentation=https://openzro.io/docs
 After=network-online.target syslog.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-EnvironmentFile=-/etc/default/netbird-management
-ExecStart=/usr/bin/netbird-mgmt management $FLAGS
+EnvironmentFile=-/etc/default/openzro-signal
+ExecStart=/usr/bin/openzro-signal run $FLAGS
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=10
-CacheDirectory=netbird
-ConfigurationDirectory=netbird
-LogsDirectory=netbird
-RuntimeDirectory=netbird
-StateDirectory=netbird
+CacheDirectory=openzro
+ConfigurationDirectory=openzro
+LogsDirectory=openzro
+RuntimeDirectory=openzro
+StateDirectory=openzro
 
 # sandboxing
 LockPersonality=yes

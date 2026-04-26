@@ -4,8 +4,8 @@ import (
 	"net"
 	"net/netip"
 
-	"github.com/netbirdio/netbird/client/iface/device"
-	"github.com/netbirdio/netbird/client/iface/wgaddr"
+	"github.com/openzro/openzro/client/iface/device"
+	"github.com/openzro/openzro/client/iface/wgaddr"
 )
 
 type wgIfaceBase interface {

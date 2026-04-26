@@ -1,14 +1,14 @@
-# This code is based on the netbird-installer contribution by physk on GitHub.
-# Source: https://github.com/physk/netbird-installer
+# This code is based on the openzro-installer contribution by physk on GitHub.
+# Source: https://github.com/physk/openzro-installer
 set -e
 
-CONFIG_FOLDER="/etc/netbird"
+CONFIG_FOLDER="/etc/openzro"
 CONFIG_FILE="$CONFIG_FOLDER/install.conf"
 
-OWNER="netbirdio"
-REPO="netbird"
-CLI_APP="netbird"
-UI_APP="netbird-ui"
+OWNER="openzro"
+REPO="openzro"
+CLI_APP="openzro"
+UI_APP="openzro-ui"
 
 # Set default variable
 OS_NAME=""
@@ -25,15 +25,15 @@ elif command -v doas > /dev/null && [ "$(id -u)" -ne 0 ]; then
     SUDO="doas"
 fi
 
-if [ -z ${NETBIRD_RELEASE+x} ]; then
-    NETBIRD_RELEASE=latest
+if [ -z ${OPENZRO_RELEASE+x} ]; then
+    OPENZRO_RELEASE=latest
 fi
 
 get_release() {
     local RELEASE=$1
     if [ "$RELEASE" = "latest" ]; then
         local TAG="latest"
-        local URL="https://pkgs.netbird.io/releases/latest"
+        local URL="https://pkgs.openzro.io/releases/latest"
     else
         local TAG="tags/${RELEASE}"
         local URL="https://api.github.com/repos/${OWNER}/${REPO}/releases/${TAG}"
@@ -48,11 +48,11 @@ get_release() {
 }
 
 download_release_binary() {
-    VERSION=$(get_release "$NETBIRD_RELEASE")
+    VERSION=$(get_release "$OPENZRO_RELEASE")
     BASE_URL="https://github.com/${OWNER}/${REPO}/releases/download"
     BINARY_BASE_NAME="${VERSION#v}_${OS_TYPE}_${ARCH}.tar.gz"
 
-    # for Darwin, download the signed NetBird-UI
+    # for Darwin, download the signed Openzro-UI
     if [ "$OS_TYPE" = "darwin" ] && [ "$1" = "$UI_APP" ]; then
         BINARY_BASE_NAME="${VERSION#v}_${OS_TYPE}_${ARCH}_signed.zip"
     fi
@@ -77,7 +77,7 @@ download_release_binary() {
 
 
     if [ "$OS_TYPE" = "darwin" ] && [ "$1" = "$UI_APP" ]; then
-        INSTALL_DIR="/Applications/NetBird UI.app"
+        INSTALL_DIR="/Applications/Openzro UI.app"
 
         if test -d "$INSTALL_DIR" ; then
           echo "removing $INSTALL_DIR"
@@ -86,7 +86,7 @@ download_release_binary() {
 
         # Unzip the app and move to INSTALL_DIR
         unzip -q -o "$BINARY_NAME"
-        mv -v "netbird_ui_${OS_TYPE}/" "$INSTALL_DIR/" || mv -v "netbird_ui_${OS_TYPE}_${ARCH}/" "$INSTALL_DIR/"
+        mv -v "openzro_ui_${OS_TYPE}/" "$INSTALL_DIR/" || mv -v "openzro_ui_${OS_TYPE}_${ARCH}/" "$INSTALL_DIR/"
     else
         ${SUDO} mkdir -p "$INSTALL_DIR"
         tar -xzvf "$BINARY_NAME"
@@ -100,32 +100,32 @@ add_apt_repo() {
 
     # Remove old keys and repo source files
     ${SUDO} rm -f \
-        /etc/apt/sources.list.d/netbird.list \
+        /etc/apt/sources.list.d/openzro.list \
         /etc/apt/sources.list.d/wiretrustee.list \
         /etc/apt/trusted.gpg.d/wiretrustee.gpg \
-        /usr/share/keyrings/netbird-archive-keyring.gpg \
+        /usr/share/keyrings/openzro-archive-keyring.gpg \
         /usr/share/keyrings/wiretrustee-archive-keyring.gpg
 
-    curl -sSL https://pkgs.netbird.io/debian/public.key \
-    | ${SUDO} gpg --dearmor -o /usr/share/keyrings/netbird-archive-keyring.gpg
+    curl -sSL https://pkgs.openzro.io/debian/public.key \
+    | ${SUDO} gpg --dearmor -o /usr/share/keyrings/openzro-archive-keyring.gpg
 
     # Explicitly set the file permission
-    ${SUDO} chmod 0644 /usr/share/keyrings/netbird-archive-keyring.gpg
+    ${SUDO} chmod 0644 /usr/share/keyrings/openzro-archive-keyring.gpg
 
-    echo 'deb [signed-by=/usr/share/keyrings/netbird-archive-keyring.gpg] https://pkgs.netbird.io/debian stable main' \
-    | ${SUDO} tee /etc/apt/sources.list.d/netbird.list
+    echo 'deb [signed-by=/usr/share/keyrings/openzro-archive-keyring.gpg] https://pkgs.openzro.io/debian stable main' \
+    | ${SUDO} tee /etc/apt/sources.list.d/openzro.list
 
     ${SUDO} apt-get update
 }
 
 add_rpm_repo() {
-cat <<-EOF | ${SUDO} tee /etc/yum.repos.d/netbird.repo
-[NetBird]
-name=NetBird
-baseurl=https://pkgs.netbird.io/yum/
+cat <<-EOF | ${SUDO} tee /etc/yum.repos.d/openzro.repo
+[Openzro]
+name=Openzro
+baseurl=https://pkgs.openzro.io/yum/
 enabled=1
 gpgcheck=0
-gpgkey=https://pkgs.netbird.io/yum/repodata/repomd.xml.key
+gpgkey=https://pkgs.openzro.io/yum/repodata/repomd.xml.key
 repo_gpgcheck=1
 EOF
 }
@@ -146,12 +146,12 @@ install_aur_package() {
     done
 
     # Build package from AUR
-    cd /tmp && git clone https://aur.archlinux.org/netbird.git
-    cd netbird && makepkg -sri --noconfirm
+    cd /tmp && git clone https://aur.archlinux.org/openzro.git
+    cd openzro && makepkg -sri --noconfirm
 
     if ! $SKIP_UI_APP; then
-        cd /tmp && git clone https://aur.archlinux.org/netbird-ui.git
-        cd netbird-ui && makepkg -sri --noconfirm
+        cd /tmp && git clone https://aur.archlinux.org/openzro-ui.git
+        cd openzro-ui && makepkg -sri --noconfirm
     fi
 
     if [ -n "$REMOVE_PKGS" ]; then
@@ -209,11 +209,11 @@ install_pkg() {
     *) echo "Unsupported macOS arch: $(uname -m)" >&2; exit 1 ;;
   esac
 
-  PKG_URL=$(curl -sIL -o /dev/null -w '%{url_effective}' "https://pkgs.netbird.io/macos/${ARCH}")
-  echo "Downloading NetBird macOS installer from https://pkgs.netbird.io/macos/${ARCH}"
-  curl -fsSL -o /tmp/netbird.pkg "${PKG_URL}"
-  ${SUDO} installer -pkg /tmp/netbird.pkg -target /
-  rm -f /tmp/netbird.pkg
+  PKG_URL=$(curl -sIL -o /dev/null -w '%{url_effective}' "https://pkgs.openzro.io/macos/${ARCH}")
+  echo "Downloading Openzro macOS installer from https://pkgs.openzro.io/macos/${ARCH}"
+  curl -fsSL -o /tmp/openzro.pkg "${PKG_URL}"
+  ${SUDO} installer -pkg /tmp/openzro.pkg -target /
+  rm -f /tmp/openzro.pkg
 }
 
 check_use_bin_variable() {
@@ -224,21 +224,21 @@ check_use_bin_variable() {
     return 1
 }
 
-install_netbird() {
-    if [ -x "$(command -v netbird)" ]; then
-      status_output="$(netbird status 2>&1 || true)"
+install_openzro() {
+    if [ -x "$(command -v openzro)" ]; then
+      status_output="$(openzro status 2>&1 || true)"
 
       if echo "$status_output" | grep -q 'failed to connect to daemon error: context deadline exceeded'; then
-          echo "Warning: could not reach NetBird daemon (timeout), proceeding anyway"
+          echo "Warning: could not reach Openzro daemon (timeout), proceeding anyway"
       else
           if echo "$status_output" | grep -q 'Management: Connected' && \
               echo "$status_output" | grep -q 'Signal: Connected'; then
-              echo "NetBird service is running, please stop it before proceeding"
+              echo "Openzro service is running, please stop it before proceeding"
               exit 1
           fi
 
           if [ -n "$status_output" ]; then
-              echo "NetBird seems to be installed already, please remove it before proceeding"
+              echo "Openzro seems to be installed already, please remove it before proceeding"
               exit 1
           fi
       fi
@@ -249,44 +249,44 @@ install_netbird() {
     case "$PACKAGE_MANAGER" in
     apt)
         add_apt_repo
-        ${SUDO} apt-get install netbird -y
+        ${SUDO} apt-get install openzro -y
 
         if ! $SKIP_UI_APP; then
-            ${SUDO} apt-get install netbird-ui -y
+            ${SUDO} apt-get install openzro-ui -y
         fi
     ;;
     yum)
         add_rpm_repo
-        ${SUDO} yum -y install netbird
+        ${SUDO} yum -y install openzro
         if ! $SKIP_UI_APP; then
-            ${SUDO} yum -y install netbird-ui
+            ${SUDO} yum -y install openzro-ui
         fi
     ;;
     dnf)
         add_rpm_repo
-        ${SUDO} dnf -y install netbird
+        ${SUDO} dnf -y install openzro
 
         if ! $SKIP_UI_APP; then
-            ${SUDO} dnf -y install netbird-ui
+            ${SUDO} dnf -y install openzro-ui
         fi
     ;;
     rpm-ostree)
         add_rpm_repo
-        ${SUDO} rpm-ostree -y install netbird
+        ${SUDO} rpm-ostree -y install openzro
         if ! $SKIP_UI_APP; then
-            ${SUDO} rpm-ostree -y install netbird-ui
+            ${SUDO} rpm-ostree -y install openzro-ui
         fi
     ;;
     pacman)
         ${SUDO} pacman -Syy
         install_aur_package
-        # in-line with the docs at https://wiki.archlinux.org/title/Netbird
-        ${SUDO} systemctl enable --now netbird@main.service
+        # in-line with the docs at https://wiki.archlinux.org/title/Openzro
+        ${SUDO} systemctl enable --now openzro@main.service
     ;;
     pkg)
         # Check if the package is already installed
-        if [ -f /Library/Receipts/netbird.pkg ]; then
-            echo "NetBird is already installed. Please remove it before proceeding."
+        if [ -f /Library/Receipts/openzro.pkg ]; then
+            echo "Openzro is already installed. Please remove it before proceeding."
             exit 1
         fi
 
@@ -294,31 +294,31 @@ install_netbird() {
         install_pkg
     ;;
     brew)
-        # Remove Netbird if it had been installed using Homebrew before
-        if brew ls --versions netbird >/dev/null 2>&1; then
-            echo "Removing existing netbird client"
+        # Remove Openzro if it had been installed using Homebrew before
+        if brew ls --versions openzro >/dev/null 2>&1; then
+            echo "Removing existing openzro client"
 
             # Stop and uninstall daemon service:
-            netbird service stop
-            netbird service uninstall
+            openzro service stop
+            openzro service uninstall
 
             # Unlink the app
-            brew unlink netbird
+            brew unlink openzro
         fi
 
-        brew install netbirdio/tap/netbird
+        brew install openzro/tap/openzro
         if ! $SKIP_UI_APP; then
-            brew install --cask netbirdio/tap/netbird-ui
+            brew install --cask openzro/tap/openzro-ui
         fi
     ;;
     *)
       if [ "$OS_NAME" = "nixos" ];then
-        echo "Please add NetBird to your NixOS configuration.nix directly:"
+        echo "Please add Openzro to your NixOS configuration.nix directly:"
 			  echo ""
-			  echo "services.netbird.enable = true;"
+			  echo "services.openzro.enable = true;"
 
         if ! $SKIP_UI_APP; then
-          echo "environment.systemPackages = [ pkgs.netbird-ui ];"
+          echo "environment.systemPackages = [ pkgs.openzro-ui ];"
         fi
 
         echo "Build and apply new configuration:"
@@ -339,20 +339,20 @@ install_netbird() {
     ${SUDO} mkdir -p "$CONFIG_FOLDER"
     echo "package_manager=$PACKAGE_MANAGER" | ${SUDO} tee "$CONFIG_FILE" > /dev/null
 
-    # Load and start netbird service
+    # Load and start openzro service
     if [ "$PACKAGE_MANAGER" != "rpm-ostree" ] && [ "$PACKAGE_MANAGER" != "pkg" ]; then
-        if ! ${SUDO} netbird service install 2>&1; then
-            echo "NetBird service has already been loaded"
+        if ! ${SUDO} openzro service install 2>&1; then
+            echo "Openzro service has already been loaded"
         fi
-        if ! ${SUDO} netbird service start 2>&1; then
-            echo "NetBird service has already been started"
+        if ! ${SUDO} openzro service start 2>&1; then
+            echo "Openzro service has already been started"
         fi
     fi
 
 
-    echo "Installation has been finished. To connect, you need to run NetBird by executing the following command:"
+    echo "Installation has been finished. To connect, you need to run Openzro by executing the following command:"
     echo ""
-    echo "netbird up"
+    echo "openzro up"
 }
 
 version_greater_equal() {
@@ -367,40 +367,40 @@ is_bin_package_manager() {
   fi
 }
 
-stop_running_netbird_ui() {
-  NB_UI_PROC=$(ps -ef | grep "[n]etbird-ui" | awk '{print $2}')
-  if [ -n "$NB_UI_PROC" ]; then
-    echo "NetBird UI is running with PID $NB_UI_PROC. Stopping it..."
-    kill -9 "$NB_UI_PROC"
+stop_running_openzro_ui() {
+  OZ_UI_PROC=$(ps -ef | grep "[n]etbird-ui" | awk '{print $2}')
+  if [ -n "$OZ_UI_PROC" ]; then
+    echo "Openzro UI is running with PID $OZ_UI_PROC. Stopping it..."
+    kill -9 "$OZ_UI_PROC"
   fi
 }
 
-update_netbird() {
+update_openzro() {
   if is_bin_package_manager "$CONFIG_FILE"; then
     latest_release=$(get_release "latest")
     latest_version=${latest_release#v}
-    installed_version=$(netbird version)
+    installed_version=$(openzro version)
 
     if [ "$latest_version" = "$installed_version" ]; then
-      echo "Installed NetBird version ($installed_version) is up-to-date"
+      echo "Installed Openzro version ($installed_version) is up-to-date"
       exit 0
     fi
 
     if version_greater_equal "$latest_version" "$installed_version"; then
-      echo "NetBird new version ($latest_version) available. Updating..."
+      echo "Openzro new version ($latest_version) available. Updating..."
       echo ""
-      echo "Initiating NetBird update. This will stop the netbird service and restart it after the update"
+      echo "Initiating Openzro update. This will stop the openzro service and restart it after the update"
 
-      ${SUDO} netbird service stop || true
-      ${SUDO} netbird service uninstall || true
-      stop_running_netbird_ui
+      ${SUDO} openzro service stop || true
+      ${SUDO} openzro service uninstall || true
+      stop_running_openzro_ui
       install_native_binaries
 
-      ${SUDO} netbird service install
-      ${SUDO} netbird service start
+      ${SUDO} openzro service install
+      ${SUDO} openzro service start
     fi
   else
-     echo "NetBird installation was done using a package manager. Please use your system's package manager to update"
+     echo "Openzro installation was done using a package manager. Please use your system's package manager to update"
   fi
 }
 
@@ -410,7 +410,7 @@ if [ -z "$SKIP_UI_APP" ]; then
 else
     if $SKIP_UI_APP; then
       echo "SKIP_UI_APP has been set to true in the environment"
-      echo "NetBird UI installation will be omitted based on your preference"
+      echo "Openzro UI installation will be omitted based on your preference"
     fi
 fi
 
@@ -430,17 +430,17 @@ if type uname >/dev/null 2>&1; then
               OS_NAME="$(. /etc/os-release && echo "$ID")"
               INSTALL_DIR="/usr/bin"
 
-              # Allow netbird UI installation for x64 arch only
+              # Allow openzro UI installation for x64 arch only
               if [ "$ARCH" != "amd64" ] && [ "$ARCH" != "arm64" ] \
                   && [ "$ARCH" != "x86_64" ];then
                   SKIP_UI_APP=true
-                  echo "NetBird UI installation will be omitted as $ARCH is not a compatible architecture"
+                  echo "Openzro UI installation will be omitted as $ARCH is not a compatible architecture"
               fi
 
-              # Allow netbird UI installation for linux running desktop environment
+              # Allow openzro UI installation for linux running desktop environment
               if [ -z "$XDG_CURRENT_DESKTOP" ];then
                   SKIP_UI_APP=true
-                  echo "NetBird UI installation will be omitted as Linux does not run desktop environment"
+                  echo "Openzro UI installation will be omitted as Linux does not run desktop environment"
               fi
 
               # Check the availability of a compatible package manager
@@ -488,14 +488,14 @@ fi
 
 UPDATE_FLAG=$1
 
-if [ "${UPDATE_NETBIRD}-x" = "true-x" ]; then
+if [ "${UPDATE_OPENZRO}-x" = "true-x" ]; then
   UPDATE_FLAG="--update"
 fi
 
 case "$UPDATE_FLAG" in
     --update)
-      update_netbird
+      update_openzro
     ;;
     *)
-      install_netbird
+      install_openzro
 esac

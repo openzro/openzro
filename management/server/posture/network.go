@@ -6,8 +6,8 @@ import (
 	"net/netip"
 	"slices"
 
-	nbpeer "github.com/netbirdio/netbird/management/server/peer"
-	"github.com/netbirdio/netbird/management/server/status"
+	nbpeer "github.com/openzro/openzro/management/server/peer"
+	"github.com/openzro/openzro/management/server/status"
 )
 
 type PeerNetworkRangeCheck struct {

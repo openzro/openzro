@@ -8,11 +8,11 @@ import (
 	"github.com/hashicorp/go-multierror"
 	log "github.com/sirupsen/logrus"
 
-	nberrors "github.com/netbirdio/netbird/client/errors"
-	firewall "github.com/netbirdio/netbird/client/firewall/manager"
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/management/domain"
-	"github.com/netbirdio/netbird/route"
+	nberrors "github.com/openzro/openzro/client/errors"
+	firewall "github.com/openzro/openzro/client/firewall/manager"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/management/domain"
+	"github.com/openzro/openzro/route"
 )
 
 const (

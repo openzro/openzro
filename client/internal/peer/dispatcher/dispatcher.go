@@ -3,7 +3,7 @@ package dispatcher
 import (
 	"sync"
 
-	"github.com/netbirdio/netbird/client/internal/peer/id"
+	"github.com/openzro/openzro/client/internal/peer/id"
 )
 
 type ConnectionListener struct {

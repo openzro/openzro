@@ -13,11 +13,11 @@ import (
 	"google.golang.org/grpc/status"
 	gproto "google.golang.org/protobuf/proto"
 
-	"github.com/netbirdio/signal-dispatcher/dispatcher"
+	"github.com/openzro/signal-dispatcher/dispatcher"
 
-	"github.com/netbirdio/netbird/signal/metrics"
-	"github.com/netbirdio/netbird/signal/peer"
-	"github.com/netbirdio/netbird/signal/proto"
+	"github.com/openzro/openzro/signal/metrics"
+	"github.com/openzro/openzro/signal/peer"
+	"github.com/openzro/openzro/signal/proto"
 )
 
 const (

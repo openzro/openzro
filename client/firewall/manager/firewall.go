@@ -8,14 +8,14 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/internal/statemanager"
+	"github.com/openzro/openzro/client/internal/statemanager"
 )
 
 const (
-	ForwardingFormatPrefix = "netbird-fwd-"
-	ForwardingFormat       = "netbird-fwd-%s-%t"
-	PreroutingFormat       = "netbird-prerouting-%s-%t"
-	NatFormat              = "netbird-nat-%s-%t"
+	ForwardingFormatPrefix = "openzro-fwd-"
+	ForwardingFormat       = "openzro-fwd-%s-%t"
+	PreroutingFormat       = "openzro-prerouting-%s-%t"
+	NatFormat              = "openzro-nat-%s-%t"
 )
 
 // Rule abstraction should be implemented by each firewall manager
@@ -89,12 +89,12 @@ func (d Network) IsPrefix() bool {
 // Manager is the high level abstraction of a firewall manager
 //
 // It declares methods which handle actions required by the
-// Netbird client for ACL and routing functionality
+// Openzro client for ACL and routing functionality
 type Manager interface {
 	Init(stateManager *statemanager.Manager) error
 
-	// AllowNetbird allows netbird interface traffic
-	AllowNetbird() error
+	// AllowOpenzro allows openzro interface traffic
+	AllowOpenzro() error
 
 	// AddPeerFiltering adds a rule to the firewall
 	//

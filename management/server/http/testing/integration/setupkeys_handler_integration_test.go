@@ -15,9 +15,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/netbirdio/netbird/management/server/http/api"
-	"github.com/netbirdio/netbird/management/server/http/handlers/setup_keys"
-	"github.com/netbirdio/netbird/management/server/http/testing/testing_tools"
+	"github.com/openzro/openzro/management/server/http/api"
+	"github.com/openzro/openzro/management/server/http/handlers/setup_keys"
+	"github.com/openzro/openzro/management/server/http/testing/testing_tools"
 )
 
 func Test_SetupKeys_Create(t *testing.T) {

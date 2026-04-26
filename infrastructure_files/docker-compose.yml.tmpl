@@ -10,82 +10,82 @@ services:
   # UI dashboard
   dashboard:
     <<: *default
-    image: netbirdio/dashboard:$NETBIRD_DASHBOARD_TAG
+    image: openzro/dashboard:$OPENZRO_DASHBOARD_TAG
     ports:
       - 80:80
       - 443:443
     environment:
       # Endpoints
-      - NETBIRD_MGMT_API_ENDPOINT=$NETBIRD_MGMT_API_ENDPOINT
-      - NETBIRD_MGMT_GRPC_API_ENDPOINT=$NETBIRD_MGMT_API_ENDPOINT
+      - OPENZRO_MGMT_API_ENDPOINT=$OPENZRO_MGMT_API_ENDPOINT
+      - OPENZRO_MGMT_GRPC_API_ENDPOINT=$OPENZRO_MGMT_API_ENDPOINT
       # OIDC
-      - AUTH_AUDIENCE=$NETBIRD_DASH_AUTH_AUDIENCE
-      - AUTH_CLIENT_ID=$NETBIRD_AUTH_CLIENT_ID
-      - AUTH_CLIENT_SECRET=$NETBIRD_AUTH_CLIENT_SECRET
-      - AUTH_AUTHORITY=$NETBIRD_AUTH_AUTHORITY
-      - USE_AUTH0=$NETBIRD_USE_AUTH0
-      - AUTH_SUPPORTED_SCOPES=$NETBIRD_AUTH_SUPPORTED_SCOPES
-      - AUTH_REDIRECT_URI=$NETBIRD_AUTH_REDIRECT_URI
-      - AUTH_SILENT_REDIRECT_URI=$NETBIRD_AUTH_SILENT_REDIRECT_URI
-      - NETBIRD_TOKEN_SOURCE=$NETBIRD_TOKEN_SOURCE
+      - AUTH_AUDIENCE=$OPENZRO_DASH_AUTH_AUDIENCE
+      - AUTH_CLIENT_ID=$OPENZRO_AUTH_CLIENT_ID
+      - AUTH_CLIENT_SECRET=$OPENZRO_AUTH_CLIENT_SECRET
+      - AUTH_AUTHORITY=$OPENZRO_AUTH_AUTHORITY
+      - USE_AUTH0=$OPENZRO_USE_AUTH0
+      - AUTH_SUPPORTED_SCOPES=$OPENZRO_AUTH_SUPPORTED_SCOPES
+      - AUTH_REDIRECT_URI=$OPENZRO_AUTH_REDIRECT_URI
+      - AUTH_SILENT_REDIRECT_URI=$OPENZRO_AUTH_SILENT_REDIRECT_URI
+      - OPENZRO_TOKEN_SOURCE=$OPENZRO_TOKEN_SOURCE
       # SSL
       - NGINX_SSL_PORT=443
       # Letsencrypt
-      - LETSENCRYPT_DOMAIN=$NETBIRD_LETSENCRYPT_DOMAIN
-      - LETSENCRYPT_EMAIL=$NETBIRD_LETSENCRYPT_EMAIL
+      - LETSENCRYPT_DOMAIN=$OPENZRO_LETSENCRYPT_DOMAIN
+      - LETSENCRYPT_EMAIL=$OPENZRO_LETSENCRYPT_EMAIL
     volumes:
       - $LETSENCRYPT_VOLUMENAME:/etc/letsencrypt/
 
   # Signal
   signal:
     <<: *default
-    image: netbirdio/signal:$NETBIRD_SIGNAL_TAG
+    image: openzro/signal:$OPENZRO_SIGNAL_TAG
     volumes:
-      - $SIGNAL_VOLUMENAME:/var/lib/netbird
+      - $SIGNAL_VOLUMENAME:/var/lib/openzro
     ports:
-      - $NETBIRD_SIGNAL_PORT:80
+      - $OPENZRO_SIGNAL_PORT:80
   #      # port and command for Let's Encrypt validation
   #      - 443:443
-  #    command: ["--letsencrypt-domain", "$NETBIRD_LETSENCRYPT_DOMAIN", "--log-file", "console"]
+  #    command: ["--letsencrypt-domain", "$OPENZRO_LETSENCRYPT_DOMAIN", "--log-file", "console"]
 
   # Relay
   relay:
     <<: *default
-    image: netbirdio/relay:$NETBIRD_RELAY_TAG
+    image: openzro/relay:$OPENZRO_RELAY_TAG
     environment:
-    - NB_LOG_LEVEL=info
-    - NB_LISTEN_ADDRESS=:$NETBIRD_RELAY_PORT
-    - NB_EXPOSED_ADDRESS=$NETBIRD_RELAY_ENDPOINT
+    - OZ_LOG_LEVEL=info
+    - OZ_LISTEN_ADDRESS=:$OPENZRO_RELAY_PORT
+    - OZ_EXPOSED_ADDRESS=$OPENZRO_RELAY_ENDPOINT
     # todo: change to a secure secret
-    - NB_AUTH_SECRET=$NETBIRD_RELAY_AUTH_SECRET
+    - OZ_AUTH_SECRET=$OPENZRO_RELAY_AUTH_SECRET
     ports:
-      - $NETBIRD_RELAY_PORT:$NETBIRD_RELAY_PORT
+      - $OPENZRO_RELAY_PORT:$OPENZRO_RELAY_PORT
 
   # Management
   management:
     <<: *default
-    image: netbirdio/management:$NETBIRD_MANAGEMENT_TAG
+    image: openzro/management:$OPENZRO_MANAGEMENT_TAG
     depends_on:
       - dashboard
     volumes:
-      - $MGMT_VOLUMENAME:/var/lib/netbird
+      - $MGMT_VOLUMENAME:/var/lib/openzro
       - $LETSENCRYPT_VOLUMENAME:/etc/letsencrypt:ro
-      - ./management.json:/etc/netbird/management.json
+      - ./management.json:/etc/openzro/management.json
     ports:
-      - $NETBIRD_MGMT_API_PORT:443 #API port
+      - $OPENZRO_MGMT_API_PORT:443 #API port
   #    # command for Let's Encrypt validation without dashboard container
-  #    command: ["--letsencrypt-domain", "$NETBIRD_LETSENCRYPT_DOMAIN", "--log-file", "console"]
+  #    command: ["--letsencrypt-domain", "$OPENZRO_LETSENCRYPT_DOMAIN", "--log-file", "console"]
     command: [
       "--port", "443",
       "--log-file", "console",
       "--log-level", "info",
-      "--disable-anonymous-metrics=$NETBIRD_DISABLE_ANONYMOUS_METRICS",
-      "--single-account-mode-domain=$NETBIRD_MGMT_SINGLE_ACCOUNT_MODE_DOMAIN",
-      "--dns-domain=$NETBIRD_MGMT_DNS_DOMAIN"
+      "--disable-anonymous-metrics=$OPENZRO_DISABLE_ANONYMOUS_METRICS",
+      "--single-account-mode-domain=$OPENZRO_MGMT_SINGLE_ACCOUNT_MODE_DOMAIN",
+      "--dns-domain=$OPENZRO_MGMT_DNS_DOMAIN"
       ]
     environment:
-      - NETBIRD_STORE_ENGINE_POSTGRES_DSN=$NETBIRD_STORE_ENGINE_POSTGRES_DSN
-      - NETBIRD_STORE_ENGINE_MYSQL_DSN=$NETBIRD_STORE_ENGINE_MYSQL_DSN
+      - OPENZRO_STORE_ENGINE_POSTGRES_DSN=$OPENZRO_STORE_ENGINE_POSTGRES_DSN
+      - OPENZRO_STORE_ENGINE_MYSQL_DSN=$OPENZRO_STORE_ENGINE_MYSQL_DSN
       
   # Coturn
   coturn:

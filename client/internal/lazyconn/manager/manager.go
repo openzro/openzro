@@ -8,12 +8,12 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/exp/maps"
 
-	"github.com/netbirdio/netbird/client/internal/lazyconn"
-	"github.com/netbirdio/netbird/client/internal/lazyconn/activity"
-	"github.com/netbirdio/netbird/client/internal/lazyconn/inactivity"
-	peerid "github.com/netbirdio/netbird/client/internal/peer/id"
-	"github.com/netbirdio/netbird/client/internal/peerstore"
-	"github.com/netbirdio/netbird/route"
+	"github.com/openzro/openzro/client/internal/lazyconn"
+	"github.com/openzro/openzro/client/internal/lazyconn/activity"
+	"github.com/openzro/openzro/client/internal/lazyconn/inactivity"
+	peerid "github.com/openzro/openzro/client/internal/peer/id"
+	"github.com/openzro/openzro/client/internal/peerstore"
+	"github.com/openzro/openzro/route"
 )
 
 const (

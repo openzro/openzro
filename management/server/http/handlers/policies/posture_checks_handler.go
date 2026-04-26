@@ -6,13 +6,13 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/netbirdio/netbird/management/server/account"
-	nbcontext "github.com/netbirdio/netbird/management/server/context"
-	"github.com/netbirdio/netbird/management/server/geolocation"
-	"github.com/netbirdio/netbird/management/server/http/api"
-	"github.com/netbirdio/netbird/management/server/http/util"
-	"github.com/netbirdio/netbird/management/server/posture"
-	"github.com/netbirdio/netbird/management/server/status"
+	"github.com/openzro/openzro/management/server/account"
+	nbcontext "github.com/openzro/openzro/management/server/context"
+	"github.com/openzro/openzro/management/server/geolocation"
+	"github.com/openzro/openzro/management/server/http/api"
+	"github.com/openzro/openzro/management/server/http/util"
+	"github.com/openzro/openzro/management/server/posture"
+	"github.com/openzro/openzro/management/server/status"
 )
 
 // postureChecksHandler is a handler that returns posture checks of the account.
@@ -164,7 +164,7 @@ func (p *postureChecksHandler) savePostureChecks(w http.ResponseWriter, r *http.
 	if geoLocationCheck := req.Checks.GeoLocationCheck; geoLocationCheck != nil {
 		if p.geolocationManager == nil {
 			util.WriteError(r.Context(), status.Errorf(status.PreconditionFailed, "Geo location database is not initialized. "+
-				"Check the self-hosted Geo database documentation at https://docs.netbird.io/selfhosted/geo-support"), w)
+				"Check the self-hosted Geo database documentation at https://docs.openzro.io/selfhosted/geo-support"), w)
 			return
 		}
 	}

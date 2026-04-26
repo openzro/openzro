@@ -18,7 +18,7 @@ import (
 	"github.com/google/nftables/expr"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/internal/routemanager/systemops"
+	"github.com/openzro/openzro/client/internal/routemanager/systemops"
 )
 
 // addIPRules collects and adds IP rules to the archive
@@ -72,14 +72,14 @@ func (g *BundleGenerator) trySystemdLogFallback() error {
 	return nil
 }
 
-// getServiceName gets the service name from environment or defaults to netbird
+// getServiceName gets the service name from environment or defaults to openzro
 func getServiceName() string {
 	if unitName := os.Getenv("SYSTEMD_UNIT"); unitName != "" {
 		log.Debugf("Detected SYSTEMD_UNIT environment variable: %s", unitName)
 		return unitName
 	}
 
-	return "netbird"
+	return "openzro"
 }
 
 // getSystemdLogs retrieves logs from systemd journal for a specific service using journalctl

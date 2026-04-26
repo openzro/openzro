@@ -7,7 +7,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/version"
+	"github.com/openzro/openzro/version"
 )
 
 var (
@@ -28,7 +28,7 @@ type OfferAnswer struct {
 	// We can set the remote peer's endpoint with this port.
 	WgListenPort int
 
-	// Version of NetBird Agent
+	// Version of Openzro Agent
 	Version string
 	// RosenpassPubKey is the Rosenpass public key of the remote peer when receiving this message
 	// This value is the local Rosenpass server public key when sending the message
@@ -151,7 +151,7 @@ func (h *Handshaker) sendOffer() error {
 	offer := OfferAnswer{
 		IceCredentials:  IceCredentials{iceUFrag, icePwd},
 		WgListenPort:    h.config.LocalWgPort,
-		Version:         version.NetbirdVersion(),
+		Version:         version.OpenzroVersion(),
 		RosenpassPubKey: h.config.RosenpassConfig.PubKey,
 		RosenpassAddr:   h.config.RosenpassConfig.Addr,
 	}
@@ -171,7 +171,7 @@ func (h *Handshaker) sendAnswer() error {
 	answer := OfferAnswer{
 		IceCredentials:  IceCredentials{uFrag, pwd},
 		WgListenPort:    h.config.LocalWgPort,
-		Version:         version.NetbirdVersion(),
+		Version:         version.OpenzroVersion(),
 		RosenpassPubKey: h.config.RosenpassConfig.PubKey,
 		RosenpassAddr:   h.config.RosenpassConfig.Addr,
 	}

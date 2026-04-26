@@ -4,7 +4,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/netbirdio/netbird/relay/messages"
+	"github.com/openzro/openzro/relay/messages"
 )
 
 // Conn represent a connection to a relayed remote peer.

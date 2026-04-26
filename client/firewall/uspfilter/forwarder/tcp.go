@@ -16,7 +16,7 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
 	"gvisor.dev/gvisor/pkg/waiter"
 
-	nftypes "github.com/netbirdio/netbird/client/internal/netflow/types"
+	nftypes "github.com/openzro/openzro/client/internal/netflow/types"
 )
 
 // handleTCP is called by the TCP forwarder for new connections.

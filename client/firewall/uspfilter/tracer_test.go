@@ -7,11 +7,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	fw "github.com/netbirdio/netbird/client/firewall/manager"
-	"github.com/netbirdio/netbird/client/firewall/uspfilter/conntrack"
-	"github.com/netbirdio/netbird/client/firewall/uspfilter/forwarder"
-	"github.com/netbirdio/netbird/client/iface/device"
-	"github.com/netbirdio/netbird/client/iface/wgaddr"
+	fw "github.com/openzro/openzro/client/firewall/manager"
+	"github.com/openzro/openzro/client/firewall/uspfilter/conntrack"
+	"github.com/openzro/openzro/client/firewall/uspfilter/forwarder"
+	"github.com/openzro/openzro/client/iface/device"
+	"github.com/openzro/openzro/client/iface/wgaddr"
 )
 
 func verifyTraceStages(t *testing.T, trace *PacketTrace, expectedStages []PacketStage) {

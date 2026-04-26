@@ -3,7 +3,7 @@ package wgproxy
 import (
 	log "github.com/sirupsen/logrus"
 
-	udpProxy "github.com/netbirdio/netbird/client/iface/wgproxy/udp"
+	udpProxy "github.com/openzro/openzro/client/iface/wgproxy/udp"
 )
 
 // KernelFactory todo: check eBPF support on FreeBSD

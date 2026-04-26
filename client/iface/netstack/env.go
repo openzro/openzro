@@ -8,7 +8,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const EnvUseNetstackMode = "NB_USE_NETSTACK_MODE"
+const EnvUseNetstackMode = "OZ_USE_NETSTACK_MODE"
 
 // IsEnabled todo: move these function to cmd layer
 func IsEnabled() bool {
@@ -16,7 +16,7 @@ func IsEnabled() bool {
 }
 
 func ListenAddr() string {
-	sPort := os.Getenv("NB_SOCKS5_LISTENER_PORT")
+	sPort := os.Getenv("OZ_SOCKS5_LISTENER_PORT")
 	if sPort == "" {
 		return listenAddr(DefaultSocks5Port)
 	}

@@ -1,4 +1,4 @@
-package NetBirdSDK
+package OpenzroSDK
 
 import (
 	"context"
@@ -12,16 +12,16 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/exp/maps"
 
-	"github.com/netbirdio/netbird/client/internal"
-	"github.com/netbirdio/netbird/client/internal/auth"
-	"github.com/netbirdio/netbird/client/internal/dns"
-	"github.com/netbirdio/netbird/client/internal/listener"
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/client/internal/profilemanager"
-	"github.com/netbirdio/netbird/client/system"
-	"github.com/netbirdio/netbird/formatter"
-	"github.com/netbirdio/netbird/management/domain"
-	"github.com/netbirdio/netbird/route"
+	"github.com/openzro/openzro/client/internal"
+	"github.com/openzro/openzro/client/internal/auth"
+	"github.com/openzro/openzro/client/internal/dns"
+	"github.com/openzro/openzro/client/internal/listener"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/client/internal/profilemanager"
+	"github.com/openzro/openzro/client/system"
+	"github.com/openzro/openzro/formatter"
+	"github.com/openzro/openzro/management/domain"
+	"github.com/openzro/openzro/route"
 )
 
 // ConnectionListener export internal Listener for mobile
@@ -91,7 +91,7 @@ func NewClient(cfgFile, stateFile, deviceName string, osVersion string, osName s
 
 // Run start the internal client. It is a blocker function
 func (c *Client) Run(fd int32, interfaceName string) error {
-	log.Infof("Starting NetBird client")
+	log.Infof("Starting Openzro client")
 	log.Debugf("Tunnel uses interface: %s", interfaceName)
 	cfg, err := profilemanager.UpdateOrCreateConfig(profilemanager.ConfigInput{
 		ConfigPath:    c.cfgFile,

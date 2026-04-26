@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/netbirdio/netbird/management/server/http/api"
+	"github.com/openzro/openzro/management/server/http/api"
 )
 
 // PostureChecksAPI APIs for PostureChecks, do not use directly
@@ -14,7 +14,7 @@ type PostureChecksAPI struct {
 }
 
 // List list all posture checks
-// See more: https://docs.netbird.io/api/resources/posture-checks#list-all-posture-checks
+// See more: https://docs.openzro.io/api/resources/posture-checks#list-all-posture-checks
 func (a *PostureChecksAPI) List(ctx context.Context) ([]api.PostureCheck, error) {
 	resp, err := a.c.NewRequest(ctx, "GET", "/api/posture-checks", nil, nil)
 	if err != nil {
@@ -28,7 +28,7 @@ func (a *PostureChecksAPI) List(ctx context.Context) ([]api.PostureCheck, error)
 }
 
 // Get get posture check info
-// See more: https://docs.netbird.io/api/resources/posture-checks#retrieve-a-posture-check
+// See more: https://docs.openzro.io/api/resources/posture-checks#retrieve-a-posture-check
 func (a *PostureChecksAPI) Get(ctx context.Context, postureCheckID string) (*api.PostureCheck, error) {
 	resp, err := a.c.NewRequest(ctx, "GET", "/api/posture-checks/"+postureCheckID, nil, nil)
 	if err != nil {
@@ -42,7 +42,7 @@ func (a *PostureChecksAPI) Get(ctx context.Context, postureCheckID string) (*api
 }
 
 // Create create new posture check
-// See more: https://docs.netbird.io/api/resources/posture-checks#create-a-posture-check
+// See more: https://docs.openzro.io/api/resources/posture-checks#create-a-posture-check
 func (a *PostureChecksAPI) Create(ctx context.Context, request api.PostApiPostureChecksJSONRequestBody) (*api.PostureCheck, error) {
 	requestBytes, err := json.Marshal(request)
 	if err != nil {
@@ -60,7 +60,7 @@ func (a *PostureChecksAPI) Create(ctx context.Context, request api.PostApiPostur
 }
 
 // Update update posture check info
-// See more: https://docs.netbird.io/api/resources/posture-checks#update-a-posture-check
+// See more: https://docs.openzro.io/api/resources/posture-checks#update-a-posture-check
 func (a *PostureChecksAPI) Update(ctx context.Context, postureCheckID string, request api.PutApiPostureChecksPostureCheckIdJSONRequestBody) (*api.PostureCheck, error) {
 	requestBytes, err := json.Marshal(request)
 	if err != nil {
@@ -78,7 +78,7 @@ func (a *PostureChecksAPI) Update(ctx context.Context, postureCheckID string, re
 }
 
 // Delete delete posture check
-// See more: https://docs.netbird.io/api/resources/posture-checks#delete-a-posture-check
+// See more: https://docs.openzro.io/api/resources/posture-checks#delete-a-posture-check
 func (a *PostureChecksAPI) Delete(ctx context.Context, postureCheckID string) error {
 	resp, err := a.c.NewRequest(ctx, "DELETE", "/api/posture-checks/"+postureCheckID, nil, nil)
 	if err != nil {

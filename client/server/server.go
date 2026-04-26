@@ -21,23 +21,23 @@ import (
 	gstatus "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/netbirdio/netbird/client/internal/auth"
-	"github.com/netbirdio/netbird/client/internal/profilemanager"
-	"github.com/netbirdio/netbird/client/system"
-	"github.com/netbirdio/netbird/management/domain"
+	"github.com/openzro/openzro/client/internal/auth"
+	"github.com/openzro/openzro/client/internal/profilemanager"
+	"github.com/openzro/openzro/client/system"
+	"github.com/openzro/openzro/management/domain"
 
-	"github.com/netbirdio/netbird/client/internal"
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/client/proto"
-	"github.com/netbirdio/netbird/version"
+	"github.com/openzro/openzro/client/internal"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/client/proto"
+	"github.com/openzro/openzro/version"
 )
 
 const (
 	probeThreshold          = time.Second * 5
-	retryInitialIntervalVar = "NB_CONN_RETRY_INTERVAL_TIME"
-	maxRetryIntervalVar     = "NB_CONN_MAX_RETRY_INTERVAL_TIME"
-	maxRetryTimeVar         = "NB_CONN_MAX_RETRY_TIME_TIME"
-	retryMultiplierVar      = "NB_CONN_RETRY_MULTIPLIER"
+	retryInitialIntervalVar = "OZ_CONN_RETRY_INTERVAL_TIME"
+	maxRetryIntervalVar     = "OZ_CONN_MAX_RETRY_INTERVAL_TIME"
+	maxRetryTimeVar         = "OZ_CONN_MAX_RETRY_TIME_TIME"
+	retryMultiplierVar      = "OZ_CONN_RETRY_MULTIPLIER"
 	defaultInitialRetryTime = 30 * time.Minute
 	defaultMaxRetryInterval = 60 * time.Minute
 	defaultMaxRetryTime     = 14 * 24 * time.Hour
@@ -856,7 +856,7 @@ func (s *Server) Status(
 		s.isSessionActive.Store(false)
 	}
 
-	statusResponse := proto.StatusResponse{Status: string(status), DaemonVersion: version.NetbirdVersion()}
+	statusResponse := proto.StatusResponse{Status: string(status), DaemonVersion: version.OpenzroVersion()}
 
 	s.statusRecorder.UpdateManagementAddress(s.config.ManagementURL.String())
 	s.statusRecorder.UpdateRosenpass(s.config.RosenpassEnabled, s.config.RosenpassPermissive)
@@ -1054,9 +1054,9 @@ func toProtoFullStatus(fullStatus peer.FullStatus) *proto.FullStatus {
 }
 
 // sendTerminalNotification sends a terminal notification message
-// to inform the user that the NetBird connection session has expired.
+// to inform the user that the Openzro connection session has expired.
 func sendTerminalNotification() error {
-	message := "NetBird connection session expired\n\nPlease re-authenticate to connect to the network."
+	message := "Openzro connection session expired\n\nPlease re-authenticate to connect to the network."
 	echoCmd := exec.Command("echo", message)
 	wallCmd := exec.Command("sudo", "wall")
 
@@ -1171,7 +1171,7 @@ func (s *Server) GetActiveProfile(ctx context.Context, msg *proto.GetActiveProfi
 func (s *Server) checkProfilesDisabled() bool {
 	// Check if the environment variable is set to disable profiles
 	if s.profilesDisabled {
-		log.Warn("Profiles are disabled via NB_DISABLE_PROFILES environment variable")
+		log.Warn("Profiles are disabled via OZ_DISABLE_PROFILES environment variable")
 		return true
 	}
 

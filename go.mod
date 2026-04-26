@@ -1,4 +1,4 @@
-module github.com/netbirdio/netbird
+module github.com/openzro/openzro
 
 go 1.23.0
 
@@ -63,8 +63,8 @@ require (
 	github.com/miekg/dns v1.1.59
 	github.com/mitchellh/hashstructure/v2 v2.0.2
 	github.com/nadoo/ipset v0.5.0
-	github.com/netbirdio/management-integrations/integrations v0.0.0-20250724151510-c007bc6b392c
-	github.com/netbirdio/signal-dispatcher/dispatcher v0.0.0-20250514131221-a464fd5f30cb
+	github.com/openzro/management-integrations/integrations v0.0.0-20250724151510-c007bc6b392c
+	github.com/openzro/signal-dispatcher/dispatcher v0.0.0-20250514131221-a464fd5f30cb
 	github.com/okta/okta-sdk-golang/v2 v2.18.0
 	github.com/oschwald/maxminddb-golang v1.12.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
@@ -249,14 +249,14 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 )
 
-replace github.com/kardianos/service => github.com/netbirdio/service v0.0.0-20240911161631-f62744f42502
+replace github.com/kardianos/service => github.com/openzro/service v0.0.0-20240911161631-f62744f42502
 
-replace github.com/getlantern/systray => github.com/netbirdio/systray v0.0.0-20231030152038-ef1ed2a27949
+replace github.com/getlantern/systray => github.com/openzro/systray v0.0.0-20231030152038-ef1ed2a27949
 
-replace golang.zx2c4.com/wireguard => github.com/netbirdio/wireguard-go v0.0.0-20241230120307-6a676aebaaf6
+replace golang.zx2c4.com/wireguard => github.com/openzro/wireguard-go v0.0.0-20241230120307-6a676aebaaf6
 
 replace github.com/cloudflare/circl => github.com/cunicu/circl v0.0.0-20230801113412-fec58fc7b5f6
 
-replace github.com/pion/ice/v3 => github.com/netbirdio/ice/v3 v3.0.0-20240315174635-e72a50fcb64e
+replace github.com/pion/ice/v3 => github.com/openzro/ice/v3 v3.0.0-20240315174635-e72a50fcb64e
 
-replace github.com/libp2p/go-netroute => github.com/netbirdio/go-netroute v0.0.0-20240611143515-f59b0e1d3944
+replace github.com/libp2p/go-netroute => github.com/openzro/go-netroute v0.0.0-20240611143515-f59b0e1d3944

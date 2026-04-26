@@ -30,4 +30,7 @@ infrastructure_files/setup-*.env
 .vscode
 .DS_Store
 vendor/
-/netbird
+/openzro
+
+# dashboard is a separate repo (openzro/dashboard)
+dashboard/

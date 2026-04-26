@@ -16,10 +16,10 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/netbirdio/netbird/encryption"
-	"github.com/netbirdio/netbird/management/client"
-	"github.com/netbirdio/netbird/signal/proto"
-	nbgrpc "github.com/netbirdio/netbird/util/grpc"
+	"github.com/openzro/openzro/encryption"
+	"github.com/openzro/openzro/management/client"
+	"github.com/openzro/openzro/signal/proto"
+	nbgrpc "github.com/openzro/openzro/util/grpc"
 )
 
 // ConnStateNotifier is a wrapper interface of the status recorder

@@ -1,13 +1,13 @@
-// Package embed provides a way to embed the NetBird client directly
-// into Go programs without requiring a separate NetBird client installation.
+// Package embed provides a way to embed the Openzro client directly
+// into Go programs without requiring a separate Openzro client installation.
 package embed
 
 // Basic Usage:
 //
 //	client, err := embed.New(embed.Options{
 //	    DeviceName:    "my-service",
-//	    SetupKey:      os.Getenv("NB_SETUP_KEY"),
-//	    ManagementURL: os.Getenv("NB_MANAGEMENT_URL"),
+//	    SetupKey:      os.Getenv("OZ_SETUP_KEY"),
+//	    ManagementURL: os.Getenv("OZ_MANAGEMENT_URL"),
 //	})
 //	if err != nil {
 //	    log.Fatal(err)
@@ -33,15 +33,15 @@ package embed
 //	    "syscall"
 //	    "time"
 //
-//	    netbird "github.com/netbirdio/netbird/client/embed"
+//	    openzro "github.com/openzro/openzro/client/embed"
 //	)
 //
 //	func main() {
 //	    // Create client with setup key and device name
-//	    client, err := netbird.New(netbird.Options{
+//	    client, err := openzro.New(openzro.Options{
 //	        DeviceName:    "http-server",
-//	        SetupKey:      os.Getenv("NB_SETUP_KEY"),
-//	        ManagementURL: os.Getenv("NB_MANAGEMENT_URL"),
+//	        SetupKey:      os.Getenv("OZ_SETUP_KEY"),
+//	        ManagementURL: os.Getenv("OZ_MANAGEMENT_URL"),
 //	        LogOutput:     io.Discard,
 //	    })
 //	    if err != nil {
@@ -59,10 +59,10 @@ package embed
 //	    mux := http.NewServeMux()
 //	    mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 //	        fmt.Printf("Request from %s: %s %s\n", r.RemoteAddr, r.Method, r.URL.Path)
-//	        fmt.Fprintf(w, "Hello from netbird!")
+//	        fmt.Fprintf(w, "Hello from openzro!")
 //	    })
 //
-//	    // Listen on netbird network
+//	    // Listen on openzro network
 //	    l, err := client.ListenTCP(":8080")
 //	    if err != nil {
 //	        log.Fatal(err)
@@ -75,7 +75,7 @@ package embed
 //	        }
 //	    }()
 //
-//	    log.Printf("HTTP server listening on netbird network port 8080")
+//	    log.Printf("HTTP server listening on openzro network port 8080")
 //
 //	    // Handle shutdown
 //	    stop := make(chan os.Signal, 1)
@@ -89,7 +89,7 @@ package embed
 //	        log.Printf("HTTP shutdown error: %v", err)
 //	    }
 //	    if err := client.Stop(shutdownCtx); err != nil {
-//	        log.Printf("Netbird shutdown error: %v", err)
+//	        log.Printf("Openzro shutdown error: %v", err)
 //	    }
 //	}
 //
@@ -105,15 +105,15 @@ package embed
 //	    "os"
 //	    "time"
 //
-//	    netbird "github.com/netbirdio/netbird/client/embed"
+//	    openzro "github.com/openzro/openzro/client/embed"
 //	)
 //
 //	func main() {
 //	    // Create client with setup key and device name
-//	    client, err := netbird.New(netbird.Options{
+//	    client, err := openzro.New(openzro.Options{
 //	        DeviceName:    "http-client",
-//	        SetupKey:      os.Getenv("NB_SETUP_KEY"),
-//	        ManagementURL: os.Getenv("NB_MANAGEMENT_URL"),
+//	        SetupKey:      os.Getenv("OZ_SETUP_KEY"),
+//	        ManagementURL: os.Getenv("OZ_MANAGEMENT_URL"),
 //	        LogOutput:     io.Discard,
 //	    })
 //	    if err != nil {
@@ -128,12 +128,12 @@ package embed
 //	        log.Fatal(err)
 //	    }
 //
-//	    // Create HTTP client that uses netbird network
+//	    // Create HTTP client that uses openzro network
 //	    httpClient := client.NewHTTPClient()
 //	    httpClient.Timeout = 10 * time.Second
 //
-//	    // Make request to server in netbird network
-//	    target := os.Getenv("NB_TARGET")
+//	    // Make request to server in openzro network
+//	    target := os.Getenv("OZ_TARGET")
 //	    resp, err := httpClient.Get(target)
 //	    if err != nil {
 //	        log.Fatal(err)
@@ -153,7 +153,7 @@ package embed
 //	    defer cancel()
 //
 //	    if err := client.Stop(shutdownCtx); err != nil {
-//	        log.Printf("Netbird shutdown error: %v", err)
+//	        log.Printf("Openzro shutdown error: %v", err)
 //	    }
 //	}
 //

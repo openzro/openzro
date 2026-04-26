@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/netbirdio/netbird/client/cmd"
+	"github.com/openzro/openzro/client/cmd"
 )
 
 func main() {

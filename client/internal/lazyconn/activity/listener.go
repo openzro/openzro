@@ -8,7 +8,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/internal/lazyconn"
+	"github.com/openzro/openzro/client/internal/lazyconn"
 )
 
 // Listener it is not a thread safe implementation, do not call Close before ReadPackets. It will cause blocking

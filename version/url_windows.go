@@ -3,10 +3,10 @@ package version
 import "golang.org/x/sys/windows/registry"
 
 const (
-	urlWinExe = "https://pkgs.netbird.io/windows/x64"
+	urlWinExe = "https://pkgs.openzro.io/windows/x64"
 )
 
-var regKeyAppPath = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\Netbird"
+var regKeyAppPath = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\Openzro"
 
 // DownloadUrl return with the proper download link
 func DownloadUrl() string {

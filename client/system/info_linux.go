@@ -15,7 +15,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/zcalusic/sysinfo"
 
-	"github.com/netbirdio/netbird/version"
+	"github.com/openzro/openzro/version"
 )
 
 var (
@@ -61,7 +61,7 @@ func GetInfo(ctx context.Context) *Info {
 		Hostname:           extractDeviceName(ctx, systemHostname),
 		GoOS:               runtime.GOOS,
 		CPUs:               runtime.NumCPU(),
-		NetbirdVersion:     version.NetbirdVersion(),
+		OpenzroVersion:     version.OpenzroVersion(),
 		UIVersion:          extractUserAgent(ctx),
 		KernelVersion:      osInfo[1],
 		NetworkAddresses:   addrs,

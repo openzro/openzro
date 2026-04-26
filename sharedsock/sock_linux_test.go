@@ -89,7 +89,7 @@ func TestShouldNotReadNonSTUNPackets(t *testing.T) {
 		_, _, err := rawSock.ReadFrom(buf)
 		return err
 	})
-	nonStun := []byte("netbird")
+	nonStun := []byte("openzro")
 	udpListener, err := net.ListenUDP("udp", &net.UDPAddr{Port: 0, IP: net.ParseIP("127.0.0.1")})
 	require.NoError(t, err, "received an error while creating regular listener, error: %s", err)
 	defer udpListener.Close()
@@ -128,7 +128,7 @@ func TestWriteTo(t *testing.T) {
 		return err
 	})
 
-	msg := []byte("netbird")
+	msg := []byte("openzro")
 	_, err = rawSock.WriteTo(msg, udpListener.LocalAddr())
 	require.NoError(t, err, "received an error while writing the stun listener, error: %s", err)
 

@@ -16,11 +16,11 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
-	"github.com/netbirdio/netbird/management/server/migration"
-	nbpeer "github.com/netbirdio/netbird/management/server/peer"
-	"github.com/netbirdio/netbird/management/server/testutil"
-	"github.com/netbirdio/netbird/management/server/types"
-	"github.com/netbirdio/netbird/route"
+	"github.com/openzro/openzro/management/server/migration"
+	nbpeer "github.com/openzro/openzro/management/server/peer"
+	"github.com/openzro/openzro/management/server/testutil"
+	"github.com/openzro/openzro/management/server/types"
+	"github.com/openzro/openzro/route"
 )
 
 func setupDatabase(t *testing.T) *gorm.DB {
@@ -30,7 +30,7 @@ func setupDatabase(t *testing.T) *gorm.DB {
 	var err error
 	var dsn string
 	var cleanup func()
-	switch os.Getenv("NETBIRD_STORE_ENGINE") {
+	switch os.Getenv("OPENZRO_STORE_ENGINE") {
 	case "mysql":
 		cleanup, dsn, err = testutil.CreateMysqlTestContainer()
 		if err != nil {
@@ -73,7 +73,7 @@ func TestMigrateFieldFromGobToJSON_EmptyDB(t *testing.T) {
 }
 
 func TestMigrateFieldFromGobToJSON_WithGobData(t *testing.T) {
-	t.Setenv("NETBIRD_STORE_ENGINE", "sqlite")
+	t.Setenv("OPENZRO_STORE_ENGINE", "sqlite")
 	db := setupDatabase(t)
 
 	err := db.AutoMigrate(&types.Account{}, &route.Route{})
@@ -137,7 +137,7 @@ func TestMigrateNetIPFieldFromBlobToJSON_EmptyDB(t *testing.T) {
 }
 
 func TestMigrateNetIPFieldFromBlobToJSON_WithBlobData(t *testing.T) {
-	t.Setenv("NETBIRD_STORE_ENGINE", "sqlite")
+	t.Setenv("OPENZRO_STORE_ENGINE", "sqlite")
 	db := setupDatabase(t)
 
 	err := db.AutoMigrate(&types.Account{}, &nbpeer.Peer{})

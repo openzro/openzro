@@ -1,21 +1,21 @@
 [Unit]
-Description=Netbird Client (%i)
-Documentation=https://netbird.io/docs
+Description=Openzro Client (%i)
+Documentation=https://openzro.io/docs
 After=network-online.target syslog.target NetworkManager.service
 Wants=network-online.target
 
 [Service]
 Type=simple
-EnvironmentFile=-/etc/default/netbird
-ExecStart=/usr/bin/netbird service run --log-file /var/log/netbird/client-%i.log --daemon-addr unix:///var/run/netbird/%i.sock $FLAGS
+EnvironmentFile=-/etc/default/openzro
+ExecStart=/usr/bin/openzro service run --log-file /var/log/openzro/client-%i.log --daemon-addr unix:///var/run/openzro/%i.sock $FLAGS
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=10
-CacheDirectory=netbird
-ConfigurationDirectory=netbird
-LogsDirectory=netbird
-RuntimeDirectory=netbird
-StateDirectory=netbird
+CacheDirectory=openzro
+ConfigurationDirectory=openzro
+LogsDirectory=openzro
+RuntimeDirectory=openzro
+StateDirectory=openzro
 
 # sandboxing
 LockPersonality=yes

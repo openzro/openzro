@@ -9,7 +9,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/management/server/context"
+	"github.com/openzro/openzro/management/server/context"
 )
 
 type ExecutionContext string
@@ -78,19 +78,19 @@ func (hook ContextHook) moduleName() string {
 		return info.Main.Path
 	}
 
-	return "netbird"
+	return "openzro"
 }
 
 func (hook ContextHook) parseSrc(filePath string) string {
-	netbirdPath := strings.SplitAfter(filePath, hook.goModuleName)
-	if len(netbirdPath) > 1 {
-		return netbirdPath[len(netbirdPath)-1]
+	openzroPath := strings.SplitAfter(filePath, hook.goModuleName)
+	if len(openzroPath) > 1 {
+		return openzroPath[len(openzroPath)-1]
 	}
 
 	// in case of forked repo
-	netbirdPath = strings.SplitAfter(filePath, "netbird/")
-	if len(netbirdPath) > 1 {
-		return netbirdPath[len(netbirdPath)-1]
+	openzroPath = strings.SplitAfter(filePath, "openzro/")
+	if len(openzroPath) > 1 {
+		return openzroPath[len(openzroPath)-1]
 	}
 
 	// in case if log entry is come from external pkg

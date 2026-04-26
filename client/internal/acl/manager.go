@@ -14,12 +14,12 @@ import (
 	"github.com/hashicorp/go-multierror"
 	log "github.com/sirupsen/logrus"
 
-	nberrors "github.com/netbirdio/netbird/client/errors"
-	firewall "github.com/netbirdio/netbird/client/firewall/manager"
-	"github.com/netbirdio/netbird/client/internal/acl/id"
-	"github.com/netbirdio/netbird/client/ssh"
-	"github.com/netbirdio/netbird/management/domain"
-	mgmProto "github.com/netbirdio/netbird/management/proto"
+	nberrors "github.com/openzro/openzro/client/errors"
+	firewall "github.com/openzro/openzro/client/firewall/manager"
+	"github.com/openzro/openzro/client/internal/acl/id"
+	"github.com/openzro/openzro/client/ssh"
+	"github.com/openzro/openzro/management/domain"
+	mgmProto "github.com/openzro/openzro/management/proto"
 )
 
 var ErrSourceRangesEmpty = errors.New("sources range is empty")
@@ -114,7 +114,7 @@ func (d *DefaultManager) applyPeerACLs(networkMap *mgmProto.NetworkMap) {
 	// if we got empty rules list but management not set networkMap.FirewallRulesIsEmpty flag
 	// we have old version of management without rules handling, we should allow all traffic
 	if len(networkMap.FirewallRules) == 0 && !networkMap.FirewallRulesIsEmpty {
-		log.Warn("this peer is connected to a NetBird Management service with an older version. Allowing all traffic from connected peers")
+		log.Warn("this peer is connected to a Openzro Management service with an older version. Allowing all traffic from connected peers")
 		rules = append(rules,
 			&mgmProto.FirewallRule{
 				PeerIP:    "0.0.0.0",

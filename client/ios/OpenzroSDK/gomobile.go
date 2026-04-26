@@ -1,4 +1,4 @@
-package NetBirdSDK
+package OpenzroSDK
 
 import _ "golang.org/x/mobile/bind"
 

@@ -7,8 +7,8 @@ import (
 
 	"github.com/miekg/dns"
 
-	"github.com/netbirdio/netbird/client/internal/statemanager"
-	nbdns "github.com/netbirdio/netbird/dns"
+	"github.com/openzro/openzro/client/internal/statemanager"
+	nbdns "github.com/openzro/openzro/dns"
 )
 
 const (

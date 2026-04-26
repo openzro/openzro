@@ -16,7 +16,7 @@ import (
 
 // RedisStoreEnvVar is the environment variable that determines if a redis store should be used.
 // The value should follow redis URL format. https://github.com/redis/redis-specifications/blob/master/uri/redis.txt
-const RedisStoreEnvVar = "NB_IDP_CACHE_REDIS_ADDRESS"
+const RedisStoreEnvVar = "OZ_IDP_CACHE_REDIS_ADDRESS"
 
 // NewStore creates a new cache store with the given max timeout and cleanup interval. It checks for the environment Variable RedisStoreEnvVar
 // to determine if a redis store should be used. If the environment variable is set, it will attempt to connect to the redis store.

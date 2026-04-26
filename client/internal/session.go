@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/netbirdio/netbird/client/internal/peer"
+	"github.com/openzro/openzro/client/internal/peer"
 )
 
 type SessionWatcher struct {
@@ -74,7 +74,7 @@ func CheckUIApp() bool {
 
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
-		if strings.Contains(line, "netbird-ui") && !strings.Contains(line, "grep") {
+		if strings.Contains(line, "openzro-ui") && !strings.Contains(line, "grep") {
 			return true
 		}
 	}

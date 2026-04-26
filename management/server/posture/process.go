@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"slices"
 
-	nbpeer "github.com/netbirdio/netbird/management/server/peer"
+	nbpeer "github.com/openzro/openzro/management/server/peer"
 )
 
 type Process struct {

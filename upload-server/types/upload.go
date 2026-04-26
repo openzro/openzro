@@ -4,11 +4,11 @@ const (
 	// ClientHeader is the header used to identify the client
 	ClientHeader = "x-nb-client"
 	// ClientHeaderValue is the value of the ClientHeader
-	ClientHeaderValue = "netbird"
+	ClientHeaderValue = "openzro"
 	// GetURLPath is the path for the GetURL request
 	GetURLPath = "/upload-url"
 
-	DefaultBundleURL = "https://upload.debug.netbird.io" + GetURLPath
+	DefaultBundleURL = "https://upload.debug.openzro.io" + GetURLPath
 )
 
 // GetURLResponse is the response for the GetURL request

@@ -11,13 +11,13 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/management/proto"
-	"github.com/netbirdio/netbird/management/server/settings"
-	"github.com/netbirdio/netbird/management/server/types"
-	auth "github.com/netbirdio/netbird/relay/auth/hmac"
-	authv2 "github.com/netbirdio/netbird/relay/auth/hmac/v2"
+	"github.com/openzro/openzro/management/proto"
+	"github.com/openzro/openzro/management/server/settings"
+	"github.com/openzro/openzro/management/server/types"
+	auth "github.com/openzro/openzro/relay/auth/hmac"
+	authv2 "github.com/openzro/openzro/relay/auth/hmac/v2"
 
-	integrationsConfig "github.com/netbirdio/management-integrations/integrations/config"
+	integrationsConfig "github.com/openzro/management-integrations/integrations/config"
 )
 
 const defaultDuration = 12 * time.Hour
@@ -205,7 +205,7 @@ func (m *TimeBasedAuthSecretsManager) pushNewTURNAndRelayTokens(ctx context.Cont
 	}
 
 	update := &proto.SyncResponse{
-		NetbirdConfig: &proto.NetbirdConfig{
+		OpenzroConfig: &proto.OpenzroConfig{
 			Turns: turns,
 		},
 	}
@@ -214,7 +214,7 @@ func (m *TimeBasedAuthSecretsManager) pushNewTURNAndRelayTokens(ctx context.Cont
 	if m.relayCfg != nil {
 		token, err := m.GenerateRelayToken()
 		if err == nil {
-			update.NetbirdConfig.Relay = &proto.RelayConfig{
+			update.OpenzroConfig.Relay = &proto.RelayConfig{
 				Urls:           m.relayCfg.Addresses,
 				TokenPayload:   token.Payload,
 				TokenSignature: token.Signature,
@@ -222,7 +222,7 @@ func (m *TimeBasedAuthSecretsManager) pushNewTURNAndRelayTokens(ctx context.Cont
 		}
 	}
 
-	m.extendNetbirdConfig(ctx, peerID, accountID, update)
+	m.extendOpenzroConfig(ctx, peerID, accountID, update)
 
 	log.WithContext(ctx).Debugf("sending new TURN credentials to peer %s", peerID)
 	m.updateManager.SendUpdate(ctx, peerID, &UpdateMessage{Update: update})
@@ -236,7 +236,7 @@ func (m *TimeBasedAuthSecretsManager) pushNewRelayTokens(ctx context.Context, ac
 	}
 
 	update := &proto.SyncResponse{
-		NetbirdConfig: &proto.NetbirdConfig{
+		OpenzroConfig: &proto.OpenzroConfig{
 			Relay: &proto.RelayConfig{
 				Urls:           m.relayCfg.Addresses,
 				TokenPayload:   string(relayToken.Payload),
@@ -246,18 +246,18 @@ func (m *TimeBasedAuthSecretsManager) pushNewRelayTokens(ctx context.Context, ac
 		},
 	}
 
-	m.extendNetbirdConfig(ctx, peerID, accountID, update)
+	m.extendOpenzroConfig(ctx, peerID, accountID, update)
 
 	log.WithContext(ctx).Debugf("sending new relay credentials to peer %s", peerID)
 	m.updateManager.SendUpdate(ctx, peerID, &UpdateMessage{Update: update})
 }
 
-func (m *TimeBasedAuthSecretsManager) extendNetbirdConfig(ctx context.Context, peerID, accountID string, update *proto.SyncResponse) {
+func (m *TimeBasedAuthSecretsManager) extendOpenzroConfig(ctx context.Context, peerID, accountID string, update *proto.SyncResponse) {
 	extraSettings, err := m.settingsManager.GetExtraSettings(ctx, accountID)
 	if err != nil {
 		log.WithContext(ctx).Errorf("failed to get extra settings: %v", err)
 	}
 
-	extendedConfig := integrationsConfig.ExtendNetBirdConfig(peerID, update.NetbirdConfig, extraSettings)
-	update.NetbirdConfig = extendedConfig
+	extendedConfig := integrationsConfig.ExtendOpenzroConfig(peerID, update.OpenzroConfig, extraSettings)
+	update.OpenzroConfig = extendedConfig
 }

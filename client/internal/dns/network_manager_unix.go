@@ -15,8 +15,8 @@ import (
 	"github.com/hashicorp/go-version"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/internal/statemanager"
-	nbversion "github.com/netbirdio/netbird/version"
+	"github.com/openzro/openzro/client/internal/statemanager"
+	nbversion "github.com/openzro/openzro/version"
 )
 
 const (

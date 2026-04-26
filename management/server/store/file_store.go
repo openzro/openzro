@@ -11,11 +11,11 @@ import (
 	"github.com/rs/xid"
 	log "github.com/sirupsen/logrus"
 
-	nbpeer "github.com/netbirdio/netbird/management/server/peer"
-	"github.com/netbirdio/netbird/management/server/telemetry"
-	"github.com/netbirdio/netbird/management/server/types"
-	nbutil "github.com/netbirdio/netbird/management/server/util"
-	"github.com/netbirdio/netbird/util"
+	nbpeer "github.com/openzro/openzro/management/server/peer"
+	"github.com/openzro/openzro/management/server/telemetry"
+	"github.com/openzro/openzro/management/server/types"
+	nbutil "github.com/openzro/openzro/management/server/util"
+	"github.com/openzro/openzro/util"
 )
 
 // storeFileName Store file name. Stored in the datadir

@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	nbdns "github.com/netbirdio/netbird/client/internal/dns"
-	"github.com/netbirdio/netbird/client/internal/dns/test"
+	nbdns "github.com/openzro/openzro/client/internal/dns"
+	"github.com/openzro/openzro/client/internal/dns/test"
 )
 
 // TestHandlerChain_ServeDNS_Priorities tests that handlers are executed in priority order

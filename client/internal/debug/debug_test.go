@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/netbirdio/netbird/client/anonymize"
-	mgmProto "github.com/netbirdio/netbird/management/proto"
+	"github.com/openzro/openzro/client/anonymize"
+	mgmProto "github.com/openzro/openzro/management/proto"
 )
 
 func TestAnonymizeStateFile(t *testing.T) {
@@ -27,7 +27,7 @@ func TestAnonymizeStateFile(t *testing.T) {
 			"domain":         "test.example.com",
 			"uri":            "stun:stun.example.com:3478",
 			"uri_with_ip":    "turn:203.0.113.1:3478",
-			"netbird_domain": "device.netbird.cloud",
+			"openzro_domain": "device.openzro.cloud",
 
 			// Test CIDR ranges
 			"public_cidr":       "203.0.113.0/24",
@@ -166,7 +166,7 @@ func TestAnonymizeStateFile(t *testing.T) {
 	assert.Equal(t, "fd00::1", state["private_ipv6"]) // Private IPv6 unchanged
 	assert.NotEqual(t, "test.example.com", state["domain"])
 	assert.True(t, strings.HasSuffix(state["domain"].(string), ".domain"))
-	assert.Equal(t, "device.netbird.cloud", state["netbird_domain"]) // Netbird domain unchanged
+	assert.Equal(t, "device.openzro.cloud", state["openzro_domain"]) // Openzro domain unchanged
 
 	// CIDR ranges
 	assert.NotEqual(t, "203.0.113.0/24", state["public_cidr"])

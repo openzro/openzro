@@ -12,7 +12,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/iface/wgproxy/listener"
+	"github.com/openzro/openzro/client/iface/wgproxy/listener"
 )
 
 // ProxyWrapper help to keep the remoteConn instance for net.Conn.Close function call

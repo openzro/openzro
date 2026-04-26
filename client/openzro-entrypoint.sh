@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -eEuo pipefail
 
-: ${NB_ENTRYPOINT_SERVICE_TIMEOUT:="5"}
-: ${NB_ENTRYPOINT_LOGIN_TIMEOUT:="1"}
-NETBIRD_BIN="${NETBIRD_BIN:-"netbird"}"
-export NB_LOG_FILE="${NB_LOG_FILE:-"console,/var/log/netbird/client.log"}"
+: ${OZ_ENTRYPOINT_SERVICE_TIMEOUT:="5"}
+: ${OZ_ENTRYPOINT_LOGIN_TIMEOUT:="1"}
+OPENZRO_BIN="${OPENZRO_BIN:-"openzro"}"
+export OZ_LOG_FILE="${OZ_LOG_FILE:-"console,/var/log/openzro/client.log"}"
 service_pids=()
 log_file_path=""
 
@@ -23,7 +23,7 @@ warn() {
 }
 
 on_exit() {
-  info "Shutting down NetBird daemon..."
+  info "Shutting down Openzro daemon..."
   if test "${#service_pids[@]}" -gt 0; then
     info "terminating service process IDs: ${service_pids[@]@Q}"
     kill -TERM "${service_pids[@]}" 2>/dev/null || true
@@ -60,7 +60,7 @@ locate_log_file() {
   done < <(sed 's#,#\n#g' <<<"${log_files_string}")
 
   warn "log files parsing for ${log_files_string@Q} is not supported by debug bundles"
-  warn "please consider removing the \$NB_LOG_FILE or setting it to real file, before gathering debug bundles."
+  warn "please consider removing the \$OZ_LOG_FILE or setting it to real file, before gathering debug bundles."
 }
 
 wait_for_daemon_startup() {
@@ -82,22 +82,22 @@ login_if_needed() {
   local timeout="${1}"
 
   if test -n "${log_file_path}" && wait_for_message "${timeout}" 'peer has been successfully registered'; then
-    info "already logged in, skipping 'netbird up'..."
+    info "already logged in, skipping 'openzro up'..."
   else
     info "logging in..."
-    "${NETBIRD_BIN}" up
+    "${OPENZRO_BIN}" up
   fi
 }
 
 main() {
   trap 'on_exit' SIGTERM SIGINT EXIT
-  "${NETBIRD_BIN}" service run &
+  "${OPENZRO_BIN}" service run &
   service_pids+=("$!")
-  info "registered new service process 'netbird service run', currently running: ${service_pids[@]@Q}"
+  info "registered new service process 'openzro service run', currently running: ${service_pids[@]@Q}"
 
-  locate_log_file "${NB_LOG_FILE}"
-  wait_for_daemon_startup "${NB_ENTRYPOINT_SERVICE_TIMEOUT}"
-  login_if_needed "${NB_ENTRYPOINT_LOGIN_TIMEOUT}"
+  locate_log_file "${OZ_LOG_FILE}"
+  wait_for_daemon_startup "${OZ_ENTRYPOINT_SERVICE_TIMEOUT}"
+  login_if_needed "${OZ_ENTRYPOINT_LOGIN_TIMEOUT}"
 
   wait "${service_pids[@]}"
 }

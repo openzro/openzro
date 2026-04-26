@@ -3,9 +3,9 @@ package integrated_validator
 import (
 	"context"
 
-	"github.com/netbirdio/netbird/management/proto"
-	nbpeer "github.com/netbirdio/netbird/management/server/peer"
-	"github.com/netbirdio/netbird/management/server/types"
+	"github.com/openzro/openzro/management/proto"
+	nbpeer "github.com/openzro/openzro/management/server/peer"
+	"github.com/openzro/openzro/management/server/types"
 )
 
 // IntegratedValidator interface exists to avoid the circle dependencies

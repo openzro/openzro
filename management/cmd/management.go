@@ -33,31 +33,31 @@ import (
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/realip"
 
-	"github.com/netbirdio/management-integrations/integrations"
+	"github.com/openzro/management-integrations/integrations"
 
-	"github.com/netbirdio/netbird/management/server/peers"
-	"github.com/netbirdio/netbird/management/server/types"
+	"github.com/openzro/openzro/management/server/peers"
+	"github.com/openzro/openzro/management/server/types"
 
-	"github.com/netbirdio/netbird/encryption"
-	"github.com/netbirdio/netbird/formatter/hook"
-	mgmtProto "github.com/netbirdio/netbird/management/proto"
-	"github.com/netbirdio/netbird/management/server"
-	"github.com/netbirdio/netbird/management/server/auth"
-	nbContext "github.com/netbirdio/netbird/management/server/context"
-	"github.com/netbirdio/netbird/management/server/geolocation"
-	"github.com/netbirdio/netbird/management/server/groups"
-	nbhttp "github.com/netbirdio/netbird/management/server/http"
-	"github.com/netbirdio/netbird/management/server/idp"
-	"github.com/netbirdio/netbird/management/server/metrics"
-	"github.com/netbirdio/netbird/management/server/networks"
-	"github.com/netbirdio/netbird/management/server/networks/resources"
-	"github.com/netbirdio/netbird/management/server/networks/routers"
-	"github.com/netbirdio/netbird/management/server/settings"
-	"github.com/netbirdio/netbird/management/server/store"
-	"github.com/netbirdio/netbird/management/server/telemetry"
-	"github.com/netbirdio/netbird/management/server/users"
-	"github.com/netbirdio/netbird/util"
-	"github.com/netbirdio/netbird/version"
+	"github.com/openzro/openzro/encryption"
+	"github.com/openzro/openzro/formatter/hook"
+	mgmtProto "github.com/openzro/openzro/management/proto"
+	"github.com/openzro/openzro/management/server"
+	"github.com/openzro/openzro/management/server/auth"
+	nbContext "github.com/openzro/openzro/management/server/context"
+	"github.com/openzro/openzro/management/server/geolocation"
+	"github.com/openzro/openzro/management/server/groups"
+	nbhttp "github.com/openzro/openzro/management/server/http"
+	"github.com/openzro/openzro/management/server/idp"
+	"github.com/openzro/openzro/management/server/metrics"
+	"github.com/openzro/openzro/management/server/networks"
+	"github.com/openzro/openzro/management/server/networks/resources"
+	"github.com/openzro/openzro/management/server/networks/routers"
+	"github.com/openzro/openzro/management/server/settings"
+	"github.com/openzro/openzro/management/server/store"
+	"github.com/openzro/openzro/management/server/telemetry"
+	"github.com/openzro/openzro/management/server/users"
+	"github.com/openzro/openzro/util"
+	"github.com/openzro/openzro/version"
 )
 
 // ManagementLegacyPort is the port that was used before by the Management gRPC server.
@@ -87,7 +87,7 @@ var (
 
 	mgmtCmd = &cobra.Command{
 		Use:   "management",
-		Short: "start NetBird Management Server",
+		Short: "start Openzro Management Server",
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			flag.Parse()
 
@@ -353,14 +353,14 @@ var (
 				}
 			}
 
-			log.WithContext(ctx).Infof("management server version %s", version.NetbirdVersion())
+			log.WithContext(ctx).Infof("management server version %s", version.OpenzroVersion())
 			log.WithContext(ctx).Infof("running HTTP server and gRPC server on the same port: %s", listener.Addr().String())
 			serveGRPCWithHTTP(ctx, listener, rootHandler, tlsEnabled)
 
 			update := version.NewUpdate("nb/management")
-			update.SetDaemonVersion(version.NetbirdVersion())
+			update.SetDaemonVersion(version.OpenzroVersion())
 			update.SetOnUpdateListener(func() {
-				log.WithContext(ctx).Infof("your management version, \"%s\", is outdated, a new management version is available. Learn more here: https://github.com/netbirdio/netbird/releases", version.NetbirdVersion())
+				log.WithContext(ctx).Infof("your management version, \"%s\", is outdated, a new management version is available. Learn more here: https://github.com/openzro/openzro/releases", version.OpenzroVersion())
 			})
 			defer update.StopWatch()
 
@@ -641,7 +641,7 @@ func loadTLSConfig(certFile string, certKey string) (*tls.Config, error) {
 func handleRebrand(cmd *cobra.Command) error {
 	var err error
 	if logFile == defaultLogFile {
-		if migrateToNetbird(oldDefaultLogFile, defaultLogFile) {
+		if migrateToOpenzro(oldDefaultLogFile, defaultLogFile) {
 			cmd.Printf("will copy Log dir %s and its content to %s\n", oldDefaultLogDir, defaultLogDir)
 			err = cpDir(oldDefaultLogDir, defaultLogDir)
 			if err != nil {
@@ -650,7 +650,7 @@ func handleRebrand(cmd *cobra.Command) error {
 		}
 	}
 	if types.MgmtConfigPath == defaultMgmtConfig {
-		if migrateToNetbird(oldDefaultMgmtConfig, defaultMgmtConfig) {
+		if migrateToOpenzro(oldDefaultMgmtConfig, defaultMgmtConfig) {
 			cmd.Printf("will copy Config dir %s and its content to %s\n", oldDefaultMgmtConfigDir, defaultMgmtConfigDir)
 			err = cpDir(oldDefaultMgmtConfigDir, defaultMgmtConfigDir)
 			if err != nil {
@@ -659,7 +659,7 @@ func handleRebrand(cmd *cobra.Command) error {
 		}
 	}
 	if mgmtDataDir == defaultMgmtDataDir {
-		if migrateToNetbird(oldDefaultMgmtDataDir, defaultMgmtDataDir) {
+		if migrateToOpenzro(oldDefaultMgmtDataDir, defaultMgmtDataDir) {
 			cmd.Printf("will copy Config dir %s and its content to %s\n", oldDefaultMgmtDataDir, defaultMgmtDataDir)
 			err = cpDir(oldDefaultMgmtDataDir, defaultMgmtDataDir)
 			if err != nil {
@@ -746,7 +746,7 @@ func cpDir(src string, dst string) error {
 	return nil
 }
 
-func migrateToNetbird(oldPath, newPath string) bool {
+func migrateToOpenzro(oldPath, newPath string) bool {
 	_, errOld := os.Stat(oldPath)
 	_, errNew := os.Stat(newPath)
 

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/netbirdio/netbird/client/internal/statemanager"
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/client/internal/statemanager"
+	"github.com/openzro/openzro/util"
 )
 
 func TestMain(m *testing.M) {
@@ -31,41 +31,41 @@ func Test_newRepairtmp(t *testing.T) {
 			resolvConfContent: `
 nameserver 10.0.0.1
 nameserver 8.8.8.8
-searchdomain netbird.cloud something`,
+searchdomain openzro.cloud something`,
 
 			touchedConfContent: `
 nameserver 8.8.8.8
-searchdomain netbird.cloud something`,
+searchdomain openzro.cloud something`,
 			wantChange: true,
 		},
 		{
 			resolvConfContent: `
 nameserver 10.0.0.1
 nameserver 8.8.8.8
-searchdomain netbird.cloud something`,
+searchdomain openzro.cloud something`,
 
 			touchedConfContent: `
 nameserver 10.0.0.1
 nameserver 8.8.8.8
-searchdomain netbird.cloud something somethingelse`,
+searchdomain openzro.cloud something somethingelse`,
 			wantChange: false,
 		},
 		{
 			resolvConfContent: `
 nameserver 10.0.0.1
 nameserver 8.8.8.8
-searchdomain netbird.cloud something`,
+searchdomain openzro.cloud something`,
 
 			touchedConfContent: `
 nameserver 10.0.0.1
-searchdomain netbird.cloud something`,
+searchdomain openzro.cloud something`,
 			wantChange: false,
 		},
 		{
 			resolvConfContent: `
 nameserver 10.0.0.1
 nameserver 8.8.8.8
-searchdomain netbird.cloud something`,
+searchdomain openzro.cloud something`,
 
 			touchedConfContent: `
 searchdomain something`,
@@ -75,7 +75,7 @@ searchdomain something`,
 			resolvConfContent: `
 nameserver 10.0.0.1
 nameserver 8.8.8.8
-searchdomain netbird.cloud something`,
+searchdomain openzro.cloud something`,
 
 			touchedConfContent: `
 nameserver 10.0.0.1`,
@@ -85,7 +85,7 @@ nameserver 10.0.0.1`,
 			resolvConfContent: `
 nameserver 10.0.0.1
 nameserver 8.8.8.8
-searchdomain netbird.cloud something`,
+searchdomain openzro.cloud something`,
 
 			touchedConfContent: `
 nameserver 8.8.8.8`,
@@ -113,7 +113,7 @@ nameserver 8.8.8.8`,
 			}
 
 			r := newRepair(operationFile, updateFn)
-			r.watchFileChanges([]string{"netbird.cloud"}, netip.MustParseAddr("10.0.0.1"), nil)
+			r.watchFileChanges([]string{"openzro.cloud"}, netip.MustParseAddr("10.0.0.1"), nil)
 
 			err = os.WriteFile(operationFile, []byte(tt.touchedConfContent), 0755)
 			if err != nil {
@@ -135,7 +135,7 @@ func Test_newRepairSymlink(t *testing.T) {
 	resolvConfContent := `
 nameserver 10.0.0.1
 nameserver 8.8.8.8
-searchdomain netbird.cloud something`
+searchdomain openzro.cloud something`
 
 	modifyContent := `nameserver 8.8.8.8`
 
@@ -160,7 +160,7 @@ searchdomain netbird.cloud something`
 	}
 
 	r := newRepair(tmpLink, updateFn)
-	r.watchFileChanges([]string{"netbird.cloud"}, netip.MustParseAddr("10.0.0.1"), nil)
+	r.watchFileChanges([]string{"openzro.cloud"}, netip.MustParseAddr("10.0.0.1"), nil)
 
 	err = os.WriteFile(tmpLink, []byte(modifyContent), 0755)
 	if err != nil {

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/netbirdio/netbird/client/internal/routemanager/systemops"
+	"github.com/openzro/openzro/client/internal/routemanager/systemops"
 )
 
 func (g *BundleGenerator) addRoutes() error {

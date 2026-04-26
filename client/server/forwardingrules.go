@@ -3,8 +3,8 @@ package server
 import (
 	"context"
 
-	firewall "github.com/netbirdio/netbird/client/firewall/manager"
-	"github.com/netbirdio/netbird/client/proto"
+	firewall "github.com/openzro/openzro/client/firewall/manager"
+	"github.com/openzro/openzro/client/proto"
 )
 
 func (s *Server) ForwardingRules(context.Context, *proto.EmptyRequest) (*proto.ForwardingRulesResponse, error) {

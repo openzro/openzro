@@ -11,7 +11,7 @@ import (
 
 const (
 	defaultAttemptThreshold    = 1
-	defaultAttemptThresholdEnv = "NB_RELAY_HC_ATTEMPT_THRESHOLD"
+	defaultAttemptThresholdEnv = "OZ_RELAY_HC_ATTEMPT_THRESHOLD"
 )
 
 var (

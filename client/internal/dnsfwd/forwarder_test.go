@@ -13,11 +13,11 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	firewall "github.com/netbirdio/netbird/client/firewall/manager"
-	"github.com/netbirdio/netbird/client/internal/dns/test"
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/management/domain"
-	"github.com/netbirdio/netbird/route"
+	firewall "github.com/openzro/openzro/client/firewall/manager"
+	"github.com/openzro/openzro/client/internal/dns/test"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/management/domain"
+	"github.com/openzro/openzro/route"
 )
 
 func Test_getMatchingEntries(t *testing.T) {

@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
 
-	"github.com/netbirdio/netbird/client/internal/routemanager/vars"
+	"github.com/openzro/openzro/client/internal/routemanager/vars"
 )
 
 var expectedVPNint = "wgtest0"
@@ -39,7 +39,7 @@ func TestEntryExists(t *testing.T) {
 
 	content := []string{
 		"1000 reserved",
-		fmt.Sprintf("%d %s", NetbirdVPNTableID, NetbirdVPNTableName),
+		fmt.Sprintf("%d %s", OpenzroVPNTableID, OpenzroVPNTableName),
 		"9999 other_table",
 	}
 	require.NoError(t, os.WriteFile(tempFilePath, []byte(strings.Join(content, "\n")), 0644))
@@ -57,7 +57,7 @@ func TestEntryExists(t *testing.T) {
 		err         error
 	}{
 		{
-			name:        "ExistsWithNetbirdPrefix",
+			name:        "ExistsWithOpenzroPrefix",
 			id:          7120,
 			shouldExist: true,
 			err:         nil,

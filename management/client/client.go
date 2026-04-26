@@ -6,9 +6,9 @@ import (
 
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
-	"github.com/netbirdio/netbird/client/system"
-	"github.com/netbirdio/netbird/management/domain"
-	"github.com/netbirdio/netbird/management/proto"
+	"github.com/openzro/openzro/client/system"
+	"github.com/openzro/openzro/management/domain"
+	"github.com/openzro/openzro/management/proto"
 )
 
 type Client interface {

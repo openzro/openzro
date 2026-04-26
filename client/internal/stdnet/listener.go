@@ -6,7 +6,7 @@ import (
 
 	"github.com/pion/transport/v3"
 
-	nbnet "github.com/netbirdio/netbird/util/net"
+	nbnet "github.com/openzro/openzro/util/net"
 )
 
 // ListenPacket listens for incoming packets on the given network and address.

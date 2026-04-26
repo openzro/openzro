@@ -6,7 +6,7 @@ import (
 )
 
 func TestGenerateKey(t *testing.T) {
-	testData := "exampl@netbird.io"
+	testData := "exampl@openzro.io"
 	key, err := GenerateKey()
 	if err != nil {
 		t.Fatalf("failed to generate key: %s", err)
@@ -36,7 +36,7 @@ func TestGenerateKey(t *testing.T) {
 }
 
 func TestGenerateKeyLegacy(t *testing.T) {
-	testData := "exampl@netbird.io"
+	testData := "exampl@openzro.io"
 	key, err := GenerateKey()
 	if err != nil {
 		t.Fatalf("failed to generate key: %s", err)
@@ -62,7 +62,7 @@ func TestGenerateKeyLegacy(t *testing.T) {
 }
 
 func TestCorruptKey(t *testing.T) {
-	testData := "exampl@netbird.io"
+	testData := "exampl@openzro.io"
 	key, err := GenerateKey()
 	if err != nil {
 		t.Fatalf("failed to generate key: %s", err)

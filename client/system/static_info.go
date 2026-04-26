@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/netbirdio/netbird/client/system/detect_cloud"
-	"github.com/netbirdio/netbird/client/system/detect_platform"
+	"github.com/openzro/openzro/client/system/detect_cloud"
+	"github.com/openzro/openzro/client/system/detect_platform"
 )
 
 var (

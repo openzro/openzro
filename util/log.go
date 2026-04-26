@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"gopkg.in/natefinch/lumberjack.v2"
 
-	"github.com/netbirdio/netbird/formatter"
+	"github.com/openzro/openzro/formatter"
 )
 
 const defaultLogSize = 15
@@ -36,7 +36,7 @@ func InitLog(logLevel string, logs ...string) error {
 		return err
 	}
 	var writers []io.Writer
-	logFmt := os.Getenv("NB_LOG_FORMAT")
+	logFmt := os.Getenv("OZ_LOG_FORMAT")
 
 	for _, logPath := range logs {
 		switch logPath {
@@ -113,7 +113,7 @@ func setGRPCLibLogger() {
 }
 
 func getLogMaxSize() int {
-	if sizeVar, ok := os.LookupEnv("NB_LOG_MAX_SIZE_MB"); ok {
+	if sizeVar, ok := os.LookupEnv("OZ_LOG_MAX_SIZE_MB"); ok {
 		size, err := strconv.ParseInt(sizeVar, 10, 64)
 		if err != nil {
 			log.Errorf("Failed parsing log-size %s: %s. Should be just an integer", sizeVar, err)

@@ -11,10 +11,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/netbirdio/netbird/client/internal"
-	"github.com/netbirdio/netbird/client/internal/profilemanager"
-	nbssh "github.com/netbirdio/netbird/client/ssh"
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/client/internal"
+	"github.com/openzro/openzro/client/internal/profilemanager"
+	nbssh "github.com/openzro/openzro/client/ssh"
+	"github.com/openzro/openzro/util"
 )
 
 var (
@@ -103,7 +103,7 @@ func runSSH(ctx context.Context, addr string, pemKey []byte, cmd *cobra.Command)
 		cmd.Printf("Error: %v\n", err)
 		cmd.Printf("Couldn't connect. Please check the connection status or if the ssh server is enabled on the other peer" +
 			"\nYou can verify the connection by running:\n\n" +
-			" netbird status\n\n")
+			" openzro status\n\n")
 		return err
 	}
 	go func() {

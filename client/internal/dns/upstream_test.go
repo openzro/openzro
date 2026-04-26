@@ -9,7 +9,7 @@ import (
 
 	"github.com/miekg/dns"
 
-	"github.com/netbirdio/netbird/client/internal/dns/test"
+	"github.com/openzro/openzro/client/internal/dns/test"
 )
 
 func TestUpstreamResolver_ServeDNS(t *testing.T) {

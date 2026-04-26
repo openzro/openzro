@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/netbirdio/netbird/client/proto"
+	"github.com/openzro/openzro/client/proto"
 )
 
 type SystemEventOutput struct {

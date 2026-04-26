@@ -1,8 +1,8 @@
 package dns
 
 import (
-	"github.com/netbirdio/netbird/client/iface/device"
-	"github.com/netbirdio/netbird/client/iface/wgaddr"
+	"github.com/openzro/openzro/client/iface/device"
+	"github.com/openzro/openzro/client/iface/wgaddr"
 )
 
 // WGIface defines subset methods of interface required for manager

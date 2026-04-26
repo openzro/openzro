@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/netbirdio/netbird/management/server/http/api"
+	"github.com/openzro/openzro/management/server/http/api"
 )
 
 // GroupsAPI APIs for Groups, do not use directly
@@ -14,7 +14,7 @@ type GroupsAPI struct {
 }
 
 // List list all groups
-// See more: https://docs.netbird.io/api/resources/groups#list-all-groups
+// See more: https://docs.openzro.io/api/resources/groups#list-all-groups
 func (a *GroupsAPI) List(ctx context.Context) ([]api.Group, error) {
 	resp, err := a.c.NewRequest(ctx, "GET", "/api/groups", nil, nil)
 	if err != nil {
@@ -28,7 +28,7 @@ func (a *GroupsAPI) List(ctx context.Context) ([]api.Group, error) {
 }
 
 // Get get group info
-// See more: https://docs.netbird.io/api/resources/groups#retrieve-a-group
+// See more: https://docs.openzro.io/api/resources/groups#retrieve-a-group
 func (a *GroupsAPI) Get(ctx context.Context, groupID string) (*api.Group, error) {
 	resp, err := a.c.NewRequest(ctx, "GET", "/api/groups/"+groupID, nil, nil)
 	if err != nil {
@@ -42,7 +42,7 @@ func (a *GroupsAPI) Get(ctx context.Context, groupID string) (*api.Group, error)
 }
 
 // Create create new group
-// See more: https://docs.netbird.io/api/resources/groups#create-a-group
+// See more: https://docs.openzro.io/api/resources/groups#create-a-group
 func (a *GroupsAPI) Create(ctx context.Context, request api.PostApiGroupsJSONRequestBody) (*api.Group, error) {
 	requestBytes, err := json.Marshal(request)
 	if err != nil {
@@ -60,7 +60,7 @@ func (a *GroupsAPI) Create(ctx context.Context, request api.PostApiGroupsJSONReq
 }
 
 // Update update group info
-// See more: https://docs.netbird.io/api/resources/groups#update-a-group
+// See more: https://docs.openzro.io/api/resources/groups#update-a-group
 func (a *GroupsAPI) Update(ctx context.Context, groupID string, request api.PutApiGroupsGroupIdJSONRequestBody) (*api.Group, error) {
 	requestBytes, err := json.Marshal(request)
 	if err != nil {
@@ -78,7 +78,7 @@ func (a *GroupsAPI) Update(ctx context.Context, groupID string, request api.PutA
 }
 
 // Delete delete group
-// See more: https://docs.netbird.io/api/resources/groups#delete-a-group
+// See more: https://docs.openzro.io/api/resources/groups#delete-a-group
 func (a *GroupsAPI) Delete(ctx context.Context, groupID string) error {
 	resp, err := a.c.NewRequest(ctx, "DELETE", "/api/groups/"+groupID, nil, nil)
 	if err != nil {

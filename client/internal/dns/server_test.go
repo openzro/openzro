@@ -17,22 +17,22 @@ import (
 	"github.com/stretchr/testify/mock"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
-	"github.com/netbirdio/netbird/client/firewall/uspfilter"
-	"github.com/netbirdio/netbird/client/iface"
-	"github.com/netbirdio/netbird/client/iface/configurer"
-	"github.com/netbirdio/netbird/client/iface/device"
-	pfmock "github.com/netbirdio/netbird/client/iface/mocks"
-	"github.com/netbirdio/netbird/client/iface/wgaddr"
-	"github.com/netbirdio/netbird/client/internal/dns/local"
-	"github.com/netbirdio/netbird/client/internal/dns/test"
-	"github.com/netbirdio/netbird/client/internal/dns/types"
-	"github.com/netbirdio/netbird/client/internal/netflow"
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/client/internal/statemanager"
-	"github.com/netbirdio/netbird/client/internal/stdnet"
-	nbdns "github.com/netbirdio/netbird/dns"
-	"github.com/netbirdio/netbird/formatter"
-	"github.com/netbirdio/netbird/management/domain"
+	"github.com/openzro/openzro/client/firewall/uspfilter"
+	"github.com/openzro/openzro/client/iface"
+	"github.com/openzro/openzro/client/iface/configurer"
+	"github.com/openzro/openzro/client/iface/device"
+	pfmock "github.com/openzro/openzro/client/iface/mocks"
+	"github.com/openzro/openzro/client/iface/wgaddr"
+	"github.com/openzro/openzro/client/internal/dns/local"
+	"github.com/openzro/openzro/client/internal/dns/test"
+	"github.com/openzro/openzro/client/internal/dns/types"
+	"github.com/openzro/openzro/client/internal/netflow"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/client/internal/statemanager"
+	"github.com/openzro/openzro/client/internal/stdnet"
+	nbdns "github.com/openzro/openzro/dns"
+	"github.com/openzro/openzro/formatter"
+	"github.com/openzro/openzro/management/domain"
 )
 
 var flowLogger = netflow.NewManager(nil, []byte{}, nil).GetLogger()
@@ -83,7 +83,7 @@ func (w *mocWGIface) GetStats(_ string) (configurer.WGStats, error) {
 
 var zoneRecords = []nbdns.SimpleRecord{
 	{
-		Name:  "peera.netbird.cloud",
+		Name:  "peera.openzro.cloud",
 		Type:  1,
 		Class: nbdns.DefaultClass,
 		TTL:   300,
@@ -145,13 +145,13 @@ func TestUpdateDNSServer(t *testing.T) {
 				ServiceEnable: true,
 				CustomZones: []nbdns.CustomZone{
 					{
-						Domain:  "netbird.cloud",
+						Domain:  "openzro.cloud",
 						Records: zoneRecords,
 					},
 				},
 				NameServerGroups: []*nbdns.NameServerGroup{
 					{
-						Domains:     []string{"netbird.io"},
+						Domains:     []string{"openzro.io"},
 						NameServers: nameServers,
 					},
 					{
@@ -161,13 +161,13 @@ func TestUpdateDNSServer(t *testing.T) {
 				},
 			},
 			expectedUpstreamMap: registeredHandlerMap{
-				generateDummyHandler("netbird.io", nameServers).ID(): handlerWrapper{
-					domain:   "netbird.io",
+				generateDummyHandler("openzro.io", nameServers).ID(): handlerWrapper{
+					domain:   "openzro.io",
 					handler:  dummyHandler,
 					priority: PriorityUpstream,
 				},
 				dummyHandler.ID(): handlerWrapper{
-					domain:   "netbird.cloud",
+					domain:   "openzro.cloud",
 					handler:  dummyHandler,
 					priority: PriorityLocal,
 				},
@@ -177,14 +177,14 @@ func TestUpdateDNSServer(t *testing.T) {
 					priority: PriorityDefault,
 				},
 			},
-			expectedLocalQs: []dns.Question{{Name: "peera.netbird.cloud.", Qtype: dns.TypeA, Qclass: dns.ClassINET}},
+			expectedLocalQs: []dns.Question{{Name: "peera.openzro.cloud.", Qtype: dns.TypeA, Qclass: dns.ClassINET}},
 		},
 		{
 			name:             "New Config Should Succeed",
-			initLocalRecords: []nbdns.SimpleRecord{{Name: "netbird.cloud", Type: 1, Class: nbdns.DefaultClass, TTL: 300, RData: "10.0.0.1"}},
+			initLocalRecords: []nbdns.SimpleRecord{{Name: "openzro.cloud", Type: 1, Class: nbdns.DefaultClass, TTL: 300, RData: "10.0.0.1"}},
 			initUpstreamMap: registeredHandlerMap{
 				generateDummyHandler(zoneRecords[0].Name, nameServers).ID(): handlerWrapper{
-					domain:   "netbird.cloud",
+					domain:   "openzro.cloud",
 					handler:  dummyHandler,
 					priority: PriorityUpstream,
 				},
@@ -195,25 +195,25 @@ func TestUpdateDNSServer(t *testing.T) {
 				ServiceEnable: true,
 				CustomZones: []nbdns.CustomZone{
 					{
-						Domain:  "netbird.cloud",
+						Domain:  "openzro.cloud",
 						Records: zoneRecords,
 					},
 				},
 				NameServerGroups: []*nbdns.NameServerGroup{
 					{
-						Domains:     []string{"netbird.io"},
+						Domains:     []string{"openzro.io"},
 						NameServers: nameServers,
 					},
 				},
 			},
 			expectedUpstreamMap: registeredHandlerMap{
-				generateDummyHandler("netbird.io", nameServers).ID(): handlerWrapper{
-					domain:   "netbird.io",
+				generateDummyHandler("openzro.io", nameServers).ID(): handlerWrapper{
+					domain:   "openzro.io",
 					handler:  dummyHandler,
 					priority: PriorityUpstream,
 				},
 				"local-resolver": handlerWrapper{
-					domain:   "netbird.cloud",
+					domain:   "openzro.cloud",
 					handler:  dummyHandler,
 					priority: PriorityLocal,
 				},
@@ -238,7 +238,7 @@ func TestUpdateDNSServer(t *testing.T) {
 				ServiceEnable: true,
 				CustomZones: []nbdns.CustomZone{
 					{
-						Domain:  "netbird.cloud",
+						Domain:  "openzro.cloud",
 						Records: zoneRecords,
 					},
 				},
@@ -260,7 +260,7 @@ func TestUpdateDNSServer(t *testing.T) {
 				ServiceEnable: true,
 				CustomZones: []nbdns.CustomZone{
 					{
-						Domain:  "netbird.cloud",
+						Domain:  "openzro.cloud",
 						Records: zoneRecords,
 					},
 				},
@@ -282,7 +282,7 @@ func TestUpdateDNSServer(t *testing.T) {
 				ServiceEnable: true,
 				CustomZones: []nbdns.CustomZone{
 					{
-						Domain: "netbird.cloud",
+						Domain: "openzro.cloud",
 					},
 				},
 				NameServerGroups: []*nbdns.NameServerGroup{
@@ -300,7 +300,7 @@ func TestUpdateDNSServer(t *testing.T) {
 		},
 		{
 			name:             "Empty Config Should Succeed and Clean Maps",
-			initLocalRecords: []nbdns.SimpleRecord{{Name: "netbird.cloud", Type: int(dns.TypeA), Class: nbdns.DefaultClass, TTL: 300, RData: "10.0.0.1"}},
+			initLocalRecords: []nbdns.SimpleRecord{{Name: "openzro.cloud", Type: int(dns.TypeA), Class: nbdns.DefaultClass, TTL: 300, RData: "10.0.0.1"}},
 			initUpstreamMap: registeredHandlerMap{
 				generateDummyHandler(zoneRecords[0].Name, nameServers).ID(): handlerWrapper{
 					domain:   zoneRecords[0].Name,
@@ -316,7 +316,7 @@ func TestUpdateDNSServer(t *testing.T) {
 		},
 		{
 			name:             "Disabled Service Should clean map",
-			initLocalRecords: []nbdns.SimpleRecord{{Name: "netbird.cloud", Type: int(dns.TypeA), Class: nbdns.DefaultClass, TTL: 300, RData: "10.0.0.1"}},
+			initLocalRecords: []nbdns.SimpleRecord{{Name: "openzro.cloud", Type: int(dns.TypeA), Class: nbdns.DefaultClass, TTL: 300, RData: "10.0.0.1"}},
 			initUpstreamMap: registeredHandlerMap{
 				generateDummyHandler(zoneRecords[0].Name, nameServers).ID(): handlerWrapper{
 					domain:   zoneRecords[0].Name,
@@ -424,10 +424,10 @@ func TestUpdateDNSServer(t *testing.T) {
 }
 
 func TestDNSFakeResolverHandleUpdates(t *testing.T) {
-	ov := os.Getenv("NB_WG_KERNEL_DISABLED")
-	defer t.Setenv("NB_WG_KERNEL_DISABLED", ov)
+	ov := os.Getenv("OZ_WG_KERNEL_DISABLED")
+	defer t.Setenv("OZ_WG_KERNEL_DISABLED", ov)
 
-	t.Setenv("NB_WG_KERNEL_DISABLED", "true")
+	t.Setenv("OZ_WG_KERNEL_DISABLED", "true")
 	newNet, err := stdnet.NewNet([]string{"utun2301"})
 	if err != nil {
 		t.Errorf("create stdnet: %v", err)
@@ -498,8 +498,8 @@ func TestDNSFakeResolverHandleUpdates(t *testing.T) {
 			priority: PriorityUpstream,
 		},
 	}
-	//dnsServer.localResolver.RegisteredMap = local.RegistrationMap{local.BuildRecordKey("netbird.cloud", dns.ClassINET, dns.TypeA): struct{}{}}
-	dnsServer.localResolver.Update([]nbdns.SimpleRecord{{Name: "netbird.cloud", Type: int(dns.TypeA), Class: nbdns.DefaultClass, TTL: 300, RData: "10.0.0.1"}})
+	//dnsServer.localResolver.RegisteredMap = local.RegistrationMap{local.BuildRecordKey("openzro.cloud", dns.ClassINET, dns.TypeA): struct{}{}}
+	dnsServer.localResolver.Update([]nbdns.SimpleRecord{{Name: "openzro.cloud", Type: int(dns.TypeA), Class: nbdns.DefaultClass, TTL: 300, RData: "10.0.0.1"}})
 	dnsServer.updateSerial = 0
 
 	nameServers := []nbdns.NameServer{
@@ -519,13 +519,13 @@ func TestDNSFakeResolverHandleUpdates(t *testing.T) {
 		ServiceEnable: true,
 		CustomZones: []nbdns.CustomZone{
 			{
-				Domain:  "netbird.cloud",
+				Domain:  "openzro.cloud",
 				Records: zoneRecords,
 			},
 		},
 		NameServerGroups: []*nbdns.NameServerGroup{
 			{
-				Domains:     []string{"netbird.io"},
+				Domains:     []string{"openzro.io"},
 				NameServers: nameServers,
 			},
 			{
@@ -591,7 +591,7 @@ func TestDNSServerStartStop(t *testing.T) {
 				t.Error(err)
 			}
 
-			dnsServer.registerHandler([]string{"netbird.cloud"}, dnsServer.localResolver, 1)
+			dnsServer.registerHandler([]string{"openzro.cloud"}, dnsServer.localResolver, 1)
 
 			resolver := &net.Resolver{
 				PreferGo: true,
@@ -718,7 +718,7 @@ func TestDNSPermanent_updateHostDNS_emptyUpstream(t *testing.T) {
 	dnsServer.OnUpdatedHostDNSServer([]string{"8.8.8.8"})
 
 	resolver := newDnsResolver(dnsServer.service.RuntimeIP(), dnsServer.service.RuntimePort())
-	_, err = resolver.LookupHost(context.Background(), "netbird.io")
+	_, err = resolver.LookupHost(context.Background(), "openzro.io")
 	if err != nil {
 		t.Errorf("failed to resolve: %s", err)
 	}
@@ -741,7 +741,7 @@ func TestDNSPermanent_updateUpstream(t *testing.T) {
 
 	// check initial state
 	resolver := newDnsResolver(dnsServer.service.RuntimeIP(), dnsServer.service.RuntimePort())
-	_, err = resolver.LookupHost(context.Background(), "netbird.io")
+	_, err = resolver.LookupHost(context.Background(), "openzro.io")
 	if err != nil {
 		t.Errorf("failed to resolve: %s", err)
 	}
@@ -750,7 +750,7 @@ func TestDNSPermanent_updateUpstream(t *testing.T) {
 		ServiceEnable: true,
 		CustomZones: []nbdns.CustomZone{
 			{
-				Domain:  "netbird.cloud",
+				Domain:  "openzro.cloud",
 				Records: zoneRecords,
 			},
 		},
@@ -774,7 +774,7 @@ func TestDNSPermanent_updateUpstream(t *testing.T) {
 		t.Errorf("failed to update dns server: %s", err)
 	}
 
-	_, err = resolver.LookupHost(context.Background(), "netbird.io")
+	_, err = resolver.LookupHost(context.Background(), "openzro.io")
 	if err != nil {
 		t.Errorf("failed to resolve: %s", err)
 	}
@@ -790,7 +790,7 @@ func TestDNSPermanent_updateUpstream(t *testing.T) {
 		ServiceEnable: true,
 		CustomZones: []nbdns.CustomZone{
 			{
-				Domain:  "netbird.cloud",
+				Domain:  "openzro.cloud",
 				Records: zoneRecords,
 			},
 		},
@@ -802,7 +802,7 @@ func TestDNSPermanent_updateUpstream(t *testing.T) {
 		t.Errorf("failed to update dns server: %s", err)
 	}
 
-	_, err = resolver.LookupHost(context.Background(), "netbird.io")
+	_, err = resolver.LookupHost(context.Background(), "openzro.io")
 	if err != nil {
 		t.Errorf("failed to resolve: %s", err)
 	}
@@ -833,7 +833,7 @@ func TestDNSPermanent_matchOnly(t *testing.T) {
 
 	// check initial state
 	resolver := newDnsResolver(dnsServer.service.RuntimeIP(), dnsServer.service.RuntimePort())
-	_, err = resolver.LookupHost(context.Background(), "netbird.io")
+	_, err = resolver.LookupHost(context.Background(), "openzro.io")
 	if err != nil {
 		t.Errorf("failed to resolve: %s", err)
 	}
@@ -842,7 +842,7 @@ func TestDNSPermanent_matchOnly(t *testing.T) {
 		ServiceEnable: true,
 		CustomZones: []nbdns.CustomZone{
 			{
-				Domain:  "netbird.cloud",
+				Domain:  "openzro.cloud",
 				Records: zoneRecords,
 			},
 		},
@@ -871,7 +871,7 @@ func TestDNSPermanent_matchOnly(t *testing.T) {
 		t.Errorf("failed to update dns server: %s", err)
 	}
 
-	_, err = resolver.LookupHost(context.Background(), "netbird.io")
+	_, err = resolver.LookupHost(context.Background(), "openzro.io")
 	if err != nil {
 		t.Errorf("failed to resolve: %s", err)
 	}
@@ -890,10 +890,10 @@ func TestDNSPermanent_matchOnly(t *testing.T) {
 
 func createWgInterfaceWithBind(t *testing.T) (*iface.WGIface, error) {
 	t.Helper()
-	ov := os.Getenv("NB_WG_KERNEL_DISABLED")
-	defer t.Setenv("NB_WG_KERNEL_DISABLED", ov)
+	ov := os.Getenv("OZ_WG_KERNEL_DISABLED")
+	defer t.Setenv("OZ_WG_KERNEL_DISABLED", ov)
 
-	t.Setenv("NB_WG_KERNEL_DISABLED", "true")
+	t.Setenv("OZ_WG_KERNEL_DISABLED", "true")
 	newNet, err := stdnet.NewNet([]string{"utun2301"})
 	if err != nil {
 		t.Fatalf("create stdnet: %v", err)

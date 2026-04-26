@@ -9,10 +9,10 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/relay/healthcheck"
-	"github.com/netbirdio/netbird/relay/messages"
-	"github.com/netbirdio/netbird/relay/metrics"
-	"github.com/netbirdio/netbird/relay/server/store"
+	"github.com/openzro/openzro/relay/healthcheck"
+	"github.com/openzro/openzro/relay/messages"
+	"github.com/openzro/openzro/relay/metrics"
+	"github.com/openzro/openzro/relay/server/store"
 )
 
 const (

@@ -21,13 +21,13 @@
         "TimeBasedCredentials": false
     },
     "Relay": {
-        "Addresses": ["$NETBIRD_RELAY_ENDPOINT"],
+        "Addresses": ["$OPENZRO_RELAY_ENDPOINT"],
         "CredentialsTTL": "24h",
-        "Secret": "$NETBIRD_RELAY_AUTH_SECRET"
+        "Secret": "$OPENZRO_RELAY_AUTH_SECRET"
     },
     "Signal": {
-        "Proto": "$NETBIRD_SIGNAL_PROTOCOL",
-        "URI": "$NETBIRD_DOMAIN:$NETBIRD_SIGNAL_PORT",
+        "Proto": "$OPENZRO_SIGNAL_PROTOCOL",
+        "URI": "$OPENZRO_DOMAIN:$OPENZRO_SIGNAL_PORT",
         "Username": "",
         "Password": null
     },
@@ -38,66 +38,66 @@
              "0.0.0.0/0"
         ]
     },
-    "DisableDefaultPolicy": $NETBIRD_MGMT_DISABLE_DEFAULT_POLICY,
+    "DisableDefaultPolicy": $OPENZRO_MGMT_DISABLE_DEFAULT_POLICY,
     "Datadir": "",
-    "DataStoreEncryptionKey": "$NETBIRD_DATASTORE_ENC_KEY",
+    "DataStoreEncryptionKey": "$OPENZRO_DATASTORE_ENC_KEY",
     "StoreConfig": {
-        "Engine": "$NETBIRD_STORE_CONFIG_ENGINE"
+        "Engine": "$OPENZRO_STORE_CONFIG_ENGINE"
     },
     "HttpConfig": {
-        "Address": "0.0.0.0:$NETBIRD_MGMT_API_PORT",
-        "AuthIssuer": "$NETBIRD_AUTH_AUTHORITY",
-        "AuthAudience": "$NETBIRD_AUTH_AUDIENCE",
-        "AuthKeysLocation": "$NETBIRD_AUTH_JWT_CERTS",
-        "AuthUserIDClaim": "$NETBIRD_AUTH_USER_ID_CLAIM",
-        "CertFile":"$NETBIRD_MGMT_API_CERT_FILE",
-        "CertKey":"$NETBIRD_MGMT_API_CERT_KEY_FILE",
-        "IdpSignKeyRefreshEnabled": $NETBIRD_MGMT_IDP_SIGNKEY_REFRESH,
-        "OIDCConfigEndpoint":"$NETBIRD_AUTH_OIDC_CONFIGURATION_ENDPOINT"
+        "Address": "0.0.0.0:$OPENZRO_MGMT_API_PORT",
+        "AuthIssuer": "$OPENZRO_AUTH_AUTHORITY",
+        "AuthAudience": "$OPENZRO_AUTH_AUDIENCE",
+        "AuthKeysLocation": "$OPENZRO_AUTH_JWT_CERTS",
+        "AuthUserIDClaim": "$OPENZRO_AUTH_USER_ID_CLAIM",
+        "CertFile":"$OPENZRO_MGMT_API_CERT_FILE",
+        "CertKey":"$OPENZRO_MGMT_API_CERT_KEY_FILE",
+        "IdpSignKeyRefreshEnabled": $OPENZRO_MGMT_IDP_SIGNKEY_REFRESH,
+        "OIDCConfigEndpoint":"$OPENZRO_AUTH_OIDC_CONFIGURATION_ENDPOINT"
     },
     "IdpManagerConfig": {
-        "ManagerType": "$NETBIRD_MGMT_IDP",
+        "ManagerType": "$OPENZRO_MGMT_IDP",
         "ClientConfig": {
-            "Issuer": "$NETBIRD_AUTH_AUTHORITY",
-            "TokenEndpoint": "$NETBIRD_AUTH_TOKEN_ENDPOINT",
-            "ClientID": "$NETBIRD_IDP_MGMT_CLIENT_ID",
-            "ClientSecret": "$NETBIRD_IDP_MGMT_CLIENT_SECRET",
+            "Issuer": "$OPENZRO_AUTH_AUTHORITY",
+            "TokenEndpoint": "$OPENZRO_AUTH_TOKEN_ENDPOINT",
+            "ClientID": "$OPENZRO_IDP_MGMT_CLIENT_ID",
+            "ClientSecret": "$OPENZRO_IDP_MGMT_CLIENT_SECRET",
             "GrantType": "client_credentials"
         },
-        "ExtraConfig": $NETBIRD_IDP_MGMT_EXTRA_CONFIG,
+        "ExtraConfig": $OPENZRO_IDP_MGMT_EXTRA_CONFIG,
         "Auth0ClientCredentials": null,
         "AzureClientCredentials": null,
         "KeycloakClientCredentials": null,
         "ZitadelClientCredentials": null
      },
     "DeviceAuthorizationFlow": {
-        "Provider": "$NETBIRD_AUTH_DEVICE_AUTH_PROVIDER",
+        "Provider": "$OPENZRO_AUTH_DEVICE_AUTH_PROVIDER",
         "ProviderConfig": {
-          "Audience": "$NETBIRD_AUTH_DEVICE_AUTH_AUDIENCE",
+          "Audience": "$OPENZRO_AUTH_DEVICE_AUTH_AUDIENCE",
           "AuthorizationEndpoint": "",
-          "Domain": "$NETBIRD_AUTH0_DOMAIN",
-          "ClientID": "$NETBIRD_AUTH_DEVICE_AUTH_CLIENT_ID",
+          "Domain": "$OPENZRO_AUTH0_DOMAIN",
+          "ClientID": "$OPENZRO_AUTH_DEVICE_AUTH_CLIENT_ID",
           "ClientSecret": "",
-          "TokenEndpoint": "$NETBIRD_AUTH_TOKEN_ENDPOINT",
-          "DeviceAuthEndpoint": "$NETBIRD_AUTH_DEVICE_AUTH_ENDPOINT",
-          "Scope": "$NETBIRD_AUTH_DEVICE_AUTH_SCOPE",
-          "UseIDToken": $NETBIRD_AUTH_DEVICE_AUTH_USE_ID_TOKEN,
+          "TokenEndpoint": "$OPENZRO_AUTH_TOKEN_ENDPOINT",
+          "DeviceAuthEndpoint": "$OPENZRO_AUTH_DEVICE_AUTH_ENDPOINT",
+          "Scope": "$OPENZRO_AUTH_DEVICE_AUTH_SCOPE",
+          "UseIDToken": $OPENZRO_AUTH_DEVICE_AUTH_USE_ID_TOKEN,
           "RedirectURLs": null
          }
     },
     "PKCEAuthorizationFlow": {
         "ProviderConfig": {
-            "Audience": "$NETBIRD_AUTH_PKCE_AUDIENCE",
-            "ClientID": "$NETBIRD_AUTH_CLIENT_ID",
-            "ClientSecret": "$NETBIRD_AUTH_CLIENT_SECRET",
+            "Audience": "$OPENZRO_AUTH_PKCE_AUDIENCE",
+            "ClientID": "$OPENZRO_AUTH_CLIENT_ID",
+            "ClientSecret": "$OPENZRO_AUTH_CLIENT_SECRET",
             "Domain": "",
-            "AuthorizationEndpoint": "$NETBIRD_AUTH_PKCE_AUTHORIZATION_ENDPOINT",
-            "TokenEndpoint": "$NETBIRD_AUTH_TOKEN_ENDPOINT",
-            "Scope": "$NETBIRD_AUTH_SUPPORTED_SCOPES",
-            "RedirectURLs": [$NETBIRD_AUTH_PKCE_REDIRECT_URLS],
-            "UseIDToken": $NETBIRD_AUTH_PKCE_USE_ID_TOKEN,
-            "DisablePromptLogin": $NETBIRD_AUTH_PKCE_DISABLE_PROMPT_LOGIN,
-            "LoginFlag": $NETBIRD_AUTH_PKCE_LOGIN_FLAG
+            "AuthorizationEndpoint": "$OPENZRO_AUTH_PKCE_AUTHORIZATION_ENDPOINT",
+            "TokenEndpoint": "$OPENZRO_AUTH_TOKEN_ENDPOINT",
+            "Scope": "$OPENZRO_AUTH_SUPPORTED_SCOPES",
+            "RedirectURLs": [$OPENZRO_AUTH_PKCE_REDIRECT_URLS],
+            "UseIDToken": $OPENZRO_AUTH_PKCE_USE_ID_TOKEN,
+            "DisablePromptLogin": $OPENZRO_AUTH_PKCE_DISABLE_PROMPT_LOGIN,
+            "LoginFlag": $OPENZRO_AUTH_PKCE_LOGIN_FLAG
         }
     }
 }

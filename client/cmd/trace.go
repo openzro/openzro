@@ -8,17 +8,17 @@ import (
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
 
-	"github.com/netbirdio/netbird/client/proto"
+	"github.com/openzro/openzro/client/proto"
 )
 
 var traceCmd = &cobra.Command{
 	Use:   "trace <direction> <source-ip> <dest-ip>",
 	Short: "Trace a packet through the firewall",
 	Example: `
-  netbird debug trace in 192.168.1.10 10.10.0.2 -p tcp --sport 12345 --dport 443 --syn --ack
-  netbird debug trace out 10.10.0.1 8.8.8.8 -p udp  --dport 53
-  netbird debug trace in 10.10.0.2 10.10.0.1 -p icmp --icmp-type 8 --icmp-code 0
-  netbird debug trace in 100.64.1.1 self -p tcp --dport 80`,
+  openzro debug trace in 192.168.1.10 10.10.0.2 -p tcp --sport 12345 --dport 443 --syn --ack
+  openzro debug trace out 10.10.0.1 8.8.8.8 -p udp  --dport 53
+  openzro debug trace in 10.10.0.2 10.10.0.1 -p icmp --icmp-type 8 --icmp-code 0
+  openzro debug trace in 100.64.1.1 self -p tcp --dport 80`,
 	Args: cobra.ExactArgs(3),
 	RunE: tracePacket,
 }

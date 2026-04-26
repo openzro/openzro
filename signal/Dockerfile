@@ -1,4 +1,4 @@
 FROM gcr.io/distroless/base:debug
-ENTRYPOINT [ "/go/bin/netbird-signal","run" ]
+ENTRYPOINT [ "/go/bin/openzro-signal","run" ]
 CMD ["--log-file", "console"]
-COPY netbird-signal /go/bin/netbird-signal
+COPY openzro-signal /go/bin/openzro-signal

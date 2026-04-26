@@ -14,7 +14,7 @@ var (
 	SemverRegexp  = regexp.MustCompile("^" + v.SemverRegexpRaw + "$")
 )
 
-// NetbirdVersion returns the Netbird version
-func NetbirdVersion() string {
+// OpenzroVersion returns the Openzro version
+func OpenzroVersion() string {
 	return version
 }

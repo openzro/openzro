@@ -17,35 +17,35 @@ import (
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 
-	firewall "github.com/netbirdio/netbird/client/firewall/manager"
-	"github.com/netbirdio/netbird/client/firewall/uspfilter/common"
-	"github.com/netbirdio/netbird/client/firewall/uspfilter/conntrack"
-	"github.com/netbirdio/netbird/client/firewall/uspfilter/forwarder"
-	nblog "github.com/netbirdio/netbird/client/firewall/uspfilter/log"
-	"github.com/netbirdio/netbird/client/iface/netstack"
-	nftypes "github.com/netbirdio/netbird/client/internal/netflow/types"
-	"github.com/netbirdio/netbird/client/internal/statemanager"
+	firewall "github.com/openzro/openzro/client/firewall/manager"
+	"github.com/openzro/openzro/client/firewall/uspfilter/common"
+	"github.com/openzro/openzro/client/firewall/uspfilter/conntrack"
+	"github.com/openzro/openzro/client/firewall/uspfilter/forwarder"
+	nblog "github.com/openzro/openzro/client/firewall/uspfilter/log"
+	"github.com/openzro/openzro/client/iface/netstack"
+	nftypes "github.com/openzro/openzro/client/internal/netflow/types"
+	"github.com/openzro/openzro/client/internal/statemanager"
 )
 
 const layerTypeAll = 0
 
 const (
 	// EnvDisableConntrack disables the stateful filter, replies to outbound traffic won't be allowed.
-	EnvDisableConntrack = "NB_DISABLE_CONNTRACK"
+	EnvDisableConntrack = "OZ_DISABLE_CONNTRACK"
 
 	// EnvDisableUserspaceRouting disables userspace routing, to-be-routed packets will be dropped.
-	EnvDisableUserspaceRouting = "NB_DISABLE_USERSPACE_ROUTING"
+	EnvDisableUserspaceRouting = "OZ_DISABLE_USERSPACE_ROUTING"
 
 	// EnvForceUserspaceRouter forces userspace routing even if native routing is available.
-	EnvForceUserspaceRouter = "NB_FORCE_USERSPACE_ROUTER"
+	EnvForceUserspaceRouter = "OZ_FORCE_USERSPACE_ROUTER"
 
-	// EnvEnableLocalForwarding enables forwarding of local traffic to the native stack for internal (non-NetBird) interfaces.
+	// EnvEnableLocalForwarding enables forwarding of local traffic to the native stack for internal (non-Openzro) interfaces.
 	// Default off as it might be security risk because sockets listening on localhost only will become accessible.
-	EnvEnableLocalForwarding = "NB_ENABLE_LOCAL_FORWARDING"
+	EnvEnableLocalForwarding = "OZ_ENABLE_LOCAL_FORWARDING"
 
 	// EnvEnableNetstackLocalForwarding is an alias for EnvEnableLocalForwarding.
 	// In netstack mode, it enables forwarding of local traffic to the native stack for all interfaces.
-	EnvEnableNetstackLocalForwarding = "NB_ENABLE_NETSTACK_LOCAL_FORWARDING"
+	EnvEnableNetstackLocalForwarding = "OZ_ENABLE_NETSTACK_LOCAL_FORWARDING"
 )
 
 var errNatNotSupported = errors.New("nat not supported with userspace firewall")

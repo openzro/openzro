@@ -10,9 +10,9 @@ import (
 
 	"golang.org/x/exp/maps"
 
-	"github.com/netbirdio/netbird/client/proto"
-	"github.com/netbirdio/netbird/management/domain"
-	"github.com/netbirdio/netbird/route"
+	"github.com/openzro/openzro/client/proto"
+	"github.com/openzro/openzro/management/domain"
+	"github.com/openzro/openzro/route"
 )
 
 type selectRoute struct {

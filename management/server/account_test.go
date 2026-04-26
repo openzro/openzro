@@ -19,35 +19,35 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
-	nbdns "github.com/netbirdio/netbird/dns"
-	nbAccount "github.com/netbirdio/netbird/management/server/account"
-	"github.com/netbirdio/netbird/management/server/activity"
-	"github.com/netbirdio/netbird/management/server/cache"
-	nbcontext "github.com/netbirdio/netbird/management/server/context"
-	"github.com/netbirdio/netbird/management/server/idp"
-	"github.com/netbirdio/netbird/management/server/integrations/port_forwarding"
-	resourceTypes "github.com/netbirdio/netbird/management/server/networks/resources/types"
-	routerTypes "github.com/netbirdio/netbird/management/server/networks/routers/types"
-	networkTypes "github.com/netbirdio/netbird/management/server/networks/types"
-	nbpeer "github.com/netbirdio/netbird/management/server/peer"
-	"github.com/netbirdio/netbird/management/server/permissions"
-	"github.com/netbirdio/netbird/management/server/posture"
-	"github.com/netbirdio/netbird/management/server/settings"
-	"github.com/netbirdio/netbird/management/server/store"
-	"github.com/netbirdio/netbird/management/server/telemetry"
-	"github.com/netbirdio/netbird/management/server/testutil"
-	"github.com/netbirdio/netbird/management/server/types"
-	"github.com/netbirdio/netbird/management/server/util"
-	"github.com/netbirdio/netbird/route"
+	nbdns "github.com/openzro/openzro/dns"
+	nbAccount "github.com/openzro/openzro/management/server/account"
+	"github.com/openzro/openzro/management/server/activity"
+	"github.com/openzro/openzro/management/server/cache"
+	nbcontext "github.com/openzro/openzro/management/server/context"
+	"github.com/openzro/openzro/management/server/idp"
+	"github.com/openzro/openzro/management/server/integrations/port_forwarding"
+	resourceTypes "github.com/openzro/openzro/management/server/networks/resources/types"
+	routerTypes "github.com/openzro/openzro/management/server/networks/routers/types"
+	networkTypes "github.com/openzro/openzro/management/server/networks/types"
+	nbpeer "github.com/openzro/openzro/management/server/peer"
+	"github.com/openzro/openzro/management/server/permissions"
+	"github.com/openzro/openzro/management/server/posture"
+	"github.com/openzro/openzro/management/server/settings"
+	"github.com/openzro/openzro/management/server/store"
+	"github.com/openzro/openzro/management/server/telemetry"
+	"github.com/openzro/openzro/management/server/testutil"
+	"github.com/openzro/openzro/management/server/types"
+	"github.com/openzro/openzro/management/server/util"
+	"github.com/openzro/openzro/route"
 )
 
 func verifyCanAddPeerToAccount(t *testing.T, manager nbAccount.Manager, account *types.Account, userID string) {
 	t.Helper()
 	peer := &nbpeer.Peer{
 		Key:  "BhRPtynAAYRDy08+q4HTMsos8fs4plTP4NOSh7C1ry8=",
-		Name: "test-host@netbird.io",
+		Name: "test-host@openzro.io",
 		Meta: nbpeer.PeerSystemMeta{
-			Hostname:  "test-host@netbird.io",
+			Hostname:  "test-host@openzro.io",
 			GoOS:      "linux",
 			Kernel:    "Linux",
 			Core:      "21.04",
@@ -367,13 +367,13 @@ func TestAccount_GetPeerNetworkMap(t *testing.T) {
 	network := &types.Network{
 		Identifier: "network",
 		Net:        net.IPNet{IP: netIP, Mask: netMask},
-		Dns:        "netbird.selfhosted",
+		Dns:        "openzro.selfhosted",
 		Serial:     0,
 		Mu:         sync.Mutex{},
 	}
 
 	for _, testCase := range tt {
-		account := newAccountWithId(context.Background(), "account-1", userID, "netbird.io", false)
+		account := newAccountWithId(context.Background(), "account-1", userID, "openzro.io", false)
 		account.UpdateSettings(&testCase.accountSettings)
 		account.Network = network
 		account.Peers = testCase.peers
@@ -387,7 +387,7 @@ func TestAccount_GetPeerNetworkMap(t *testing.T) {
 			validatedPeers[p] = struct{}{}
 		}
 
-		customZone := account.GetPeersCustomZone(context.Background(), "netbird.io")
+		customZone := account.GetPeersCustomZone(context.Background(), "openzro.io")
 		networkMap := account.GetPeerNetworkMap(context.Background(), testCase.peerID, customZone, validatedPeers, account.GetResourcePoliciesMap(), account.GetResourceRoutersMap(), nil)
 		assert.Len(t, networkMap.Peers, len(testCase.expectedPeers))
 		assert.Len(t, networkMap.OfflinePeers, len(testCase.expectedOfflinePeers))
@@ -395,7 +395,7 @@ func TestAccount_GetPeerNetworkMap(t *testing.T) {
 }
 
 func TestNewAccount(t *testing.T) {
-	domain := "netbird.io"
+	domain := "openzro.io"
 	userId := "account_creator"
 	accountID := "account_id"
 	account := newAccountWithId(context.Background(), accountID, userId, domain, false)
@@ -1020,7 +1020,7 @@ func TestAccountManager_AddPeer(t *testing.T) {
 	}
 
 	userID := "testingUser"
-	account, err := createAccount(manager, "test_account", userID, "netbird.cloud")
+	account, err := createAccount(manager, "test_account", userID, "openzro.cloud")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1089,7 +1089,7 @@ func TestAccountManager_AddPeerWithUserID(t *testing.T) {
 		return
 	}
 
-	account, err := manager.GetOrCreateAccountByUser(context.Background(), userID, "netbird.cloud")
+	account, err := manager.GetOrCreateAccountByUser(context.Background(), userID, "openzro.cloud")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1406,7 +1406,7 @@ func TestAccountManager_DeletePeer(t *testing.T) {
 		return
 	}
 
-	account, err := createAccount(manager, "test_account", userID, "netbird.cloud")
+	account, err := createAccount(manager, "test_account", userID, "openzro.cloud")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2887,7 +2887,7 @@ func createManager(t testing.TB) (*DefaultAccountManager, error) {
 
 	permissionsManager := permissions.NewManager(store)
 
-	manager, err := BuildManager(context.Background(), store, NewPeersUpdateManager(nil), nil, "", "netbird.cloud", eventStore, nil, false, MockIntegratedValidator{}, metrics, port_forwarding.NewControllerMock(), settingsMockManager, permissionsManager, false)
+	manager, err := BuildManager(context.Background(), store, NewPeersUpdateManager(nil), nil, "", "openzro.cloud", eventStore, nil, false, MockIntegratedValidator{}, metrics, port_forwarding.NewControllerMock(), settingsMockManager, permissionsManager, false)
 	if err != nil {
 		return nil, err
 	}
@@ -2992,7 +2992,7 @@ func peerShouldReceiveUpdate(t *testing.T, updateMessage <-chan *UpdateMessage) 
 }
 
 func BenchmarkSyncAndMarkPeer(b *testing.B) {
-	b.Setenv("NB_GET_ACCOUNT_BUFFER_INTERVAL", "0")
+	b.Setenv("OZ_GET_ACCOUNT_BUFFER_INTERVAL", "0")
 
 	benchCases := []struct {
 		name   string
@@ -3061,7 +3061,7 @@ func BenchmarkSyncAndMarkPeer(b *testing.B) {
 }
 
 func BenchmarkLoginPeer_ExistingPeer(b *testing.B) {
-	b.Setenv("NB_GET_ACCOUNT_BUFFER_INTERVAL", "0")
+	b.Setenv("OZ_GET_ACCOUNT_BUFFER_INTERVAL", "0")
 	benchCases := []struct {
 		name   string
 		peers  int
@@ -3136,7 +3136,7 @@ func BenchmarkLoginPeer_ExistingPeer(b *testing.B) {
 }
 
 func BenchmarkLoginPeer_NewPeer(b *testing.B) {
-	b.Setenv("NB_GET_ACCOUNT_BUFFER_INTERVAL", "0")
+	b.Setenv("OZ_GET_ACCOUNT_BUFFER_INTERVAL", "0")
 	benchCases := []struct {
 		name   string
 		peers  int

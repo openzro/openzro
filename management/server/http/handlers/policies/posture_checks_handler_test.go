@@ -14,12 +14,12 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 
-	nbcontext "github.com/netbirdio/netbird/management/server/context"
-	"github.com/netbirdio/netbird/management/server/geolocation"
-	"github.com/netbirdio/netbird/management/server/http/api"
-	"github.com/netbirdio/netbird/management/server/mock_server"
-	"github.com/netbirdio/netbird/management/server/posture"
-	"github.com/netbirdio/netbird/management/server/status"
+	nbcontext "github.com/openzro/openzro/management/server/context"
+	"github.com/openzro/openzro/management/server/geolocation"
+	"github.com/openzro/openzro/management/server/http/api"
+	"github.com/openzro/openzro/management/server/mock_server"
+	"github.com/openzro/openzro/management/server/posture"
+	"github.com/openzro/openzro/management/server/status"
 )
 
 var berlin = "Berlin"
@@ -436,9 +436,9 @@ func TestPostureCheckUpdate(t *testing.T) {
 						"process_check": {
 							"processes": [
 								{ 
-									"linux_path": "/usr/local/bin/netbird",
-									"mac_path": "/Applications/NetBird.app/Contents/MacOS/netbird",
-									"windows_path": "C:\\ProgramData\\NetBird\\netbird.exe"
+									"linux_path": "/usr/local/bin/openzro",
+									"mac_path": "/Applications/Openzro.app/Contents/MacOS/openzro",
+									"windows_path": "C:\\ProgramData\\Openzro\\openzro.exe"
 								}
 							]
 						}
@@ -454,9 +454,9 @@ func TestPostureCheckUpdate(t *testing.T) {
 					ProcessCheck: &api.ProcessCheck{
 						Processes: []api.Process{
 							{
-								LinuxPath:   str("/usr/local/bin/netbird"),
-								MacPath:     str("/Applications/NetBird.app/Contents/MacOS/netbird"),
-								WindowsPath: str("C:\\ProgramData\\NetBird\\netbird.exe"),
+								LinuxPath:   str("/usr/local/bin/openzro"),
+								MacPath:     str("/Applications/Openzro.app/Contents/MacOS/openzro"),
+								WindowsPath: str("C:\\ProgramData\\Openzro\\openzro.exe"),
 							},
 						},
 					},
@@ -495,7 +495,7 @@ func TestPostureCheckUpdate(t *testing.T) {
 			expectedBody:   false,
 		},
 		{
-			name:        "Create Posture Checks Invalid NetBird's Min Version",
+			name:        "Create Posture Checks Invalid Openzro's Min Version",
 			requestType: http.MethodPost,
 			requestPath: "/api/posture-checks",
 			requestBody: bytes.NewBuffer(
@@ -728,7 +728,7 @@ func TestPostureCheckUpdate(t *testing.T) {
 			expectedBody:   false,
 		},
 		{
-			name:        "Update Posture Checks Invalid NetBird's Min Version",
+			name:        "Update Posture Checks Invalid Openzro's Min Version",
 			requestType: http.MethodPut,
 			requestPath: "/api/posture-checks/postureCheck",
 			requestBody: bytes.NewBuffer(

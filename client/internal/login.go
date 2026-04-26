@@ -10,11 +10,11 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/netbirdio/netbird/client/internal/profilemanager"
-	"github.com/netbirdio/netbird/client/ssh"
-	"github.com/netbirdio/netbird/client/system"
-	mgm "github.com/netbirdio/netbird/management/client"
-	mgmProto "github.com/netbirdio/netbird/management/proto"
+	"github.com/openzro/openzro/client/internal/profilemanager"
+	"github.com/openzro/openzro/client/ssh"
+	"github.com/openzro/openzro/client/system"
+	mgm "github.com/openzro/openzro/management/client"
+	mgmProto "github.com/openzro/openzro/management/proto"
 )
 
 // IsLoginRequired check that the server is support SSO or not

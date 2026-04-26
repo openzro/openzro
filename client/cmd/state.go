@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/status"
 
-	"github.com/netbirdio/netbird/client/proto"
+	"github.com/openzro/openzro/client/proto"
 )
 
 var (
@@ -17,7 +17,7 @@ var (
 var stateCmd = &cobra.Command{
 	Use:   "state",
 	Short: "Manage daemon state",
-	Long:  "Provides commands for managing and inspecting the Netbird daemon state.",
+	Long:  "Provides commands for managing and inspecting the Openzro daemon state.",
 }
 
 var stateListCmd = &cobra.Command{
@@ -25,7 +25,7 @@ var stateListCmd = &cobra.Command{
 	Aliases: []string{"ls"},
 	Short:   "List all stored states",
 	Long:    "Lists all registered states with their status and basic information.",
-	Example: "  netbird state list",
+	Example: "  openzro state list",
 	RunE:    stateList,
 }
 
@@ -34,8 +34,8 @@ var stateCleanCmd = &cobra.Command{
 	Short: "Clean stored states",
 	Long: `Clean specific state or all states. The daemon must not be running.
 This will perform cleanup operations and remove the state.`,
-	Example: `  netbird state clean dns_state
-  netbird state clean --all`,
+	Example: `  openzro state clean dns_state
+  openzro state clean --all`,
 	RunE: stateClean,
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		// Check mutual exclusivity between --all flag and state-name argument
@@ -54,8 +54,8 @@ var stateDeleteCmd = &cobra.Command{
 	Short: "Delete stored states",
 	Long: `Delete specific state or all states from storage. The daemon must not be running.
 This will remove the state without performing any cleanup operations.`,
-	Example: `  netbird state delete dns_state
-  netbird state delete --all`,
+	Example: `  openzro state delete dns_state
+  openzro state delete --all`,
 	RunE: stateDelete,
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		// Check mutual exclusivity between --all flag and state-name argument

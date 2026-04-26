@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/netbirdio/netbird/management/server/idp"
-	"github.com/netbirdio/netbird/management/server/integration_reference"
+	"github.com/openzro/openzro/management/server/idp"
+	"github.com/openzro/openzro/management/server/integration_reference"
 )
 
 const (

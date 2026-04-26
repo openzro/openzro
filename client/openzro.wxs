@@ -1,0 +1,61 @@
+<Wix
+	xmlns="http://wixtoolset.org/schemas/v4/wxs"
+	xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+	<Package Name="Openzro" Version="$(env.OPENZRO_VERSION)" Manufacturer="Openzro GmbH" Language="1033" UpgradeCode="6456ec4e-3ad6-4b9b-a2be-98e81cb21ccf"
+        InstallerVersion="500" Compressed="yes"  Codepage="utf-8" >
+
+
+		<MediaTemplate EmbedCab="yes" />
+
+		<Feature Id="OpenzroFeature" Title="Openzro" Level="1">
+			<ComponentGroupRef Id="OpenzroFilesComponent" />
+		</Feature>
+
+		<MajorUpgrade AllowSameVersionUpgrades='yes' DowngradeErrorMessage="A newer version of [ProductName] is already installed. Setup will now exit."/>
+
+		<StandardDirectory Id="ProgramFiles64Folder">
+			<Directory Id="OpenzroInstallDir" Name="Openzro">
+				<Component Id="OpenzroFiles" Guid="db3165de-cc6e-4922-8396-9d892950e23e" Bitness="always64">
+					<File ProcessorArchitecture="x64" Source=".\dist\openzro_windows_amd64\openzro.exe" KeyPath="yes" />
+					<File ProcessorArchitecture="x64" Source=".\dist\openzro_windows_amd64\openzro-ui.exe">
+						<Shortcut Id="OpenzroDesktopShortcut" Directory="DesktopFolder" Name="Openzro" WorkingDirectory="OpenzroInstallDir" Icon="OpenzroIcon" />
+						<Shortcut Id="OpenzroStartMenuShortcut" Directory="StartMenuFolder" Name="Openzro" WorkingDirectory="OpenzroInstallDir" Icon="OpenzroIcon" />
+					</File>
+					<File ProcessorArchitecture="x64" Source=".\dist\openzro_windows_amd64\wintun.dll" />
+					<File ProcessorArchitecture="x64" Source=".\dist\openzro_windows_amd64\opengl32.dll" />
+
+					<ServiceInstall
+                                     Id="OpenzroService"
+                                     Name="Openzro"
+                                     DisplayName="Openzro"
+                                     Description="A WireGuard-based mesh network that connects your devices into a single private network."
+                                     Start="auto" Type="ownProcess"
+                                     ErrorControl="normal"
+                                     Account="LocalSystem"
+                                     Vital="yes"
+                                     Interactive="no"
+                                     Arguments='service run config [CommonAppDataFolder]Openzro\config.json log-level info'
+                        />
+					<ServiceControl Id="OpenzroService" Name="Openzro" Start="install" Stop="both" Remove="uninstall" Wait="yes" />
+
+					<Environment Id="UpdatePath" Name="PATH" Value="[OpenzroInstallDir]" Part="last" Action="set" System="yes" />
+
+				</Component>
+			</Directory>
+		</StandardDirectory>
+
+		<ComponentGroup Id="OpenzroFilesComponent">
+			<ComponentRef Id="OpenzroFiles" />
+		</ComponentGroup>
+
+		<util:CloseApplication Id="CloseOpenzro" CloseMessage="no" Target="openzro.exe" RebootPrompt="no" />
+		<util:CloseApplication Id="CloseOpenzroUI" CloseMessage="no" Target="openzro-ui.exe" RebootPrompt="no" />
+
+
+
+		<!-- Icons -->
+		<Icon Id="OpenzroIcon" SourceFile=".\client\ui\assets\openzro.ico" />
+		<Property Id="ARPPRODUCTICON" Value="OpenzroIcon" />
+
+	</Package>
+</Wix>

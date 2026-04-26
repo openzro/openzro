@@ -210,7 +210,7 @@ type AccessiblePeer struct {
 	// CountryCode 2-letter ISO 3166-1 alpha-2 code that represents the country
 	CountryCode CountryCode `json:"country_code"`
 
-	// DnsLabel Peer's DNS label is the parsed peer name for domain resolution. It is used to form an FQDN by appending the account's domain to the peer label. e.g. peer-dns-label.netbird.cloud
+	// DnsLabel Peer's DNS label is the parsed peer name for domain resolution. It is used to form an FQDN by appending the account's domain to the peer label. e.g. peer-dns-label.openzro.cloud
 	DnsLabel string `json:"dns_label"`
 
 	// GeonameId Unique identifier from the GeoNames database for a specific geographical location.
@@ -222,7 +222,7 @@ type AccessiblePeer struct {
 	// Ip Peer's IP address
 	Ip string `json:"ip"`
 
-	// LastSeen Last time peer connected to Netbird's management service
+	// LastSeen Last time peer connected to Openzro's management service
 	LastSeen time.Time `json:"last_seen"`
 
 	// Name Peer's hostname
@@ -1024,7 +1024,7 @@ type Peer struct {
 	// CountryCode 2-letter ISO 3166-1 alpha-2 code that represents the country
 	CountryCode CountryCode `json:"country_code"`
 
-	// DnsLabel Peer's DNS label is the parsed peer name for domain resolution. It is used to form an FQDN by appending the account's domain to the peer label. e.g. peer-dns-label.netbird.cloud
+	// DnsLabel Peer's DNS label is the parsed peer name for domain resolution. It is used to form an FQDN by appending the account's domain to the peer label. e.g. peer-dns-label.openzro.cloud
 	DnsLabel string `json:"dns_label"`
 
 	// Ephemeral Indicates whether the peer is ephemeral or not
@@ -1057,7 +1057,7 @@ type Peer struct {
 	// LastLogin Last time this peer performed log in (authentication). E.g., user authenticated.
 	LastLogin time.Time `json:"last_login"`
 
-	// LastSeen Last time peer connected to Netbird's management service
+	// LastSeen Last time peer connected to Openzro's management service
 	LastSeen time.Time `json:"last_seen"`
 
 	// LoginExpirationEnabled Indicates whether peer login expiration has been enabled or not
@@ -1108,7 +1108,7 @@ type PeerBatch struct {
 	// CountryCode 2-letter ISO 3166-1 alpha-2 code that represents the country
 	CountryCode CountryCode `json:"country_code"`
 
-	// DnsLabel Peer's DNS label is the parsed peer name for domain resolution. It is used to form an FQDN by appending the account's domain to the peer label. e.g. peer-dns-label.netbird.cloud
+	// DnsLabel Peer's DNS label is the parsed peer name for domain resolution. It is used to form an FQDN by appending the account's domain to the peer label. e.g. peer-dns-label.openzro.cloud
 	DnsLabel string `json:"dns_label"`
 
 	// Ephemeral Indicates whether the peer is ephemeral or not
@@ -1141,7 +1141,7 @@ type PeerBatch struct {
 	// LastLogin Last time this peer performed log in (authentication). E.g., user authenticated.
 	LastLogin time.Time `json:"last_login"`
 
-	// LastSeen Last time peer connected to Netbird's management service
+	// LastSeen Last time peer connected to Openzro's management service
 	LastSeen time.Time `json:"last_seen"`
 
 	// LoginExpirationEnabled Indicates whether peer login expiration has been enabled or not
@@ -1758,7 +1758,7 @@ type User struct {
 	Name        string           `json:"name"`
 	Permissions *UserPermissions `json:"permissions,omitempty"`
 
-	// Role User's NetBird account role
+	// Role User's Openzro account role
 	Role string `json:"role"`
 
 	// Status User's status
@@ -1782,7 +1782,7 @@ type UserCreateRequest struct {
 	// Name User's full name
 	Name *string `json:"name,omitempty"`
 
-	// Role User's NetBird account role
+	// Role User's Openzro account role
 	Role string `json:"role"`
 }
 
@@ -1801,7 +1801,7 @@ type UserRequest struct {
 	// IsBlocked If set to true then user is blocked and can't use the system
 	IsBlocked bool `json:"is_blocked"`
 
-	// Role User's NetBird account role
+	// Role User's Openzro account role
 	Role string `json:"role"`
 }
 

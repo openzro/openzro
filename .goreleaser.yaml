@@ -1,10 +1,10 @@
 version: 2
 
-project_name: netbird
+project_name: openzro
 builds:
-  - id: netbird
+  - id: openzro
     dir: client
-    binary: netbird
+    binary: openzro
     env: [CGO_ENABLED=0]
     goos:
       - linux
@@ -23,14 +23,14 @@ builds:
       - goos: windows
         goarch: 386
     ldflags:
-      - -s -w -X github.com/netbirdio/netbird/version.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
+      - -s -w -X github.com/openzro/openzro/version.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
     mod_timestamp: "{{ .CommitTimestamp }}"
     tags:
       - load_wgnt_from_rsrc
 
-  - id: netbird-static
+  - id: openzro-static
     dir: client
-    binary: netbird
+    binary: openzro
     env: [CGO_ENABLED=0]
     goos:
       - linux
@@ -43,12 +43,12 @@ builds:
       - hardfloat
       - softfloat
     ldflags:
-      - -s -w -X github.com/netbirdio/netbird/version.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
+      - -s -w -X github.com/openzro/openzro/version.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
     mod_timestamp: "{{ .CommitTimestamp }}"
     tags:
       - load_wgnt_from_rsrc
 
-  - id: netbird-mgmt
+  - id: openzro-mgmt
     dir: management
     env:
       - CGO_ENABLED=1
@@ -57,7 +57,7 @@ builds:
           {{- if eq .Arch "arm64"}}CC=aarch64-linux-gnu-gcc{{- end }}
           {{- if eq .Arch "arm"}}CC=arm-linux-gnueabihf-gcc{{- end }}
         {{- end }}
-    binary: netbird-mgmt
+    binary: openzro-mgmt
     goos:
       - linux
     goarch:
@@ -65,13 +65,13 @@ builds:
       - arm64
       - arm
     ldflags:
-      - -s -w -X github.com/netbirdio/netbird/version.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
+      - -s -w -X github.com/openzro/openzro/version.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
     mod_timestamp: "{{ .CommitTimestamp }}"
 
-  - id: netbird-signal
+  - id: openzro-signal
     dir: signal
     env: [CGO_ENABLED=0]
-    binary: netbird-signal
+    binary: openzro-signal
     goos:
       - linux
     goarch:
@@ -79,13 +79,13 @@ builds:
       - arm64
       - arm
     ldflags:
-      - -s -w -X github.com/netbirdio/netbird/version.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
+      - -s -w -X github.com/openzro/openzro/version.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
     mod_timestamp: "{{ .CommitTimestamp }}"
 
-  - id: netbird-relay
+  - id: openzro-relay
     dir: relay
     env: [CGO_ENABLED=0]
-    binary: netbird-relay
+    binary: openzro-relay
     goos:
       - linux
     goarch:
@@ -93,13 +93,13 @@ builds:
       - arm64
       - arm
     ldflags:
-      - -s -w -X github.com/netbirdio/netbird/version.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
+      - -s -w -X github.com/openzro/openzro/version.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
     mod_timestamp: "{{ .CommitTimestamp }}"
 
-  - id: netbird-upload
+  - id: openzro-upload
     dir: upload-server
     env: [CGO_ENABLED=0]
-    binary: netbird-upload
+    binary: openzro-upload
     goos:
       - linux
     goarch:
@@ -107,25 +107,25 @@ builds:
       - arm64
       - arm
     ldflags:
-      - -s -w -X github.com/netbirdio/netbird/version.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
+      - -s -w -X github.com/openzro/openzro/version.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
     mod_timestamp: "{{ .CommitTimestamp }}"
 
 universal_binaries:
-  - id: netbird
+  - id: openzro
 
 archives:
   - builds:
-      - netbird
-      - netbird-static
+      - openzro
+      - openzro-static
 
 nfpms:
-  - maintainer: Netbird <dev@netbird.io>
-    description: Netbird client.
-    homepage: https://netbird.io/
-    id: netbird-deb
+  - maintainer: Openzro <dev@openzro.io>
+    description: Openzro client.
+    homepage: https://openzro.io/
+    id: openzro-deb
     bindir: /usr/bin
     builds:
-      - netbird
+      - openzro
     formats:
       - deb
 
@@ -133,13 +133,13 @@ nfpms:
       postinstall: "release_files/post_install.sh"
       preremove: "release_files/pre_remove.sh"
 
-  - maintainer: Netbird <dev@netbird.io>
-    description: Netbird client.
-    homepage: https://netbird.io/
-    id: netbird-rpm
+  - maintainer: Openzro <dev@openzro.io>
+    description: Openzro client.
+    homepage: https://openzro.io/
+    id: openzro-rpm
     bindir: /usr/bin
     builds:
-      - netbird
+      - openzro
     formats:
       - rpm
 
@@ -148,122 +148,122 @@ nfpms:
       preremove: "release_files/pre_remove.sh"
 dockers:
   - image_templates:
-      - netbirdio/netbird:{{ .Version }}-amd64
-      - ghcr.io/netbirdio/netbird:{{ .Version }}-amd64
+      - openzro/openzro:{{ .Version }}-amd64
+      - ghcr.io/openzro/openzro:{{ .Version }}-amd64
     ids:
-      - netbird
+      - openzro
     goarch: amd64
     use: buildx
     dockerfile: client/Dockerfile
     extra_files:
-      - client/netbird-entrypoint.sh
+      - client/openzro-entrypoint.sh
     build_flag_templates:
       - "--platform=linux/amd64"
       - "--label=org.opencontainers.image.created={{.Date}}"
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.source=https://github.com/netbirdio/{{.ProjectName}}"
-      - "--label=maintainer=dev@netbird.io"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/{{.ProjectName}}"
+      - "--label=maintainer=dev@openzro.io"
   - image_templates:
-      - netbirdio/netbird:{{ .Version }}-arm64v8
-      - ghcr.io/netbirdio/netbird:{{ .Version }}-arm64v8
+      - openzro/openzro:{{ .Version }}-arm64v8
+      - ghcr.io/openzro/openzro:{{ .Version }}-arm64v8
     ids:
-      - netbird
+      - openzro
     goarch: arm64
     use: buildx
     dockerfile: client/Dockerfile
     extra_files:
-      - client/netbird-entrypoint.sh
+      - client/openzro-entrypoint.sh
     build_flag_templates:
       - "--platform=linux/arm64"
       - "--label=org.opencontainers.image.created={{.Date}}"
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.source=https://github.com/netbirdio/{{.ProjectName}}"
-      - "--label=maintainer=dev@netbird.io"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/{{.ProjectName}}"
+      - "--label=maintainer=dev@openzro.io"
   - image_templates:
-      - netbirdio/netbird:{{ .Version }}-arm
-      - ghcr.io/netbirdio/netbird:{{ .Version }}-arm
+      - openzro/openzro:{{ .Version }}-arm
+      - ghcr.io/openzro/openzro:{{ .Version }}-arm
     ids:
-      - netbird
+      - openzro
     goarch: arm
     goarm: 6
     use: buildx
     dockerfile: client/Dockerfile
     extra_files:
-      - client/netbird-entrypoint.sh
+      - client/openzro-entrypoint.sh
     build_flag_templates:
       - "--platform=linux/arm"
       - "--label=org.opencontainers.image.created={{.Date}}"
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.source=https://github.com/netbirdio/{{.ProjectName}}"
-      - "--label=maintainer=dev@netbird.io"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/{{.ProjectName}}"
+      - "--label=maintainer=dev@openzro.io"
 
   - image_templates:
-      - netbirdio/netbird:{{ .Version }}-rootless-amd64
-      - ghcr.io/netbirdio/netbird:{{ .Version }}-rootless-amd64
+      - openzro/openzro:{{ .Version }}-rootless-amd64
+      - ghcr.io/openzro/openzro:{{ .Version }}-rootless-amd64
     ids:
-      - netbird
+      - openzro
     goarch: amd64
     use: buildx
     dockerfile: client/Dockerfile-rootless
     extra_files:
-      - client/netbird-entrypoint.sh
+      - client/openzro-entrypoint.sh
     build_flag_templates:
       - "--platform=linux/amd64"
       - "--label=org.opencontainers.image.created={{.Date}}"
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.source=https://github.com/netbirdio/{{.ProjectName}}"
-      - "--label=maintainer=dev@netbird.io"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/{{.ProjectName}}"
+      - "--label=maintainer=dev@openzro.io"
   - image_templates:
-      - netbirdio/netbird:{{ .Version }}-rootless-arm64v8
-      - ghcr.io/netbirdio/netbird:{{ .Version }}-rootless-arm64v8
+      - openzro/openzro:{{ .Version }}-rootless-arm64v8
+      - ghcr.io/openzro/openzro:{{ .Version }}-rootless-arm64v8
     ids:
-      - netbird
+      - openzro
     goarch: arm64
     use: buildx
     dockerfile: client/Dockerfile-rootless
     extra_files:
-      - client/netbird-entrypoint.sh
+      - client/openzro-entrypoint.sh
     build_flag_templates:
       - "--platform=linux/arm64"
       - "--label=org.opencontainers.image.created={{.Date}}"
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.source=https://github.com/netbirdio/{{.ProjectName}}"
-      - "--label=maintainer=dev@netbird.io"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/{{.ProjectName}}"
+      - "--label=maintainer=dev@openzro.io"
   - image_templates:
-      - netbirdio/netbird:{{ .Version }}-rootless-arm
-      - ghcr.io/netbirdio/netbird:{{ .Version }}-rootless-arm
+      - openzro/openzro:{{ .Version }}-rootless-arm
+      - ghcr.io/openzro/openzro:{{ .Version }}-rootless-arm
     ids:
-      - netbird
+      - openzro
     goarch: arm
     goarm: 6
     use: buildx
     dockerfile: client/Dockerfile-rootless
     extra_files:
-      - client/netbird-entrypoint.sh
+      - client/openzro-entrypoint.sh
     build_flag_templates:
       - "--platform=linux/arm"
       - "--label=org.opencontainers.image.created={{.Date}}"
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.source=https://github.com/netbirdio/{{.ProjectName}}"
-      - "--label=maintainer=dev@netbird.io"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/{{.ProjectName}}"
+      - "--label=maintainer=dev@openzro.io"
 
   - image_templates:
-      - netbirdio/relay:{{ .Version }}-amd64
-      - ghcr.io/netbirdio/relay:{{ .Version }}-amd64
+      - openzro/relay:{{ .Version }}-amd64
+      - ghcr.io/openzro/relay:{{ .Version }}-amd64
     ids:
-      - netbird-relay
+      - openzro-relay
     goarch: amd64
     use: buildx
     dockerfile: relay/Dockerfile
@@ -273,13 +273,13 @@ dockers:
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.source=https://github.com/netbirdio/{{.ProjectName}}"
-      - "--label=maintainer=dev@netbird.io"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/{{.ProjectName}}"
+      - "--label=maintainer=dev@openzro.io"
   - image_templates:
-      - netbirdio/relay:{{ .Version }}-arm64v8
-      - ghcr.io/netbirdio/relay:{{ .Version }}-arm64v8
+      - openzro/relay:{{ .Version }}-arm64v8
+      - ghcr.io/openzro/relay:{{ .Version }}-arm64v8
     ids:
-      - netbird-relay
+      - openzro-relay
     goarch: arm64
     use: buildx
     dockerfile: relay/Dockerfile
@@ -289,13 +289,13 @@ dockers:
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.source=https://github.com/netbirdio/{{.ProjectName}}"
-      - "--label=maintainer=dev@netbird.io"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/{{.ProjectName}}"
+      - "--label=maintainer=dev@openzro.io"
   - image_templates:
-      - netbirdio/relay:{{ .Version }}-arm
-      - ghcr.io/netbirdio/relay:{{ .Version }}-arm
+      - openzro/relay:{{ .Version }}-arm
+      - ghcr.io/openzro/relay:{{ .Version }}-arm
     ids:
-      - netbird-relay
+      - openzro-relay
     goarch: arm
     goarm: 6
     use: buildx
@@ -306,13 +306,13 @@ dockers:
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.source=https://github.com/netbirdio/{{.ProjectName}}"
-      - "--label=maintainer=dev@netbird.io"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/{{.ProjectName}}"
+      - "--label=maintainer=dev@openzro.io"
   - image_templates:
-      - netbirdio/signal:{{ .Version }}-amd64
-      - ghcr.io/netbirdio/signal:{{ .Version }}-amd64
+      - openzro/signal:{{ .Version }}-amd64
+      - ghcr.io/openzro/signal:{{ .Version }}-amd64
     ids:
-      - netbird-signal
+      - openzro-signal
     goarch: amd64
     use: buildx
     dockerfile: signal/Dockerfile
@@ -322,13 +322,13 @@ dockers:
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.source=https://github.com/netbirdio/{{.ProjectName}}"
-      - "--label=maintainer=dev@netbird.io"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/{{.ProjectName}}"
+      - "--label=maintainer=dev@openzro.io"
   - image_templates:
-      - netbirdio/signal:{{ .Version }}-arm64v8
-      - ghcr.io/netbirdio/signal:{{ .Version }}-arm64v8
+      - openzro/signal:{{ .Version }}-arm64v8
+      - ghcr.io/openzro/signal:{{ .Version }}-arm64v8
     ids:
-      - netbird-signal
+      - openzro-signal
     goarch: arm64
     use: buildx
     dockerfile: signal/Dockerfile
@@ -338,13 +338,13 @@ dockers:
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.source=https://github.com/netbirdio/{{.ProjectName}}"
-      - "--label=maintainer=dev@netbird.io"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/{{.ProjectName}}"
+      - "--label=maintainer=dev@openzro.io"
   - image_templates:
-      - netbirdio/signal:{{ .Version }}-arm
-      - ghcr.io/netbirdio/signal:{{ .Version }}-arm
+      - openzro/signal:{{ .Version }}-arm
+      - ghcr.io/openzro/signal:{{ .Version }}-arm
     ids:
-      - netbird-signal
+      - openzro-signal
     goarch: arm
     goarm: 6
     use: buildx
@@ -355,13 +355,13 @@ dockers:
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.source=https://github.com/netbirdio/{{.ProjectName}}"
-      - "--label=maintainer=dev@netbird.io"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/{{.ProjectName}}"
+      - "--label=maintainer=dev@openzro.io"
   - image_templates:
-      - netbirdio/management:{{ .Version }}-amd64
-      - ghcr.io/netbirdio/management:{{ .Version }}-amd64
+      - openzro/management:{{ .Version }}-amd64
+      - ghcr.io/openzro/management:{{ .Version }}-amd64
     ids:
-      - netbird-mgmt
+      - openzro-mgmt
     goarch: amd64
     use: buildx
     dockerfile: management/Dockerfile
@@ -371,13 +371,13 @@ dockers:
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.source=https://github.com/netbirdio/{{.ProjectName}}"
-      - "--label=maintainer=dev@netbird.io"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/{{.ProjectName}}"
+      - "--label=maintainer=dev@openzro.io"
   - image_templates:
-      - netbirdio/management:{{ .Version }}-arm64v8
-      - ghcr.io/netbirdio/management:{{ .Version }}-arm64v8
+      - openzro/management:{{ .Version }}-arm64v8
+      - ghcr.io/openzro/management:{{ .Version }}-arm64v8
     ids:
-      - netbird-mgmt
+      - openzro-mgmt
     goarch: arm64
     use: buildx
     dockerfile: management/Dockerfile
@@ -387,13 +387,13 @@ dockers:
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.source=https://github.com/netbirdio/{{.ProjectName}}"
-      - "--label=maintainer=dev@netbird.io"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/{{.ProjectName}}"
+      - "--label=maintainer=dev@openzro.io"
   - image_templates:
-      - netbirdio/management:{{ .Version }}-arm
-      - ghcr.io/netbirdio/management:{{ .Version }}-arm
+      - openzro/management:{{ .Version }}-arm
+      - ghcr.io/openzro/management:{{ .Version }}-arm
     ids:
-      - netbird-mgmt
+      - openzro-mgmt
     goarch: arm
     goarm: 6
     use: buildx
@@ -404,13 +404,13 @@ dockers:
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.source=https://github.com/netbirdio/{{.ProjectName}}"
-      - "--label=maintainer=dev@netbird.io"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/{{.ProjectName}}"
+      - "--label=maintainer=dev@openzro.io"
   - image_templates:
-      - netbirdio/management:{{ .Version }}-debug-amd64
-      - ghcr.io/netbirdio/management:{{ .Version }}-debug-amd64
+      - openzro/management:{{ .Version }}-debug-amd64
+      - ghcr.io/openzro/management:{{ .Version }}-debug-amd64
     ids:
-      - netbird-mgmt
+      - openzro-mgmt
     goarch: amd64
     use: buildx
     dockerfile: management/Dockerfile.debug
@@ -420,13 +420,13 @@ dockers:
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.source=https://github.com/netbirdio/{{.ProjectName}}"
-      - "--label=maintainer=dev@netbird.io"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/{{.ProjectName}}"
+      - "--label=maintainer=dev@openzro.io"
   - image_templates:
-      - netbirdio/management:{{ .Version }}-debug-arm64v8
-      - ghcr.io/netbirdio/management:{{ .Version }}-debug-arm64v8
+      - openzro/management:{{ .Version }}-debug-arm64v8
+      - ghcr.io/openzro/management:{{ .Version }}-debug-arm64v8
     ids:
-      - netbird-mgmt
+      - openzro-mgmt
     goarch: arm64
     use: buildx
     dockerfile: management/Dockerfile.debug
@@ -436,14 +436,14 @@ dockers:
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.source=https://github.com/netbirdio/{{.ProjectName}}"
-      - "--label=maintainer=dev@netbird.io"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/{{.ProjectName}}"
+      - "--label=maintainer=dev@openzro.io"
 
   - image_templates:
-      - netbirdio/management:{{ .Version }}-debug-arm
-      - ghcr.io/netbirdio/management:{{ .Version }}-debug-arm
+      - openzro/management:{{ .Version }}-debug-arm
+      - ghcr.io/openzro/management:{{ .Version }}-debug-arm
     ids:
-      - netbird-mgmt
+      - openzro-mgmt
     goarch: arm
     goarm: 6
     use: buildx
@@ -454,13 +454,13 @@ dockers:
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.source=https://github.com/netbirdio/{{.ProjectName}}"
-      - "--label=maintainer=dev@netbird.io"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/{{.ProjectName}}"
+      - "--label=maintainer=dev@openzro.io"
   - image_templates:
-      - netbirdio/upload:{{ .Version }}-amd64
-      - ghcr.io/netbirdio/upload:{{ .Version }}-amd64
+      - openzro/upload:{{ .Version }}-amd64
+      - ghcr.io/openzro/upload:{{ .Version }}-amd64
     ids:
-      - netbird-upload
+      - openzro-upload
     goarch: amd64
     use: buildx
     dockerfile: upload-server/Dockerfile
@@ -470,13 +470,13 @@ dockers:
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.source=https://github.com/netbirdio/{{.ProjectName}}"
-      - "--label=maintainer=dev@netbird.io"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/{{.ProjectName}}"
+      - "--label=maintainer=dev@openzro.io"
   - image_templates:
-      - netbirdio/upload:{{ .Version }}-arm64v8
-      - ghcr.io/netbirdio/upload:{{ .Version }}-arm64v8
+      - openzro/upload:{{ .Version }}-arm64v8
+      - ghcr.io/openzro/upload:{{ .Version }}-arm64v8
     ids:
-      - netbird-upload
+      - openzro-upload
     goarch: arm64
     use: buildx
     dockerfile: upload-server/Dockerfile
@@ -486,13 +486,13 @@ dockers:
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.source=https://github.com/netbirdio/{{.ProjectName}}"
-      - "--label=maintainer=dev@netbird.io"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/{{.ProjectName}}"
+      - "--label=maintainer=dev@openzro.io"
   - image_templates:
-      - netbirdio/upload:{{ .Version }}-arm
-      - ghcr.io/netbirdio/upload:{{ .Version }}-arm
+      - openzro/upload:{{ .Version }}-arm
+      - ghcr.io/openzro/upload:{{ .Version }}-arm
     ids:
-      - netbird-upload
+      - openzro-upload
     goarch: arm
     goarm: 6
     use: buildx
@@ -503,176 +503,176 @@ dockers:
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.source=https://github.com/netbirdio/{{.ProjectName}}"
-      - "--label=maintainer=dev@netbird.io"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/{{.ProjectName}}"
+      - "--label=maintainer=dev@openzro.io"
 docker_manifests:
-  - name_template: netbirdio/netbird:{{ .Version }}
+  - name_template: openzro/openzro:{{ .Version }}
     image_templates:
-      - netbirdio/netbird:{{ .Version }}-arm64v8
-      - netbirdio/netbird:{{ .Version }}-arm
-      - netbirdio/netbird:{{ .Version }}-amd64
+      - openzro/openzro:{{ .Version }}-arm64v8
+      - openzro/openzro:{{ .Version }}-arm
+      - openzro/openzro:{{ .Version }}-amd64
 
-  - name_template: netbirdio/netbird:latest
+  - name_template: openzro/openzro:latest
     image_templates:
-      - netbirdio/netbird:{{ .Version }}-arm64v8
-      - netbirdio/netbird:{{ .Version }}-arm
-      - netbirdio/netbird:{{ .Version }}-amd64
+      - openzro/openzro:{{ .Version }}-arm64v8
+      - openzro/openzro:{{ .Version }}-arm
+      - openzro/openzro:{{ .Version }}-amd64
 
-  - name_template: netbirdio/netbird:{{ .Version }}-rootless
+  - name_template: openzro/openzro:{{ .Version }}-rootless
     image_templates:
-      - netbirdio/netbird:{{ .Version }}-rootless-arm64v8
-      - netbirdio/netbird:{{ .Version }}-rootless-arm
-      - netbirdio/netbird:{{ .Version }}-rootless-amd64
+      - openzro/openzro:{{ .Version }}-rootless-arm64v8
+      - openzro/openzro:{{ .Version }}-rootless-arm
+      - openzro/openzro:{{ .Version }}-rootless-amd64
 
-  - name_template: netbirdio/netbird:rootless-latest
+  - name_template: openzro/openzro:rootless-latest
     image_templates:
-      - netbirdio/netbird:{{ .Version }}-rootless-arm64v8
-      - netbirdio/netbird:{{ .Version }}-rootless-arm
-      - netbirdio/netbird:{{ .Version }}-rootless-amd64
+      - openzro/openzro:{{ .Version }}-rootless-arm64v8
+      - openzro/openzro:{{ .Version }}-rootless-arm
+      - openzro/openzro:{{ .Version }}-rootless-amd64
 
-  - name_template: netbirdio/relay:{{ .Version }}
+  - name_template: openzro/relay:{{ .Version }}
     image_templates:
-      - netbirdio/relay:{{ .Version }}-arm64v8
-      - netbirdio/relay:{{ .Version }}-arm
-      - netbirdio/relay:{{ .Version }}-amd64
+      - openzro/relay:{{ .Version }}-arm64v8
+      - openzro/relay:{{ .Version }}-arm
+      - openzro/relay:{{ .Version }}-amd64
 
-  - name_template: netbirdio/relay:latest
+  - name_template: openzro/relay:latest
     image_templates:
-      - netbirdio/relay:{{ .Version }}-arm64v8
-      - netbirdio/relay:{{ .Version }}-arm
-      - netbirdio/relay:{{ .Version }}-amd64
+      - openzro/relay:{{ .Version }}-arm64v8
+      - openzro/relay:{{ .Version }}-arm
+      - openzro/relay:{{ .Version }}-amd64
 
-  - name_template: netbirdio/signal:{{ .Version }}
+  - name_template: openzro/signal:{{ .Version }}
     image_templates:
-      - netbirdio/signal:{{ .Version }}-arm64v8
-      - netbirdio/signal:{{ .Version }}-arm
-      - netbirdio/signal:{{ .Version }}-amd64
+      - openzro/signal:{{ .Version }}-arm64v8
+      - openzro/signal:{{ .Version }}-arm
+      - openzro/signal:{{ .Version }}-amd64
 
-  - name_template: netbirdio/signal:latest
+  - name_template: openzro/signal:latest
     image_templates:
-      - netbirdio/signal:{{ .Version }}-arm64v8
-      - netbirdio/signal:{{ .Version }}-arm
-      - netbirdio/signal:{{ .Version }}-amd64
+      - openzro/signal:{{ .Version }}-arm64v8
+      - openzro/signal:{{ .Version }}-arm
+      - openzro/signal:{{ .Version }}-amd64
 
-  - name_template: netbirdio/management:{{ .Version }}
+  - name_template: openzro/management:{{ .Version }}
     image_templates:
-      - netbirdio/management:{{ .Version }}-arm64v8
-      - netbirdio/management:{{ .Version }}-arm
-      - netbirdio/management:{{ .Version }}-amd64
+      - openzro/management:{{ .Version }}-arm64v8
+      - openzro/management:{{ .Version }}-arm
+      - openzro/management:{{ .Version }}-amd64
 
-  - name_template: netbirdio/management:latest
+  - name_template: openzro/management:latest
     image_templates:
-      - netbirdio/management:{{ .Version }}-arm64v8
-      - netbirdio/management:{{ .Version }}-arm
-      - netbirdio/management:{{ .Version }}-amd64
+      - openzro/management:{{ .Version }}-arm64v8
+      - openzro/management:{{ .Version }}-arm
+      - openzro/management:{{ .Version }}-amd64
 
-  - name_template: netbirdio/management:debug-latest
+  - name_template: openzro/management:debug-latest
     image_templates:
-      - netbirdio/management:{{ .Version }}-debug-arm64v8
-      - netbirdio/management:{{ .Version }}-debug-arm
-      - netbirdio/management:{{ .Version }}-debug-amd64
-  - name_template: netbirdio/upload:{{ .Version }}
+      - openzro/management:{{ .Version }}-debug-arm64v8
+      - openzro/management:{{ .Version }}-debug-arm
+      - openzro/management:{{ .Version }}-debug-amd64
+  - name_template: openzro/upload:{{ .Version }}
     image_templates:
-      - netbirdio/upload:{{ .Version }}-arm64v8
-      - netbirdio/upload:{{ .Version }}-arm
-      - netbirdio/upload:{{ .Version }}-amd64
+      - openzro/upload:{{ .Version }}-arm64v8
+      - openzro/upload:{{ .Version }}-arm
+      - openzro/upload:{{ .Version }}-amd64
 
-  - name_template: netbirdio/upload:latest
+  - name_template: openzro/upload:latest
     image_templates:
-      - netbirdio/upload:{{ .Version }}-arm64v8
-      - netbirdio/upload:{{ .Version }}-arm
-      - netbirdio/upload:{{ .Version }}-amd64
+      - openzro/upload:{{ .Version }}-arm64v8
+      - openzro/upload:{{ .Version }}-arm
+      - openzro/upload:{{ .Version }}-amd64
 
-  - name_template: ghcr.io/netbirdio/netbird:{{ .Version }}
+  - name_template: ghcr.io/openzro/openzro:{{ .Version }}
     image_templates:
-      - ghcr.io/netbirdio/netbird:{{ .Version }}-arm64v8
-      - ghcr.io/netbirdio/netbird:{{ .Version }}-arm
-      - ghcr.io/netbirdio/netbird:{{ .Version }}-amd64
+      - ghcr.io/openzro/openzro:{{ .Version }}-arm64v8
+      - ghcr.io/openzro/openzro:{{ .Version }}-arm
+      - ghcr.io/openzro/openzro:{{ .Version }}-amd64
 
-  - name_template: ghcr.io/netbirdio/netbird:latest
+  - name_template: ghcr.io/openzro/openzro:latest
     image_templates:
-      - ghcr.io/netbirdio/netbird:{{ .Version }}-arm64v8
-      - ghcr.io/netbirdio/netbird:{{ .Version }}-arm
-      - ghcr.io/netbirdio/netbird:{{ .Version }}-amd64
+      - ghcr.io/openzro/openzro:{{ .Version }}-arm64v8
+      - ghcr.io/openzro/openzro:{{ .Version }}-arm
+      - ghcr.io/openzro/openzro:{{ .Version }}-amd64
 
-  - name_template: ghcr.io/netbirdio/netbird:{{ .Version }}-rootless
+  - name_template: ghcr.io/openzro/openzro:{{ .Version }}-rootless
     image_templates:
-      - ghcr.io/netbirdio/netbird:{{ .Version }}-rootless-arm64v8
-      - ghcr.io/netbirdio/netbird:{{ .Version }}-rootless-arm
-      - ghcr.io/netbirdio/netbird:{{ .Version }}-rootless-amd64
+      - ghcr.io/openzro/openzro:{{ .Version }}-rootless-arm64v8
+      - ghcr.io/openzro/openzro:{{ .Version }}-rootless-arm
+      - ghcr.io/openzro/openzro:{{ .Version }}-rootless-amd64
 
-  - name_template: ghcr.io/netbirdio/netbird:rootless-latest
+  - name_template: ghcr.io/openzro/openzro:rootless-latest
     image_templates:
-      - ghcr.io/netbirdio/netbird:{{ .Version }}-rootless-arm64v8
-      - ghcr.io/netbirdio/netbird:{{ .Version }}-rootless-arm
-      - ghcr.io/netbirdio/netbird:{{ .Version }}-rootless-amd64
+      - ghcr.io/openzro/openzro:{{ .Version }}-rootless-arm64v8
+      - ghcr.io/openzro/openzro:{{ .Version }}-rootless-arm
+      - ghcr.io/openzro/openzro:{{ .Version }}-rootless-amd64
 
-  - name_template: ghcr.io/netbirdio/relay:{{ .Version }}
+  - name_template: ghcr.io/openzro/relay:{{ .Version }}
     image_templates:
-      - ghcr.io/netbirdio/relay:{{ .Version }}-arm64v8
-      - ghcr.io/netbirdio/relay:{{ .Version }}-arm
-      - ghcr.io/netbirdio/relay:{{ .Version }}-amd64
+      - ghcr.io/openzro/relay:{{ .Version }}-arm64v8
+      - ghcr.io/openzro/relay:{{ .Version }}-arm
+      - ghcr.io/openzro/relay:{{ .Version }}-amd64
 
-  - name_template: ghcr.io/netbirdio/relay:latest
+  - name_template: ghcr.io/openzro/relay:latest
     image_templates:
-      - ghcr.io/netbirdio/relay:{{ .Version }}-arm64v8
-      - ghcr.io/netbirdio/relay:{{ .Version }}-arm
-      - ghcr.io/netbirdio/relay:{{ .Version }}-amd64
+      - ghcr.io/openzro/relay:{{ .Version }}-arm64v8
+      - ghcr.io/openzro/relay:{{ .Version }}-arm
+      - ghcr.io/openzro/relay:{{ .Version }}-amd64
 
-  - name_template: ghcr.io/netbirdio/signal:{{ .Version }}
+  - name_template: ghcr.io/openzro/signal:{{ .Version }}
     image_templates:
-      - ghcr.io/netbirdio/signal:{{ .Version }}-arm64v8
-      - ghcr.io/netbirdio/signal:{{ .Version }}-arm
-      - ghcr.io/netbirdio/signal:{{ .Version }}-amd64
+      - ghcr.io/openzro/signal:{{ .Version }}-arm64v8
+      - ghcr.io/openzro/signal:{{ .Version }}-arm
+      - ghcr.io/openzro/signal:{{ .Version }}-amd64
 
-  - name_template: ghcr.io/netbirdio/signal:latest
+  - name_template: ghcr.io/openzro/signal:latest
     image_templates:
-      - ghcr.io/netbirdio/signal:{{ .Version }}-arm64v8
-      - ghcr.io/netbirdio/signal:{{ .Version }}-arm
-      - ghcr.io/netbirdio/signal:{{ .Version }}-amd64
+      - ghcr.io/openzro/signal:{{ .Version }}-arm64v8
+      - ghcr.io/openzro/signal:{{ .Version }}-arm
+      - ghcr.io/openzro/signal:{{ .Version }}-amd64
 
-  - name_template: ghcr.io/netbirdio/management:{{ .Version }}
+  - name_template: ghcr.io/openzro/management:{{ .Version }}
     image_templates:
-      - ghcr.io/netbirdio/management:{{ .Version }}-arm64v8
-      - ghcr.io/netbirdio/management:{{ .Version }}-arm
-      - ghcr.io/netbirdio/management:{{ .Version }}-amd64
+      - ghcr.io/openzro/management:{{ .Version }}-arm64v8
+      - ghcr.io/openzro/management:{{ .Version }}-arm
+      - ghcr.io/openzro/management:{{ .Version }}-amd64
 
-  - name_template: ghcr.io/netbirdio/management:latest
+  - name_template: ghcr.io/openzro/management:latest
     image_templates:
-      - ghcr.io/netbirdio/management:{{ .Version }}-arm64v8
-      - ghcr.io/netbirdio/management:{{ .Version }}-arm
-      - ghcr.io/netbirdio/management:{{ .Version }}-amd64
+      - ghcr.io/openzro/management:{{ .Version }}-arm64v8
+      - ghcr.io/openzro/management:{{ .Version }}-arm
+      - ghcr.io/openzro/management:{{ .Version }}-amd64
 
-  - name_template: ghcr.io/netbirdio/management:debug-latest
+  - name_template: ghcr.io/openzro/management:debug-latest
     image_templates:
-      - ghcr.io/netbirdio/management:{{ .Version }}-debug-arm64v8
-      - ghcr.io/netbirdio/management:{{ .Version }}-debug-arm
-      - ghcr.io/netbirdio/management:{{ .Version }}-debug-amd64
+      - ghcr.io/openzro/management:{{ .Version }}-debug-arm64v8
+      - ghcr.io/openzro/management:{{ .Version }}-debug-arm
+      - ghcr.io/openzro/management:{{ .Version }}-debug-amd64
 
-  - name_template: ghcr.io/netbirdio/upload:{{ .Version }}
+  - name_template: ghcr.io/openzro/upload:{{ .Version }}
     image_templates:
-      - ghcr.io/netbirdio/upload:{{ .Version }}-arm64v8
-      - ghcr.io/netbirdio/upload:{{ .Version }}-arm
-      - ghcr.io/netbirdio/upload:{{ .Version }}-amd64
+      - ghcr.io/openzro/upload:{{ .Version }}-arm64v8
+      - ghcr.io/openzro/upload:{{ .Version }}-arm
+      - ghcr.io/openzro/upload:{{ .Version }}-amd64
 
-  - name_template: ghcr.io/netbirdio/upload:latest
+  - name_template: ghcr.io/openzro/upload:latest
     image_templates:
-      - ghcr.io/netbirdio/upload:{{ .Version }}-arm64v8
-      - ghcr.io/netbirdio/upload:{{ .Version }}-arm
-      - ghcr.io/netbirdio/upload:{{ .Version }}-amd64
+      - ghcr.io/openzro/upload:{{ .Version }}-arm64v8
+      - ghcr.io/openzro/upload:{{ .Version }}-arm
+      - ghcr.io/openzro/upload:{{ .Version }}-amd64
 brews:
   - ids:
       - default
     repository:
-      owner: netbirdio
+      owner: openzro
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     commit_author:
-      name: Netbird
-      email: dev@netbird.io
-    description: Netbird project.
+      name: Openzro
+      email: dev@openzro.io
+    description: Openzro project.
     download_strategy: CurlDownloadStrategy
-    homepage: https://netbird.io/
+    homepage: https://openzro.io/
     license: "BSD3"
     test: |
       system "#{bin}/{{ .ProjectName	}} version"
@@ -680,7 +680,7 @@ brews:
 uploads:
   - name: debian
     ids:
-      - netbird-deb
+      - openzro-deb
     mode: archive
     target: https://pkgs.wiretrustee.com/debian/pool/{{ .ArtifactName }};deb.distribution=stable;deb.component=main;deb.architecture={{ if .Arm }}armhf{{ else }}{{ .Arch }}{{ end }};deb.package=
     username: dev@wiretrustee.com
@@ -688,7 +688,7 @@ uploads:
 
   - name: yum
     ids:
-      - netbird-rpm
+      - openzro-rpm
     mode: archive
     target: https://pkgs.wiretrustee.com/yum/{{ .Arch }}{{ if .Arm }}{{ .Arm }}{{ end }}
     username: dev@wiretrustee.com

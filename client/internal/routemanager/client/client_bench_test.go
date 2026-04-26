@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/route"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/route"
 )
 
 type benchmarkTier struct {

@@ -2,28 +2,28 @@
 
 set -x
 
-APP=/Applications/NetBird.app
-AGENT=/usr/local/bin/netbird
-LOG_FILE=/var/log/netbird/client_post_install.log
+APP=/Applications/Openzro.app
+AGENT=/usr/local/bin/openzro
+LOG_FILE=/var/log/openzro/client_post_install.log
 
-mkdir -p /var/log/netbird/
+mkdir -p /var/log/openzro/
 mkdir -p /usr/local/bin/
 
 {
-    echo "Installing NetBird..."
+    echo "Installing Openzro..."
 
     if test -d $APP; then
-        echo "NetBird app copied successfully."
+        echo "Openzro app copied successfully."
     else
-        echo "NetBird app could not be copied to the Applications folder."
+        echo "Openzro app could not be copied to the Applications folder."
         exit 1
     fi
 
-    ln -fs $APP/Contents/MacOS/netbird $AGENT
+    ln -fs $APP/Contents/MacOS/openzro $AGENT
     if test -f $AGENT; then
-        echo "NetBird binary linked successfully."
+        echo "Openzro binary linked successfully."
     else
-        echo "NetBird could not create symlink to /usr/local/bin"
+        echo "Openzro could not create symlink to /usr/local/bin"
         exit 1
     fi
 
@@ -32,7 +32,7 @@ mkdir -p /usr/local/bin/
 
     open $APP
 
-    echo "Finished Netbird installation successfully"
+    echo "Finished Openzro installation successfully"
     exit 0 # all good
 } &> $LOG_FILE
 

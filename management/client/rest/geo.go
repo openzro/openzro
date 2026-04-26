@@ -3,7 +3,7 @@ package rest
 import (
 	"context"
 
-	"github.com/netbirdio/netbird/management/server/http/api"
+	"github.com/openzro/openzro/management/server/http/api"
 )
 
 // GeoLocationAPI APIs for Geo-Location, do not use directly
@@ -12,7 +12,7 @@ type GeoLocationAPI struct {
 }
 
 // ListCountries list all country codes
-// See more: https://docs.netbird.io/api/resources/geo-locations#list-all-country-codes
+// See more: https://docs.openzro.io/api/resources/geo-locations#list-all-country-codes
 func (a *GeoLocationAPI) ListCountries(ctx context.Context) ([]api.Country, error) {
 	resp, err := a.c.NewRequest(ctx, "GET", "/api/locations/countries", nil, nil)
 	if err != nil {
@@ -26,7 +26,7 @@ func (a *GeoLocationAPI) ListCountries(ctx context.Context) ([]api.Country, erro
 }
 
 // ListCountryCities Get a list of all English city names for a given country code
-// See more: https://docs.netbird.io/api/resources/geo-locations#list-all-city-names-by-country
+// See more: https://docs.openzro.io/api/resources/geo-locations#list-all-city-names-by-country
 func (a *GeoLocationAPI) ListCountryCities(ctx context.Context, countryCode string) ([]api.City, error) {
 	resp, err := a.c.NewRequest(ctx, "GET", "/api/locations/countries/"+countryCode+"/cities", nil, nil)
 	if err != nil {

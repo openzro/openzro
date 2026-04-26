@@ -8,7 +8,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/util/embeddedroots"
+	"github.com/openzro/openzro/util/embeddedroots"
 )
 
 func ClientQUICTLSConfig() *tls.Config {

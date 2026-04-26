@@ -13,8 +13,8 @@ import (
 	nfct "github.com/ti-mo/conntrack"
 	"github.com/ti-mo/netfilter"
 
-	nftypes "github.com/netbirdio/netbird/client/internal/netflow/types"
-	nbnet "github.com/netbirdio/netbird/util/net"
+	nftypes "github.com/openzro/openzro/client/internal/netflow/types"
+	nbnet "github.com/openzro/openzro/util/net"
 )
 
 const defaultChannelSize = 100
@@ -299,10 +299,10 @@ func (c *ConnTrack) inferDirection(mark uint32, srcIP, dstIP netip.Addr) nftypes
 	case wgaddr == dstIP:
 		return nftypes.Ingress
 	case wgnetwork.Contains(srcIP):
-		// netbird network -> resource network
+		// openzro network -> resource network
 		return nftypes.Ingress
 	case wgnetwork.Contains(dstIP):
-		// resource network -> netbird network
+		// resource network -> openzro network
 		return nftypes.Egress
 	}
 

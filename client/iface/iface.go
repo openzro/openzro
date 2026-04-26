@@ -15,13 +15,13 @@ import (
 
 	wgdevice "golang.zx2c4.com/wireguard/device"
 
-	"github.com/netbirdio/netbird/client/errors"
-	"github.com/netbirdio/netbird/client/iface/bind"
-	"github.com/netbirdio/netbird/client/iface/configurer"
-	"github.com/netbirdio/netbird/client/iface/device"
-	"github.com/netbirdio/netbird/client/iface/wgaddr"
-	"github.com/netbirdio/netbird/client/iface/wgproxy"
-	"github.com/netbirdio/netbird/monotime"
+	"github.com/openzro/openzro/client/errors"
+	"github.com/openzro/openzro/client/iface/bind"
+	"github.com/openzro/openzro/client/iface/configurer"
+	"github.com/openzro/openzro/client/iface/device"
+	"github.com/openzro/openzro/client/iface/wgaddr"
+	"github.com/openzro/openzro/client/iface/wgproxy"
+	"github.com/openzro/openzro/monotime"
 )
 
 const (

@@ -858,8 +858,8 @@
       {
         "current": {
           "selected": false,
-          "text": "netbird-relay",
-          "value": "netbird-relay"
+          "text": "openzro-relay",
+          "value": "openzro-relay"
         },
         "datasource": {
           "type": "prometheus",
@@ -919,7 +919,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Netbird / Relay",
+  "title": "Openzro / Relay",
   "uid": "febyq2pgq2u-v003",
   "version": 1,
   "weekStart": ""

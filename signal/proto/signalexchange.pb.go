@@ -222,7 +222,7 @@ type Body struct {
 	Payload string    `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"`
 	// wgListenPort is an actual WireGuard listen port
 	WgListenPort   uint32 `protobuf:"varint,3,opt,name=wgListenPort,proto3" json:"wgListenPort,omitempty"`
-	NetBirdVersion string `protobuf:"bytes,4,opt,name=netBirdVersion,proto3" json:"netBirdVersion,omitempty"`
+	OpenzroVersion string `protobuf:"bytes,4,opt,name=openzroVersion,proto3" json:"openzroVersion,omitempty"`
 	Mode           *Mode  `protobuf:"bytes,5,opt,name=mode,proto3" json:"mode,omitempty"`
 	// featuresSupported list of supported features by the client of this protocol
 	FeaturesSupported []uint32 `protobuf:"varint,6,rep,packed,name=featuresSupported,proto3" json:"featuresSupported,omitempty"`
@@ -285,9 +285,9 @@ func (x *Body) GetWgListenPort() uint32 {
 	return 0
 }
 
-func (x *Body) GetNetBirdVersion() string {
+func (x *Body) GetOpenzroVersion() string {
 	if x != nil {
-		return x.NetBirdVersion
+		return x.OpenzroVersion
 	}
 	return ""
 }

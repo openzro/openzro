@@ -9,11 +9,11 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// setFlagsFromEnvVars reads and updates flag values from environment variables with prefix NB_
+// setFlagsFromEnvVars reads and updates flag values from environment variables with prefix OZ_
 func setFlagsFromEnvVars(cmd *cobra.Command) {
 	flags := cmd.PersistentFlags()
 	flags.VisitAll(func(f *pflag.Flag) {
-		newEnvVar := flagNameToEnvVar(f.Name, "NB_")
+		newEnvVar := flagNameToEnvVar(f.Name, "OZ_")
 		value, present := os.LookupEnv(newEnvVar)
 		if !present {
 			return
@@ -27,7 +27,7 @@ func setFlagsFromEnvVars(cmd *cobra.Command) {
 }
 
 // flagNameToEnvVar converts flag name to environment var name adding a prefix,
-// replacing dashes and making all uppercase (e.g. setup-keys is converted to NB_SETUP_KEYS according to the input prefix)
+// replacing dashes and making all uppercase (e.g. setup-keys is converted to OZ_SETUP_KEYS according to the input prefix)
 func flagNameToEnvVar(cmdFlag string, prefix string) string {
 	parsed := strings.ReplaceAll(cmdFlag, "-", "_")
 	upper := strings.ToUpper(parsed)

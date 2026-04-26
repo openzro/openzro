@@ -11,7 +11,7 @@ import (
 	"github.com/eko/gocache/store/redis/v4"
 	"github.com/vmihailenco/msgpack/v5"
 
-	"github.com/netbirdio/netbird/management/server/idp"
+	"github.com/openzro/openzro/management/server/idp"
 )
 
 const (

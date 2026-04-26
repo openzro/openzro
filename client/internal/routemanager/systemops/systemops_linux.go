@@ -16,11 +16,11 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
-	nberrors "github.com/netbirdio/netbird/client/errors"
-	"github.com/netbirdio/netbird/client/internal/routemanager/sysctl"
-	"github.com/netbirdio/netbird/client/internal/routemanager/vars"
-	"github.com/netbirdio/netbird/client/internal/statemanager"
-	nbnet "github.com/netbirdio/netbird/util/net"
+	nberrors "github.com/openzro/openzro/client/errors"
+	"github.com/openzro/openzro/client/internal/routemanager/sysctl"
+	"github.com/openzro/openzro/client/internal/routemanager/vars"
+	"github.com/openzro/openzro/client/internal/statemanager"
+	nbnet "github.com/openzro/openzro/util/net"
 )
 
 // IPRule contains IP rule information for debugging
@@ -43,10 +43,10 @@ type IPRule struct {
 }
 
 const (
-	// NetbirdVPNTableID is the ID of the custom routing table used by Netbird.
-	NetbirdVPNTableID = 0x1BD0
-	// NetbirdVPNTableName is the name of the custom routing table used by Netbird.
-	NetbirdVPNTableName = "netbird"
+	// OpenzroVPNTableID is the ID of the custom routing table used by Openzro.
+	OpenzroVPNTableID = 0x1BD0
+	// OpenzroVPNTableName is the name of the custom routing table used by Openzro.
+	OpenzroVPNTableName = "openzro"
 
 	// rtTablesPath is the path to the file containing the routing table names.
 	rtTablesPath = "/etc/iproute2/rt_tables"
@@ -79,8 +79,8 @@ func getSetupRules() []ruleParams {
 	return []ruleParams{
 		{100, 0, syscall.RT_TABLE_MAIN, netlink.FAMILY_V4, false, 0, "rule with suppress prefixlen v4"},
 		{100, 0, syscall.RT_TABLE_MAIN, netlink.FAMILY_V6, false, 0, "rule with suppress prefixlen v6"},
-		{110, nbnet.ControlPlaneMark, NetbirdVPNTableID, netlink.FAMILY_V4, true, -1, "rule v4 netbird"},
-		{110, nbnet.ControlPlaneMark, NetbirdVPNTableID, netlink.FAMILY_V6, true, -1, "rule v6 netbird"},
+		{110, nbnet.ControlPlaneMark, OpenzroVPNTableID, netlink.FAMILY_V4, true, -1, "rule v4 openzro"},
+		{110, nbnet.ControlPlaneMark, OpenzroVPNTableID, netlink.FAMILY_V6, true, -1, "rule v6 openzro"},
 	}
 }
 
@@ -91,7 +91,7 @@ func getSetupRules() []ruleParams {
 // potential routes received and configured for the VPN.  This rule is skipped for the default route and routes
 // that are not in the main table.
 //
-// Rule 2 (VPN Traffic Routing): Directs all remaining traffic to the 'NetbirdVPNTableID' custom routing table.
+// Rule 2 (VPN Traffic Routing): Directs all remaining traffic to the 'OpenzroVPNTableID' custom routing table.
 // This table is where a default route or other specific routes received from the management server are configured,
 // enabling VPN connectivity.
 func (r *SysOps) SetupRouting(initAddresses []net.IP, stateManager *statemanager.Manager) (err error) {
@@ -139,10 +139,10 @@ func (r *SysOps) CleanupRouting(stateManager *statemanager.Manager) error {
 
 	var result *multierror.Error
 
-	if err := flushRoutes(NetbirdVPNTableID, netlink.FAMILY_V4); err != nil {
+	if err := flushRoutes(OpenzroVPNTableID, netlink.FAMILY_V4); err != nil {
 		result = multierror.Append(result, fmt.Errorf("flush routes v4: %w", err))
 	}
-	if err := flushRoutes(NetbirdVPNTableID, netlink.FAMILY_V6); err != nil {
+	if err := flushRoutes(OpenzroVPNTableID, netlink.FAMILY_V6); err != nil {
 		result = multierror.Append(result, fmt.Errorf("flush routes v6: %w", err))
 	}
 
@@ -180,18 +180,18 @@ func (r *SysOps) AddVPNRoute(prefix netip.Prefix, intf *net.Interface) error {
 	}
 
 	if sysctlFailed && (prefix == vars.Defaultv4 || prefix == vars.Defaultv6) {
-		log.Warnf("Default route is configured but sysctl operations failed, VPN traffic may not be routed correctly, consider using NB_USE_LEGACY_ROUTING=true or setting net.ipv4.conf.*.rp_filter to 2 (loose) or 0 (off)")
+		log.Warnf("Default route is configured but sysctl operations failed, VPN traffic may not be routed correctly, consider using OZ_USE_LEGACY_ROUTING=true or setting net.ipv4.conf.*.rp_filter to 2 (loose) or 0 (off)")
 	}
 
 	// No need to check if routes exist as main table takes precedence over the VPN table via Rule 1
 
 	// TODO remove this once we have ipv6 support
 	if prefix == vars.Defaultv4 {
-		if err := addUnreachableRoute(vars.Defaultv6, NetbirdVPNTableID); err != nil {
+		if err := addUnreachableRoute(vars.Defaultv6, OpenzroVPNTableID); err != nil {
 			return fmt.Errorf("add blackhole: %w", err)
 		}
 	}
-	if err := addRoute(prefix, Nexthop{netip.Addr{}, intf}, NetbirdVPNTableID); err != nil {
+	if err := addRoute(prefix, Nexthop{netip.Addr{}, intf}, OpenzroVPNTableID); err != nil {
 		return fmt.Errorf("add route: %w", err)
 	}
 	return nil
@@ -208,11 +208,11 @@ func (r *SysOps) RemoveVPNRoute(prefix netip.Prefix, intf *net.Interface) error 
 
 	// TODO remove this once we have ipv6 support
 	if prefix == vars.Defaultv4 {
-		if err := removeUnreachableRoute(vars.Defaultv6, NetbirdVPNTableID); err != nil {
+		if err := removeUnreachableRoute(vars.Defaultv6, OpenzroVPNTableID); err != nil {
 			return fmt.Errorf("remove unreachable route: %w", err)
 		}
 	}
-	if err := removeRoute(prefix, Nexthop{netip.Addr{}, intf}, NetbirdVPNTableID); err != nil {
+	if err := removeRoute(prefix, Nexthop{netip.Addr{}, intf}, OpenzroVPNTableID); err != nil {
 		return fmt.Errorf("remove route: %w", err)
 	}
 	return nil
@@ -244,7 +244,7 @@ func discoverRoutingTables() []int {
 		return []int{
 			syscall.RT_TABLE_MAIN,
 			syscall.RT_TABLE_LOCAL,
-			NetbirdVPNTableID,
+			OpenzroVPNTableID,
 		}
 	}
 	return tables
@@ -309,7 +309,7 @@ func getAllRoutingTables() ([]int, error) {
 		tables = append(tables, tableID)
 	}
 
-	standardTables := []int{syscall.RT_TABLE_MAIN, syscall.RT_TABLE_LOCAL, NetbirdVPNTableID}
+	standardTables := []int{syscall.RT_TABLE_MAIN, syscall.RT_TABLE_LOCAL, OpenzroVPNTableID}
 	for _, table := range standardTables {
 		if !tablesMap[table] {
 			tables = append(tables, table)
@@ -495,8 +495,8 @@ func routeTableToString(tableID int) string {
 		return "main"
 	case syscall.RT_TABLE_LOCAL:
 		return "local"
-	case NetbirdVPNTableID:
-		return "netbird"
+	case OpenzroVPNTableID:
+		return "openzro"
 	default:
 		return fmt.Sprintf("%d", tableID)
 	}
@@ -611,8 +611,8 @@ func ruleTableToString(table int) string {
 		return "local"
 	case syscall.RT_TABLE_DEFAULT:
 		return "default"
-	case NetbirdVPNTableID:
-		return "netbird"
+	case OpenzroVPNTableID:
+		return "openzro"
 	default:
 		return fmt.Sprintf("%d", table)
 	}
@@ -767,7 +767,7 @@ func EnableIPForwarding() error {
 }
 
 // entryExists checks if the specified ID or name already exists in the rt_tables file
-// and verifies if existing names start with "netbird_".
+// and verifies if existing names start with "openzro_".
 func entryExists(file *os.File, id int) (bool, error) {
 	if _, err := file.Seek(0, 0); err != nil {
 		return false, fmt.Errorf("seek rt_tables: %w", err)
@@ -779,7 +779,7 @@ func entryExists(file *os.File, id int) (bool, error) {
 		var existingName string
 		if _, err := fmt.Sscanf(line, "%d %s\n", &existingID, &existingName); err == nil {
 			if existingID == id {
-				if existingName != NetbirdVPNTableName {
+				if existingName != OpenzroVPNTableName {
 					return true, ErrTableIDExists
 				}
 				return true, nil
@@ -807,9 +807,9 @@ func addRoutingTableName() error {
 		}
 	}()
 
-	exists, err := entryExists(file, NetbirdVPNTableID)
+	exists, err := entryExists(file, OpenzroVPNTableID)
 	if err != nil {
-		return fmt.Errorf("verify entry %d, %s: %w", NetbirdVPNTableID, NetbirdVPNTableName, err)
+		return fmt.Errorf("verify entry %d, %s: %w", OpenzroVPNTableID, OpenzroVPNTableName, err)
 	}
 	if exists {
 		return nil
@@ -824,7 +824,7 @@ func addRoutingTableName() error {
 		return fmt.Errorf("open rt_tables for appending: %w", err)
 	}
 
-	if _, err := file.WriteString(fmt.Sprintf("\n%d\t%s\n", NetbirdVPNTableID, NetbirdVPNTableName)); err != nil {
+	if _, err := file.WriteString(fmt.Sprintf("\n%d\t%s\n", OpenzroVPNTableID, OpenzroVPNTableName)); err != nil {
 		return fmt.Errorf("append entry to rt_tables: %w", err)
 	}
 

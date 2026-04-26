@@ -17,11 +17,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 
-	"github.com/netbirdio/netbird/client/system"
-	"github.com/netbirdio/netbird/encryption"
-	"github.com/netbirdio/netbird/management/domain"
-	"github.com/netbirdio/netbird/management/proto"
-	nbgrpc "github.com/netbirdio/netbird/util/grpc"
+	"github.com/openzro/openzro/client/system"
+	"github.com/openzro/openzro/encryption"
+	"github.com/openzro/openzro/management/domain"
+	"github.com/openzro/openzro/management/proto"
+	nbgrpc "github.com/openzro/openzro/util/grpc"
 )
 
 const ConnectTimeout = 10 * time.Second
@@ -527,7 +527,7 @@ func infoToMetaData(info *system.Info) *proto.PeerSystemMeta {
 		OSVersion:        info.OSVersion,
 		Platform:         info.Platform,
 		Kernel:           info.Kernel,
-		NetbirdVersion:   info.NetbirdVersion,
+		OpenzroVersion:   info.OpenzroVersion,
 		UiVersion:        info.UIVersion,
 		KernelVersion:    info.KernelVersion,
 		NetworkAddresses: addresses,

@@ -12,8 +12,8 @@ import (
 func withTempConfigDir(t *testing.T, testFunc func(configDir string)) {
 	t.Helper()
 	tempDir := t.TempDir()
-	t.Setenv("NETBIRD_CONFIG_DIR", tempDir)
-	defer os.Unsetenv("NETBIRD_CONFIG_DIR")
+	t.Setenv("OPENZRO_CONFIG_DIR", tempDir)
+	defer os.Unsetenv("OPENZRO_CONFIG_DIR")
 	testFunc(tempDir)
 }
 

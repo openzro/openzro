@@ -3,7 +3,7 @@ package client
 import (
 	"context"
 
-	"github.com/netbirdio/netbird/signal/proto"
+	"github.com/openzro/openzro/signal/proto"
 )
 
 type MockClient struct {

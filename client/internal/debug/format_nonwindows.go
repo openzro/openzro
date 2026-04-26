@@ -3,8 +3,8 @@
 package debug
 
 import (
-	"github.com/netbirdio/netbird/client/anonymize"
-	"github.com/netbirdio/netbird/client/internal/routemanager/systemops"
+	"github.com/openzro/openzro/client/anonymize"
+	"github.com/openzro/openzro/client/internal/routemanager/systemops"
 )
 
 // buildPlatformSpecificRouteTable builds headers and rows for non-Windows platforms

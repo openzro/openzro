@@ -14,7 +14,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
-	"github.com/netbirdio/netbird/client/internal/peer"
+	"github.com/openzro/openzro/client/internal/peer"
 )
 
 type upstreamResolverIOS struct {
@@ -75,7 +75,7 @@ func (u *upstreamResolverIOS) exchange(ctx context.Context, upstream string, r *
 	return ExchangeWithFallback(nil, client, r, upstream)
 }
 
-// GetClientPrivate returns a new DNS client bound to the local IP address of the Netbird interface
+// GetClientPrivate returns a new DNS client bound to the local IP address of the Openzro interface
 // This method is needed for iOS
 func GetClientPrivate(ip netip.Addr, interfaceName string, dialTimeout time.Duration) (*dns.Client, error) {
 	index, err := getInterfaceIndex(interfaceName)

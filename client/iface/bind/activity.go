@@ -8,7 +8,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/monotime"
+	"github.com/openzro/openzro/monotime"
 )
 
 const (

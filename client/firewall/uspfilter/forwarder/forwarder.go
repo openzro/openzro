@@ -18,10 +18,10 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
 	"gvisor.dev/gvisor/pkg/tcpip/transport/udp"
 
-	"github.com/netbirdio/netbird/client/firewall/uspfilter/common"
-	"github.com/netbirdio/netbird/client/firewall/uspfilter/conntrack"
-	nblog "github.com/netbirdio/netbird/client/firewall/uspfilter/log"
-	nftypes "github.com/netbirdio/netbird/client/internal/netflow/types"
+	"github.com/openzro/openzro/client/firewall/uspfilter/common"
+	"github.com/openzro/openzro/client/firewall/uspfilter/conntrack"
+	nblog "github.com/openzro/openzro/client/firewall/uspfilter/log"
+	nftypes "github.com/openzro/openzro/client/internal/netflow/types"
 )
 
 const (

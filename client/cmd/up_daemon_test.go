@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/netbirdio/netbird/client/internal"
-	"github.com/netbirdio/netbird/client/internal/profilemanager"
+	"github.com/openzro/openzro/client/internal"
+	"github.com/openzro/openzro/client/internal/profilemanager"
 )
 
 var cliAddr string

@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/netbirdio/netbird/management/server/http/api"
+	"github.com/openzro/openzro/management/server/http/api"
 )
 
 // UsersAPI APIs for users, do not use directly
@@ -14,7 +14,7 @@ type UsersAPI struct {
 }
 
 // List list all users, only returns one user always
-// See more: https://docs.netbird.io/api/resources/users#list-all-users
+// See more: https://docs.openzro.io/api/resources/users#list-all-users
 func (a *UsersAPI) List(ctx context.Context) ([]api.User, error) {
 	resp, err := a.c.NewRequest(ctx, "GET", "/api/users", nil, nil)
 	if err != nil {
@@ -28,7 +28,7 @@ func (a *UsersAPI) List(ctx context.Context) ([]api.User, error) {
 }
 
 // Create create user
-// See more: https://docs.netbird.io/api/resources/users#create-a-user
+// See more: https://docs.openzro.io/api/resources/users#create-a-user
 func (a *UsersAPI) Create(ctx context.Context, request api.PostApiUsersJSONRequestBody) (*api.User, error) {
 	requestBytes, err := json.Marshal(request)
 	if err != nil {
@@ -46,7 +46,7 @@ func (a *UsersAPI) Create(ctx context.Context, request api.PostApiUsersJSONReque
 }
 
 // Update update user settings
-// See more: https://docs.netbird.io/api/resources/users#update-a-user
+// See more: https://docs.openzro.io/api/resources/users#update-a-user
 func (a *UsersAPI) Update(ctx context.Context, userID string, request api.PutApiUsersUserIdJSONRequestBody) (*api.User, error) {
 	requestBytes, err := json.Marshal(request)
 	if err != nil {
@@ -64,7 +64,7 @@ func (a *UsersAPI) Update(ctx context.Context, userID string, request api.PutApi
 }
 
 // Delete delete user
-// See more: https://docs.netbird.io/api/resources/users#delete-a-user
+// See more: https://docs.openzro.io/api/resources/users#delete-a-user
 func (a *UsersAPI) Delete(ctx context.Context, userID string) error {
 	resp, err := a.c.NewRequest(ctx, "DELETE", "/api/users/"+userID, nil, nil)
 	if err != nil {
@@ -78,7 +78,7 @@ func (a *UsersAPI) Delete(ctx context.Context, userID string) error {
 }
 
 // ResendInvitation resend user invitation
-// See more: https://docs.netbird.io/api/resources/users#resend-user-invitation
+// See more: https://docs.openzro.io/api/resources/users#resend-user-invitation
 func (a *UsersAPI) ResendInvitation(ctx context.Context, userID string) error {
 	resp, err := a.c.NewRequest(ctx, "POST", "/api/users/"+userID+"/invite", nil, nil)
 	if err != nil {
@@ -92,7 +92,7 @@ func (a *UsersAPI) ResendInvitation(ctx context.Context, userID string) error {
 }
 
 // Current gets the current user info
-// See more: https://docs.netbird.io/api/resources/users#retrieve-current-user
+// See more: https://docs.openzro.io/api/resources/users#retrieve-current-user
 func (a *UsersAPI) Current(ctx context.Context) (*api.User, error) {
 	resp, err := a.c.NewRequest(ctx, "GET", "/api/users/current", nil, nil)
 	if err != nil {

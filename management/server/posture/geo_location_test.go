@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/netbirdio/netbird/management/server/peer"
+	"github.com/openzro/openzro/management/server/peer"
 
 	"github.com/stretchr/testify/assert"
 )

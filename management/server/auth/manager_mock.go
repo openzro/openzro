@@ -5,8 +5,8 @@ import (
 
 	"github.com/golang-jwt/jwt"
 
-	nbcontext "github.com/netbirdio/netbird/management/server/context"
-	"github.com/netbirdio/netbird/management/server/types"
+	nbcontext "github.com/openzro/openzro/management/server/context"
+	"github.com/openzro/openzro/management/server/types"
 )
 
 var (

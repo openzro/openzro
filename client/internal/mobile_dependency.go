@@ -1,10 +1,10 @@
 package internal
 
 import (
-	"github.com/netbirdio/netbird/client/iface/device"
-	"github.com/netbirdio/netbird/client/internal/dns"
-	"github.com/netbirdio/netbird/client/internal/listener"
-	"github.com/netbirdio/netbird/client/internal/stdnet"
+	"github.com/openzro/openzro/client/iface/device"
+	"github.com/openzro/openzro/client/internal/dns"
+	"github.com/openzro/openzro/client/internal/listener"
+	"github.com/openzro/openzro/client/internal/stdnet"
 )
 
 // MobileDependency collect all dependencies for mobile platform

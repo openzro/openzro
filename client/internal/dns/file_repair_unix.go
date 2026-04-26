@@ -11,7 +11,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/internal/statemanager"
+	"github.com/openzro/openzro/client/internal/statemanager"
 )
 
 var (
@@ -134,9 +134,9 @@ func (f *repair) isEventRelevant(event fsnotify.Event) bool {
 	return false
 }
 
-// nbParamsAreMissing checks if the resolv.conf file contains all the parameters that NetBird needs
-// check the NetBird related nameserver IP at the first place
-// check the NetBird related search domains in the search domains list
+// nbParamsAreMissing checks if the resolv.conf file contains all the parameters that Openzro needs
+// check the Openzro related nameserver IP at the first place
+// check the Openzro related search domains in the search domains list
 func isNbParamsMissing(nbSearchDomains []string, nbNameserverIP netip.Addr, rConf *resolvConf) bool {
 	if !isContains(nbSearchDomains, rConf.searchDomains) {
 		return true

@@ -14,8 +14,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
-	"github.com/netbirdio/netbird/client/internal/statemanager"
-	nbdns "github.com/netbirdio/netbird/dns"
+	"github.com/openzro/openzro/client/internal/statemanager"
+	nbdns "github.com/openzro/openzro/dns"
 )
 
 const (

@@ -11,31 +11,31 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/netbirdio/netbird/client/system"
-	"github.com/netbirdio/netbird/management/server/activity"
-	"github.com/netbirdio/netbird/management/server/integrations/port_forwarding"
-	"github.com/netbirdio/netbird/management/server/permissions"
-	"github.com/netbirdio/netbird/management/server/settings"
-	"github.com/netbirdio/netbird/management/server/store"
-	"github.com/netbirdio/netbird/management/server/telemetry"
-	"github.com/netbirdio/netbird/management/server/types"
+	"github.com/openzro/openzro/client/system"
+	"github.com/openzro/openzro/management/server/activity"
+	"github.com/openzro/openzro/management/server/integrations/port_forwarding"
+	"github.com/openzro/openzro/management/server/permissions"
+	"github.com/openzro/openzro/management/server/settings"
+	"github.com/openzro/openzro/management/server/store"
+	"github.com/openzro/openzro/management/server/telemetry"
+	"github.com/openzro/openzro/management/server/types"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/netbirdio/management-integrations/integrations"
+	"github.com/openzro/management-integrations/integrations"
 
-	"github.com/netbirdio/netbird/encryption"
-	mgmtProto "github.com/netbirdio/netbird/management/proto"
-	mgmt "github.com/netbirdio/netbird/management/server"
-	"github.com/netbirdio/netbird/management/server/mock_server"
+	"github.com/openzro/openzro/encryption"
+	mgmtProto "github.com/openzro/openzro/management/proto"
+	mgmt "github.com/openzro/openzro/management/server"
+	"github.com/openzro/openzro/management/server/mock_server"
 
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/util"
 )
 
 const ValidKey = "A2C8E62B-38F5-4553-B31E-DD66C696CEBB"
@@ -106,7 +106,7 @@ func startManagement(t *testing.T) (*grpc.Server, net.Listener) {
 		Return(true, nil).
 		AnyTimes()
 
-	accountManager, err := mgmt.BuildManager(context.Background(), store, peersUpdateManager, nil, "", "netbird.selfhosted", eventStore, nil, false, ia, metrics, port_forwarding.NewControllerMock(), settingsMockManager, permissionsManagerMock, false)
+	accountManager, err := mgmt.BuildManager(context.Background(), store, peersUpdateManager, nil, "", "openzro.selfhosted", eventStore, nil, false, ia, metrics, port_forwarding.NewControllerMock(), settingsMockManager, permissionsManagerMock, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,8 +310,8 @@ func TestClient_Sync(t *testing.T) {
 		if resp.GetPeerConfig() == nil {
 			t.Error("expecting non nil PeerConfig got nil")
 		}
-		if resp.GetNetbirdConfig() == nil {
-			t.Error("expecting non nil NetbirdConfig got nil")
+		if resp.GetOpenzroConfig() == nil {
+			t.Error("expecting non nil OpenzroConfig got nil")
 		}
 		if len(resp.GetRemotePeers()) != 1 {
 			t.Errorf("expecting RemotePeers size %d got %d", 1, len(resp.GetRemotePeers()))
@@ -410,7 +410,7 @@ func Test_SystemMetaDataFromClient(t *testing.T) {
 		OS:             info.OS,
 		Core:           info.OSVersion,
 		OSVersion:      info.OSVersion,
-		NetbirdVersion: info.NetbirdVersion,
+		OpenzroVersion: info.OpenzroVersion,
 		KernelVersion:  info.KernelVersion,
 
 		NetworkAddresses: protoNetAddr,
@@ -454,7 +454,7 @@ func isEqual(a, b *mgmtProto.PeerSystemMeta) bool {
 		a.GetPlatform() == b.GetPlatform() &&
 		a.GetOS() == b.GetOS() &&
 		a.GetOSVersion() == b.GetOSVersion() &&
-		a.GetNetbirdVersion() == b.GetNetbirdVersion() &&
+		a.GetOpenzroVersion() == b.GetOpenzroVersion() &&
 		a.GetUiVersion() == b.GetUiVersion() &&
 		a.GetSysSerialNumber() == b.GetSysSerialNumber() &&
 		a.GetSysProductName() == b.GetSysProductName() &&

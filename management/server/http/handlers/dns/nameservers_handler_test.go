@@ -12,15 +12,15 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	nbdns "github.com/netbirdio/netbird/dns"
-	"github.com/netbirdio/netbird/management/server/http/api"
-	"github.com/netbirdio/netbird/management/server/status"
+	nbdns "github.com/openzro/openzro/dns"
+	"github.com/openzro/openzro/management/server/http/api"
+	"github.com/openzro/openzro/management/server/status"
 
 	"github.com/gorilla/mux"
 
-	nbcontext "github.com/netbirdio/netbird/management/server/context"
+	nbcontext "github.com/openzro/openzro/management/server/context"
 
-	"github.com/netbirdio/netbird/management/server/mock_server"
+	"github.com/openzro/openzro/management/server/mock_server"
 )
 
 const (

@@ -5,7 +5,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/netbirdio/netbird/client/internal/listener"
+	"github.com/openzro/openzro/client/internal/listener"
 )
 
 type notifier struct {

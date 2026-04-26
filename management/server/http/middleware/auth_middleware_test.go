@@ -11,13 +11,13 @@ import (
 	"github.com/golang-jwt/jwt"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/netbirdio/netbird/management/server/auth"
-	nbjwt "github.com/netbirdio/netbird/management/server/auth/jwt"
-	nbcontext "github.com/netbirdio/netbird/management/server/context"
-	"github.com/netbirdio/netbird/management/server/util"
+	"github.com/openzro/openzro/management/server/auth"
+	nbjwt "github.com/openzro/openzro/management/server/auth/jwt"
+	nbcontext "github.com/openzro/openzro/management/server/context"
+	"github.com/openzro/openzro/management/server/util"
 
-	"github.com/netbirdio/netbird/management/server/http/middleware/bypass"
-	"github.com/netbirdio/netbird/management/server/types"
+	"github.com/openzro/openzro/management/server/http/middleware/bypass"
+	"github.com/openzro/openzro/management/server/types"
 )
 
 const (

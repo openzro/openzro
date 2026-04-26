@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/util"
 )
 
 func TestGetConfig(t *testing.T) {
@@ -166,8 +166,8 @@ func TestUpdateOldManagementURL(t *testing.T) {
 		},
 		{
 			name:                  "No update needed when not using cloud management",
-			previousManagementURL: "https://netbird.example.com:33073",
-			expectedManagementURL: "https://netbird.example.com:33073",
+			previousManagementURL: "https://openzro.example.com:33073",
+			expectedManagementURL: "https://openzro.example.com:33073",
 			fileShouldNotChange:   true,
 		},
 	}

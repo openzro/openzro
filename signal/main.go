@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/netbirdio/netbird/signal/cmd"
+	"github.com/openzro/openzro/signal/cmd"
 	"os"
 )
 

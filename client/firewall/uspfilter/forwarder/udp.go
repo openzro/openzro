@@ -17,8 +17,8 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip/transport/udp"
 	"gvisor.dev/gvisor/pkg/waiter"
 
-	nblog "github.com/netbirdio/netbird/client/firewall/uspfilter/log"
-	nftypes "github.com/netbirdio/netbird/client/internal/netflow/types"
+	nblog "github.com/openzro/openzro/client/firewall/uspfilter/log"
+	nftypes "github.com/openzro/openzro/client/internal/netflow/types"
 )
 
 const (

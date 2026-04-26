@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/netbirdio/netbird/relay/testec2/tun"
+	"github.com/openzro/openzro/relay/testec2/tun"
 
 	log "github.com/sirupsen/logrus"
 )

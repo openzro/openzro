@@ -17,23 +17,23 @@ import (
 	"google.golang.org/grpc/codes"
 	gstatus "google.golang.org/grpc/status"
 
-	"github.com/netbirdio/netbird/client/iface/device"
-	"github.com/netbirdio/netbird/client/internal/dns"
-	"github.com/netbirdio/netbird/client/internal/listener"
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/client/internal/profilemanager"
-	"github.com/netbirdio/netbird/client/internal/stdnet"
-	cProto "github.com/netbirdio/netbird/client/proto"
-	"github.com/netbirdio/netbird/client/ssh"
-	"github.com/netbirdio/netbird/client/system"
-	mgm "github.com/netbirdio/netbird/management/client"
-	mgmProto "github.com/netbirdio/netbird/management/proto"
-	"github.com/netbirdio/netbird/relay/auth/hmac"
-	relayClient "github.com/netbirdio/netbird/relay/client"
-	signal "github.com/netbirdio/netbird/signal/client"
-	"github.com/netbirdio/netbird/util"
-	nbnet "github.com/netbirdio/netbird/util/net"
-	"github.com/netbirdio/netbird/version"
+	"github.com/openzro/openzro/client/iface/device"
+	"github.com/openzro/openzro/client/internal/dns"
+	"github.com/openzro/openzro/client/internal/listener"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/client/internal/profilemanager"
+	"github.com/openzro/openzro/client/internal/stdnet"
+	cProto "github.com/openzro/openzro/client/proto"
+	"github.com/openzro/openzro/client/ssh"
+	"github.com/openzro/openzro/client/system"
+	mgm "github.com/openzro/openzro/management/client"
+	mgmProto "github.com/openzro/openzro/management/proto"
+	"github.com/openzro/openzro/relay/auth/hmac"
+	relayClient "github.com/openzro/openzro/relay/client"
+	signal "github.com/openzro/openzro/signal/client"
+	"github.com/openzro/openzro/util"
+	nbnet "github.com/openzro/openzro/util/net"
+	"github.com/openzro/openzro/version"
 )
 
 type ConnectClient struct {
@@ -110,7 +110,7 @@ func (c *ConnectClient) run(mobileDependency MobileDependency, runningChan chan 
 				rec.PublishEvent(
 					cProto.SystemEvent_CRITICAL, cProto.SystemEvent_SYSTEM,
 					"panic occurred",
-					"The Netbird service panicked. Please restart the service and submit a bug report with the client logs.",
+					"The Openzro service panicked. Please restart the service and submit a bug report with the client logs.",
 					nil,
 				)
 			}
@@ -119,7 +119,7 @@ func (c *ConnectClient) run(mobileDependency MobileDependency, runningChan chan 
 		}
 	}()
 
-	log.Infof("starting NetBird client version %s on %s/%s", version.NetbirdVersion(), runtime.GOOS, runtime.GOARCH)
+	log.Infof("starting Openzro client version %s on %s/%s", version.OpenzroVersion(), runtime.GOOS, runtime.GOARCH)
 
 	nbnet.Init()
 
@@ -190,7 +190,7 @@ func (c *ConnectClient) run(mobileDependency MobileDependency, runningChan chan 
 			}
 		}()
 
-		// connect (just a connection, no stream yet) and login to Management Service to get an initial global Netbird config
+		// connect (just a connection, no stream yet) and login to Management Service to get an initial global Openzro config
 		loginResp, err := loginToManagement(engineCtx, mgmClient, publicSSHKey, c.config)
 		if err != nil {
 			log.Debug(err)
@@ -212,8 +212,8 @@ func (c *ConnectClient) run(mobileDependency MobileDependency, runningChan chan 
 		c.statusRecorder.UpdateLocalPeerState(localPeerState)
 
 		signalURL := fmt.Sprintf("%s://%s",
-			strings.ToLower(loginResp.GetNetbirdConfig().GetSignal().GetProtocol().String()),
-			loginResp.GetNetbirdConfig().GetSignal().GetUri(),
+			strings.ToLower(loginResp.GetOpenzroConfig().GetSignal().GetProtocol().String()),
+			loginResp.GetOpenzroConfig().GetSignal().GetUri(),
 		)
 
 		c.statusRecorder.UpdateSignalAddress(signalURL)
@@ -224,8 +224,8 @@ func (c *ConnectClient) run(mobileDependency MobileDependency, runningChan chan 
 			c.statusRecorder.MarkSignalDisconnected(err)
 		}()
 
-		// with the global Netbird config in hand connect (just a connection, no stream yet) Signal
-		signalClient, err := connectToSignal(engineCtx, loginResp.GetNetbirdConfig(), myPrivateKey)
+		// with the global Openzro config in hand connect (just a connection, no stream yet) Signal
+		signalClient, err := connectToSignal(engineCtx, loginResp.GetOpenzroConfig(), myPrivateKey)
 		if err != nil {
 			log.Error(err)
 			return wrapErr(err)
@@ -274,11 +274,11 @@ func (c *ConnectClient) run(mobileDependency MobileDependency, runningChan chan 
 		c.engineMutex.Unlock()
 
 		if err := c.engine.Start(); err != nil {
-			log.Errorf("error while starting Netbird Connection Engine: %s", err)
+			log.Errorf("error while starting Openzro Connection Engine: %s", err)
 			return wrapErr(err)
 		}
 
-		log.Infof("Netbird engine started, the IP is: %s", peerConfig.GetAddress())
+		log.Infof("Openzro engine started, the IP is: %s", peerConfig.GetAddress())
 		state.Set(StatusConnected)
 
 		if runningChan != nil {
@@ -291,7 +291,7 @@ func (c *ConnectClient) run(mobileDependency MobileDependency, runningChan chan 
 		<-engineCtx.Done()
 		c.engineMutex.Lock()
 		if c.engine != nil && c.engine.wgInterface != nil {
-			log.Infof("ensuring %s is removed, Netbird engine context cancelled", c.engine.wgInterface.Name())
+			log.Infof("ensuring %s is removed, Openzro engine context cancelled", c.engine.wgInterface.Name())
 			if err := c.engine.Stop(); err != nil {
 				log.Errorf("Failed to stop engine: %v", err)
 			}
@@ -302,7 +302,7 @@ func (c *ConnectClient) run(mobileDependency MobileDependency, runningChan chan 
 
 		backOff.Reset()
 
-		log.Info("stopped NetBird client")
+		log.Info("stopped Openzro client")
 
 		if _, err := state.Status(); errors.Is(err, ErrResetConnection) {
 			return err
@@ -325,7 +325,7 @@ func (c *ConnectClient) run(mobileDependency MobileDependency, runningChan chan 
 }
 
 func parseRelayInfo(loginResp *mgmProto.LoginResponse) ([]string, *hmac.Token) {
-	relayCfg := loginResp.GetNetbirdConfig().GetRelay()
+	relayCfg := loginResp.GetOpenzroConfig().GetRelay()
 	if relayCfg == nil {
 		return nil, nil
 	}
@@ -466,7 +466,7 @@ func createEngineConfig(key wgtypes.Key, config *profilemanager.Config, peerConf
 }
 
 // connectToSignal creates Signal Service client and established a connection
-func connectToSignal(ctx context.Context, wtConfig *mgmProto.NetbirdConfig, ourPrivateKey wgtypes.Key) (*signal.GrpcClient, error) {
+func connectToSignal(ctx context.Context, wtConfig *mgmProto.OpenzroConfig, ourPrivateKey wgtypes.Key) (*signal.GrpcClient, error) {
 	var sigTLSEnabled bool
 	if wtConfig.Signal.Protocol == mgmProto.HostConfig_HTTPS {
 		sigTLSEnabled = true
@@ -483,7 +483,7 @@ func connectToSignal(ctx context.Context, wtConfig *mgmProto.NetbirdConfig, ourP
 	return signalClient, nil
 }
 
-// loginToManagement creates Management ServiceDependencies client, establishes a connection, logs-in and gets a global Netbird config (signal, turn, stun hosts, etc)
+// loginToManagement creates Management ServiceDependencies client, establishes a connection, logs-in and gets a global Openzro config (signal, turn, stun hosts, etc)
 func loginToManagement(ctx context.Context, client mgm.Client, pubSSHKey []byte, config *profilemanager.Config) (*mgmProto.LoginResponse, error) {
 
 	serverPublicKey, err := client.GetServerPublicKey()
@@ -554,7 +554,7 @@ func closeConnWithLog(conn *net.UDPConn) {
 	startClosing := time.Now()
 	err := conn.Close()
 	if err != nil {
-		log.Warnf("closing probe port %d failed: %v. NetBird will still attempt to use this port for connection.", conn.LocalAddr().(*net.UDPAddr).Port, err)
+		log.Warnf("closing probe port %d failed: %v. Openzro will still attempt to use this port for connection.", conn.LocalAddr().(*net.UDPAddr).Port, err)
 	}
 	if time.Since(startClosing) > time.Second {
 		log.Warnf("closing the testing port %d took %s. Usually it is safe to ignore, but continuous warnings may indicate a problem.", conn.LocalAddr().(*net.UDPAddr).Port, time.Since(startClosing))

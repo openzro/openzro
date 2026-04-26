@@ -10,8 +10,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/netbirdio/netbird/upload-server/server"
-	"github.com/netbirdio/netbird/upload-server/types"
+	"github.com/openzro/openzro/upload-server/server"
+	"github.com/openzro/openzro/upload-server/types"
 )
 
 func TestUpload(t *testing.T) {

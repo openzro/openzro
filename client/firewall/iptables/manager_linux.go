@@ -11,10 +11,10 @@ import (
 	"github.com/hashicorp/go-multierror"
 	log "github.com/sirupsen/logrus"
 
-	nberrors "github.com/netbirdio/netbird/client/errors"
-	firewall "github.com/netbirdio/netbird/client/firewall/manager"
-	"github.com/netbirdio/netbird/client/iface/wgaddr"
-	"github.com/netbirdio/netbird/client/internal/statemanager"
+	nberrors "github.com/openzro/openzro/client/errors"
+	firewall "github.com/openzro/openzro/client/firewall/manager"
+	"github.com/openzro/openzro/client/iface/wgaddr"
+	"github.com/openzro/openzro/client/internal/statemanager"
 )
 
 // Manager of iptables firewall
@@ -193,8 +193,8 @@ func (m *Manager) Close(stateManager *statemanager.Manager) error {
 	return nberrors.FormatErrorOrNil(merr)
 }
 
-// AllowNetbird allows netbird interface traffic
-func (m *Manager) AllowNetbird() error {
+// AllowOpenzro allows openzro interface traffic
+func (m *Manager) AllowOpenzro() error {
 	if !m.wgIface.IsUserspaceBind() {
 		return nil
 	}
@@ -209,7 +209,7 @@ func (m *Manager) AllowNetbird() error {
 		"",
 	)
 	if err != nil {
-		return fmt.Errorf("allow netbird interface traffic: %w", err)
+		return fmt.Errorf("allow openzro interface traffic: %w", err)
 	}
 	return nil
 }

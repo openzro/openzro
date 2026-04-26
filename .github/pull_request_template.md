@@ -14,4 +14,4 @@
 - [ ] Created tests that fail without the change (if possible)
 - [ ] Extended the README / documentation, if necessary
 
-> By submitting this pull request, you confirm that you have read and agree to the terms of the [Contributor License Agreement](https://github.com/netbirdio/netbird/blob/main/CONTRIBUTOR_LICENSE_AGREEMENT.md).
+> By submitting this pull request, you confirm that you have read and agree to the terms of the [Contributor License Agreement](https://github.com/openzro/openzro/blob/main/CONTRIBUTOR_LICENSE_AGREEMENT.md).

@@ -20,8 +20,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
-	"github.com/netbirdio/netbird/client/iface"
-	"github.com/netbirdio/netbird/client/internal/routemanager/vars"
+	"github.com/openzro/openzro/client/iface"
+	"github.com/openzro/openzro/client/internal/routemanager/vars"
 )
 
 type dialer interface {
@@ -138,7 +138,7 @@ func TestAddVPNRoute(t *testing.T) {
 
 	for n, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			t.Setenv("NB_DISABLE_ROUTE_CACHE", "true")
+			t.Setenv("OZ_DISABLE_ROUTE_CACHE", "true")
 
 			wgInterface := createWGInterface(t, fmt.Sprintf("utun53%d", n), "100.65.75.2/24", 33100+n)
 
@@ -336,7 +336,7 @@ func TestAddRouteToNonVPNIntf(t *testing.T) {
 
 	for n, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			t.Setenv("NB_DISABLE_ROUTE_CACHE", "true")
+			t.Setenv("OZ_DISABLE_ROUTE_CACHE", "true")
 
 			wgInterface := createWGInterface(t, fmt.Sprintf("utun54%d", n), "100.65.75.2/24", 33200+n)
 

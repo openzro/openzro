@@ -9,8 +9,8 @@ import (
 	"github.com/pion/ice/v3"
 	log "github.com/sirupsen/logrus"
 
-	icemaker "github.com/netbirdio/netbird/client/internal/peer/ice"
-	"github.com/netbirdio/netbird/client/internal/stdnet"
+	icemaker "github.com/openzro/openzro/client/internal/peer/ice"
+	"github.com/openzro/openzro/client/internal/stdnet"
 )
 
 const (

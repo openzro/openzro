@@ -11,20 +11,20 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	nbdns "github.com/netbirdio/netbird/dns"
-	"github.com/netbirdio/netbird/management/server/integrations/port_forwarding"
-	"github.com/netbirdio/netbird/management/server/permissions"
-	"github.com/netbirdio/netbird/management/server/settings"
-	"github.com/netbirdio/netbird/management/server/store"
-	"github.com/netbirdio/netbird/management/server/telemetry"
-	"github.com/netbirdio/netbird/management/server/types"
+	nbdns "github.com/openzro/openzro/dns"
+	"github.com/openzro/openzro/management/server/integrations/port_forwarding"
+	"github.com/openzro/openzro/management/server/permissions"
+	"github.com/openzro/openzro/management/server/settings"
+	"github.com/openzro/openzro/management/server/store"
+	"github.com/openzro/openzro/management/server/telemetry"
+	"github.com/openzro/openzro/management/server/types"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/netbirdio/netbird/dns"
-	"github.com/netbirdio/netbird/management/server/activity"
-	nbpeer "github.com/netbirdio/netbird/management/server/peer"
-	"github.com/netbirdio/netbird/management/server/status"
+	"github.com/openzro/openzro/dns"
+	"github.com/openzro/openzro/management/server/activity"
+	nbpeer "github.com/openzro/openzro/management/server/peer"
+	"github.com/openzro/openzro/management/server/status"
 )
 
 const (
@@ -219,7 +219,7 @@ func createDNSManager(t *testing.T) (*DefaultAccountManager, error) {
 	// return empty extra settings for expected calls to UpdateAccountPeers
 	settingsMockManager.EXPECT().GetExtraSettings(gomock.Any(), gomock.Any()).Return(&types.ExtraSettings{}, nil).AnyTimes()
 	permissionsManager := permissions.NewManager(store)
-	return BuildManager(context.Background(), store, NewPeersUpdateManager(nil), nil, "", "netbird.test", eventStore, nil, false, MockIntegratedValidator{}, metrics, port_forwarding.NewControllerMock(), settingsMockManager, permissionsManager, false)
+	return BuildManager(context.Background(), store, NewPeersUpdateManager(nil), nil, "", "openzro.test", eventStore, nil, false, MockIntegratedValidator{}, metrics, port_forwarding.NewControllerMock(), settingsMockManager, permissionsManager, false)
 }
 
 func createDNSStore(t *testing.T) (store.Store, error) {
@@ -238,9 +238,9 @@ func initTestDNSAccount(t *testing.T, am *DefaultAccountManager) (*types.Account
 	t.Helper()
 	peer1 := &nbpeer.Peer{
 		Key:  dnsPeer1Key,
-		Name: "test-host1@netbird.io",
+		Name: "test-host1@openzro.io",
 		Meta: nbpeer.PeerSystemMeta{
-			Hostname:  "test-host1@netbird.io",
+			Hostname:  "test-host1@openzro.io",
 			GoOS:      "linux",
 			Kernel:    "Linux",
 			Core:      "21.04",
@@ -253,9 +253,9 @@ func initTestDNSAccount(t *testing.T, am *DefaultAccountManager) (*types.Account
 	}
 	peer2 := &nbpeer.Peer{
 		Key:  dnsPeer2Key,
-		Name: "test-host2@netbird.io",
+		Name: "test-host2@openzro.io",
 		Meta: nbpeer.PeerSystemMeta{
-			Hostname:  "test-host2@netbird.io",
+			Hostname:  "test-host2@openzro.io",
 			GoOS:      "linux",
 			Kernel:    "Linux",
 			Core:      "21.04",

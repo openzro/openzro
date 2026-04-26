@@ -9,7 +9,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	relayClient "github.com/netbirdio/netbird/relay/client"
+	relayClient "github.com/openzro/openzro/relay/client"
 )
 
 type RelayConnInfo struct {

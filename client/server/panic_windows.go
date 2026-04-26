@@ -11,7 +11,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/util"
 )
 
 const (
@@ -28,8 +28,8 @@ var (
 
 func handlePanicLog() error {
 	// TODO: move this to a central location
-	logDir := path.Join(os.Getenv("PROGRAMDATA"), "Netbird")
-	logPath := path.Join(logDir, "netbird.err")
+	logDir := path.Join(os.Getenv("PROGRAMDATA"), "Openzro")
+	logPath := path.Join(logDir, "openzro.err")
 
 	if err := os.MkdirAll(logDir, 0750); err != nil {
 		return fmt.Errorf("create panic log directory: %w", err)

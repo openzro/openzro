@@ -7,8 +7,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/internal/lazyconn"
-	"github.com/netbirdio/netbird/monotime"
+	"github.com/openzro/openzro/client/internal/lazyconn"
+	"github.com/openzro/openzro/monotime"
 )
 
 const (

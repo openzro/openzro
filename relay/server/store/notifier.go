@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/netbirdio/netbird/relay/messages"
+	"github.com/openzro/openzro/relay/messages"
 )
 
 type PeerNotifier struct {

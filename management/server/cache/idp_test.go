@@ -10,9 +10,9 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/vmihailenco/msgpack/v5"
 
-	"github.com/netbirdio/netbird/management/server/cache"
-	"github.com/netbirdio/netbird/management/server/idp"
-	"github.com/netbirdio/netbird/management/server/testutil"
+	"github.com/openzro/openzro/management/server/cache"
+	"github.com/openzro/openzro/management/server/idp"
+	"github.com/openzro/openzro/management/server/testutil"
 )
 
 func TestNewIDPCacheManagers(t *testing.T) {

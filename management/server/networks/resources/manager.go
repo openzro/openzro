@@ -5,17 +5,17 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/netbirdio/netbird/management/server/account"
-	"github.com/netbirdio/netbird/management/server/activity"
-	"github.com/netbirdio/netbird/management/server/groups"
-	"github.com/netbirdio/netbird/management/server/networks/resources/types"
-	"github.com/netbirdio/netbird/management/server/permissions"
-	"github.com/netbirdio/netbird/management/server/permissions/modules"
-	"github.com/netbirdio/netbird/management/server/permissions/operations"
-	"github.com/netbirdio/netbird/management/server/status"
-	"github.com/netbirdio/netbird/management/server/store"
-	nbtypes "github.com/netbirdio/netbird/management/server/types"
-	"github.com/netbirdio/netbird/management/server/util"
+	"github.com/openzro/openzro/management/server/account"
+	"github.com/openzro/openzro/management/server/activity"
+	"github.com/openzro/openzro/management/server/groups"
+	"github.com/openzro/openzro/management/server/networks/resources/types"
+	"github.com/openzro/openzro/management/server/permissions"
+	"github.com/openzro/openzro/management/server/permissions/modules"
+	"github.com/openzro/openzro/management/server/permissions/operations"
+	"github.com/openzro/openzro/management/server/status"
+	"github.com/openzro/openzro/management/server/store"
+	nbtypes "github.com/openzro/openzro/management/server/types"
+	"github.com/openzro/openzro/management/server/util"
 )
 
 type Manager interface {

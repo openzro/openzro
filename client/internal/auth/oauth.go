@@ -10,8 +10,8 @@ import (
 	"google.golang.org/grpc/codes"
 	gstatus "google.golang.org/grpc/status"
 
-	"github.com/netbirdio/netbird/client/internal"
-	"github.com/netbirdio/netbird/client/internal/profilemanager"
+	"github.com/openzro/openzro/client/internal"
+	"github.com/openzro/openzro/client/internal/profilemanager"
 )
 
 // OAuthFlow represents an interface for authorization using different OAuth 2.0 flows
@@ -98,7 +98,7 @@ func authenticateWithDeviceCodeFlow(ctx context.Context, config *profilemanager.
 		case ok && s.Code() == codes.NotFound:
 			return nil, fmt.Errorf("no SSO provider returned from management. " +
 				"Please proceed with setting up this device using setup keys " +
-				"https://docs.netbird.io/how-to/register-machines-using-setup-keys")
+				"https://docs.openzro.io/how-to/register-machines-using-setup-keys")
 		case ok && s.Code() == codes.Unimplemented:
 			return nil, fmt.Errorf("the management server, %s, does not support SSO providers, "+
 				"please update your server or use Setup Keys to login", config.ManagementURL)

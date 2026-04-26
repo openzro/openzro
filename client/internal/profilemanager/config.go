@@ -17,25 +17,25 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/iface"
-	"github.com/netbirdio/netbird/client/internal/routemanager/dynamic"
-	"github.com/netbirdio/netbird/client/ssh"
-	mgm "github.com/netbirdio/netbird/management/client"
-	"github.com/netbirdio/netbird/management/domain"
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/client/iface"
+	"github.com/openzro/openzro/client/internal/routemanager/dynamic"
+	"github.com/openzro/openzro/client/ssh"
+	mgm "github.com/openzro/openzro/management/client"
+	"github.com/openzro/openzro/management/domain"
+	"github.com/openzro/openzro/util"
 )
 
 const (
 	// managementLegacyPortString is the port that was used before by the Management gRPC server.
 	// It is used for backward compatibility now.
-	// NB: hardcoded from github.com/netbirdio/netbird/management/cmd to avoid import
+	// NB: hardcoded from github.com/openzro/openzro/management/cmd to avoid import
 	managementLegacyPortString = "33073"
-	// DefaultManagementURL points to the NetBird's cloud management endpoint
-	DefaultManagementURL = "https://api.netbird.io:443"
-	// oldDefaultManagementURL points to the NetBird's old cloud management endpoint
+	// DefaultManagementURL points to the Openzro's cloud management endpoint
+	DefaultManagementURL = "https://api.openzro.io:443"
+	// oldDefaultManagementURL points to the Openzro's old cloud management endpoint
 	oldDefaultManagementURL = "https://api.wiretrustee.com:443"
-	// DefaultAdminURL points to NetBird's cloud management console
-	DefaultAdminURL = "https://app.netbird.io:443"
+	// DefaultAdminURL points to Openzro's cloud management console
+	DefaultAdminURL = "https://app.openzro.io:443"
 )
 
 var DefaultInterfaceBlacklist = []string{
@@ -155,7 +155,7 @@ func getConfigDir() (string, error) {
 		return "", err
 	}
 
-	configDir = filepath.Join(configDir, "netbird")
+	configDir = filepath.Join(configDir, "openzro")
 	if _, err := os.Stat(configDir); os.IsNotExist(err) {
 		if err := os.MkdirAll(configDir, 0755); err != nil {
 			return "", err
@@ -609,7 +609,7 @@ func GetConfig(configPath string) (*Config, error) {
 
 // UpdateOldManagementURL checks whether client can switch to the new Management URL with port 443 and the management domain.
 // If it can switch, then it updates the config and returns a new one. Otherwise, it returns the provided config.
-// The check is performed only for the NetBird's managed version.
+// The check is performed only for the Openzro's managed version.
 func UpdateOldManagementURL(ctx context.Context, config *Config, configPath string) (*Config, error) {
 	defaultManagementURL, err := parseURL("Management URL", DefaultManagementURL)
 	if err != nil {
@@ -623,7 +623,7 @@ func UpdateOldManagementURL(ctx context.Context, config *Config, configPath stri
 
 	if config.ManagementURL.Hostname() != defaultManagementURL.Hostname() &&
 		config.ManagementURL.Hostname() != parsedOldDefaultManagementURL.Hostname() {
-		// only do the check for the NetBird's managed version
+		// only do the check for the Openzro's managed version
 		return config, nil
 	}
 

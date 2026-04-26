@@ -8,16 +8,16 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/iface/device"
-	"github.com/netbirdio/netbird/client/internal"
-	"github.com/netbirdio/netbird/client/internal/dns"
-	"github.com/netbirdio/netbird/client/internal/listener"
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/client/internal/profilemanager"
-	"github.com/netbirdio/netbird/client/internal/stdnet"
-	"github.com/netbirdio/netbird/client/system"
-	"github.com/netbirdio/netbird/formatter"
-	"github.com/netbirdio/netbird/util/net"
+	"github.com/openzro/openzro/client/iface/device"
+	"github.com/openzro/openzro/client/internal"
+	"github.com/openzro/openzro/client/internal/dns"
+	"github.com/openzro/openzro/client/internal/listener"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/client/internal/profilemanager"
+	"github.com/openzro/openzro/client/internal/stdnet"
+	"github.com/openzro/openzro/client/system"
+	"github.com/openzro/openzro/formatter"
+	"github.com/openzro/openzro/util/net"
 )
 
 // ConnectionListener export internal Listener for mobile

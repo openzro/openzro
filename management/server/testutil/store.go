@@ -81,9 +81,9 @@ func CreatePostgresTestContainer() (func(), string, error) {
 	var err error
 	pgContainer, err = postgres.RunContainer(ctx,
 		testcontainers.WithImage("postgres:16-alpine"),
-		postgres.WithDatabase("netbird"),
+		postgres.WithDatabase("openzro"),
 		postgres.WithUsername("root"),
-		postgres.WithPassword("netbird"),
+		postgres.WithPassword("openzro"),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).WithStartupTimeout(15*time.Second),

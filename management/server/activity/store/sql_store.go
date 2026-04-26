@@ -15,8 +15,8 @@ import (
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 
-	"github.com/netbirdio/netbird/management/server/activity"
-	"github.com/netbirdio/netbird/management/server/types"
+	"github.com/openzro/openzro/management/server/activity"
+	"github.com/openzro/openzro/management/server/types"
 )
 
 const (
@@ -28,9 +28,9 @@ const (
 
 	gcmEncAlgo = "GCM"
 
-	storeEngineEnv     = "NB_ACTIVITY_EVENT_STORE_ENGINE"
-	postgresDsnEnv     = "NB_ACTIVITY_EVENT_POSTGRES_DSN"
-	sqlMaxOpenConnsEnv = "NB_SQL_MAX_OPEN_CONNS"
+	storeEngineEnv     = "OZ_ACTIVITY_EVENT_STORE_ENGINE"
+	postgresDsnEnv     = "OZ_ACTIVITY_EVENT_POSTGRES_DSN"
+	sqlMaxOpenConnsEnv = "OZ_SQL_MAX_OPEN_CONNS"
 )
 
 type eventWithNames struct {

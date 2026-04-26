@@ -13,28 +13,28 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 
-	"github.com/netbirdio/management-integrations/integrations"
+	"github.com/openzro/management-integrations/integrations"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 
-	"github.com/netbirdio/netbird/client/internal"
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/client/internal/profilemanager"
-	daemonProto "github.com/netbirdio/netbird/client/proto"
-	mgmtProto "github.com/netbirdio/netbird/management/proto"
-	"github.com/netbirdio/netbird/management/server"
-	"github.com/netbirdio/netbird/management/server/activity"
-	"github.com/netbirdio/netbird/management/server/integrations/port_forwarding"
-	"github.com/netbirdio/netbird/management/server/permissions"
-	"github.com/netbirdio/netbird/management/server/settings"
-	"github.com/netbirdio/netbird/management/server/store"
-	"github.com/netbirdio/netbird/management/server/telemetry"
-	"github.com/netbirdio/netbird/management/server/types"
-	"github.com/netbirdio/netbird/signal/proto"
-	signalServer "github.com/netbirdio/netbird/signal/server"
+	"github.com/openzro/openzro/client/internal"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/client/internal/profilemanager"
+	daemonProto "github.com/openzro/openzro/client/proto"
+	mgmtProto "github.com/openzro/openzro/management/proto"
+	"github.com/openzro/openzro/management/server"
+	"github.com/openzro/openzro/management/server/activity"
+	"github.com/openzro/openzro/management/server/integrations/port_forwarding"
+	"github.com/openzro/openzro/management/server/permissions"
+	"github.com/openzro/openzro/management/server/settings"
+	"github.com/openzro/openzro/management/server/store"
+	"github.com/openzro/openzro/management/server/telemetry"
+	"github.com/openzro/openzro/management/server/types"
+	"github.com/openzro/openzro/signal/proto"
+	signalServer "github.com/openzro/openzro/signal/server"
 )
 
 var (
@@ -303,7 +303,7 @@ func startManagement(t *testing.T, signalAddr string, counter *int) (*grpc.Serve
 	settingsMockManager := settings.NewMockManager(ctrl)
 	permissionsManagerMock := permissions.NewMockManager(ctrl)
 
-	accountManager, err := server.BuildManager(context.Background(), store, peersUpdateManager, nil, "", "netbird.selfhosted", eventStore, nil, false, ia, metrics, port_forwarding.NewControllerMock(), settingsMockManager, permissionsManagerMock, false)
+	accountManager, err := server.BuildManager(context.Background(), store, peersUpdateManager, nil, "", "openzro.selfhosted", eventStore, nil, false, ia, metrics, port_forwarding.NewControllerMock(), settingsMockManager, permissionsManagerMock, false)
 	if err != nil {
 		return nil, "", err
 	}

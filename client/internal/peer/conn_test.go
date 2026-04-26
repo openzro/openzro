@@ -9,13 +9,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/netbirdio/netbird/client/iface"
-	"github.com/netbirdio/netbird/client/internal/peer/dispatcher"
-	"github.com/netbirdio/netbird/client/internal/peer/guard"
-	"github.com/netbirdio/netbird/client/internal/peer/ice"
-	"github.com/netbirdio/netbird/client/internal/stdnet"
-	"github.com/netbirdio/netbird/util"
-	semaphoregroup "github.com/netbirdio/netbird/util/semaphore-group"
+	"github.com/openzro/openzro/client/iface"
+	"github.com/openzro/openzro/client/internal/peer/dispatcher"
+	"github.com/openzro/openzro/client/internal/peer/guard"
+	"github.com/openzro/openzro/client/internal/peer/ice"
+	"github.com/openzro/openzro/client/internal/stdnet"
+	"github.com/openzro/openzro/util"
+	semaphoregroup "github.com/openzro/openzro/util/semaphore-group"
 )
 
 var testDispatcher = dispatcher.NewConnectionDispatcher()

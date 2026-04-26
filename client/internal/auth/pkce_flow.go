@@ -19,8 +19,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
 
-	"github.com/netbirdio/netbird/client/internal"
-	"github.com/netbirdio/netbird/client/internal/templates"
+	"github.com/openzro/openzro/client/internal"
+	"github.com/openzro/openzro/client/internal/templates"
 )
 
 var _ OAuthFlow = &PKCEAuthorizationFlow{}

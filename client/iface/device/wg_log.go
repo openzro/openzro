@@ -7,7 +7,7 @@ import (
 )
 
 func wgLogLevel() int {
-	if os.Getenv("NB_WG_DEBUG") == "true" {
+	if os.Getenv("OZ_WG_DEBUG") == "true" {
 		return device.LogLevelVerbose
 	} else {
 		return device.LogLevelSilent

@@ -1,5 +1,5 @@
 FROM ubuntu:24.04
 RUN apt update && apt install -y ca-certificates && rm -fr /var/cache/apt
-ENTRYPOINT [ "/go/bin/netbird-mgmt","management"]
+ENTRYPOINT [ "/go/bin/openzro-mgmt","management"]
 CMD ["--log-file", "console"]
-COPY netbird-mgmt /go/bin/netbird-mgmt
+COPY openzro-mgmt /go/bin/openzro-mgmt

@@ -9,11 +9,11 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/client/internal/lazyconn"
-	"github.com/netbirdio/netbird/client/internal/lazyconn/manager"
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/client/internal/peerstore"
-	"github.com/netbirdio/netbird/route"
+	"github.com/openzro/openzro/client/internal/lazyconn"
+	"github.com/openzro/openzro/client/internal/lazyconn/manager"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/client/internal/peerstore"
+	"github.com/openzro/openzro/route"
 )
 
 // ConnMgr coordinates both lazy connections (established on-demand) and permanent peer connections.

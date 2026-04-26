@@ -13,12 +13,12 @@ import (
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/netbirdio/netbird/client/internal/netflow/conntrack"
-	"github.com/netbirdio/netbird/client/internal/netflow/logger"
-	nftypes "github.com/netbirdio/netbird/client/internal/netflow/types"
-	"github.com/netbirdio/netbird/client/internal/peer"
-	"github.com/netbirdio/netbird/flow/client"
-	"github.com/netbirdio/netbird/flow/proto"
+	"github.com/openzro/openzro/client/internal/netflow/conntrack"
+	"github.com/openzro/openzro/client/internal/netflow/logger"
+	nftypes "github.com/openzro/openzro/client/internal/netflow/types"
+	"github.com/openzro/openzro/client/internal/peer"
+	"github.com/openzro/openzro/flow/client"
+	"github.com/openzro/openzro/flow/proto"
 )
 
 // Manager handles netflow tracking and logging

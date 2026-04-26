@@ -8,7 +8,7 @@ import (
 
 	"google.golang.org/grpc/metadata"
 
-	"github.com/netbirdio/netbird/management/proto"
+	"github.com/openzro/openzro/management/proto"
 )
 
 // DeviceNameCtxKey context key for device name
@@ -49,7 +49,7 @@ type Info struct {
 	OSVersion          string
 	Hostname           string
 	CPUs               int
-	NetbirdVersion     string
+	OpenzroVersion     string
 	UIVersion          string
 	KernelVersion      string
 	NetworkAddresses   []NetworkAddress
@@ -103,14 +103,14 @@ type StaticInfo struct {
 	Environment        Environment
 }
 
-// extractUserAgent extracts Netbird's agent (client) name and version from the outgoing context
+// extractUserAgent extracts Openzro's agent (client) name and version from the outgoing context
 func extractUserAgent(ctx context.Context) string {
 	md, hasMeta := metadata.FromOutgoingContext(ctx)
 	if hasMeta {
 		agent, ok := md["user-agent"]
 		if ok {
 			nbAgent := strings.Split(agent[0], " ")[0]
-			if strings.HasPrefix(nbAgent, "netbird") {
+			if strings.HasPrefix(nbAgent, "openzro") {
 				return nbAgent
 			}
 			return ""

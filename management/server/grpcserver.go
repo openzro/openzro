@@ -18,21 +18,21 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
-	integrationsConfig "github.com/netbirdio/management-integrations/integrations/config"
-	"github.com/netbirdio/netbird/management/server/integrations/integrated_validator"
+	integrationsConfig "github.com/openzro/management-integrations/integrations/config"
+	"github.com/openzro/openzro/management/server/integrations/integrated_validator"
 
-	"github.com/netbirdio/netbird/encryption"
-	"github.com/netbirdio/netbird/management/proto"
-	"github.com/netbirdio/netbird/management/server/account"
-	"github.com/netbirdio/netbird/management/server/activity"
-	"github.com/netbirdio/netbird/management/server/auth"
-	nbContext "github.com/netbirdio/netbird/management/server/context"
-	nbpeer "github.com/netbirdio/netbird/management/server/peer"
-	"github.com/netbirdio/netbird/management/server/posture"
-	"github.com/netbirdio/netbird/management/server/settings"
-	internalStatus "github.com/netbirdio/netbird/management/server/status"
-	"github.com/netbirdio/netbird/management/server/telemetry"
-	"github.com/netbirdio/netbird/management/server/types"
+	"github.com/openzro/openzro/encryption"
+	"github.com/openzro/openzro/management/proto"
+	"github.com/openzro/openzro/management/server/account"
+	"github.com/openzro/openzro/management/server/activity"
+	"github.com/openzro/openzro/management/server/auth"
+	nbContext "github.com/openzro/openzro/management/server/context"
+	nbpeer "github.com/openzro/openzro/management/server/peer"
+	"github.com/openzro/openzro/management/server/posture"
+	"github.com/openzro/openzro/management/server/settings"
+	internalStatus "github.com/openzro/openzro/management/server/status"
+	"github.com/openzro/openzro/management/server/telemetry"
+	"github.com/openzro/openzro/management/server/types"
 )
 
 // GRPCServer an instance of a Management gRPC API server
@@ -385,7 +385,7 @@ func extractPeerMeta(ctx context.Context, meta *proto.PeerSystemMeta) nbpeer.Pee
 		Platform:           meta.GetPlatform(),
 		OS:                 meta.GetOS(),
 		OSVersion:          osVersion,
-		WtVersion:          meta.GetNetbirdVersion(),
+		WtVersion:          meta.GetOpenzroVersion(),
 		UIVersion:          meta.GetUiVersion(),
 		KernelVersion:      meta.GetKernelVersion(),
 		NetworkAddresses:   networkAddresses,
@@ -532,7 +532,7 @@ func (s *GRPCServer) prepareLoginResponse(ctx context.Context, peer *nbpeer.Peer
 
 	// if peer has reached this point then it has logged in
 	loginResp := &proto.LoginResponse{
-		NetbirdConfig: toNetbirdConfig(s.config, nil, relayToken, nil),
+		OpenzroConfig: toOpenzroConfig(s.config, nil, relayToken, nil),
 		PeerConfig:    toPeerConfig(peer, netMap.Network, s.accountManager.GetDNSDomain(settings), settings),
 		Checks:        toProtocolChecks(ctx, postureChecks),
 	}
@@ -582,7 +582,7 @@ func ToResponseProto(configProto types.Protocol) proto.HostConfig_Protocol {
 	}
 }
 
-func toNetbirdConfig(config *types.Config, turnCredentials *Token, relayToken *Token, extraSettings *types.ExtraSettings) *proto.NetbirdConfig {
+func toOpenzroConfig(config *types.Config, turnCredentials *Token, relayToken *Token, extraSettings *types.ExtraSettings) *proto.OpenzroConfig {
 	if config == nil {
 		return nil
 	}
@@ -638,7 +638,7 @@ func toNetbirdConfig(config *types.Config, turnCredentials *Token, relayToken *T
 		}
 	}
 
-	nbConfig := &proto.NetbirdConfig{
+	nbConfig := &proto.OpenzroConfig{
 		Stuns:  stuns,
 		Turns:  turns,
 		Signal: signalCfg,
@@ -671,9 +671,9 @@ func toSyncResponse(ctx context.Context, config *types.Config, peer *nbpeer.Peer
 		Checks: toProtocolChecks(ctx, checks),
 	}
 
-	nbConfig := toNetbirdConfig(config, turnCredentials, relayCredentials, extraSettings)
-	extendedConfig := integrationsConfig.ExtendNetBirdConfig(peer.ID, nbConfig, extraSettings)
-	response.NetbirdConfig = extendedConfig
+	nbConfig := toOpenzroConfig(config, turnCredentials, relayCredentials, extraSettings)
+	extendedConfig := integrationsConfig.ExtendOpenzroConfig(peer.ID, nbConfig, extraSettings)
+	response.OpenzroConfig = extendedConfig
 
 	response.NetworkMap.PeerConfig = response.PeerConfig
 

@@ -10,26 +10,26 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/exp/maps"
 
-	nbcache "github.com/netbirdio/netbird/management/server/cache"
-	nbcontext "github.com/netbirdio/netbird/management/server/context"
-	"github.com/netbirdio/netbird/management/server/permissions"
-	"github.com/netbirdio/netbird/management/server/permissions/modules"
-	"github.com/netbirdio/netbird/management/server/permissions/roles"
-	"github.com/netbirdio/netbird/management/server/status"
-	"github.com/netbirdio/netbird/management/server/users"
-	"github.com/netbirdio/netbird/management/server/util"
+	nbcache "github.com/openzro/openzro/management/server/cache"
+	nbcontext "github.com/openzro/openzro/management/server/context"
+	"github.com/openzro/openzro/management/server/permissions"
+	"github.com/openzro/openzro/management/server/permissions/modules"
+	"github.com/openzro/openzro/management/server/permissions/roles"
+	"github.com/openzro/openzro/management/server/status"
+	"github.com/openzro/openzro/management/server/users"
+	"github.com/openzro/openzro/management/server/util"
 
-	nbpeer "github.com/netbirdio/netbird/management/server/peer"
-	"github.com/netbirdio/netbird/management/server/store"
-	"github.com/netbirdio/netbird/management/server/types"
+	nbpeer "github.com/openzro/openzro/management/server/peer"
+	"github.com/openzro/openzro/management/server/store"
+	"github.com/openzro/openzro/management/server/types"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
-	"github.com/netbirdio/netbird/management/server/activity"
-	"github.com/netbirdio/netbird/management/server/idp"
-	"github.com/netbirdio/netbird/management/server/integration_reference"
+	"github.com/openzro/openzro/management/server/activity"
+	"github.com/openzro/openzro/management/server/idp"
+	"github.com/openzro/openzro/management/server/integration_reference"
 )
 
 const (
@@ -1303,7 +1303,7 @@ func TestDefaultAccountManager_SaveUser(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 
 			// create an account and an admin user
-			account, err := manager.GetOrCreateAccountByUser(context.Background(), ownerUserID, "netbird.io")
+			account, err := manager.GetOrCreateAccountByUser(context.Background(), ownerUserID, "openzro.io")
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -6,7 +6,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/formatter/levels"
+	"github.com/openzro/openzro/formatter/levels"
 )
 
 // Formatter formats logs into text what is fit for logcat

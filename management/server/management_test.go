@@ -19,17 +19,17 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 
-	"github.com/netbirdio/netbird/encryption"
-	mgmtProto "github.com/netbirdio/netbird/management/proto"
-	"github.com/netbirdio/netbird/management/server"
-	"github.com/netbirdio/netbird/management/server/activity"
-	"github.com/netbirdio/netbird/management/server/integrations/port_forwarding"
-	"github.com/netbirdio/netbird/management/server/permissions"
-	"github.com/netbirdio/netbird/management/server/settings"
-	"github.com/netbirdio/netbird/management/server/store"
-	"github.com/netbirdio/netbird/management/server/telemetry"
-	"github.com/netbirdio/netbird/management/server/types"
-	"github.com/netbirdio/netbird/util"
+	"github.com/openzro/openzro/encryption"
+	mgmtProto "github.com/openzro/openzro/management/proto"
+	"github.com/openzro/openzro/management/server"
+	"github.com/openzro/openzro/management/server/activity"
+	"github.com/openzro/openzro/management/server/integrations/port_forwarding"
+	"github.com/openzro/openzro/management/server/permissions"
+	"github.com/openzro/openzro/management/server/settings"
+	"github.com/openzro/openzro/management/server/store"
+	"github.com/openzro/openzro/management/server/telemetry"
+	"github.com/openzro/openzro/management/server/types"
+	"github.com/openzro/openzro/util"
 )
 
 const (
@@ -54,7 +54,7 @@ func setupTest(t *testing.T) *testSuite {
 	ts := &testSuite{t: t}
 
 	var err error
-	ts.dataDir, err = os.MkdirTemp("", "netbird_mgmt_test_tmp_*")
+	ts.dataDir, err = os.MkdirTemp("", "openzro_mgmt_test_tmp_*")
 	if err != nil {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}
@@ -112,7 +112,7 @@ func loginPeerWithValidSetupKey(
 		Core:           "core",
 		Platform:       "platform",
 		Kernel:         "kernel",
-		NetbirdVersion: "",
+		OpenzroVersion: "",
 	}
 	msgToEncrypt := &mgmtProto.LoginRequest{SetupKey: ValidSetupKey, Meta: meta}
 	message, err := encryption.EncryptMessage(serverPubKey, key, msgToEncrypt)
@@ -202,7 +202,7 @@ func startServer(
 		peersUpdateManager,
 		nil,
 		"",
-		"netbird.selfhosted",
+		"openzro.selfhosted",
 		eventStore,
 		nil,
 		false,
@@ -292,15 +292,15 @@ func TestSyncNewPeerConfiguration(t *testing.T) {
 	}
 
 	expectedSignalConfig := &mgmtProto.HostConfig{
-		Uri:      "signal.netbird.io:10000",
+		Uri:      "signal.openzro.io:10000",
 		Protocol: mgmtProto.HostConfig_HTTP,
 	}
 	expectedStunsConfig := &mgmtProto.HostConfig{
-		Uri:      "stun:stun.netbird.io:3468",
+		Uri:      "stun:stun.openzro.io:3468",
 		Protocol: mgmtProto.HostConfig_UDP,
 	}
 	expectedTRUNHost := &mgmtProto.HostConfig{
-		Uri:      "turn:stun.netbird.io:3468",
+		Uri:      "turn:stun.openzro.io:3468",
 		Protocol: mgmtProto.HostConfig_UDP,
 	}
 
@@ -308,15 +308,15 @@ func TestSyncNewPeerConfiguration(t *testing.T) {
 		Urls: []string{"rel://test.com:3535"},
 	}
 
-	assert.NotNil(t, resp.NetbirdConfig)
-	assert.Equal(t, resp.NetbirdConfig.Signal, expectedSignalConfig)
-	assert.Contains(t, resp.NetbirdConfig.Stuns, expectedStunsConfig)
-	assert.Equal(t, len(resp.NetbirdConfig.Turns), 1)
-	actualTURN := resp.NetbirdConfig.Turns[0]
+	assert.NotNil(t, resp.OpenzroConfig)
+	assert.Equal(t, resp.OpenzroConfig.Signal, expectedSignalConfig)
+	assert.Contains(t, resp.OpenzroConfig.Stuns, expectedStunsConfig)
+	assert.Equal(t, len(resp.OpenzroConfig.Turns), 1)
+	actualTURN := resp.OpenzroConfig.Turns[0]
 	assert.Greater(t, len(actualTURN.User), 0)
 	assert.Equal(t, actualTURN.HostConfig, expectedTRUNHost)
-	assert.Equal(t, len(resp.NetbirdConfig.Relay.Urls), 1)
-	assert.Equal(t, resp.NetbirdConfig.Relay.Urls, expectedRelayHost.Urls)
+	assert.Equal(t, len(resp.OpenzroConfig.Relay.Urls), 1)
+	assert.Equal(t, resp.OpenzroConfig.Relay.Urls, expectedRelayHost.Urls)
 	assert.Equal(t, len(resp.NetworkMap.OfflinePeers), 0)
 }
 
@@ -562,26 +562,26 @@ func TestLoginRegisteredPeer(t *testing.T) {
 	}
 
 	expectedSignalConfig := &mgmtProto.HostConfig{
-		Uri:      "signal.netbird.io:10000",
+		Uri:      "signal.openzro.io:10000",
 		Protocol: mgmtProto.HostConfig_HTTP,
 	}
 	expectedStunsConfig := &mgmtProto.HostConfig{
-		Uri:      "stun:stun.netbird.io:3468",
+		Uri:      "stun:stun.openzro.io:3468",
 		Protocol: mgmtProto.HostConfig_UDP,
 	}
 	expectedTurnsConfig := &mgmtProto.ProtectedHostConfig{
 		HostConfig: &mgmtProto.HostConfig{
-			Uri:      "turn:stun.netbird.io:3468",
+			Uri:      "turn:stun.openzro.io:3468",
 			Protocol: mgmtProto.HostConfig_UDP,
 		},
 		User:     "some_user",
 		Password: "some_password",
 	}
 
-	assert.NotNil(t, loginResp.GetNetbirdConfig())
-	assert.Equal(t, loginResp.GetNetbirdConfig().Signal, expectedSignalConfig)
-	assert.Contains(t, loginResp.GetNetbirdConfig().Stuns, expectedStunsConfig)
-	assert.Contains(t, loginResp.GetNetbirdConfig().Turns, expectedTurnsConfig)
+	assert.NotNil(t, loginResp.GetOpenzroConfig())
+	assert.Equal(t, loginResp.GetOpenzroConfig().Signal, expectedSignalConfig)
+	assert.Contains(t, loginResp.GetOpenzroConfig().Stuns, expectedStunsConfig)
+	assert.Contains(t, loginResp.GetOpenzroConfig().Turns, expectedTurnsConfig)
 }
 
 func TestSync10PeersGetUpdates(t *testing.T) {

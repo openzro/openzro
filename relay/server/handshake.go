@@ -6,11 +6,11 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/netbirdio/netbird/relay/messages"
+	"github.com/openzro/openzro/relay/messages"
 	//nolint:staticcheck
-	"github.com/netbirdio/netbird/relay/messages/address"
+	"github.com/openzro/openzro/relay/messages/address"
 	//nolint:staticcheck
-	authmsg "github.com/netbirdio/netbird/relay/messages/auth"
+	authmsg "github.com/openzro/openzro/relay/messages/auth"
 )
 
 type Validator interface {

@@ -69,15 +69,15 @@ func TestServiceLifecycle(t *testing.T) {
 	}
 
 	originalServiceName := serviceName
-	serviceName = "netbirdtest" + fmt.Sprintf("%d", time.Now().Unix())
+	serviceName = "openzrotest" + fmt.Sprintf("%d", time.Now().Unix())
 	defer func() {
 		serviceName = originalServiceName
 	}()
 
 	tempDir := t.TempDir()
-	configPath = fmt.Sprintf("%s/netbird-test-config.json", tempDir)
+	configPath = fmt.Sprintf("%s/openzro-test-config.json", tempDir)
 	logLevel = "info"
-	daemonAddr = fmt.Sprintf("unix://%s/netbird-test.sock", tempDir)
+	daemonAddr = fmt.Sprintf("unix://%s/openzro-test.sock", tempDir)
 
 	ctx := context.Background()
 
