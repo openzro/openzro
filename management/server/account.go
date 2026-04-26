@@ -356,6 +356,7 @@ func (am *DefaultAccountManager) UpdateAccountSettings(ctx context.Context, acco
 
 	am.handleRoutingPeerDNSResolutionSettings(ctx, oldSettings, newSettings, userID, accountID)
 	am.handleLazyConnectionSettings(ctx, oldSettings, newSettings, userID, accountID)
+	am.handleAdmissionSettings(ctx, oldSettings, newSettings, userID, accountID)
 	am.handlePeerLoginExpirationSettings(ctx, oldSettings, newSettings, userID, accountID)
 	am.handleGroupsPropagationSettings(ctx, oldSettings, newSettings, userID, accountID)
 	if err = am.handleInactivityExpirationSettings(ctx, oldSettings, newSettings, userID, accountID); err != nil {
@@ -417,6 +418,38 @@ func (am *DefaultAccountManager) handleLazyConnectionSettings(ctx context.Contex
 			am.StoreEvent(ctx, userID, accountID, accountID, activity.AccountLazyConnectionDisabled, nil)
 		}
 	}
+}
+
+// handleAdmissionSettings emits audit events when the account-wide
+// admission gate flips state or when its posture-check list changes.
+// Both transitions are required by Bacen 4.893: the auditor needs a
+// trail of who turned the gate on/off and who altered the policy that
+// drives admission decisions.
+func (am *DefaultAccountManager) handleAdmissionSettings(ctx context.Context, oldSettings, newSettings *types.Settings, userID, accountID string) {
+	if oldSettings.AdmissionEnforcementEnabled != newSettings.AdmissionEnforcementEnabled {
+		event := activity.AdmissionEnforcementEnabled
+		if !newSettings.AdmissionEnforcementEnabled {
+			event = activity.AdmissionEnforcementDisabled
+		}
+		am.StoreEvent(ctx, userID, accountID, accountID, event, nil)
+	}
+	if !stringSlicesEqual(oldSettings.AdmissionPostureChecks, newSettings.AdmissionPostureChecks) {
+		am.StoreEvent(ctx, userID, accountID, accountID, activity.AdmissionPostureChecksUpdated, map[string]any{
+			"posture_check_ids": newSettings.AdmissionPostureChecks,
+		})
+	}
+}
+
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func (am *DefaultAccountManager) handlePeerLoginExpirationSettings(ctx context.Context, oldSettings, newSettings *types.Settings, userID, accountID string) {

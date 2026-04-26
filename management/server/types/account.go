@@ -1150,6 +1150,60 @@ func (a *Account) GetPostureChecks(postureChecksID string) *posture.Checks {
 	return nil
 }
 
+// AdmissionDenial describes the specific posture check that rejected
+// the peer at the admission gate. It is what the audit-trail event
+// records and what the gRPC error message surfaces to the operator.
+type AdmissionDenial struct {
+	PostureCheckID   string
+	PostureCheckName string
+	CheckType        string
+	Reason           string
+}
+
+// EvaluateAdmission runs the supplied admission posture checks against
+// the peer and returns the first failing check, if any.
+//
+// Free function (not a method) so callers can build the inputs from
+// whatever scope they have — usually a transaction-scoped settings
+// load plus a transaction-scoped GetPostureChecksByIDs lookup. The
+// goal is to avoid forcing a full Account load on every Login/Sync.
+//
+// Returns (nil, nil) when the peer passes every listed check.
+// Returns (denial, nil) when a check rejects the peer — the caller
+// should refuse the login. A nil error means "we evaluated"; lookup
+// failures from a vendor (Intune/SentinelOne/Huntress timing out, for
+// example) appear as a denial with the vendor's error in Reason and
+// the per-check FailOpen toggle decides whether that flips the
+// boolean.
+func EvaluateAdmission(ctx context.Context, peer *nbpeer.Peer, ids []string, postureChecks map[string]*posture.Checks) *AdmissionDenial {
+	if peer == nil || len(ids) == 0 || len(postureChecks) == 0 {
+		return nil
+	}
+	for _, id := range ids {
+		pc, ok := postureChecks[id]
+		if !ok || pc == nil {
+			continue
+		}
+		for _, check := range pc.GetChecks() {
+			compliant, err := check.Check(ctx, *peer)
+			if compliant {
+				continue
+			}
+			reason := "non-compliant"
+			if err != nil {
+				reason = err.Error()
+			}
+			return &AdmissionDenial{
+				PostureCheckID:   pc.ID,
+				PostureCheckName: pc.Name,
+				CheckType:        check.Name(),
+				Reason:           reason,
+			}
+		}
+	}
+	return nil
+}
+
 // GetPeerRoutesFirewallRules gets the routes firewall rules associated with a routing peer ID for the account.
 func (a *Account) GetPeerRoutesFirewallRules(ctx context.Context, peerID string, validatedPeersMap map[string]struct{}) []*RouteFirewallRule {
 	routesFirewallRules := make([]*RouteFirewallRule, 0, len(a.Routes))

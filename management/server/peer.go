@@ -626,6 +626,15 @@ func (am *DefaultAccountManager) AddPeer(ctx context.Context, setupKey, userID s
 
 	newPeer = am.integratedPeerValidator.PreparePeer(ctx, accountID, newPeer, groupsToAdd, settings.Extra)
 
+	// Admission gate: refuse to enroll brand new peers that fail the
+	// account-wide posture checks. Runs before IP allocation so a
+	// denied registration costs neither an IP nor a setup-key
+	// increment — the setup key is only consumed inside the
+	// transaction below.
+	if err := am.evaluateAdmission(ctx, am.Store, accountID, newPeer, opEvent.InitiatorID); err != nil {
+		return nil, nil, nil, err
+	}
+
 	network, err := am.Store.GetAccountNetwork(ctx, store.LockingStrengthNone, accountID)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed getting network: %w", err)
@@ -828,6 +837,17 @@ func (am *DefaultAccountManager) SyncPeer(ctx context.Context, sync types.PeerSy
 				return err
 			}
 		}
+
+		// Admission gate on Sync: gives us continuous revocation. The
+		// MDM cache TTL governs how quickly a state change at the
+		// vendor (e.g. Intune flips device to non-compliant)
+		// propagates here — at most one cache window per peer per
+		// vendor. On denial, the gRPC Sync stream closes with
+		// PermissionDenied; the client backs off and re-attempts
+		// Login, which hits the same gate.
+		if err := am.evaluateAdmission(ctx, transaction, accountID, peer, peer.ID); err != nil {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
@@ -944,6 +964,16 @@ func (am *DefaultAccountManager) LoginPeer(ctx context.Context, login types.Peer
 			if err != nil {
 				return err
 			}
+		}
+
+		// Admission gate: refuse re-login of an existing peer that no
+		// longer meets the account-wide posture checks. Runs against
+		// the freshly-reported Meta so a peer whose hostname/OS/etc.
+		// just changed gets evaluated on the new values, not stale
+		// ones. Returning the error rolls back any meta updates above
+		// — the next attempt will re-evaluate fresh.
+		if err := am.evaluateAdmission(ctx, transaction, accountID, peer, login.UserID); err != nil {
+			return err
 		}
 
 		if peer.SSHKey != login.SSHKey {

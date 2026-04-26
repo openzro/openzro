@@ -284,6 +284,12 @@ type AccountRequest struct {
 
 // AccountSettings defines model for AccountSettings.
 type AccountSettings struct {
+	// AdmissionEnforcementEnabled When true, peer Login/Sync is gated on the listed posture checks.
+	AdmissionEnforcementEnabled *bool `json:"admission_enforcement_enabled,omitempty"`
+
+	// AdmissionPostureChecks Posture check IDs evaluated as the admission gate when admission_enforcement_enabled is true.
+	AdmissionPostureChecks *[]string `json:"admission_posture_checks,omitempty"`
+
 	// DnsDomain Allows to define a custom dns domain for the account
 	DnsDomain *string               `json:"dns_domain,omitempty"`
 	Extra     *AccountExtraSettings `json:"extra,omitempty"`

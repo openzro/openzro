@@ -131,6 +131,12 @@ func (h *handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 	if req.Settings.LazyConnectionEnabled != nil {
 		settings.LazyConnectionEnabled = *req.Settings.LazyConnectionEnabled
 	}
+	if req.Settings.AdmissionEnforcementEnabled != nil {
+		settings.AdmissionEnforcementEnabled = *req.Settings.AdmissionEnforcementEnabled
+	}
+	if req.Settings.AdmissionPostureChecks != nil {
+		settings.AdmissionPostureChecks = *req.Settings.AdmissionPostureChecks
+	}
 
 	var onboarding *types.AccountOnboarding
 	if req.Onboarding != nil {
@@ -193,6 +199,11 @@ func toAccountResponse(accountID string, settings *types.Settings, meta *types.A
 		jwtAllowGroups = []string{}
 	}
 
+	admissionPostureChecks := settings.AdmissionPostureChecks
+	if admissionPostureChecks == nil {
+		admissionPostureChecks = []string{}
+	}
+
 	apiSettings := api.AccountSettings{
 		PeerLoginExpiration:             int(settings.PeerLoginExpiration.Seconds()),
 		PeerLoginExpirationEnabled:      settings.PeerLoginExpirationEnabled,
@@ -206,6 +217,8 @@ func toAccountResponse(accountID string, settings *types.Settings, meta *types.A
 		RoutingPeerDnsResolutionEnabled: &settings.RoutingPeerDNSResolutionEnabled,
 		LazyConnectionEnabled:           &settings.LazyConnectionEnabled,
 		DnsDomain:                       &settings.DNSDomain,
+		AdmissionEnforcementEnabled:     &settings.AdmissionEnforcementEnabled,
+		AdmissionPostureChecks:          &admissionPostureChecks,
 	}
 
 	apiOnboarding := api.AccountOnboarding{
