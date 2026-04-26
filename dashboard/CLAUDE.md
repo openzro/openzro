@@ -84,9 +84,11 @@ state transition, a permission check.
   in the repo root and is mirrored at
   [`src/assets/openzro.svg`](src/assets/openzro.svg) for components that
   import via the `@/assets` alias. Keep them in sync.
-- `src/assets/openzro-full.svg` currently points at the same icon.
-  When a real wordmark+icon SVG is produced, replace it there; do
-  *not* introduce a third asset file.
+- The full **lockup** (icon + wordmark) is rendered as live markup, not
+  baked into a second SVG: see [`OpenzroLogo`](src/components/OpenzroLogo.tsx)
+  using the `.oz-lockup` + `.oz-wordmark` pattern from
+  [`globals.css`](src/app/globals.css). This keeps the middle `Z`
+  themable via `--oz-primary` and avoids a separate dark-mode asset.
 - New images go under `src/assets/`. SVG preferred; raster only for
   bitmap photography.
 
