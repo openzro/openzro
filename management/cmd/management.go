@@ -41,6 +41,7 @@ import (
 
 	"github.com/openzro/openzro/encryption"
 	"github.com/openzro/openzro/formatter/hook"
+	flowProto "github.com/openzro/openzro/flow/proto"
 	mgmtProto "github.com/openzro/openzro/management/proto"
 	"github.com/openzro/openzro/management/server"
 	"github.com/openzro/openzro/management/server/auth"
@@ -308,6 +309,7 @@ var (
 				return fmt.Errorf("failed creating gRPC API handler: %v", err)
 			}
 			mgmtProto.RegisterManagementServiceServer(gRPCAPIHandler, srv)
+			flowProto.RegisterFlowServiceServer(gRPCAPIHandler, server.NewFlowService())
 
 			installationID, err := getInstallationID(ctx, store)
 			if err != nil {
