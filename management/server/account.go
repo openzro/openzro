@@ -27,6 +27,7 @@ import (
 	"github.com/openzro/openzro/formatter/hook"
 	"github.com/openzro/openzro/management/server/account"
 	"github.com/openzro/openzro/management/server/activity"
+	"github.com/openzro/openzro/management/server/activity_exporters"
 	nbcache "github.com/openzro/openzro/management/server/cache"
 	nbcontext "github.com/openzro/openzro/management/server/context"
 	"github.com/openzro/openzro/management/server/geolocation"
@@ -104,6 +105,18 @@ type DefaultAccountManager struct {
 	updateAccountPeersBufferInterval atomic.Int64
 
 	disableDefaultPolicy bool
+
+	// activityExporters owns the per-account audit log streamers
+	// configured via the dashboard. Optional: when nil, only the
+	// process-wide env-var baseline is active.
+	activityExporters *activity_exporters.Manager
+}
+
+// SetActivityExporters wires a per-account exporter manager into
+// StoreEvent. Called once at startup from cmd/management.go after
+// the store + manager are constructed. nil disables the layer.
+func (am *DefaultAccountManager) SetActivityExporters(m *activity_exporters.Manager) {
+	am.activityExporters = m
 }
 
 func isUniqueConstraintError(err error) bool {

@@ -112,11 +112,22 @@ func (am *DefaultAccountManager) StoreEvent(ctx context.Context, initiatorID, ta
 
 		// Fan out to configured external exporters. Best-effort: failures
 		// are already logged inside the exporter and never propagate.
+		//
+		// Two layers, both opt-in:
+		//   - getActivityExporters: process-wide env-var baseline (HTTP
+		//     webhook, Datadog, Elastic) configured at boot. Receives
+		//     every event from every account.
+		//   - am.activityExporters: per-account dashboard-managed rows.
+		//     Receives only the events whose AccountID matches the
+		//     row's tenant.
 		for _, exp := range getActivityExporters(ctx) {
 			if err := exp.Export(ctx, stored); err != nil {
 				log.WithContext(ctx).Errorf(
 					"activity exporter %s: %v", exp.Name(), err)
 			}
+		}
+		if am.activityExporters != nil {
+			am.activityExporters.ExportEvent(ctx, stored)
 		}
 	}()
 }
