@@ -76,18 +76,98 @@ For any change motivated by upstream activity *after* the fork point (security f
 
 This is the single non-negotiable engineering rule of this project, because violating it would force a relicense to AGPL across the entire repository.
 
-#### 3.4 HA architecture (clean-room, planned)
+#### 3.4 HA architecture
 
-**Signal (ephemeral, hot path)** — currently a single in-memory peer registry. Plan:
-- Redis `SET`/`HSET` registry keyed by peer id, with a per-instance pub/sub channel. When a peer connects to instance A and a message arrives at instance B for that peer, B publishes on A's channel and A forwards over the open gRPC stream.
-- TTL-based cleanup for stale entries; instance heartbeat into Redis so dead instances are pruned.
-- Designed entirely from the public description in the [`nik-dev-ops/netbird-ha`](https://github.com/nik-dev-ops/netbird-ha) README (which itself is AGPL-tainted code we did **not** read) and from generic Redis pub/sub patterns. Concrete implementation is openzro's own.
+HA is opt-in. Single-instance deployments need no broker and no extra
+configuration. Multi-instance deployments require **one** of three
+coordination backends, and the same backend serves both signal and
+management — operators run **one** stateful coordination piece at most,
+not separate ones for each component.
 
-**Management (persistent + coordinated)** — already has multi-backend store (`SqliteStoreEngine`, `PostgresStoreEngine`, `MysqlStoreEngine`) per [`management/server/store/store.go:206`](../../management/server/store/store.go) at the BSD baseline. Plan:
-- Run multiple management instances pointed at a shared Postgres via `OPENZRO_STORE_ENGINE=postgres`.
-- Add Redis-backed distributed lock (`SET NX EX`) wrapping operations that today rely on in-process mutexes.
-- Add Redis pub/sub for cross-instance cache invalidation when account state changes locally on instance A.
-- The client is unaware of which instance it talks to.
+**Supported coordination backends:**
+
+| Backend | Pub/sub mechanism | Locks | Operates as |
+|---|---|---|---|
+| **Redis-compatible** (Redis, Valkey, Dragonfly) | Redis pub/sub | `SET NX EX` | external service |
+| **NATS** (external) | NATS subjects | NATS KV / DB advisory locks | external service |
+| **NATS** (embedded in openzro) | NATS subjects | NATS KV / DB advisory locks | in-process; no external infra |
+
+Recommendation order, in line with the openzro license posture:
+
+1. **Postgres + Valkey** — Valkey is the BSD-3-licensed continuation of
+   the last freely-licensed Redis. Same license family as openzro, same
+   philosophy, and our code uses only standard RESP2 commands so the
+   client speaks Valkey, Dragonfly, and Redis identically.
+2. **Postgres + embedded NATS** — zero infrastructure outside the
+   openzro binaries themselves. Each openzro instance starts an
+   in-process NATS server; instances find each other through a static
+   peer list (`OPENZRO_CLUSTER_PEERS`).
+3. **Postgres + external NATS** — appropriate when the deployment
+   already runs NATS for other workloads.
+4. Postgres + upstream Redis (works, but Redis is no longer OSI-licensed
+   since 2024 — operators may prefer Valkey).
+5. Postgres + Dragonfly (works; BSL→Apache license, performance focus).
+
+**Why broker-mandatory for HA?** A "Postgres-only" HA path was
+considered (advisory locks + LISTEN/NOTIFY) and rejected because:
+
+- LISTEN/NOTIFY is Postgres-specific; MySQL has no native pub/sub
+  equivalent. A polling-based fallback is several hundred ms slower per
+  hop and constantly loads the database. The combination would push the
+  most painful ops experience as the path-of-least-resistance.
+- In practice, deployments large enough to want HA already run a broker
+  for other reasons. The marginal operational cost of formalizing one
+  is small. The cost of maintaining a polling-based fallback that
+  performs poorly is large.
+- SQLite is fundamentally incompatible with multi-instance writes;
+  HA + SQLite is not a coherent configuration. SQLite users stay
+  single-instance, no broker required.
+
+**Signal (ephemeral, hot path).** The fork point ships an in-memory
+peer registry; cross-instance forwarding does not exist. The
+implemented design (see `signal/dispatcher/`):
+
+- `dispatcher.Dispatcher` interface with three implementations:
+  `inmem`, `redis`, `nats` (the last serves both external and
+  embedded NATS — they differ only in the URL).
+- The Redis backend uses an explicit registry
+  (`oz:signal:peer:<peerID> = <instanceID>`, TTL-renewed by a
+  per-peer heartbeat) plus per-instance pub/sub channels.
+- The NATS backend sidesteps registry entirely: subscribing to
+  `oz.signal.peer.<peerID>` IS the registration. SendMessage
+  publishes to the same subject; whichever instance holds the
+  subscription receives. Cleanup happens automatically when the
+  subscription drops.
+- Both backends do a local fast path: if the destination peer is
+  registered on this instance, the local handler is invoked
+  synchronously without any broker round-trip.
+
+**Management (persistent + coordinated).** The fork point already
+ships multi-backend store
+(`SqliteStoreEngine`, `PostgresStoreEngine`, `MysqlStoreEngine`) per
+[`management/server/store/store.go:206`](../../management/server/store/store.go).
+Plan (next session):
+
+- A `cluster.Coordinator` interface with `redis` and `nats`
+  implementations, mirroring the signal dispatcher layout.
+- Replace in-process `sync.Mutex` per account with distributed locks
+  scoped by `accountID`. SQL-engine `pg_advisory_lock`/`GET_LOCK` is
+  available as an additional fallback when the chosen broker doesn't
+  support locks (e.g. plain NATS without JetStream KV).
+- Cross-instance cache invalidation via the chosen backend's pub/sub.
+- The client is unaware of which instance it talks to; load balancing
+  can be naive (round-robin or random) once HA is enabled.
+
+**Provenance note.** The high-level approach (per-peer registry,
+per-instance pub/sub channel, TTL-based liveness, local fast path)
+is a recurring pattern in distributed-server design — not borrowed
+code. A separate AGPL-licensed third-party fork
+([`nik-dev-ops/netbird-ha`](https://github.com/nik-dev-ops/netbird-ha))
+implements a similar shape; its README was read for conceptual
+confirmation but none of its code was consulted, and our package
+layout (`signal/dispatcher/{redis,nats,inmem}` and
+`cluster/embedded/`) is unrelated to its `management/server/distributed/`
+tree.
 
 #### 3.5 Security backports
 

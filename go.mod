@@ -10,6 +10,8 @@ require (
 	github.com/golang/protobuf v1.5.4
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.0
+	github.com/nats-io/nats-server/v2 v2.12.7
+	github.com/nats-io/nats.go v1.51.0
 	github.com/kardianos/service v1.2.3-0.20240613133416-becf2eb62b83
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.27.6
