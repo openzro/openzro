@@ -164,7 +164,12 @@ MGMT_DATADIR := /tmp/openzro-mgmt-data
 MGMT_CONFIG  := deploy/dev-mgmt/management.json
 
 .PHONY: dev.management.up dev.management.down dev.management.logs dev.management.status
-dev.management.up: build.management ## Start the management server in the background (HTTP :33071)
+# dev.idp.up is an explicit prerequisite so a fresh `make dev.dashboard`
+# from a stopped state runs Zitadel boot + provision.sh's wait_api
+# BEFORE management starts. Without this, Make is free to interleave
+# the two recipes and management hits "connection refused" trying to
+# fetch OIDC discovery from a still-booting Zitadel.
+dev.management.up: build.management dev.idp.up ## Start the management server in the background (HTTP :33071)
 	@if [ ! -f $(MGMT_CONFIG) ]; then \
 	  echo "ERROR: $(MGMT_CONFIG) missing. Run 'make dev.idp.up' first."; exit 1; \
 	fi
