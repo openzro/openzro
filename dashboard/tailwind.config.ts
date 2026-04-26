@@ -92,7 +92,7 @@ const config: Config = {
       },
       fontFamily: {
         // CSS variables wired up in src/app/layout.tsx via next/font.
-        sans: ["var(--font-geist)", "ui-sans-serif", "system-ui", "sans-serif"],
+        sans: ["var(--font-geist-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
         mono: ["var(--font-jetbrains-mono)", "ui-monospace", "SFMono-Regular", "monospace"],
       },
     },

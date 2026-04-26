@@ -45,7 +45,7 @@
 
 /* Wordmark: open + Z + ro, with the middle Z heavier and brand-colored. */
 .oz-wordmark {
-  font-family: var(--font-geist), system-ui, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
   font-weight: 600;
   letter-spacing: -0.025em;
   line-height: 1;
@@ -76,7 +76,7 @@
   border-radius: 8px;
   background: var(--oz-primary);
   color: #fff;
-  font-family: var(--font-geist), system-ui, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
   font-weight: 600;
   font-size: 14px;
   border: 0;
