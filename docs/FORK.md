@@ -26,11 +26,11 @@ Both clones were made with `--single-branch --branch <tag>` so only commits reac
 
 ```
 openzro/
-├── .git/            (history detached at v0.52.2 — was netbirdio/netbird)
+├── .git/            (single repo history; initial state imported from netbirdio/netbird@v0.52.2)
 ├── docs/
 │   └── FORK.md      (this file)
 ├── client/  management/  signal/  relay/  ...   (Go core, ex-netbirdio/netbird)
-└── dashboard/       (Next.js web UI, own .git detached at v2.15.0 — was netbirdio/dashboard)
+└── dashboard/       (Next.js web UI, ex-netbirdio/dashboard@v2.15.0 — integrated as a subfolder)
 ```
 
-`dashboard/` keeps its own `.git`, so the root repo treats it as a nested repository (gitlink). Upstream history for the web UI is preserved and `git log` inside `dashboard/` works normally. If you later want a single monorepo history, use `git subtree add` or `git filter-repo --subdirectory-filter` to merge `dashboard/`'s history into the root repo.
+This is a single-repo monorepo. The `dashboard/` folder was imported from `netbirdio/dashboard@v2.15.0` as a plain directory snapshot — its independent upstream Git history is **not** preserved here. Refer to https://github.com/netbirdio/dashboard for the original web UI history up to that tag.
