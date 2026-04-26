@@ -58,6 +58,10 @@ type ChecksDefinition struct {
 	GeoLocationCheck      *GeoLocationCheck      `json:",omitempty"`
 	PeerNetworkRangeCheck *PeerNetworkRangeCheck `json:",omitempty"`
 	ProcessCheck          *ProcessCheck          `json:",omitempty"`
+	// EndpointSecurityCheck delegates compliance to a configured
+	// MDM/EDR vendor (Intune / SentinelOne / Huntress). See
+	// endpoint_security.go.
+	EndpointSecurityCheck *EndpointSecurityCheck `json:",omitempty"`
 }
 
 // Copy returns a copy of a checks definition.
@@ -110,6 +114,12 @@ func (cd ChecksDefinition) Copy() ChecksDefinition {
 		}
 		copy(cdCopy.ProcessCheck.Processes, processCheck.Processes)
 	}
+	if cd.EndpointSecurityCheck != nil {
+		cdCopy.EndpointSecurityCheck = &EndpointSecurityCheck{
+			ProviderID: cd.EndpointSecurityCheck.ProviderID,
+			FailOpen:   cd.EndpointSecurityCheck.FailOpen,
+		}
+	}
 	return cdCopy
 }
 
@@ -152,6 +162,9 @@ func (pc *Checks) GetChecks() []Check {
 	}
 	if pc.Checks.ProcessCheck != nil {
 		checks = append(checks, pc.Checks.ProcessCheck)
+	}
+	if pc.Checks.EndpointSecurityCheck != nil {
+		checks = append(checks, pc.Checks.EndpointSecurityCheck)
 	}
 	return checks
 }
