@@ -531,16 +531,31 @@ func (am *DefaultAccountManager) SaveOrAddUsers(ctx context.Context, accountID, 
 		groupsMap[group.ID] = group
 	}
 
-	var initiatorUser *types.User
-	if initiatorUserID != activity.SystemInitiator {
-		result, err := am.Store.GetUserByUserID(ctx, store.LockingStrengthShare, initiatorUserID)
-		if err != nil {
-			return nil, err
-		}
-		initiatorUser = result
-	}
-
 	err = am.Store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
+		// SECURITY (GHSA-rxmp-8h9v-56cx): re-fetch the initiator INSIDE the
+		// transaction under an exclusive lock and re-validate privilege
+		// before iterating updates. The outer ValidateUserPermissions call
+		// above and a Share-locked read of initiatorUser are not enough:
+		// between those two reads, the initiator could be concurrently
+		// demoted (e.g. by another admin running in parallel). Once
+		// initiatorUser.Role is "user", validateUserUpdate(...) imposes no
+		// restrictions on subsequent updates — which would let a demoted
+		// user escalate someone else to Owner via the still-running
+		// transaction. Locking the initiator's row for the duration of the
+		// transaction makes the role read authoritative.
+		var initiatorUser *types.User
+		if initiatorUserID != activity.SystemInitiator {
+			result, err := transaction.GetUserByUserID(ctx, store.LockingStrengthUpdate, initiatorUserID)
+			if err != nil {
+				return err
+			}
+			initiatorUser = result
+
+			if !initiatorUser.HasAdminPower() && !initiatorUser.IsServiceUser {
+				return status.NewPermissionDeniedError()
+			}
+		}
+
 		for _, update := range updates {
 			if update == nil {
 				return status.Errorf(status.InvalidArgument, "provided user update is nil")
