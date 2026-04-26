@@ -30,6 +30,24 @@ const (
 	envElasticBatchSize     = "OPENZRO_ACTIVITY_EXPORT_ELASTIC_BATCH_SIZE"
 	envElasticFlushInterval = "OPENZRO_ACTIVITY_EXPORT_ELASTIC_FLUSH_INTERVAL"
 	envElasticBufferSize    = "OPENZRO_ACTIVITY_EXPORT_ELASTIC_BUFFER_SIZE"
+
+	// Datadog Logs Intake
+	envDatadogAPIKey        = "OPENZRO_ACTIVITY_EXPORT_DATADOG_API_KEY"
+	envDatadogSite          = "OPENZRO_ACTIVITY_EXPORT_DATADOG_SITE"
+	envDatadogURL           = "OPENZRO_ACTIVITY_EXPORT_DATADOG_URL"
+	envDatadogService       = "OPENZRO_ACTIVITY_EXPORT_DATADOG_SERVICE"
+	envDatadogSource        = "OPENZRO_ACTIVITY_EXPORT_DATADOG_SOURCE"
+	envDatadogTags          = "OPENZRO_ACTIVITY_EXPORT_DATADOG_TAGS"
+	envDatadogHostname      = "OPENZRO_ACTIVITY_EXPORT_DATADOG_HOSTNAME"
+	envDatadogBatchSize     = "OPENZRO_ACTIVITY_EXPORT_DATADOG_BATCH_SIZE"
+	envDatadogFlushInterval = "OPENZRO_ACTIVITY_EXPORT_DATADOG_FLUSH_INTERVAL"
+	envDatadogBufferSize    = "OPENZRO_ACTIVITY_EXPORT_DATADOG_BUFFER_SIZE"
+
+	// Custom payload template. When set, replaces the default JSON
+	// payload of the HTTP webhook with the rendered template output.
+	// Use Go text/template syntax with `.` bound to the activity
+	// event. See exporter.RenderTemplate for the supported FuncMap.
+	envHTTPTemplate = "OPENZRO_ACTIVITY_EXPORT_TEMPLATE"
 )
 
 // NewFromEnv constructs the configured set of exporters from
@@ -54,6 +72,12 @@ func NewFromEnv(ctx context.Context) ([]Exporter, error) {
 		out = append(out, exp)
 	}
 
+	if exp, err := newDatadogFromEnv(ctx); err != nil {
+		return nil, err
+	} else if exp != nil {
+		out = append(out, exp)
+	}
+
 	return out, nil
 }
 
@@ -66,17 +90,77 @@ func newHTTPWebhookFromEnv(ctx context.Context) (Exporter, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", envHeadersJSON, err)
 	}
+	tmpl, err := loadTemplateFromEnv(envHTTPTemplate)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", envHTTPTemplate, err)
+	}
 	exp, err := NewHTTPWebhook(HTTPWebhookConfig{
 		URL:            url,
 		Headers:        headers,
 		Timeout:        envDuration(envTimeout),
 		MaxAttempts:    envInt(envMaxAttempts),
 		InitialBackoff: envDuration(envInitialBackoff),
+		Template:       tmpl,
 	})
 	if err != nil {
 		return nil, err
 	}
-	log.WithContext(ctx).Infof("activity export enabled: HTTP webhook → %s", url)
+	mode := "default-payload"
+	if tmpl != nil {
+		mode = "templated-payload"
+	}
+	log.WithContext(ctx).Infof("activity export enabled: HTTP webhook → %s [%s]", url, mode)
+	return exp, nil
+}
+
+// loadTemplateFromEnv reads a payload template from name, which may
+// hold the template inline OR a "@/path/to/file" reference. The file
+// form keeps deployment configs short when the template is large.
+func loadTemplateFromEnv(name string) (*PayloadTemplate, error) {
+	v := os.Getenv(name)
+	if v == "" {
+		return nil, nil
+	}
+	if len(v) > 1 && v[0] == '@' {
+		path := v[1:]
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read template file %s: %w", path, err)
+		}
+		v = string(b)
+	}
+	return NewPayloadTemplate(v)
+}
+
+func newDatadogFromEnv(ctx context.Context) (Exporter, error) {
+	apiKey := os.Getenv(envDatadogAPIKey)
+	if apiKey == "" {
+		return nil, nil
+	}
+	exp, err := NewDatadog(DatadogConfig{
+		APIKey:        apiKey,
+		Site:          os.Getenv(envDatadogSite),
+		URL:           os.Getenv(envDatadogURL),
+		Service:       os.Getenv(envDatadogService),
+		Source:        os.Getenv(envDatadogSource),
+		Tags:          os.Getenv(envDatadogTags),
+		Hostname:      os.Getenv(envDatadogHostname),
+		BatchSize:     envInt(envDatadogBatchSize),
+		FlushInterval: envDuration(envDatadogFlushInterval),
+		BufferSize:    envInt(envDatadogBufferSize),
+	})
+	if err != nil {
+		return nil, err
+	}
+	target := os.Getenv(envDatadogURL)
+	if target == "" {
+		site := os.Getenv(envDatadogSite)
+		if site == "" {
+			site = "us1"
+		}
+		target = "site=" + site
+	}
+	log.WithContext(ctx).Infof("activity export enabled: Datadog Logs Intake → %s", target)
 	return exp, nil
 }
 
