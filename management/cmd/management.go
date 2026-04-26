@@ -33,7 +33,7 @@ import (
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/realip"
 
-	"github.com/openzro/management-integrations/integrations"
+	"github.com/openzro/openzro/management/integrations/integrations"
 
 	"github.com/openzro/openzro/management/server/peers"
 	"github.com/openzro/openzro/management/server/types"

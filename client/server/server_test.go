@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 
-	"github.com/openzro/management-integrations/integrations"
+	"github.com/openzro/openzro/management/integrations/integrations"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"

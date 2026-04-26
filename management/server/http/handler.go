@@ -8,7 +8,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
 
-	"github.com/openzro/management-integrations/integrations"
+	"github.com/openzro/openzro/management/integrations/integrations"
 
 	"github.com/openzro/openzro/management/server/account"
 	"github.com/openzro/openzro/management/server/settings"
