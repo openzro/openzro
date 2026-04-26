@@ -1,0 +1,34 @@
+{
+    "Stuns": [
+        {
+            "Proto": "udp",
+            "URI": "stun:localhost:3478"
+        }
+    ],
+    "Signal": {
+        "Proto": "http",
+        "URI": "localhost:10000"
+    },
+    "ReverseProxy": {
+        "TrustedHTTPProxies": [],
+        "TrustedHTTPProxiesCount": 0,
+        "TrustedPeers": ["0.0.0.0/0"]
+    },
+    "DisableDefaultPolicy": false,
+    "Datadir": "",
+    "DataStoreEncryptionKey": "__ENCRYPTION_KEY__",
+    "StoreConfig": {
+        "Engine": "sqlite"
+    },
+    "HttpConfig": {
+        "Address": "0.0.0.0:33071",
+        "AuthIssuer": "http://127.0.0.1:8080",
+        "AuthAudience": "__CLIENT_ID__",
+        "AuthUserIDClaim": "sub",
+        "OIDCConfigEndpoint": "http://127.0.0.1:8080/.well-known/openid-configuration",
+        "IdpSignKeyRefreshEnabled": true
+    },
+    "IdpManagerConfig": {
+        "ManagerType": "none"
+    }
+}

@@ -1,0 +1,106 @@
+# openZro · local IdP for dashboard development
+#
+# Brought up by `make dev.idp.up`, torn down by `make dev.idp.down`.
+# Zitadel + dedicated Postgres. Provisioning of the OIDC application
+# is handled by deploy/dev-idp/provision.sh — this compose only
+# bootstraps the IdP and emits a service-user PAT to the machinekey/
+# directory.
+
+name: openzro-dev-idp
+
+services:
+  zitadel-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: zitadel
+    volumes:
+      - zitadel-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "zitadel"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Init runs migrations and exits. Splitting init from start avoids
+  # the migration-lock race we hit with `start-from-init` on slow disks.
+  zitadel-init:
+    image: ghcr.io/zitadel/zitadel:v2.66.4
+    restart: "no"
+    command:
+      - init
+    depends_on:
+      zitadel-db:
+        condition: service_healthy
+    environment: &zitadel-env
+      ZITADEL_DATABASE_POSTGRES_HOST: zitadel-db
+      ZITADEL_DATABASE_POSTGRES_PORT: 5432
+      ZITADEL_DATABASE_POSTGRES_DATABASE: zitadel
+      ZITADEL_DATABASE_POSTGRES_USER_USERNAME: postgres
+      ZITADEL_DATABASE_POSTGRES_USER_PASSWORD: postgres
+      ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE: disable
+      ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME: postgres
+      ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD: postgres
+      ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE: disable
+
+  # Setup runs setup steps once after init.
+  zitadel-setup:
+    image: ghcr.io/zitadel/zitadel:v2.66.4
+    restart: "no"
+    command:
+      - setup
+      - --masterkey
+      - "MasterkeyNeedsToHave32Characters"
+      - --tlsMode
+      - disabled
+    depends_on:
+      zitadel-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *zitadel-env
+      ZITADEL_EXTERNALSECURE: "false"
+      ZITADEL_EXTERNALPORT: 8080
+      ZITADEL_EXTERNALDOMAIN: 127.0.0.1
+      ZITADEL_TLS_ENABLED: "false"
+      ZITADEL_FIRSTINSTANCE_PATPATH: /machinekey/zitadel-admin-sa.token
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_USERNAME: zitadel-admin-sa
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_NAME: Admin
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_PAT_SCOPES: openid
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_PAT_EXPIRATIONDATE: "2099-01-01T00:00:00Z"
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME: test
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: test
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORDCHANGEREQUIRED: "false"
+      ZITADEL_DEFAULTINSTANCE_PASSWORDCOMPLEXITYPOLICY_MINLENGTH: "1"
+      ZITADEL_DEFAULTINSTANCE_PASSWORDCOMPLEXITYPOLICY_HASLOWERCASE: "false"
+      ZITADEL_DEFAULTINSTANCE_PASSWORDCOMPLEXITYPOLICY_HASUPPERCASE: "false"
+      ZITADEL_DEFAULTINSTANCE_PASSWORDCOMPLEXITYPOLICY_HASNUMBER: "false"
+      ZITADEL_DEFAULTINSTANCE_PASSWORDCOMPLEXITYPOLICY_HASSYMBOL: "false"
+      ZITADEL_DEFAULTINSTANCE_DOMAINPOLICY_USERLOGINMUSTBEDOMAIN: "false"
+    volumes:
+      - ./dev-idp/machinekey:/machinekey
+
+  zitadel:
+    image: ghcr.io/zitadel/zitadel:v2.66.4
+    restart: unless-stopped
+    command:
+      - start
+      - --masterkey
+      - "MasterkeyNeedsToHave32Characters"
+      - --tlsMode
+      - disabled
+    ports:
+      - "8080:8080"
+    depends_on:
+      zitadel-setup:
+        condition: service_completed_successfully
+    environment:
+      <<: *zitadel-env
+      ZITADEL_EXTERNALSECURE: "false"
+      ZITADEL_EXTERNALPORT: 8080
+      ZITADEL_EXTERNALDOMAIN: 127.0.0.1
+      ZITADEL_TLS_ENABLED: "false"
+
+volumes:
+  zitadel-db-data:

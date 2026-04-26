@@ -52,11 +52,17 @@ build.go: ## go build ./... — verifies the whole module compiles
 build.dashboard: ## Production build of the Next.js dashboard
 	cd $(DASHBOARD_DIR) && $(NPM) ci && $(NPM) run build
 
-dev.dashboard: ## Run the dashboard in dev mode (hot reload, http://localhost:3000)
+build.management: ## Build the management server binary
+	$(GO) build $(GOFLAGS) -o management/management ./management
+
+dev.dashboard: dev.idp.up dev.management.up ## Full dev stack: Zitadel + management + dashboard. http://localhost:3000
 	cd $(DASHBOARD_DIR) && $(NPM) install && $(NPM) run dev
 
-dev.dashboard.turbo: ## Run the dashboard in dev mode with Turbopack
+dev.dashboard.turbo: dev.idp.up dev.management.up ## Same as dev.dashboard but with Turbopack
 	cd $(DASHBOARD_DIR) && $(NPM) install && $(NPM) run turbo
+
+dev.dashboard.bare: ## Run dashboard without IdP/management (use when pointing at external services)
+	cd $(DASHBOARD_DIR) && $(NPM) install && $(NPM) run dev
 
 lint.dashboard: ## ESLint over the dashboard sources
 	cd $(DASHBOARD_DIR) && $(NPM) install && $(NPM) run lint
@@ -129,6 +135,91 @@ dev.deps.logs: ## Tail logs from the local dev dependencies
 	$(DOCKER_COMPOSE) -f deploy/dev-deps.compose.yml logs -f --tail=100
 
 # ---------------------------------------------------------------------------
+# Local dev: IdP (Zitadel) for dashboard auth
+# ---------------------------------------------------------------------------
+
+.PHONY: dev.idp.up dev.idp.down dev.idp.logs dev.idp.reset
+dev.idp.up: ## Bring up local Zitadel and provision an OIDC app for the dashboard
+	$(DOCKER_COMPOSE) -f deploy/dev-idp.compose.yml up -d
+	@bash deploy/dev-idp/provision.sh
+
+dev.idp.down: ## Stop the local Zitadel (keeps volume so subsequent ups are fast)
+	$(DOCKER_COMPOSE) -f deploy/dev-idp.compose.yml down
+
+dev.idp.logs: ## Tail Zitadel logs
+	$(DOCKER_COMPOSE) -f deploy/dev-idp.compose.yml logs -f --tail=100
+
+dev.idp.reset: ## Wipe the IdP volume and force a fresh provisioning on next dev.idp.up
+	$(DOCKER_COMPOSE) -f deploy/dev-idp.compose.yml down -v
+	rm -rf deploy/dev-idp/machinekey/*
+
+# ---------------------------------------------------------------------------
+# Local dev: management server (foreground binary, sqlite store, IdP=none)
+# ---------------------------------------------------------------------------
+
+MGMT_BIN     := management/management
+MGMT_PIDFILE := /tmp/openzro-mgmt.pid
+MGMT_LOGFILE := /tmp/openzro-mgmt.log
+MGMT_DATADIR := /tmp/openzro-mgmt-data
+MGMT_CONFIG  := deploy/dev-mgmt/management.json
+
+.PHONY: dev.management.up dev.management.down dev.management.logs dev.management.status
+dev.management.up: build.management ## Start the management server in the background (HTTP :33071)
+	@if [ ! -f $(MGMT_CONFIG) ]; then \
+	  echo "ERROR: $(MGMT_CONFIG) missing. Run 'make dev.idp.up' first."; exit 1; \
+	fi
+	@if [ -f $(MGMT_PIDFILE) ] && kill -0 $$(cat $(MGMT_PIDFILE)) 2>/dev/null; then \
+	  echo "management already running (pid $$(cat $(MGMT_PIDFILE)))"; \
+	else \
+	  mkdir -p $(MGMT_DATADIR); \
+	  ./$(MGMT_BIN) management \
+	    --config $(MGMT_CONFIG) \
+	    --datadir $(MGMT_DATADIR) \
+	    --port 33071 \
+	    --log-file $(MGMT_LOGFILE) \
+	    --log-level info \
+	    --disable-anonymous-metrics \
+	    --disable-geolite-update \
+	    >>$(MGMT_LOGFILE) 2>&1 & \
+	  echo $$! > $(MGMT_PIDFILE); \
+	  sleep 1; \
+	  if ! kill -0 $$(cat $(MGMT_PIDFILE)) 2>/dev/null; then \
+	    echo "management failed to start. Last 20 log lines:"; tail -20 $(MGMT_LOGFILE); exit 1; \
+	  fi; \
+	  echo "management started (pid $$(cat $(MGMT_PIDFILE))). Logs: $(MGMT_LOGFILE)"; \
+	fi
+
+dev.management.down: ## Stop the management server
+	@if [ -f $(MGMT_PIDFILE) ]; then \
+	  kill $$(cat $(MGMT_PIDFILE)) 2>/dev/null && echo "management stopped" || echo "management was not running"; \
+	  rm -f $(MGMT_PIDFILE); \
+	else \
+	  echo "no management PID file"; \
+	fi
+
+dev.management.logs: ## Tail management server logs
+	@tail -f $(MGMT_LOGFILE)
+
+dev.management.status: ## Check whether management is running
+	@if [ -f $(MGMT_PIDFILE) ] && kill -0 $$(cat $(MGMT_PIDFILE)) 2>/dev/null; then \
+	  echo "running (pid $$(cat $(MGMT_PIDFILE)))"; \
+	else \
+	  echo "stopped"; \
+	fi
+
+# ---------------------------------------------------------------------------
+# Stop everything
+# ---------------------------------------------------------------------------
+
+.PHONY: stop dev.down
+stop: dev.down ## Alias for dev.down — stop every container started by `make dev.*`
+
+dev.down: dev.management.down ## Stop management + dev IdP + dev deps + HA cluster (whichever are running)
+	-$(DOCKER_COMPOSE) -f deploy/dev-idp.compose.yml down
+	-$(DOCKER_COMPOSE) -f deploy/dev-deps.compose.yml down
+	-$(DOCKER_COMPOSE) -f deploy/ha-local.compose.yml down 2>/dev/null || true
+
+# ---------------------------------------------------------------------------
 # Local dev: HA cluster (2 management + 2 signal + deps)
 # ---------------------------------------------------------------------------
 
@@ -154,3 +245,6 @@ clean: ## Remove build artefacts, coverage output, and the dashboard's .next dir
 	rm -f coverage.out
 	rm -f management/management signal/signal relay/relay client/client
 	rm -rf $(DASHBOARD_DIR)/.next $(DASHBOARD_DIR)/out
+	rm -f $(DASHBOARD_DIR)/.local-config.json
+	rm -f deploy/dev-idp/machinekey/zitadel-admin-sa.token
+	rm -f deploy/dev-idp/machinekey/provisioned.json
