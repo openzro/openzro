@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 
 	"github.com/openzro/openzro/management/server/activity"
+	"github.com/openzro/openzro/management/server/activity/exporter"
 	"github.com/openzro/openzro/management/server/permissions/modules"
 	"github.com/openzro/openzro/management/server/permissions/operations"
 	"github.com/openzro/openzro/management/server/status"
@@ -19,6 +21,29 @@ import (
 func isEnabled() bool {
 	response := os.Getenv("OZ_EVENT_ACTIVITY_LOG_ENABLED")
 	return response == "" || response == "true"
+}
+
+// activityExporters is initialized lazily on first StoreEvent so that
+// configuration is read at runtime rather than at package import. This
+// keeps the test suite hermetic (env vars in tests don't leak into a
+// shared exporter list) while letting production deployments configure
+// streaming purely through OPENZRO_ACTIVITY_EXPORT_* env vars.
+var (
+	activityExportersOnce sync.Once
+	activityExporters     []exporter.Exporter
+)
+
+func getActivityExporters(ctx context.Context) []exporter.Exporter {
+	activityExportersOnce.Do(func() {
+		exps, err := exporter.NewFromEnv(ctx)
+		if err != nil {
+			log.WithContext(ctx).Errorf(
+				"activity export disabled: invalid configuration: %v", err)
+			return
+		}
+		activityExporters = exps
+	})
+	return activityExporters
 }
 
 // GetEvents returns a list of activity events of an account
@@ -62,22 +87,38 @@ func (am *DefaultAccountManager) GetEvents(ctx context.Context, accountID, userI
 }
 
 func (am *DefaultAccountManager) StoreEvent(ctx context.Context, initiatorID, targetID, accountID string, activityID activity.ActivityDescriber, meta map[string]any) {
-	if isEnabled() {
-		go func() {
-			_, err := am.eventStore.Save(ctx, &activity.Event{
-				Timestamp:   time.Now().UTC(),
-				Activity:    activityID.(activity.Activity),
-				InitiatorID: initiatorID,
-				TargetID:    targetID,
-				AccountID:   accountID,
-				Meta:        meta,
-			})
-			if err != nil {
-				// todo add metric
-				log.WithContext(ctx).Errorf("received an error while storing an activity event, error: %s", err)
-			}
-		}()
+	if !isEnabled() {
+		return
 	}
+	go func() {
+		event := &activity.Event{
+			Timestamp:   time.Now().UTC(),
+			Activity:    activityID.(activity.Activity),
+			InitiatorID: initiatorID,
+			TargetID:    targetID,
+			AccountID:   accountID,
+			Meta:        meta,
+		}
+
+		stored, err := am.eventStore.Save(ctx, event)
+		if err != nil {
+			log.WithContext(ctx).Errorf("received an error while storing an activity event, error: %s", err)
+			// Continue to exporters even if local persistence failed —
+			// SIEM may be the only durable record in a misconfigured
+			// deployment, and dropping the event there too compounds
+			// the loss.
+			stored = event
+		}
+
+		// Fan out to configured external exporters. Best-effort: failures
+		// are already logged inside the exporter and never propagate.
+		for _, exp := range getActivityExporters(ctx) {
+			if err := exp.Export(ctx, stored); err != nil {
+				log.WithContext(ctx).Errorf(
+					"activity exporter %s: %v", exp.Name(), err)
+			}
+		}
+	}()
 }
 
 type eventUserInfo struct {
