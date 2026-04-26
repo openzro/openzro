@@ -8,7 +8,7 @@ connection information between openzro peers
 The CLI accepts the the following options:
 
 ```shell
-start Openzro Signal Server daemon
+start openZro Signal Server daemon
 
 Usage:
   openzro-signal run [flags]
@@ -22,7 +22,7 @@ Flags:
       --cert-key string             Location of your SSL certificate private key. Can be used when you have an existing certificate and don't want a new certificate be generated automatically. If letsencrypt-domain is specified this property has no effect
 
 Global Flags:
-      --log-file string    sets Openzro log path. If console is specified the the log will be output to stdout (default "/var/log/openzro/signal.log")
+      --log-file string    sets openZro log path. If console is specified the the log will be output to stdout (default "/var/log/openzro/signal.log")
       --log-level string    (default "info")
 ```
 

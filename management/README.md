@@ -1,10 +1,10 @@
 # openzro Management Server
-openzro management server will control and synchronize peers configuration within your Openzro account and network.
+openzro management server will control and synchronize peers configuration within your openZro account and network.
 
 ## Command Options
 The CLI accepts the command **management** with the following options:
 ```shell
-start Openzro Management Server
+start openZro Management Server
 
 Usage:
   openzro-mgmt management [flags]
@@ -18,8 +18,8 @@ Flags:
       --port int                    server port to listen on (default 33073)
 
 Global Flags:
-      --config string      Openzro config file location to write new config to (default "/etc/openzro")
-      --log-file string    sets Openzro log path. If console is specified the the log will be output to stdout (default "/var/log/openzro/management.log")
+      --config string      openZro config file location to write new config to (default "/etc/openzro")
+      --log-file string    sets openZro log path. If console is specified the the log will be output to stdout (default "/var/log/openzro/management.log")
       --log-level string    (default "info")
 ```
 ## Run Management service (Docker)

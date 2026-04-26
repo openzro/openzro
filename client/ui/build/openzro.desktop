@@ -1,5 +1,5 @@
 [Desktop Entry]
-Name=Openzro
+Name=openZro
 Exec=/usr/bin/openzro-ui
 Icon=openzro
 Type=Application

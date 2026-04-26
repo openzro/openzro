@@ -1,9 +1,9 @@
 ## Dashboard variables
 
 1. **datasource**: Select Prometheus server
-2. **cluster**: Filter Openzro instances by cluster
+2. **cluster**: Filter openZro instances by cluster
 3. **environment**: Filter by environment (dev, staging, UAT, prod) 
-4. **job**: Select target Openzro instance if multiple are running
+4. **job**: Select target openZro instance if multiple are running
 5. **host**: Filter metrics by host
 
 

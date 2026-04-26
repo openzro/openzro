@@ -1,5 +1,5 @@
-# Openzro Dashboard
-Openzro Dashboard is Openzros Management server UI. It allows users to signin, view setup keys and manage peers. This image is **not ready** for production use.
+# openZro Dashboard
+openZro Dashboard is Openzros Management server UI. It allows users to signin, view setup keys and manage peers. This image is **not ready** for production use.
 ## Tags
 ```latest``` ```vX.X.X``` not available yet.
 

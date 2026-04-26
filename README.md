@@ -28,7 +28,7 @@
 
 <p align="center">
 <strong>
-  Start using Openzro at <a href="https://openzro.io/pricing">openzro.io</a>
+  Start using openZro at <a href="https://openzro.io/pricing">openzro.io</a>
   <br/>
   See <a href="https://openzro.io/docs/">Documentation</a>
   <br/>
@@ -38,23 +38,23 @@
 </strong>
 <br>
 <a href="https://registry.terraform.io/providers/openzro/openzro/latest">
-    New: Openzro terraform provider
+    New: openZro terraform provider
   </a> 
 </p>
 
 <br>
 
-**Openzro combines a configuration-free peer-to-peer private network and a centralized access control system in a single platform, making it easy to create secure private networks for your organization or home.**
+**openZro combines a configuration-free peer-to-peer private network and a centralized access control system in a single platform, making it easy to create secure private networks for your organization or home.**
 
-**Connect.** Openzro creates a WireGuard-based overlay network that automatically connects your machines over an encrypted tunnel, leaving behind the hassle of opening ports, complex firewall rules, VPN gateways, and so forth.
+**Connect.** openZro creates a WireGuard-based overlay network that automatically connects your machines over an encrypted tunnel, leaving behind the hassle of opening ports, complex firewall rules, VPN gateways, and so forth.
 
-**Secure.** Openzro enables secure remote access by applying granular access policies while allowing you to manage them intuitively from a single place. Works universally on any infrastructure.
+**Secure.** openZro enables secure remote access by applying granular access policies while allowing you to manage them intuitively from a single place. Works universally on any infrastructure.
 
 ### Open Source Network Security in a Single Platform
 
 <img width="1188" alt="centralized-network-management 1" src="https://github.com/user-attachments/assets/c28cc8e4-15d2-4d2f-bb97-a6433db39d56" />
 
-### Openzro on Lawrence Systems (Video)
+### openZro on Lawrence Systems (Video)
 [![Watch the video](https://img.youtube.com/vi/Kwrff6h0rEw/0.jpg)](https://www.youtube.com/watch?v=Kwrff6h0rEw)
 
 ### Key features
@@ -70,16 +70,16 @@
 ||| <ul><li>- \[x] [Periodic re-authentication](https://docs.openzro.io/how-to/enforce-periodic-user-authentication)</ui></li> || <ul><li>- \[x] [Serverless](https://docs.openzro.io/how-to/openzro-on-faas)</ui></li> |
 ||||| <ul><li>- \[x] Docker</ui></li> |
 
-### Quickstart with Openzro Cloud
+### Quickstart with openZro Cloud
 
-- Download and install Openzro at [https://app.openzro.io/install](https://app.openzro.io/install)
+- Download and install openZro at [https://app.openzro.io/install](https://app.openzro.io/install)
 - Follow the steps to sign-up with Google, Microsoft, GitHub or your email address.
-- Check Openzro [admin UI](https://app.openzro.io/).
+- Check openZro [admin UI](https://app.openzro.io/).
 - Add more machines.
 
-### Quickstart with self-hosted Openzro
+### Quickstart with self-hosted openZro
 
-> This is the quickest way to try self-hosted Openzro. It should take around 5 minutes to get started if you already have a public domain and a VM.
+> This is the quickest way to try self-hosted openZro. It should take around 5 minutes to get started if you already have a public domain and a VM.
 Follow the [Advanced guide with a custom identity provider](https://docs.openzro.io/selfhosted/selfhosted-guide#advanced-guide-with-a-custom-identity-provider) for installations with different IDPs.
 
 **Infrastructure requirements:**
@@ -101,15 +101,15 @@ export OPENZRO_DOMAIN=openzro.example.com; curl -fsSL https://github.com/openzro
 ```
 - Once finished, you can manage the resources via `docker-compose`
 
-### A bit on Openzro internals
--  Every machine in the network runs [Openzro Agent (or Client)](client/) that manages WireGuard.
+### A bit on openZro internals
+-  Every machine in the network runs [openZro Agent (or Client)](client/) that manages WireGuard.
 -  Every agent connects to [Management Service](management/) that holds network state, manages peer IPs, and distributes network updates to agents (peers).
--  Openzro agent uses WebRTC ICE implemented in [pion/ice library](https://github.com/pion/ice) to discover connection candidates when establishing a peer-to-peer connection between machines.
+-  openZro agent uses WebRTC ICE implemented in [pion/ice library](https://github.com/pion/ice) to discover connection candidates when establishing a peer-to-peer connection between machines.
 -  Connection candidates are discovered with the help of [STUN](https://en.wikipedia.org/wiki/STUN) servers.
 -  Agents negotiate a connection through [Signal Service](signal/) passing p2p encrypted messages with candidates.
 -  Sometimes the NAT traversal is unsuccessful due to strict NATs (e.g. mobile carrier-grade NAT) and a p2p connection isn't possible. When this occurs the system falls back to a relay server called [TURN](https://en.wikipedia.org/wiki/Traversal_Using_Relays_around_NAT), and a secure WireGuard tunnel is established via the TURN server. 
  
-[Coturn](https://github.com/coturn/coturn) is the one that has been successfully used for STUN and TURN in Openzro setups.
+[Coturn](https://github.com/coturn/coturn) is the one that has been successfully used for STUN and TURN in openZro setups.
 
 <p float="left" align="middle">
   <img src="https://docs.openzro.io/docs-static/img/architecture/high-level-dia.png" width="700"/>
@@ -118,15 +118,15 @@ export OPENZRO_DOMAIN=openzro.example.com; curl -fsSL https://github.com/openzro
 See a complete [architecture overview](https://docs.openzro.io/about-openzro/how-openzro-works#architecture) for details.
 
 ### Community projects
--  [Openzro installer script](https://github.com/physk/openzro-installer)
--  [Openzro ansible collection by Dominion Solutions](https://galaxy.ansible.com/ui/repo/published/dominion_solutions/openzro/)
+-  [openZro installer script](https://github.com/physk/openzro-installer)
+-  [openZro ansible collection by Dominion Solutions](https://galaxy.ansible.com/ui/repo/published/dominion_solutions/openzro/)
 
 **Note**: The `main` branch may be in an *unstable or even broken state* during development.
 For stable versions, see [releases](https://github.com/openzro/openzro/releases).
 
 ### Support acknowledgement
 
-In November 2022, Openzro joined the [StartUpSecure program](https://www.forschung-it-sicherheit-kommunikationssysteme.de/foerderung/bekanntmachungen/startup-secure) sponsored by The Federal Ministry of Education and Research of The Federal Republic of Germany. Together with [CISPA Helmholtz Center for Information Security](https://cispa.de/en) Openzro brings the security best practices and simplicity to private networking.
+In November 2022, openZro joined the [StartUpSecure program](https://www.forschung-it-sicherheit-kommunikationssysteme.de/foerderung/bekanntmachungen/startup-secure) sponsored by The Federal Ministry of Education and Research of The Federal Republic of Germany. Together with [CISPA Helmholtz Center for Information Security](https://cispa.de/en) openZro brings the security best practices and simplicity to private networking.
 
 ![CISPA_Logo_BLACK_EN_RZ_RGB (1)](https://user-images.githubusercontent.com/700848/203091324-c6d311a0-22b5-4b05-a288-91cbc6cdcc46.png)
 
