@@ -12,6 +12,15 @@ export interface User {
   is_blocked?: boolean;
   last_login?: Date;
   permissions: Permissions;
+  // issued tells the dashboard how this user was created. "integration"
+  // means an external IdP pushed the user via SCIM — manual edits will
+  // be overwritten on the next sync, so the UI shows a SCIM badge.
+  issued?: UserIssued;
+}
+
+export enum UserIssued {
+  API = "api",
+  INTEGRATION = "integration",
 }
 
 export enum Role {
