@@ -2,6 +2,7 @@ import loadConfig from "@utils/config";
 
 const config = loadConfig();
 export const GRPC_API_ORIGIN = config.grpcApiOrigin;
+export const API_ORIGIN = config.apiOrigin;
 
 export const getOpenzroUpCommand = () => {
   let cmd = "openzro up";
