@@ -1,0 +1,159 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+
+h1 {
+    @apply text-2xl font-medium text-gray-700 dark:text-nb-gray-100 my-1;
+}
+h2 {
+    @apply text-xl font-medium text-gray-700 dark:text-nb-gray-100 my-1;
+}
+p {
+    @apply font-light tracking-wide text-gray-700 dark:text-zinc-50 text-sm;
+}
+
+.p-default {
+    @apply px-4 sm:px-6 md:px-8;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
+
+[placeholder]{
+    text-overflow:ellipsis;
+}
+
+.animated-gradient-bg{
+    background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
+    background-size: 400% 400%;
+    animation: gradient 15s ease infinite;
+    height: 100%;
+}
+
+@keyframes gradient {
+    0% {
+        background-position: 0 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0 50%;
+    }
+}
+
+.sticky {
+    position: sticky !important;
+    left: 0;
+    top: 0;
+    z-index: 1;
+}
+
+
+.table-fixed-scroll {
+    display: table;
+    position: relative;
+    width: 100%;
+}
+
+.stepper-bg-variant .step-circle {
+    @apply !border-nb-gray-940;
+}
+
+.webkit-scroll{
+    -webkit-overflow-scrolling: touch;
+    -webkit-transform: translate3d(0, 0, 0);
+}
+
+
+/**
+ * Timescape Root element
+ */
+.timescape {
+    @apply flex items-center gap-[1px] rounded-md py-2 px-3 select-none w-fit cursor-text bg-nb-gray-900;
+}
+
+/**
+ * Date and time input elements
+ */
+.timescape input {
+    @apply cursor-text px-0.5 py-1 bg-transparent h-fit border-0 outline-0 select-none box-content caret-transparent text-nb-gray-200 text-sm placeholder-nb-gray-300;
+    font-variant-numeric: tabular-nums;
+    /* For the calculation of the input width these are important */
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+}
+
+.timescape input:focus {
+    @apply bg-nb-gray-700 text-white rounded py-1 px-0.5 border-0 outline-0;
+}
+
+/**
+ * Separator elements
+ */
+.timescape .separator {
+    @apply text-gray-400 m-0 text-[80%] -top-[1px] relative;
+}
+
+
+/**
+ * Fade in animation
+ */
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+
+.animate-slow-ping {
+    animation: ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite
+}
+
+@keyframes ping {
+    75%, 100% {
+        transform: scale(2);
+        opacity: 0;
+    }
+}
+
+.animate-slow-pulse {
+    animation: pulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite
+}
+
+
+@keyframes pulse {
+    60% {
+        opacity: 0.5;
+    }
+}
+
+@keyframes bg-scroll {
+    0% {
+        background-position: 0% 100%;
+    }
+    100% {
+        background-position: 0% 0%;
+    }
+}
+
+.animate-bg-scroll {
+    animation: bg-scroll 4s linear infinite;
+}
+.animate-bg-scroll-faster {
+    animation: bg-scroll 1.8s linear infinite;
+}

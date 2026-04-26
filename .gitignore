@@ -32,5 +32,3 @@ infrastructure_files/setup-*.env
 vendor/
 /openzro
 
-# dashboard is a separate repo (openzro/dashboard)
-dashboard/
