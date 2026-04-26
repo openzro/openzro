@@ -106,7 +106,11 @@ var (
 				}
 			}()
 
-			srv, err := server.NewServer(cmd.Context(), metricsServer.Meter)
+			disp, err := buildDispatcher(cmd.Context(), metricsServer.Meter)
+			if err != nil {
+				return fmt.Errorf("building signal dispatcher: %v", err)
+			}
+			srv, err := server.NewServerWithDispatcher(cmd.Context(), metricsServer.Meter, disp)
 			if err != nil {
 				return fmt.Errorf("creating signal server: %v", err)
 			}
