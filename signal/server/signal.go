@@ -13,8 +13,8 @@ import (
 	"google.golang.org/grpc/status"
 	gproto "google.golang.org/protobuf/proto"
 
-	"github.com/openzro/signal-dispatcher/dispatcher"
-
+	"github.com/openzro/openzro/signal/dispatcher"
+	"github.com/openzro/openzro/signal/dispatcher/inmem"
 	"github.com/openzro/openzro/signal/metrics"
 	"github.com/openzro/openzro/signal/peer"
 	"github.com/openzro/openzro/signal/proto"
@@ -43,18 +43,20 @@ const (
 type Server struct {
 	registry *peer.Registry
 	proto.UnimplementedSignalExchangeServer
-	dispatcher *dispatcher.Dispatcher
+	dispatcher dispatcher.Dispatcher
 	metrics    *metrics.AppMetrics
 }
 
-// NewServer creates a new Signal server
+// NewServer creates a new Signal server with the in-memory dispatcher
+// (single-instance mode). Use NewServerWithDispatcher to plug in an
+// alternate backend for HA.
 func NewServer(ctx context.Context, meter metric.Meter) (*Server, error) {
 	appMetrics, err := metrics.NewAppMetrics(meter)
 	if err != nil {
 		return nil, fmt.Errorf("creating app metrics: %v", err)
 	}
 
-	d, err := dispatcher.NewDispatcher(ctx, meter)
+	d, err := inmem.New(ctx, meter)
 	if err != nil {
 		return nil, fmt.Errorf("creating dispatcher: %v", err)
 	}
@@ -66,6 +68,21 @@ func NewServer(ctx context.Context, meter metric.Meter) (*Server, error) {
 	}
 
 	return s, nil
+}
+
+// NewServerWithDispatcher creates a Signal server backed by the given
+// Dispatcher. This is the seam used to wire up the Redis dispatcher for HA.
+func NewServerWithDispatcher(ctx context.Context, meter metric.Meter, d dispatcher.Dispatcher) (*Server, error) {
+	appMetrics, err := metrics.NewAppMetrics(meter)
+	if err != nil {
+		return nil, fmt.Errorf("creating app metrics: %v", err)
+	}
+
+	return &Server{
+		dispatcher: d,
+		registry:   peer.NewRegistry(appMetrics),
+		metrics:    appMetrics,
+	}, nil
 }
 
 // Send forwards a message to the signal peer
