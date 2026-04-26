@@ -19,7 +19,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
-	"github.com/openzro/management-integrations/integrations"
+	"github.com/openzro/openzro/management/integrations/integrations"
 	"github.com/openzro/openzro/management/server/peers"
 	"github.com/openzro/openzro/management/server/permissions"
 	"github.com/openzro/openzro/management/server/settings"

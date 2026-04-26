@@ -26,7 +26,7 @@ import (
 	wgdevice "golang.zx2c4.com/wireguard/device"
 	"golang.zx2c4.com/wireguard/tun/netstack"
 
-	"github.com/openzro/management-integrations/integrations"
+	"github.com/openzro/openzro/management/integrations/integrations"
 
 	"github.com/openzro/openzro/client/iface"
 	"github.com/openzro/openzro/client/iface/bind"

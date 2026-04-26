@@ -17,7 +17,7 @@ import (
 	auth "github.com/openzro/openzro/relay/auth/hmac"
 	authv2 "github.com/openzro/openzro/relay/auth/hmac/v2"
 
-	integrationsConfig "github.com/openzro/management-integrations/integrations/config"
+	integrationsConfig "github.com/openzro/openzro/management/integrations/integrations/config"
 )
 
 const defaultDuration = 12 * time.Hour

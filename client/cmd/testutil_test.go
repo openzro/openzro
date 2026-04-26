@@ -22,7 +22,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/openzro/management-integrations/integrations"
+	"github.com/openzro/openzro/management/integrations/integrations"
 
 	clientProto "github.com/openzro/openzro/client/proto"
 	client "github.com/openzro/openzro/client/server"

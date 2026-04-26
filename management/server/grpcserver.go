@@ -18,7 +18,7 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
-	integrationsConfig "github.com/openzro/management-integrations/integrations/config"
+	integrationsConfig "github.com/openzro/openzro/management/integrations/integrations/config"
 	"github.com/openzro/openzro/management/server/integrations/integrated_validator"
 
 	"github.com/openzro/openzro/encryption"
