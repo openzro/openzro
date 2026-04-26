@@ -82,9 +82,9 @@ func (m *Manager) buildProvider(row *MDMProvider) (Provider, error) {
 	case TypeIntune:
 		return NewIntune(*plain.(*IntuneConfig))
 	case TypeSentinelOne:
-		return nil, errors.New("sentinelone driver not yet implemented (deferred)")
+		return NewSentinelOne(*plain.(*SentinelOneConfig))
 	case TypeHuntress:
-		return nil, errors.New("huntress driver not yet implemented (deferred)")
+		return NewHuntress(*plain.(*HuntressConfig))
 	}
 	return nil, fmt.Errorf("unknown provider type %q", row.Type)
 }
