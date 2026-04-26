@@ -33,6 +33,7 @@ import (
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/realip"
 
+	clusterfactory "github.com/openzro/openzro/cluster/factory"
 	"github.com/openzro/openzro/management/integrations/integrations"
 
 	"github.com/openzro/openzro/management/server/peers"
@@ -169,7 +170,17 @@ var (
 			if err != nil {
 				return fmt.Errorf("failed creating Store: %s: %v", config.Datadir, err)
 			}
-			peersUpdateManager := server.NewPeersUpdateManager(appMetrics)
+
+			// Build the cluster coordinator from environment. nil means
+			// single-instance mode (no broker configured); HA mode is
+			// triggered by setting OPENZRO_REDIS_URL, OPENZRO_NATS_URL,
+			// or OPENZRO_BROKER=embedded. See cluster/factory.
+			clusterCoord, err := clusterfactory.NewFromEnv(ctx)
+			if err != nil {
+				return fmt.Errorf("failed building cluster coordinator: %v", err)
+			}
+
+			peersUpdateManager := server.NewPeersUpdateManagerWithCluster(appMetrics, clusterCoord)
 
 			var idpManager idp.Manager
 			if config.IdpManagerConfig != nil {
