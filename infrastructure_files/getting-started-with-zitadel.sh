@@ -434,6 +434,12 @@ initEnvironment() {
   ZITADEL_EXTERNALSECURE="false"
   ZITADEL_TLS_MODE="disabled"
   ZITADEL_MASTERKEY="$(openssl rand -base64 32 | head -c 32)"
+  # CVE-2025-10678 mitigation: hijack ZITADEL's built-in default admin
+  # ('zitadel-admin', password 'Password1!') with a random password that
+  # is generated, set, and immediately discarded — the real admin is
+  # provisioned later via API as admin@$OPENZRO_DOMAIN with its own
+  # random password (see init_zitadel below).
+  ZITADEL_DEFAULT_INSTANCE_PASSWORD="$(openssl rand -base64 32 | sed 's/=//g')@"
   OPENZRO_PORT=80
   OPENZRO_HTTP_PROTOCOL="http"
   OPENZRO_RELAY_PROTO="rel"
@@ -729,6 +735,9 @@ ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_USERNAME=zitadel-admin-sa
 ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_NAME=Admin
 ZITADEL_FIRSTINSTANCE_ORG_MACHINE_PAT_SCOPES=openid
 ZITADEL_FIRSTINSTANCE_ORG_MACHINE_PAT_EXPIRATIONDATE=$ZIDATE_TOKEN_EXPIRATION_DATE
+ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME=zitadel-admin
+ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD=$ZITADEL_DEFAULT_INSTANCE_PASSWORD
+ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORDCHANGEREQUIRED=true
 $ZITADEL_DB_ENV
 EOF
 }
