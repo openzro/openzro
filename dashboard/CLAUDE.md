@@ -8,9 +8,16 @@ icon location, and the wordmark/lockup HTML pattern.
 
 ## Stack
 
-- **Next.js 14 (App Router)**, stable. Not on canary releases — and not
-  on Next 15+ until the security implications of CVE-2025-66478 are
-  re-evaluated for our usage. See [`docs/security/advisories.md`](../docs/security/advisories.md).
+- **Next.js 14 (App Router)**, stable. Not on canary releases. The
+  bump to Next 15.5.15+ (or 16.2.3+) is **planned and tracked** —
+  it closes GHSA-q4gf-8mx6-v5v3 and GHSA-h25m-26qc-wcjf, both DoS
+  advisories that affect every App Router app on 13.x–15.5.14
+  (we are 14.2.28). The original CLAUDE.md restriction was based
+  on CVE-2025-55182 (RCE in Server Components) which only affects
+  Next 15.0.0–15.5.14 + 16.0.0–16.0.6 — bumping straight to
+  15.5.15+ jumps over that window. See
+  [`docs/security/advisories.md`](../docs/security/advisories.md)
+  for the full triage.
 - **React 18.3** with TypeScript in strict mode.
 - **Tailwind CSS** with the palette and font tokens defined in
   [`tailwind.config.ts`](tailwind.config.ts) and CSS variables in
