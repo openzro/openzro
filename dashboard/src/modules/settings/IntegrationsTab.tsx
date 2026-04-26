@@ -18,6 +18,7 @@ import {
   GlobeIcon,
   KeyRoundIcon,
   PlusCircleIcon,
+  ShieldCheckIcon,
   Trash2Icon,
   UsersIcon,
 } from "lucide-react";
@@ -26,7 +27,9 @@ import { useSWRConfig } from "swr";
 import SettingsIcon from "@/assets/icons/SettingsIcon";
 import { Account } from "@/interfaces/Account";
 import { FlowExport, FlowExportType } from "@/interfaces/FlowExport";
+import { MDMProvider, MDMProviderType } from "@/interfaces/MDMProvider";
 import FlowExportModal from "@/modules/flow-exports/FlowExportModal";
+import MDMProviderModal from "@/modules/mdm-providers/MDMProviderModal";
 
 type Props = {
   account: Account;
@@ -128,9 +131,182 @@ export default function IntegrationsTab(_: Readonly<Props>) {
         <Separator />
       </div>
 
+      <MDMProvidersSection />
+
+      <div className="my-10">
+        <Separator />
+      </div>
+
       <SCIMSetupSection />
     </Tabs.Content>
   );
+}
+
+// MDMProvidersSection mirrors the Flow Exports table shape: list,
+// add, edit, delete. Each row is one configured vendor connection
+// (Intune / SentinelOne / Huntress). Posture checks reference these
+// rows by ID.
+function MDMProvidersSection() {
+  const { data, isLoading } =
+    useFetchApi<MDMProvider[]>("/admin/mdm-providers");
+
+  const [editing, setEditing] = useState<MDMProvider | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  const openCreate = () => {
+    setEditing(null);
+    setModalOpen(true);
+  };
+  const openEdit = (row: MDMProvider) => {
+    setEditing(row);
+    setModalOpen(true);
+  };
+
+  return (
+    <div>
+      <h2 className="flex items-center gap-2">
+        <ShieldCheckIcon size={18} className="text-violet-300" />
+        MDM / EDR Providers
+      </h2>
+      <Paragraph>
+        Connect Microsoft Intune, SentinelOne, or Huntress to require
+        devices to be in good security standing before they&apos;re
+        allowed in the network. Configured providers can then be
+        referenced from any posture check via the &quot;Endpoint
+        Security&quot; check type.
+      </Paragraph>
+      <HelpText>
+        Credentials are encrypted at rest with the management&apos;s
+        DataStoreEncryptionKey. Posture lookups are cached for 5
+        minutes per device to avoid hammering the vendor API.
+      </HelpText>
+
+      <div className="mt-6 flex justify-end">
+        <Button variant="primary" onClick={openCreate}>
+          <PlusCircleIcon size={16} /> Add provider
+        </Button>
+      </div>
+
+      <div className="mt-4">
+        {isLoading && (
+          <Paragraph className="text-nb-gray-300">Loading…</Paragraph>
+        )}
+        {!isLoading && (!data || data.length === 0) && (
+          <div className="rounded-md border border-dashed border-nb-gray-700 p-8 text-center">
+            <Paragraph className="text-nb-gray-300">
+              No MDM/EDR providers configured. Click <b>Add provider</b>{" "}
+              to connect Intune, SentinelOne, or Huntress.
+            </Paragraph>
+          </div>
+        )}
+        {data && data.length > 0 && (
+          <table className="w-full text-sm">
+            <thead className="text-left text-nb-gray-300 text-xs uppercase">
+              <tr>
+                <th className="py-2">Type</th>
+                <th>Name</th>
+                <th>Tenant / Endpoint</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((row) => (
+                <MDMRow
+                  key={row.id}
+                  row={row}
+                  onEdit={() => openEdit(row)}
+                />
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <MDMProviderModal
+        open={modalOpen}
+        setOpen={setModalOpen}
+        existing={editing}
+      />
+    </div>
+  );
+}
+
+function MDMRow({
+  row,
+  onEdit,
+}: {
+  row: MDMProvider;
+  onEdit: () => void;
+}) {
+  const { mutate } = useSWRConfig();
+  const api = useApiCall(`/admin/mdm-providers/${row.id}`);
+
+  const onDelete = async () => {
+    if (!confirm(`Delete "${row.name}"? This cannot be undone.`)) return;
+    try {
+      await api.del();
+      await mutate("/admin/mdm-providers");
+      notify({ title: "Deleted", description: row.name });
+    } catch {
+      // useApiCall surfaces toast
+    }
+  };
+
+  return (
+    <tr className="border-t border-nb-gray-900">
+      <td className="py-3">
+        <MDMTypeBadge type={row.type} />
+      </td>
+      <td className="py-3">{row.name}</td>
+      <td className="py-3 font-mono text-xs text-nb-gray-300">
+        {mdmEndpointLabel(row)}
+      </td>
+      <td className="py-3">
+        <span
+          className={row.enabled ? "text-emerald-400" : "text-nb-gray-400"}
+        >
+          {row.enabled ? "Enabled" : "Disabled"}
+        </span>
+      </td>
+      <td className="py-3 text-right">
+        <Button variant="secondary" onClick={onEdit} className="mr-2">
+          Edit
+        </Button>
+        <Button variant="danger-outline" onClick={onDelete}>
+          <Trash2Icon size={14} />
+        </Button>
+      </td>
+    </tr>
+  );
+}
+
+function MDMTypeBadge({ type }: { type: MDMProviderType }) {
+  const labels: Record<MDMProviderType, string> = {
+    intune: "Intune",
+    sentinelone: "SentinelOne",
+    huntress: "Huntress",
+  };
+  return (
+    <span className="inline-flex items-center gap-1 rounded bg-nb-gray-900 px-2 py-1 text-xs text-violet-300">
+      <ShieldCheckIcon size={12} />
+      {labels[type]}
+    </span>
+  );
+}
+
+function mdmEndpointLabel(row: MDMProvider): string {
+  if (row.type === "intune") {
+    const c = row.config as { tenant_id?: string };
+    return c?.tenant_id ? `tenant:${c.tenant_id}` : "";
+  }
+  if (row.type === "sentinelone") {
+    return (row.config as { management_url?: string })?.management_url ?? "";
+  }
+  if (row.type === "huntress") {
+    return "api.huntress.io";
+  }
+  return "";
 }
 
 // SCIMSetupSection points operators at the static configuration they
