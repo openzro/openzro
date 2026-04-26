@@ -2,7 +2,92 @@
 @tailwind components;
 @tailwind utilities;
 
+/* openZro design tokens (see ../../../design-tokens.md and ../../../CLAUDE.md). */
+:root {
+  --oz-violet-50:  #f5f3ff;
+  --oz-violet-100: #ede9fe;
+  --oz-violet-200: #ddd6fe;
+  --oz-violet-300: #c4b5fd;
+  --oz-violet-400: #a78bfa;
+  --oz-violet-500: #8b5cf6;
+  --oz-violet-600: #7c3aed;
+  --oz-violet-700: #6d28d9;
+  --oz-violet-800: #5b21b6;
+  --oz-violet-900: #4c1d95;
 
+  --oz-ink:    #0f0a1f;
+  --oz-ink-2:  #1a1330;
+  --oz-paper:  #faf9fc;
+
+  --oz-primary:       var(--oz-violet-600);
+  --oz-primary-hover: var(--oz-violet-700);
+  --oz-primary-soft:  var(--oz-violet-100);
+  --oz-text:          var(--oz-ink);
+  --oz-text-muted:    var(--oz-violet-700);
+  --oz-bg:            #ffffff;
+  --oz-bg-soft:       var(--oz-violet-50);
+  --oz-bg-dark:       var(--oz-ink);
+  --oz-border:        var(--oz-violet-200);
+}
+
+/* Dark theme (Tailwind `darkMode: "class"`, applied as <html class="dark">). */
+.dark {
+  --oz-primary:       var(--oz-violet-400); /* lighter on dark per CLAUDE.md */
+  --oz-primary-hover: var(--oz-violet-300);
+  --oz-primary-soft:  var(--oz-violet-900);
+  --oz-text:          #ffffff;
+  --oz-text-muted:    var(--oz-violet-300);
+  --oz-bg:            var(--oz-ink);
+  --oz-bg-soft:       var(--oz-ink-2);
+  --oz-bg-dark:       #000000;
+  --oz-border:        var(--oz-violet-800);
+}
+
+/* Wordmark: open + Z + ro, with the middle Z heavier and brand-colored. */
+.oz-wordmark {
+  font-family: var(--font-geist), system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1;
+  color: var(--oz-text);
+}
+.oz-wordmark .oz-z {
+  color: var(--oz-primary);
+  font-weight: 700;
+}
+.oz-wordmark--dark { color: #ffffff; }
+.oz-wordmark--dark .oz-z { color: var(--oz-violet-400); }
+
+/* Lockup: icon + wordmark together, used in nav/headers. */
+.oz-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-deacmetion: none;
+}
+.oz-lockup .oz-wordmark { font-size: 20px; }
+
+/* Primary button (matches CLAUDE.md spec). */
+.oz-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  background: var(--oz-primary);
+  color: #fff;
+  font-family: var(--font-geist), system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  border: 0;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.oz-btn:hover { background: var(--oz-primary-hover); }
+.oz-btn:focus-visible {
+  outline: 2px solid var(--oz-violet-500);
+  outline-offset: 2px;
+}
 
 h1 {
     @apply text-2xl font-medium text-gray-700 dark:text-nb-gray-100 my-1;

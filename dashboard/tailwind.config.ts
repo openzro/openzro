@@ -31,21 +31,33 @@ const config: Config = {
           "940": "#1c1d21",
           "950": "#181a1d",
         },
+        // The `openzro` palette name is preserved (every existing
+        // component uses bg-openzro-500, text-openzro-400, etc.) but
+        // the values are now the violet scale from CLAUDE.md /
+        // design-tokens.md. Only the hex values changed; class names
+        // stay identical so we don't have to touch every component.
+        // The 150 and 950 stops are interpolated; everything else is
+        // the canonical violet scale verbatim.
         openzro: {
-          DEFAULT: "#f68330",
-          "50": "#fff6ed",
-          "100": "#feecd6",
-          "150": "#ffdfb8",
-          "200": "#ffd4a6",
-          "300": "#fab677",
-          "400": "#f68330",
-          "500": "#f46d1b",
-          "600": "#e55311",
-          "700": "#be3e10",
-          "800": "#973215",
-          "900": "#7a2b14",
-          "950": "#421308",
+          DEFAULT: "#7c3aed", // violet-600 — brand primary
+          "50": "#f5f3ff",
+          "100": "#ede9fe",
+          "150": "#e7e1fc",
+          "200": "#ddd6fe",
+          "300": "#c4b5fd",
+          "400": "#a78bfa",
+          "500": "#8b5cf6",
+          "600": "#7c3aed",
+          "700": "#6d28d9",
+          "800": "#5b21b6",
+          "900": "#4c1d95",
+          "950": "#2e1065",
         },
+        // Ink (neutrals, dark surfaces) and paper (off-white background)
+        // straight from the brand spec. Available as bg-oz-ink etc.
+        "oz-ink": "#0f0a1f",
+        "oz-ink-2": "#1a1330",
+        "oz-paper": "#faf9fc",
         "nb-blue": {
           DEFAULT: "#31e4f5",
           "50": "#ebffff",
@@ -77,6 +89,11 @@ const config: Config = {
       },
       transitionDuration: {
         "3000": "3000ms",
+      },
+      fontFamily: {
+        // CSS variables wired up in src/app/layout.tsx via next/font.
+        sans: ["var(--font-geist)", "ui-sans-serif", "system-ui", "sans-serif"],
+        mono: ["var(--font-jetbrains-mono)", "ui-monospace", "SFMono-Regular", "monospace"],
       },
     },
   },
