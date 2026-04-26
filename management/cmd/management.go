@@ -46,6 +46,8 @@ import (
 	flowSinks "github.com/openzro/openzro/flow/sinks"
 	flowFactory "github.com/openzro/openzro/flow/store/factory"
 	flowExports "github.com/openzro/openzro/management/server/flow_exports"
+	"github.com/openzro/openzro/management/server/mdm"
+	"github.com/openzro/openzro/management/server/posture"
 	mgmtProto "github.com/openzro/openzro/management/proto"
 	"github.com/openzro/openzro/management/server"
 	"github.com/openzro/openzro/management/server/auth"
@@ -317,11 +319,33 @@ var (
 			// land alongside accounts/peers/etc. Reads & writes go
 			// through GORM with credentials encrypted at rest.
 			var flowExportsStore *flowExports.Store
+			var mdmStore *mdm.Store
+			var mdmManager *mdm.Manager
 			if sqlStore, ok := store.(*mgmtStore.SqlStore); ok {
 				flowExportsStore, err = flowExports.NewStore(sqlStore.GetGormDB(), config.DataStoreEncryptionKey)
 				if err != nil {
 					return fmt.Errorf("flow_exports store: %w", err)
 				}
+				mdmStore, err = mdm.NewStore(sqlStore.GetGormDB(), config.DataStoreEncryptionKey)
+				if err != nil {
+					return fmt.Errorf("mdm store: %w", err)
+				}
+				mdmManager, err = mdm.NewManager(ctx, mdmStore, 0)
+				if err != nil {
+					return fmt.Errorf("mdm manager: %w", err)
+				}
+				// Wire the posture check into the live manager. Set
+				// the package-level resolver once so every Account's
+				// posture eval can call the manager without threading
+				// the dependency through every method.
+				posture.SetDefaultMDMResolver(func(ctx context.Context, providerID uint64, deviceID string) (bool, string, error) {
+					st, err := mdmManager.Lookup(ctx, providerID, deviceID)
+					if err != nil {
+						return false, "", err
+					}
+					return st.Compliant, st.Reason, nil
+				})
+				defer func() { _ = mdmManager.Close() }()
 			}
 
 			// Build FlowService + flow_exports.Manager BEFORE
@@ -362,7 +386,7 @@ var (
 				}
 			}
 
-			httpAPIHandler, err := nbhttp.NewAPIHandler(ctx, accountManager, networksManager, resourcesManager, routersManager, groupsManager, geo, authManager, appMetrics, integratedPeerValidator, proxyController, permissionsManager, peersManager, settingsManager, flowStore, flowExportsStore, flowExportsManager)
+			httpAPIHandler, err := nbhttp.NewAPIHandler(ctx, accountManager, networksManager, resourcesManager, routersManager, groupsManager, geo, authManager, appMetrics, integratedPeerValidator, proxyController, permissionsManager, peersManager, settingsManager, flowStore, flowExportsStore, flowExportsManager, mdmStore, mdmManager)
 
 			if err != nil {
 				return fmt.Errorf("failed creating HTTP API handler: %v", err)
