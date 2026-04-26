@@ -333,6 +333,9 @@ type AvailablePorts struct {
 
 // Checks List of objects that perform the actual checks
 type Checks struct {
+	// EndpointSecurityCheck Posture check that delegates compliance to a configured MDM/EDR provider.
+	EndpointSecurityCheck *EndpointSecurityCheck `json:"endpoint_security_check,omitempty"`
+
 	// GeoLocationCheck Posture check for geo location
 	GeoLocationCheck *GeoLocationCheck `json:"geo_location_check,omitempty"`
 
@@ -347,6 +350,16 @@ type Checks struct {
 
 	// ProcessCheck Posture Check for binaries exist and are running in the peer’s system
 	ProcessCheck *ProcessCheck `json:"process_check,omitempty"`
+}
+
+// EndpointSecurityCheck Posture check that delegates compliance to a configured
+// MDM/EDR provider (Intune, SentinelOne, Huntress).
+type EndpointSecurityCheck struct {
+	// FailOpen When true, peers are treated as compliant if the vendor lookup itself fails (timeout, vendor outage, device not found).
+	FailOpen *bool `json:"fail_open,omitempty"`
+
+	// ProviderID ID of the MDM/EDR provider configured under /api/admin/mdm-providers.
+	ProviderId uint64 `json:"provider_id"`
 }
 
 // City Describe city geographical location information

@@ -18,6 +18,7 @@ const (
 	GeoLocationCheckName      = "GeoLocationCheck"
 	PeerNetworkRangeCheckName = "PeerNetworkRangeCheck"
 	ProcessCheckName          = "ProcessCheck"
+	EndpointSecurityCheckName = "EndpointSecurityCheck"
 
 	CheckActionAllow string = "allow"
 	CheckActionDeny  string = "deny"
@@ -221,6 +222,10 @@ func buildPostureCheck(postureChecksID string, name string, description string, 
 		postureChecks.Checks.ProcessCheck = toProcessCheck(processCheck)
 	}
 
+	if endpointSecurityCheck := checks.EndpointSecurityCheck; endpointSecurityCheck != nil {
+		postureChecks.Checks.EndpointSecurityCheck = toEndpointSecurityCheck(endpointSecurityCheck)
+	}
+
 	return &postureChecks, nil
 }
 
@@ -255,11 +260,34 @@ func (pc *Checks) ToAPIResponse() *api.PostureCheck {
 		checks.ProcessCheck = toProcessCheckResponse(pc.Checks.ProcessCheck)
 	}
 
+	if pc.Checks.EndpointSecurityCheck != nil {
+		checks.EndpointSecurityCheck = toEndpointSecurityCheckResponse(pc.Checks.EndpointSecurityCheck)
+	}
+
 	return &api.PostureCheck{
 		Id:          pc.ID,
 		Name:        pc.Name,
 		Description: &pc.Description,
 		Checks:      checks,
+	}
+}
+
+func toEndpointSecurityCheck(check *api.EndpointSecurityCheck) *EndpointSecurityCheck {
+	failOpen := false
+	if check.FailOpen != nil {
+		failOpen = *check.FailOpen
+	}
+	return &EndpointSecurityCheck{
+		ProviderID: check.ProviderId,
+		FailOpen:   failOpen,
+	}
+}
+
+func toEndpointSecurityCheckResponse(check *EndpointSecurityCheck) *api.EndpointSecurityCheck {
+	failOpen := check.FailOpen
+	return &api.EndpointSecurityCheck{
+		ProviderId: check.ProviderID,
+		FailOpen:   &failOpen,
 	}
 }
 

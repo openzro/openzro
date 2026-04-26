@@ -1072,6 +1072,8 @@ components:
           $ref: '#/components/schemas/PeerNetworkRangeCheck'
         process_check:
           $ref: '#/components/schemas/ProcessCheck'
+        endpoint_security_check:
+          $ref: '#/components/schemas/EndpointSecurityCheck'
     NBVersionCheck:
       description: Posture check for the version of Openzro
       type: object
@@ -1170,6 +1172,22 @@ components:
             $ref: '#/components/schemas/Process'
       required:
         - processes
+    EndpointSecurityCheck:
+      description: Posture check that delegates compliance to a configured MDM/EDR provider (Intune, SentinelOne, Huntress).
+      type: object
+      properties:
+        provider_id:
+          description: ID of the MDM/EDR provider configured under /api/admin/mdm-providers.
+          type: integer
+          format: int64
+          example: 1
+        fail_open:
+          description: When true, peers are treated as compliant if the vendor lookup itself fails (timeout, vendor outage, device not found). When false (default), lookup failures are treated as non-compliant.
+          type: boolean
+          default: false
+          example: false
+      required:
+        - provider_id
     Process:
       description: Describes the operational activity within a peer's system.
       type: object

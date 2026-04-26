@@ -11,9 +11,15 @@ export interface PostureCheck {
     geo_location_check?: GeoLocationCheck;
     peer_network_range_check?: PeerNetworkRangeCheck;
     process_check?: ProcessCheck;
+    endpoint_security_check?: EndpointSecurityCheck;
   };
   policies?: Policy[];
   active?: boolean;
+}
+
+export interface EndpointSecurityCheck {
+  provider_id: number;
+  fail_open?: boolean;
 }
 
 export interface OpenzroVersionCheck {
