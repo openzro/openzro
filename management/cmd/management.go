@@ -43,6 +43,7 @@ import (
 	"github.com/openzro/openzro/encryption"
 	"github.com/openzro/openzro/formatter/hook"
 	flowProto "github.com/openzro/openzro/flow/proto"
+	flowSinks "github.com/openzro/openzro/flow/sinks"
 	flowFactory "github.com/openzro/openzro/flow/store/factory"
 	mgmtProto "github.com/openzro/openzro/management/proto"
 	"github.com/openzro/openzro/management/server"
@@ -337,7 +338,26 @@ var (
 				}
 				return peer.ID, peer.AccountID, nil
 			}
-			flowProto.RegisterFlowServiceServer(gRPCAPIHandler, server.NewFlowService(flowStore, peerResolver))
+			// Aggregate destinations: hot store (queryable from UI) +
+			// any streaming sinks the operator configured (Elastic
+			// today, future Datadog/etc.). Each sink is independent —
+			// a slow one cannot back-pressure peers or block other
+			// sinks.
+			sinks := []flowstore.Sink{}
+			if flowStore != nil {
+				sinks = append(sinks, flowStore)
+			}
+			extraSinks, err := flowSinks.NewFromEnv(ctx)
+			if err != nil {
+				return fmt.Errorf("flow sinks: %w", err)
+			}
+			sinks = append(sinks, extraSinks...)
+			defer func() {
+				for _, s := range extraSinks {
+					_ = s.Close()
+				}
+			}()
+			flowProto.RegisterFlowServiceServer(gRPCAPIHandler, server.NewFlowService(sinks, peerResolver))
 
 			installationID, err := getInstallationID(ctx, store)
 			if err != nil {
