@@ -34,6 +34,8 @@ otherwise.
 | Logging & retention | Activity log (built-in) + Streamer (HTTP / Datadog / Elastic / templates) | Same activity events fanned out to operator's SIEM |
 | Incident detection | Flow Events stack (real-time + cold archive) | Flow Events table + S3 archive |
 | Incident response (revocation) | Device Admission worker (Phase 2) — closes session on compliance flip | `peer.admission.deny` paired with the prior `peer.added`/login event |
+| Break-glass exception (auditable) | Per-peer Admission Bypass with mandatory reason + expiry — see [ADR-0004](../adr/0004-admission-bypass-and-group-scope.md) | `peer.admission.bypass.granted`, `.revoked`, `.expired` |
+| Infrastructure scoping | Group-scope exemption (gateway / routing peers) | `account.setting.admission.exempt_groups.update` |
 | Data-at-rest protection | Credentials encrypted via DataStoreEncryptionKey | n/a — verified by inspecting DB columns |
 | Periodic review | Auditor CSV export (Phase 3) | `/api/events/admission.csv?from=…&to=…` |
 
@@ -89,6 +91,16 @@ Activity Streamer to the operator's SIEM in real time. Two layers:
   + dashboard's Settings → Integrations → Activity Streamer. Each
   tenant streams into their own SIEM. Credentials encrypted at rest
   via `DataStoreEncryptionKey`.
+
+**Break-glass exceptions are part of the audit trail.** When an
+operator grants a per-peer Admission Bypass (see
+[ADR-0004](../adr/0004-admission-bypass-and-group-scope.md)) the
+reason, expiry, and operator user ID are recorded in
+`peer.admission.bypass.granted`. Revocation and automatic
+expiration emit their own events
+(`.revoked`, `.expired`). The auditor reading
+`/api/events/admission.csv` sees the full lifecycle of every
+override — there is no silent override path.
 
 Both layers support custom payload templates (Go text/template) so
 the operator can match the SIEM's expected schema without standing

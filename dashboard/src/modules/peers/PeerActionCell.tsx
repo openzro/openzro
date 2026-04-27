@@ -12,15 +12,17 @@ import { IconInfoCircle } from "@tabler/icons-react";
 import {
   MonitorIcon,
   MoreVertical,
+  ShieldHalf,
   TerminalSquare,
   TimerResetIcon,
   Trash2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import React from "react";
+import React, { useState } from "react";
 import { useSWRConfig } from "swr";
 import { usePeer } from "@/contexts/PeerProvider";
 import { usePermissions } from "@/contexts/PermissionsProvider";
+import AdmissionBypassModal from "@/modules/peers/AdmissionBypassModal";
 import { ExitNodeDropdownButton } from "@/modules/exit-node/ExitNodeDropdownButton";
 
 export default function PeerActionCell() {
@@ -28,6 +30,7 @@ export default function PeerActionCell() {
   const router = useRouter();
   const { mutate } = useSWRConfig();
   const { permission } = usePermissions();
+  const [bypassOpen, setBypassOpen] = useState(false);
 
   const toggleLoginExpiration = async () => {
     const text = peer.login_expiration_enabled ? "disabled" : "enabled";
@@ -137,6 +140,25 @@ export default function PeerActionCell() {
 
           <DropdownMenuSeparator />
 
+          {/*
+            Admission bypass — break-glass override for the Device
+            Admission gate when this peer is failing posture checks
+            (CEO laptop, contractor on legacy device, etc.). Reason
+            + expiry are mandatory for the audit trail. See
+            ADR-0004.
+          */}
+          <DropdownMenuItem
+            onClick={() => setBypassOpen(true)}
+            disabled={!permission.peers.update}
+          >
+            <div className={"flex gap-3 items-center w-full"}>
+              <ShieldHalf size={14} className={"shrink-0"} />
+              Bypass admission…
+            </div>
+          </DropdownMenuItem>
+
+          <DropdownMenuSeparator />
+
           <DropdownMenuItem
             onClick={deletePeer}
             variant={"danger"}
@@ -149,6 +171,15 @@ export default function PeerActionCell() {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {peer.id && (
+        <AdmissionBypassModal
+          open={bypassOpen}
+          setOpen={setBypassOpen}
+          peerId={peer.id}
+          peerName={peer.name}
+        />
+      )}
     </div>
   );
 }
