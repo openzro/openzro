@@ -218,6 +218,8 @@ release:
     name: openzro
   draft: false
   prerelease: auto
+  extra_files:
+    - glob: ./infrastructure_files/getting-started-with-zitadel.sh
   header: |
     ## openZro {{ .Tag }}
 
