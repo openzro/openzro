@@ -1,0 +1,45 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>openZro package repository</title>
+<style>
+  body { font-family: 'Geist', system-ui, sans-serif; max-width: 720px; margin: 4em auto; padding: 0 1em; color: #0f0a1f; }
+  h1 { color: #7c3aed; letter-spacing: -0.025em; }
+  code { background: #f5f3ff; padding: 0.15em 0.4em; border-radius: 4px; }
+  pre { background: #f5f3ff; padding: 1em; border-radius: 8px; overflow-x: auto; }
+  a { color: #7c3aed; }
+</style>
+<h1>openZro package repository</h1>
+<p>This domain serves signed APT, YUM, DNF, and zypper repositories
+for openZro releases. See the
+<a href="https://docs.openzro.io/get-started/install/linux">Linux
+install guide</a> for the recommended setup.</p>
+
+<h2>APT (Debian, Ubuntu)</h2>
+<pre>curl -fsSL https://pkg.openzro.io/openzro-archive-keyring.gpg \
+  | sudo tee /usr/share/keyrings/openzro-archive-keyring.gpg > /dev/null
+echo 'deb [signed-by=/usr/share/keyrings/openzro-archive-keyring.gpg] \
+https://pkg.openzro.io/apt stable main' \
+  | sudo tee /etc/apt/sources.list.d/openzro.list
+sudo apt-get update
+sudo apt-get install openzro</pre>
+
+<h2>YUM / DNF (RHEL, Fedora, Amazon Linux)</h2>
+<pre>sudo tee /etc/yum.repos.d/openzro.repo &lt;&lt;EOF
+[openzro]
+name=openZro
+baseurl=https://pkg.openzro.io/rpm/\$basearch
+enabled=1
+gpgcheck=1
+gpgkey=https://pkg.openzro.io/openzro-archive-key.asc
+EOF
+sudo dnf install openzro</pre>
+
+<h2>zypper (openSUSE, SLES)</h2>
+<pre>sudo zypper addrepo \
+  https://pkg.openzro.io/rpm/x86_64/openzro.repo openzro
+sudo rpm --import https://pkg.openzro.io/openzro-archive-key.asc
+sudo zypper install openzro</pre>
+
+<p>Source for the repository tooling lives under
+<code>scripts/publish-packages.sh</code> in
+<a href="https://github.com/openzro/openzro">openzro/openzro</a>.</p>

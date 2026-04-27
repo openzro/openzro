@@ -1,0 +1,17 @@
+Package: openzro
+Priority: optional
+Section: 
+Installed-Size: 32744
+Maintainer: openZro <dev@openzro.io>
+Architecture: amd64
+Version: 0.1.0~alpha.3
+Filename: pool/main/o/openzro/openzro_0.1.0-alpha.3_linux_amd64.deb
+Size: 12528508
+MD5sum: 4f1f73ec965c1690af6212db1368af91
+SHA1: cfccea4b5d8d4b0fbfe6205d2276bab85527ad9a
+SHA256: 389a252c150acb7b255032c113032404a0b8caa09533e7f45336e530c583b39d
+SHA512: 4c58b1330c65c1eaf2a33fce16530baaf65e0b7d1b231ec956b9f14ca1695c89966181e2067d810a496d2ff0ee406437af2a204d3026dfd2fca78f0b601b295c
+Description: openZro client (zero-trust mesh networking).
+Homepage: https://openzro.io/
+License: BSD-3-Clause
+
