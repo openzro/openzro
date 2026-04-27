@@ -33,10 +33,10 @@ func TestStore_RejectsInvalid(t *testing.T) {
 
 	cases := []SaveInput{
 		{Type: TypeIntune, Intune: &IntuneConfig{TenantID: "t", ClientID: "c"}}, // no Name
-		{Name: "x", Type: TypeIntune, Intune: &IntuneConfig{ClientID: "c"}},      // no TenantID
-		{Name: "x", Type: TypeIntune},                                             // no Intune block
-		{Name: "x", Type: TypeSentinelOne, SentinelOne: &SentinelOneConfig{}},     // no URL
-		{Name: "x", Type: "wat"},                                                   // unknown type
+		{Name: "x", Type: TypeIntune, Intune: &IntuneConfig{ClientID: "c"}},     // no TenantID
+		{Name: "x", Type: TypeIntune},                                           // no Intune block
+		{Name: "x", Type: TypeSentinelOne, SentinelOne: &SentinelOneConfig{}},   // no URL
+		{Name: "x", Type: "wat"},                                                // unknown type
 	}
 	for i, in := range cases {
 		_, err := s.Save(ctx, in)

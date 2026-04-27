@@ -1,7 +1,8 @@
 // Package mdm_providers exposes the admin-only CRUD API for MDM/EDR
-// vendor credentials (Intune, SentinelOne, Huntress). Mirrors the
-// shape of flow_exports/handler.go — same encrypted-at-rest envelope,
-// same write-only semantics for credentials, same admin-only gate.
+// vendor credentials (Intune, SentinelOne, Huntress, CrowdStrike).
+// Mirrors the shape of flow_exports/handler.go — same encrypted-at-rest
+// envelope, same write-only semantics for credentials, same admin-only
+// gate.
 package mdm_providers
 
 import (
@@ -45,12 +46,13 @@ func AddEndpoints(perms permissions.Manager, store *mdm.Store, manager *mdm.Mana
 }
 
 type requestBody struct {
-	Name        string                  `json:"name"`
-	Type        mdm.ProviderType        `json:"type"`
-	Enabled     *bool                   `json:"enabled,omitempty"`
-	Intune      *mdm.IntuneConfig       `json:"intune,omitempty"`
-	SentinelOne *mdm.SentinelOneConfig  `json:"sentinelone,omitempty"`
-	Huntress    *mdm.HuntressConfig     `json:"huntress,omitempty"`
+	Name        string                 `json:"name"`
+	Type        mdm.ProviderType       `json:"type"`
+	Enabled     *bool                  `json:"enabled,omitempty"`
+	Intune      *mdm.IntuneConfig      `json:"intune,omitempty"`
+	SentinelOne *mdm.SentinelOneConfig `json:"sentinelone,omitempty"`
+	Huntress    *mdm.HuntressConfig    `json:"huntress,omitempty"`
+	CrowdStrike *mdm.CrowdStrikeConfig `json:"crowdstrike,omitempty"`
 }
 
 type responseBody struct {
@@ -217,6 +219,7 @@ func bodyToInput(b requestBody, id uint64) mdm.SaveInput {
 		Intune:      b.Intune,
 		SentinelOne: b.SentinelOne,
 		Huntress:    b.Huntress,
+		CrowdStrike: b.CrowdStrike,
 	}
 }
 

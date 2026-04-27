@@ -61,7 +61,7 @@ func NewCachedProvider(p Provider, ttl time.Duration) *CachedProvider {
 }
 
 func (c *CachedProvider) Type() ProviderType { return c.inner.Type() }
-func (c *CachedProvider) Close() error        { return c.inner.Close() }
+func (c *CachedProvider) Close() error       { return c.inner.Close() }
 
 func (c *CachedProvider) GetDeviceStatus(ctx context.Context, deviceID string) (DeviceStatus, error) {
 	if cached, ok := c.cache.get(deviceID); ok {

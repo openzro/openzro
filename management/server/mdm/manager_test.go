@@ -19,7 +19,7 @@ type fakeProvider struct {
 }
 
 func (f *fakeProvider) Type() ProviderType { return f.t }
-func (f *fakeProvider) Close() error        { return nil }
+func (f *fakeProvider) Close() error       { return nil }
 func (f *fakeProvider) GetDeviceStatus(_ context.Context, id string) (DeviceStatus, error) {
 	f.calls++
 	if f.err != nil {

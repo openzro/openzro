@@ -3,14 +3,22 @@
 // api_token, api_secret) are NEVER on the wire — the public
 // projection only carries enough for the UI to display
 // "configured / not configured" states.
-export type MDMProviderType = "intune" | "sentinelone" | "huntress";
+export type MDMProviderType =
+  | "intune"
+  | "sentinelone"
+  | "huntress"
+  | "crowdstrike";
 
 export interface MDMProvider {
   id: number;
   name: string;
   type: MDMProviderType;
   enabled: boolean;
-  config?: IntunePublicConfig | SentinelOnePublicConfig | HuntressPublicConfig;
+  config?:
+    | IntunePublicConfig
+    | SentinelOnePublicConfig
+    | HuntressPublicConfig
+    | CrowdStrikePublicConfig;
   created_at: string;
   updated_at: string;
 }
@@ -29,6 +37,22 @@ export interface SentinelOnePublicConfig {
 
 export interface HuntressPublicConfig {
   has_credentials: boolean;
+}
+
+// CrowdStrike Falcon clouds. Tenants are pinned to one region; the
+// OAuth client minted in that region only works against its home
+// cloud, so the operator must pick the right value here.
+export type CrowdStrikeCloud =
+  | "us-1"
+  | "us-2"
+  | "eu-1"
+  | "us-gov-1"
+  | "us-gov-2";
+
+export interface CrowdStrikePublicConfig {
+  cloud: CrowdStrikeCloud | "";
+  client_id: string;
+  has_client_secret: boolean;
 }
 
 // MDMProviderInput is the create/update body — sensitive fields go
@@ -50,5 +74,10 @@ export interface MDMProviderInput {
   huntress?: {
     api_key?: string;
     api_secret?: string;
+  };
+  crowdstrike?: {
+    cloud?: CrowdStrikeCloud | "";
+    client_id: string;
+    client_secret?: string;
   };
 }

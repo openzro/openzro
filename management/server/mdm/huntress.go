@@ -44,7 +44,7 @@ func NewHuntress(cfg HuntressConfig) (*Huntress, error) {
 }
 
 func (h *Huntress) Type() ProviderType { return TypeHuntress }
-func (h *Huntress) Close() error        { return nil }
+func (h *Huntress) Close() error       { return nil }
 
 type huntressResp struct {
 	Agents []huntressAgent `json:"agents"`
