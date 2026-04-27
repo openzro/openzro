@@ -631,7 +631,12 @@ func (am *DefaultAccountManager) AddPeer(ctx context.Context, setupKey, userID s
 	// denied registration costs neither an IP nor a setup-key
 	// increment — the setup key is only consumed inside the
 	// transaction below.
-	if err := am.evaluateAdmission(ctx, am.Store, accountID, newPeer, opEvent.InitiatorID); err != nil {
+	// AddPeer flow: peer.ID is not assigned yet, so the helper
+	// uses groupsToAdd as the candidate group set for the
+	// AdmissionExemptGroups short-circuit. groupsToAdd was already
+	// resolved above from sk.AutoGroups (setup-key path) or
+	// user.AutoGroups (interactive SSO path).
+	if err := am.evaluateAdmission(ctx, am.Store, accountID, newPeer, groupsToAdd, opEvent.InitiatorID); err != nil {
 		return nil, nil, nil, err
 	}
 
@@ -845,7 +850,11 @@ func (am *DefaultAccountManager) SyncPeer(ctx context.Context, sync types.PeerSy
 		// vendor. On denial, the gRPC Sync stream closes with
 		// PermissionDenied; the client backs off and re-attempts
 		// Login, which hits the same gate.
-		if err := am.evaluateAdmission(ctx, transaction, accountID, peer, peer.ID); err != nil {
+		// SyncPeer: peer.ID is set, so the helper resolves group
+		// memberships via the transaction. candidateGroups stays
+		// nil. The string after the peer is the audit initiator —
+		// for a Sync the peer itself is the initiator (not a user).
+		if err := am.evaluateAdmission(ctx, transaction, accountID, peer, nil, peer.ID); err != nil {
 			return err
 		}
 		return nil
@@ -972,7 +981,11 @@ func (am *DefaultAccountManager) LoginPeer(ctx context.Context, login types.Peer
 		// just changed gets evaluated on the new values, not stale
 		// ones. Returning the error rolls back any meta updates above
 		// — the next attempt will re-evaluate fresh.
-		if err := am.evaluateAdmission(ctx, transaction, accountID, peer, login.UserID); err != nil {
+		// LoginPeer: peer is already persisted with peer.ID set, so
+		// the helper looks up group memberships via the
+		// transaction. candidateGroups stays nil. login.UserID is
+		// the audit initiator (the user re-authenticating).
+		if err := am.evaluateAdmission(ctx, transaction, accountID, peer, nil, login.UserID); err != nil {
 			return err
 		}
 

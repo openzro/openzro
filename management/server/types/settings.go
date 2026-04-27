@@ -62,6 +62,18 @@ type Settings struct {
 	// every peer at Login/Sync time when AdmissionEnforcementEnabled
 	// is true. Order is irrelevant; ALL listed checks must pass.
 	AdmissionPostureChecks []string `gorm:"serializer:json"`
+
+	// AdmissionExemptGroups lists Group IDs whose member peers skip
+	// the admission gate entirely. Motivating case: routing /
+	// gateway peers — server-side machines (cloud VMs, K8s pods,
+	// on-prem servers) that are part of the mesh but never enrol
+	// in MDM/EDR. Without this, an account that turns admission on
+	// would lock its own infrastructure out the moment a posture
+	// check fires for a peer that has no MDM agent to report from.
+	//
+	// Membership in ANY exempt group is sufficient (OR semantics).
+	// Changes are audited via activity.AdmissionExemptGroupsUpdated.
+	AdmissionExemptGroups []string `gorm:"serializer:json"`
 }
 
 // Copy copies the Settings struct
@@ -83,6 +95,7 @@ func (s *Settings) Copy() *Settings {
 		DNSDomain:                       s.DNSDomain,
 		AdmissionEnforcementEnabled:     s.AdmissionEnforcementEnabled,
 		AdmissionPostureChecks:          append([]string(nil), s.AdmissionPostureChecks...),
+		AdmissionExemptGroups:           append([]string(nil), s.AdmissionExemptGroups...),
 	}
 	if s.Extra != nil {
 		settings.Extra = s.Extra.Copy()

@@ -6,4 +6,5 @@ This directory contains the ADRs for openzro. Each ADR captures a single decisio
 |-------|---------------------------------------------|------------|
 | [0001](./0001-openzro-foundation.md) | openzro foundation (fork rationale, license posture, technical strategy) | Accepted |
 | [0002](./0002-flow-events-storage.md) | Flow events storage architecture | Accepted |
-| [0003](./0003-device-admission-gate.md) | Device admission gate (control-plane refusal of non-compliant peers) | Accepted |
+| [0003](./0003-device-admission-gate.md) | Device admission gate (control-plane refusal of non-compliant peers) | Accepted (§Consequences "no per-peer overrides" superseded by 0004) |
+| [0004](./0004-admission-bypass-and-group-scope.md) | Admission bypass + group-scope exemption | Accepted |

@@ -137,6 +137,9 @@ func (h *handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 	if req.Settings.AdmissionPostureChecks != nil {
 		settings.AdmissionPostureChecks = *req.Settings.AdmissionPostureChecks
 	}
+	if req.Settings.AdmissionExemptGroups != nil {
+		settings.AdmissionExemptGroups = *req.Settings.AdmissionExemptGroups
+	}
 
 	var onboarding *types.AccountOnboarding
 	if req.Onboarding != nil {
@@ -203,6 +206,10 @@ func toAccountResponse(accountID string, settings *types.Settings, meta *types.A
 	if admissionPostureChecks == nil {
 		admissionPostureChecks = []string{}
 	}
+	admissionExemptGroups := settings.AdmissionExemptGroups
+	if admissionExemptGroups == nil {
+		admissionExemptGroups = []string{}
+	}
 
 	apiSettings := api.AccountSettings{
 		PeerLoginExpiration:             int(settings.PeerLoginExpiration.Seconds()),
@@ -219,6 +226,7 @@ func toAccountResponse(accountID string, settings *types.Settings, meta *types.A
 		DnsDomain:                       &settings.DNSDomain,
 		AdmissionEnforcementEnabled:     &settings.AdmissionEnforcementEnabled,
 		AdmissionPostureChecks:          &admissionPostureChecks,
+		AdmissionExemptGroups:           &admissionExemptGroups,
 	}
 
 	apiOnboarding := api.AccountOnboarding{

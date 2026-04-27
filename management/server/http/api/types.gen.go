@@ -287,6 +287,9 @@ type AccountSettings struct {
 	// AdmissionEnforcementEnabled When true, peer Login/Sync is gated on the listed posture checks.
 	AdmissionEnforcementEnabled *bool `json:"admission_enforcement_enabled,omitempty"`
 
+	// AdmissionExemptGroups Group IDs whose member peers skip the admission gate (gateway / routing peers without MDM).
+	AdmissionExemptGroups *[]string `json:"admission_exempt_groups,omitempty"`
+
 	// AdmissionPostureChecks Posture check IDs evaluated as the admission gate when admission_enforcement_enabled is true.
 	AdmissionPostureChecks *[]string `json:"admission_posture_checks,omitempty"`
 

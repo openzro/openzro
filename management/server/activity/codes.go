@@ -189,6 +189,21 @@ const (
 	// posture check IDs that act as the admission gate.
 	AdmissionPostureChecksUpdated Activity = 90
 
+	// PeerAdmissionBypassGranted / Revoked / Expired record the
+	// lifecycle of a per-peer break-glass bypass. ADR-0004 makes
+	// the audit trail mandatory: every grant carries the
+	// initiator + reason + expiry, every revoke records who
+	// pulled it back, every expiry is automatic and emits its own
+	// row.
+	PeerAdmissionBypassGranted Activity = 91
+	PeerAdmissionBypassRevoked Activity = 92
+	PeerAdmissionBypassExpired Activity = 93
+
+	// AdmissionExemptGroupsUpdated records changes to the
+	// account-wide list of groups whose member peers skip the
+	// admission gate (gateway / routing peers without MDM).
+	AdmissionExemptGroupsUpdated Activity = 94
+
 	AccountDeleted Activity = 99999
 )
 
@@ -296,6 +311,11 @@ var activityMap = map[Activity]Code{
 	AdmissionEnforcementEnabled:   {"Admission enforcement enabled", "account.setting.admission.enforcement.enable"},
 	AdmissionEnforcementDisabled:  {"Admission enforcement disabled", "account.setting.admission.enforcement.disable"},
 	AdmissionPostureChecksUpdated: {"Admission posture checks updated", "account.setting.admission.checks.update"},
+
+	PeerAdmissionBypassGranted:   {"Peer admission bypass granted", "peer.admission.bypass.granted"},
+	PeerAdmissionBypassRevoked:   {"Peer admission bypass revoked", "peer.admission.bypass.revoked"},
+	PeerAdmissionBypassExpired:   {"Peer admission bypass expired", "peer.admission.bypass.expired"},
+	AdmissionExemptGroupsUpdated: {"Admission exempt groups updated", "account.setting.admission.exempt_groups.update"},
 }
 
 // StringCode returns a string code of the activity

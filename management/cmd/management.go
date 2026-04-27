@@ -45,7 +45,9 @@ import (
 	flowProto "github.com/openzro/openzro/flow/proto"
 	flowSinks "github.com/openzro/openzro/flow/sinks"
 	flowFactory "github.com/openzro/openzro/flow/store/factory"
+	"github.com/openzro/openzro/management/server/activity"
 	activityExporters "github.com/openzro/openzro/management/server/activity_exporters"
+	"github.com/openzro/openzro/management/server/admission"
 	flowExports "github.com/openzro/openzro/management/server/flow_exports"
 	"github.com/openzro/openzro/management/server/mdm"
 	"github.com/openzro/openzro/management/server/posture"
@@ -324,6 +326,7 @@ var (
 			var mdmManager *mdm.Manager
 			var activityExportersStore *activityExporters.Store
 			var activityExportersManager *activityExporters.Manager
+			var admissionBypassStore *admission.Store
 			if sqlStore, ok := store.(*mgmtStore.SqlStore); ok {
 				flowExportsStore, err = flowExports.NewStore(sqlStore.GetGormDB(), config.DataStoreEncryptionKey)
 				if err != nil {
@@ -346,6 +349,15 @@ var (
 					return fmt.Errorf("activity_exporters manager: %w", err)
 				}
 				defer activityExportersManager.Stop()
+				// Per-peer admission bypass store (ADR-0004 — break-
+				// glass overrides for the Device Admission gate, with
+				// mandatory audit trail). The expiry worker fires
+				// peer.admission.bypass.expired events as rows time
+				// out so the auditor sees the full lifecycle.
+				admissionBypassStore, err = admission.NewStore(sqlStore.GetGormDB())
+				if err != nil {
+					return fmt.Errorf("admission bypass store: %w", err)
+				}
 				// Wire the posture check into the live manager. Set
 				// the package-level resolver once so every Account's
 				// posture eval can call the manager without threading
@@ -404,8 +416,30 @@ var (
 			if activityExportersManager != nil {
 				accountManager.SetActivityExporters(activityExportersManager)
 			}
+			if admissionBypassStore != nil {
+				accountManager.SetAdmissionBypasses(admissionBypassStore)
+				// The worker emits peer.admission.bypass.expired
+				// events through the same StoreEvent path the rest
+				// of the audit log uses. Adapt to the package's
+				// import-cycle-free EventEmitter signature:
+				// activity.Activity is a typed int alias, so we
+				// reconstruct it from the uint32 the worker passes.
+				go admission.RunExpiryWorker(ctx, admissionBypassStore,
+					func(ctx context.Context, initiatorID, targetID, accountID string, code uint32, meta map[string]any) {
+						accountManager.StoreEvent(ctx, initiatorID, targetID, accountID, activity.Activity(code), meta)
+					})
+			}
 
-			httpAPIHandler, err := nbhttp.NewAPIHandler(ctx, accountManager, networksManager, resourcesManager, routersManager, groupsManager, geo, authManager, appMetrics, integratedPeerValidator, proxyController, permissionsManager, peersManager, settingsManager, flowStore, flowExportsStore, flowExportsManager, mdmStore, mdmManager, activityExportersStore, activityExportersManager)
+			// Bypass-event emitter passed by closure: the handler
+			// emits granted / revoked through the same StoreEvent
+			// path as the rest of the audit log. Cast the activity
+			// type alias since admission_bypass uses the activity
+			// package directly (no import-cycle workaround needed
+			// at the handler edge).
+			bypassEmitter := func(ctx context.Context, initiatorID, targetID, accountID string, code activity.Activity, meta map[string]any) {
+				accountManager.StoreEvent(ctx, initiatorID, targetID, accountID, code, meta)
+			}
+			httpAPIHandler, err := nbhttp.NewAPIHandler(ctx, accountManager, networksManager, resourcesManager, routersManager, groupsManager, geo, authManager, appMetrics, integratedPeerValidator, proxyController, permissionsManager, peersManager, settingsManager, flowStore, flowExportsStore, flowExportsManager, mdmStore, mdmManager, activityExportersStore, activityExportersManager, admissionBypassStore, bypassEmitter)
 
 			if err != nil {
 				return fmt.Errorf("failed creating HTTP API handler: %v", err)
