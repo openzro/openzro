@@ -17,6 +17,7 @@ import { useSWRConfig } from "swr";
 import SettingsIcon from "@/assets/icons/SettingsIcon";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { Account } from "@/interfaces/Account";
+import { Group } from "@/interfaces/Group";
 import { PostureCheck } from "@/interfaces/PostureCheck";
 
 type Props = {
@@ -32,20 +33,32 @@ export default function DeviceAdmissionTab({ account }: Readonly<Props>) {
   const { data: postureChecks, isLoading: postureChecksLoading } =
     useFetchApi<PostureCheck[]>("/posture-checks");
 
+  const { data: groups } = useFetchApi<Group[]>("/groups");
+
   const [enforcementEnabled, setEnforcementEnabled] = useState<boolean>(
     !!account.settings.admission_enforcement_enabled,
   );
   const [selectedIds, setSelectedIds] = useState<string[]>(
     account.settings.admission_posture_checks ?? [],
   );
+  const [exemptGroupIds, setExemptGroupIds] = useState<string[]>(
+    account.settings.admission_exempt_groups ?? [],
+  );
 
   const { hasChanges, updateRef } = useHasChanges([
     enforcementEnabled,
     selectedIds.slice().sort().join(","),
+    exemptGroupIds.slice().sort().join(","),
   ]);
 
   const toggleCheck = (id: string) => {
     setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  };
+
+  const toggleExemptGroup = (id: string) => {
+    setExemptGroupIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
   };
@@ -61,6 +74,7 @@ export default function DeviceAdmissionTab({ account }: Readonly<Props>) {
             ...account.settings,
             admission_enforcement_enabled: enforcementEnabled,
             admission_posture_checks: selectedIds,
+            admission_exempt_groups: exemptGroupIds,
           },
         })
         .then(() => {
@@ -68,6 +82,7 @@ export default function DeviceAdmissionTab({ account }: Readonly<Props>) {
           updateRef([
             enforcementEnabled,
             selectedIds.slice().sort().join(","),
+            exemptGroupIds.slice().sort().join(","),
           ]);
         }),
       loadingMessage: "Saving admission policy...",
@@ -227,6 +242,62 @@ export default function DeviceAdmissionTab({ account }: Readonly<Props>) {
                     </div>
                   </label>
                 ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <Label>Exempt groups</Label>
+            <HelpText>
+              Peers in any of these groups skip the admission gate
+              entirely. Use this for routing / gateway peers (cloud
+              VMs, K8s pods, on-prem servers) that aren&apos;t enrolled
+              in MDM/EDR — without an exempt group, the gate would
+              lock your own infrastructure out.
+            </HelpText>
+
+            {(groups ?? []).length === 0 ? (
+              <Paragraph className={"text-xs text-nb-gray-300 mt-2"}>
+                No groups defined yet. Create a group (e.g.{" "}
+                <code className={"font-mono text-xs"}>
+                  infrastructure-peers
+                </code>
+                ) under{" "}
+                <InlineLink href={"/team/groups"}>Groups</InlineLink>{" "}
+                first, then attach it to the setup keys you use to
+                enrol gateway peers.
+              </Paragraph>
+            ) : (
+              <div
+                className={
+                  "mt-3 flex flex-col gap-2 border border-nb-gray-900 rounded-md p-4"
+                }
+              >
+                {(groups ?? [])
+                  .filter((g) => g.id)
+                  .map((g) => (
+                    <label
+                      key={g.id}
+                      className={
+                        "flex items-start gap-3 cursor-pointer select-none py-1"
+                      }
+                    >
+                      <Checkbox
+                        checked={exemptGroupIds.includes(g.id as string)}
+                        onCheckedChange={() =>
+                          toggleExemptGroup(g.id as string)
+                        }
+                        disabled={!permission.settings.update}
+                      />
+                      <div className={"flex flex-col"}>
+                        <span className={"text-sm font-medium"}>{g.name}</span>
+                        <span className={"text-xs text-nb-gray-300"}>
+                          {g.peers_count ?? 0} peer
+                          {(g.peers_count ?? 0) === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                    </label>
+                  ))}
               </div>
             )}
           </div>

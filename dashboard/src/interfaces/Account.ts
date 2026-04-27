@@ -22,5 +22,6 @@ export interface Account {
     lazy_connection_enabled: boolean;
     admission_enforcement_enabled?: boolean;
     admission_posture_checks?: string[];
+    admission_exempt_groups?: string[];
   };
 }
