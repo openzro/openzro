@@ -28,6 +28,7 @@ import (
 	"github.com/openzro/openzro/management/server/account"
 	"github.com/openzro/openzro/management/server/activity"
 	"github.com/openzro/openzro/management/server/activity_exporters"
+	"github.com/openzro/openzro/management/server/admission"
 	nbcache "github.com/openzro/openzro/management/server/cache"
 	nbcontext "github.com/openzro/openzro/management/server/context"
 	"github.com/openzro/openzro/management/server/geolocation"
@@ -110,6 +111,13 @@ type DefaultAccountManager struct {
 	// configured via the dashboard. Optional: when nil, only the
 	// process-wide env-var baseline is active.
 	activityExporters *activity_exporters.Manager
+
+	// admissionBypasses owns the per-peer admission bypass store
+	// (ADR-0004 — break-glass overrides for the Device Admission
+	// gate, with mandatory audit trail). When nil, the bypass
+	// short-circuit is skipped and the gate runs as if no bypass
+	// existed; the existing posture checks still apply.
+	admissionBypasses *admission.Store
 }
 
 // SetActivityExporters wires a per-account exporter manager into
@@ -117,6 +125,14 @@ type DefaultAccountManager struct {
 // the store + manager are constructed. nil disables the layer.
 func (am *DefaultAccountManager) SetActivityExporters(m *activity_exporters.Manager) {
 	am.activityExporters = m
+}
+
+// SetAdmissionBypasses wires the per-peer admission bypass store
+// into evaluateAdmission. Called once at startup from
+// cmd/management.go. nil disables the bypass short-circuit; the
+// gate continues to run posture checks as before.
+func (am *DefaultAccountManager) SetAdmissionBypasses(s *admission.Store) {
+	am.admissionBypasses = s
 }
 
 func isUniqueConstraintError(err error) bool {
@@ -455,6 +471,11 @@ func (am *DefaultAccountManager) handleAdmissionSettings(ctx context.Context, ol
 	if !stringSlicesEqual(oldSettings.AdmissionPostureChecks, newSettings.AdmissionPostureChecks) {
 		am.StoreEvent(ctx, userID, accountID, accountID, activity.AdmissionPostureChecksUpdated, map[string]any{
 			"posture_check_ids": newSettings.AdmissionPostureChecks,
+		})
+	}
+	if !stringSlicesEqual(oldSettings.AdmissionExemptGroups, newSettings.AdmissionExemptGroups) {
+		am.StoreEvent(ctx, userID, accountID, accountID, activity.AdmissionExemptGroupsUpdated, map[string]any{
+			"exempt_group_ids": newSettings.AdmissionExemptGroups,
 		})
 	}
 }

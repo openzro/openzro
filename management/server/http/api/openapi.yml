@@ -150,6 +150,12 @@ components:
           items:
             type: string
             example: "posture-check-id"
+        admission_exempt_groups:
+          description: Group IDs whose member peers skip the admission gate. Motivating case is gateway / routing peers (cloud VMs, K8s pods, on-prem servers) that are part of the mesh but never enrol in MDM/EDR. Membership in ANY listed group is sufficient.
+          type: array
+          items:
+            type: string
+            example: "group-id"
       required:
         - peer_login_expiration_enabled
         - peer_login_expiration

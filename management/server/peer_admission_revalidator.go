@@ -145,7 +145,11 @@ func (am *DefaultAccountManager) revalidateAdmissionForPeer(ctx context.Context,
 	// status.PermissionDenied on rejection. We translate that into a
 	// channel close — the gRPC handler wakes up on its update channel
 	// closing and drops the stream with the same error semantics.
-	if err := am.evaluateAdmission(ctx, am.Store, accountID, peer, peerID); err != nil {
+	// Revalidator: peer is persisted, so the helper resolves group
+	// memberships from the store. candidateGroups is nil. The
+	// peerID stands as the audit initiator since this is a
+	// system-initiated re-check, not a user action.
+	if err := am.evaluateAdmission(ctx, am.Store, accountID, peer, nil, peerID); err != nil {
 		log.WithContext(ctx).Infof("admission revalidator: revoking session for peer %s: %v", peerID, err)
 		am.peersUpdateManager.CloseChannel(ctx, peerID)
 	}

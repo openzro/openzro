@@ -7,6 +7,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/openzro/openzro/management/server/activity"
+	"github.com/openzro/openzro/management/server/admission"
 	nbpeer "github.com/openzro/openzro/management/server/peer"
 	"github.com/openzro/openzro/management/server/status"
 	"github.com/openzro/openzro/management/server/store"
@@ -16,24 +17,37 @@ import (
 // evaluateAdmission runs the account-wide admission posture checks
 // against peer and refuses login when any of them rejects it.
 //
-// Reads settings + the configured posture checks from the supplied
-// transaction so the caller stays within a single locking scope. Runs
-// the check.Check() call out of band of any DB lock — the only
-// in-transaction work is metadata I/O. The evaluation itself can do
-// network I/O (e.g. EndpointSecurityCheck → Microsoft Graph), so
-// callers must invoke this BEFORE acquiring write locks they intend
-// to hold for long.
+// Two short-circuits run BEFORE the posture checks. Both are
+// declarative gates added by ADR-0004 to keep the admission gate
+// usable in real deployments:
 //
-// Returns nil when the peer is admitted (or admission is disabled).
-// Returns a status.PermissionDenied error when a check rejects the
-// peer; the message is structured as
-// "device admission denied: <CheckType>: <Reason>" so client UIs and
-// SIEM rules can pattern-match.
+//  1. Group-scope exemption — if the peer's groups intersect
+//     `Settings.AdmissionExemptGroups`, the check is skipped.
+//     Motivating case: gateway / routing peers (cloud VMs, K8s
+//     pods, on-prem servers) that are part of the mesh but never
+//     enrol in MDM/EDR, so a posture check would always fail.
+//     Exempting their group is a one-time declarative change
+//     audited via AdmissionExemptGroupsUpdated.
 //
-// Side effect: on denial, an activity.PeerAdmissionDenied event is
-// stored, including the failing posture check ID and the reason. This
-// is the audit trail required by Bacen 4.893 / Circular 3.909.
-func (am *DefaultAccountManager) evaluateAdmission(ctx context.Context, transaction store.Store, accountID string, peer *nbpeer.Peer, initiatorID string) error {
+//  2. Per-peer bypass — if there's an active, non-expired
+//     PeerAdmissionBypass row for (accountID, peerID), the
+//     check is skipped. Bypass is the break-glass for individual
+//     non-compliant devices that need temporary access (CEO
+//     laptop with a 24h reason). The grant emitted its own
+//     audit event when it was issued; we just honour it here.
+//
+// candidateGroups is consulted only when peer.ID is empty (the
+// AddPeer flow, before the peer is persisted). For Login / Sync
+// the function resolves the actual group memberships from the
+// supplied transaction.
+func (am *DefaultAccountManager) evaluateAdmission(
+	ctx context.Context,
+	transaction store.Store,
+	accountID string,
+	peer *nbpeer.Peer,
+	candidateGroups []string,
+	initiatorID string,
+) error {
 	settings, err := transaction.GetAccountSettings(ctx, store.LockingStrengthShare, accountID)
 	if err != nil {
 		return err
@@ -46,6 +60,44 @@ func (am *DefaultAccountManager) evaluateAdmission(ctx context.Context, transact
 		return nil
 	}
 
+	peerID := peer.ID
+	if peerID == "" {
+		peerID = peer.Key
+	}
+
+	// Short-circuit 1: group-scope exemption.
+	if len(settings.AdmissionExemptGroups) > 0 {
+		groups, err := am.resolveAdmissionPeerGroups(ctx, transaction, accountID, peer.ID, candidateGroups)
+		if err != nil {
+			return fmt.Errorf("admission: failed to resolve peer groups: %w", err)
+		}
+		if admission.HasGroupOverlap(groups, settings.AdmissionExemptGroups) {
+			log.WithContext(ctx).Debugf(
+				"admission: peer %s exempt by group membership", peerID)
+			return nil
+		}
+	}
+
+	// Short-circuit 2: active per-peer bypass.
+	if am.admissionBypasses != nil && peer.ID != "" {
+		active, row, err := am.admissionBypasses.IsActive(ctx, accountID, peer.ID)
+		if err != nil {
+			// Don't fail-open silently on a DB hiccup; log and
+			// continue to the posture checks. If the operator
+			// expects bypass to take effect and the DB is broken,
+			// the right behavior is "deny" (fail-closed) plus a
+			// loud log so the on-call sees the actual problem.
+			log.WithContext(ctx).Errorf(
+				"admission: bypass lookup failed for peer %s: %v",
+				peerID, err)
+		} else if active && row != nil {
+			log.WithContext(ctx).Infof(
+				"admission: peer %s bypassed by %s (reason=%q expires=%s)",
+				peerID, row.InitiatorID, row.Reason, row.ExpiresAt.Format("2006-01-02T15:04:05Z"))
+			return nil
+		}
+	}
+
 	checks, err := transaction.GetPostureChecksByIDs(ctx, store.LockingStrengthShare, accountID, ids)
 	if err != nil {
 		return fmt.Errorf("admission: failed to load posture checks: %w", err)
@@ -56,10 +108,6 @@ func (am *DefaultAccountManager) evaluateAdmission(ctx context.Context, transact
 		return nil
 	}
 
-	peerID := peer.ID
-	if peerID == "" {
-		peerID = peer.Key
-	}
 	log.WithContext(ctx).Warnf("admission denied for peer %s: %s (%s) %s",
 		peerID, denial.CheckType, denial.PostureCheckName, denial.Reason)
 
@@ -76,4 +124,22 @@ func (am *DefaultAccountManager) evaluateAdmission(ctx context.Context, transact
 
 	return status.Errorf(status.PermissionDenied,
 		"device admission denied: %s: %s", denial.CheckType, denial.Reason)
+}
+
+// resolveAdmissionPeerGroups returns the peer's group memberships as
+// the admission gate sees them. For an existing peer (peer.ID
+// non-empty) this is a transaction-scoped DB lookup. For a new peer
+// (AddPeer flow) it falls back to the candidate groups computed
+// from the SetupKey.AutoGroups or User.AutoGroups before the peer
+// is persisted.
+func (am *DefaultAccountManager) resolveAdmissionPeerGroups(
+	ctx context.Context,
+	transaction store.Store,
+	accountID, peerID string,
+	candidateGroups []string,
+) ([]string, error) {
+	if peerID == "" {
+		return candidateGroups, nil
+	}
+	return getPeerGroupIDs(ctx, transaction, accountID, peerID)
 }
