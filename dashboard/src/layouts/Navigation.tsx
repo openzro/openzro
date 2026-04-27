@@ -2,6 +2,7 @@
 
 import { ScrollArea } from "@components/ScrollArea";
 import { cn } from "@utils/helpers";
+import { CableIcon } from "lucide-react";
 import AccessControlIcon from "@/assets/icons/AccessControlIcon";
 import ActivityIcon from "@/assets/icons/ActivityIcon";
 import DNSIcon from "@/assets/icons/DNSIcon";
@@ -165,6 +166,12 @@ export default function Navigation({
               </SidebarItemGroup>
 
               <SidebarItemGroup>
+                <SidebarItem
+                  icon={<CableIcon size={16} />}
+                  label="Integrations"
+                  href={"/integrations"}
+                  visible={permission.settings.read}
+                />
                 <SidebarItem
                   icon={<SettingsIcon />}
                   label="Settings"

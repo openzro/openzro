@@ -8,7 +8,6 @@ import InlineLink from "@components/InlineLink";
 import { notify } from "@components/Notification";
 import Paragraph from "@components/Paragraph";
 import { cn } from "@utils/helpers";
-import * as Tabs from "@radix-ui/react-tabs";
 import useFetchApi, { useApiCall } from "@utils/api";
 import { API_ORIGIN } from "@utils/openzro";
 import {
@@ -26,8 +25,6 @@ import {
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { useEffect, useState } from "react";
 import { useSWRConfig } from "swr";
-import SettingsIcon from "@/assets/icons/SettingsIcon";
-import { Account } from "@/interfaces/Account";
 import {
   ActivityExporter,
   ActivityExporterType,
@@ -38,23 +35,18 @@ import ActivityExporterModal from "@/modules/activity-exporters/ActivityExporter
 import FlowExportModal from "@/modules/flow-exports/FlowExportModal";
 import MDMProviderModal from "@/modules/mdm-providers/MDMProviderModal";
 
-type Props = {
-  account: Account;
-};
-
-// IntegrationsTab is the dashboard surface for runtime-configurable
-// external integrations. Four sub-sections, each on its own
-// deep-linkable sub-route:
+// IntegrationsPage is the top-level dashboard surface for
+// runtime-configurable external integrations. Four sub-sections,
+// each on its own deep-linkable sub-route:
 //
-//   /settings?tab=integrations&subtab=flow      Flow Exports
-//   /settings?tab=integrations&subtab=mdm       MDM / EDR
-//   /settings?tab=integrations&subtab=activity  Activity Streamer
-//   /settings?tab=integrations&subtab=idp-sync  Identity Provider Sync (SCIM)
+//   /integrations?subtab=flow      Flow Exports
+//   /integrations?subtab=mdm       MDM / EDR
+//   /integrations?subtab=activity  Activity Streamer
+//   /integrations?subtab=idp-sync  Identity Provider Sync (SCIM)
 //
 // Sub-tab is rendered as a vertical left rail inside the content
-// area (matches the Settings outer VerticalTabs pattern). Each
-// click pushes the URL so a refresh / share-link / browser back
-// keeps the user on the right section.
+// area. Each click pushes the URL so a refresh / share-link /
+// browser back keeps the user on the right section.
 //
 // The four sections share the same encrypted-at-rest credential
 // envelope on the backend; they're grouped here because they're
@@ -80,7 +72,7 @@ function isValidSubTab(value: string | null): boolean {
   return SUB_TABS.some((t) => t.value === value);
 }
 
-export default function IntegrationsTab(_: Readonly<Props>) {
+export default function IntegrationsPage() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -107,7 +99,7 @@ export default function IntegrationsTab(_: Readonly<Props>) {
 
   const select = (value: string) => {
     setActive(value);
-    router.push(`${pathname}?tab=integrations&subtab=${value}`, {
+    router.push(`${pathname}?subtab=${value}`, {
       scroll: false,
     });
   };
@@ -115,21 +107,16 @@ export default function IntegrationsTab(_: Readonly<Props>) {
   const activeMeta = SUB_TABS.find((t) => t.value === active) ?? SUB_TABS[0];
 
   return (
-    <Tabs.Content value="integrations">
+    <>
       <div className={"p-default py-6"}>
         <Breadcrumbs>
           <Breadcrumbs.Item
-            href={"/settings"}
-            label={"Settings"}
-            icon={<SettingsIcon size={13} />}
-          />
-          <Breadcrumbs.Item
-            href={"/settings?tab=integrations"}
+            href={"/integrations"}
             label={"Integrations"}
             icon={<CableIcon size={14} />}
           />
           <Breadcrumbs.Item
-            href={`/settings?tab=integrations&subtab=${activeMeta.value}`}
+            href={`/integrations?subtab=${activeMeta.value}`}
             label={activeMeta.label}
             icon={activeMeta.icon}
             active
@@ -145,9 +132,9 @@ export default function IntegrationsTab(_: Readonly<Props>) {
         <div className={"mt-6 flex flex-col gap-6 lg:flex-row"}>
           {/*
             Vertical sub-nav. Each entry deep-links via
-            ?tab=integrations&subtab=<value> so refresh / share-link
-            keeps the user on the right section. The list is
-            shrink-0 so the content column flexes to fill.
+            ?subtab=<value> so refresh / share-link keeps the user
+            on the right section. The list is shrink-0 so the
+            content column flexes to fill.
           */}
           <nav
             className={cn(
@@ -185,7 +172,7 @@ export default function IntegrationsTab(_: Readonly<Props>) {
           </div>
         </div>
       </div>
-    </Tabs.Content>
+    </>
   );
 }
 
