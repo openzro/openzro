@@ -247,26 +247,36 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Fetch / create gh-pages branch worktree.
-          git fetch origin gh-pages 2>/dev/null || true
-          if git ls-remote --exit-code --heads origin gh-pages >/dev/null; then
-            git worktree add gh-pages-tree origin/gh-pages
-            cd gh-pages-tree && git checkout -B gh-pages
+          # Use a fresh clone in a separate directory rather than a
+          # `git worktree add` against the main checkout — orphan
+          # worktrees and the actions/checkout extra-header config
+          # don't always cooperate with the auth setup that lets us
+          # push back. A separate clone is unambiguous.
+          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          if git ls-remote --exit-code --heads "$REMOTE" gh-pages >/dev/null; then
+              git clone --depth 1 --branch gh-pages "$REMOTE" gh-pages-tree
           else
-            git worktree add --orphan -b gh-pages gh-pages-tree
-            cd gh-pages-tree
+              mkdir gh-pages-tree
+              cd gh-pages-tree
+              git init -b gh-pages
+              git remote add origin "$REMOTE"
+              cd ..
           fi
 
           # Replace pool/dists/repodata in place; preserve any other
-          # files an operator may have committed (CNAME etc).
+          # files an operator may have committed to gh-pages (e.g.
+          # CNAME if they configured it manually before the first run).
           rsync -a --delete-after \
               --exclude='.git/' \
-              "$GITHUB_WORKSPACE/.pkg-publish/repo/" ./
+              "$GITHUB_WORKSPACE/.pkg-publish/repo/" gh-pages-tree/
 
+          cd gh-pages-tree
           git add -A
-          git -c user.name='openzro-ci' -c user.email='ci@openzro.io' \
-              commit -m "publish: ${GITHUB_REF_NAME} packages" || {
+          if git diff --cached --quiet; then
               echo "No changes to publish"
               exit 0
-          }
+          fi
+          git -c user.name='openzro-ci' -c user.email='ci@openzro.io' \
+              commit -m "publish: ${GITHUB_REF_NAME} packages"
           git push origin gh-pages
