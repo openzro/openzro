@@ -1,0 +1,53 @@
+# macOS desktop UI release.
+#
+# Runs on a darwin runner (macos-14 or later) — CGO Fyne build cannot
+# cross-compile from Linux. Produces a universal binary (amd64+arm64
+# fat binary) and tarballs it for download.
+#
+# No code signing or notarization in this stream — users will need to
+# `xattr -d com.apple.quarantine` after download. SignPath / Apple
+# Developer ID is the planned future path.
+
+version: 2
+
+project_name: openzro-ui
+
+builds:
+  - id: openzro-ui-darwin
+    dir: client/ui
+    binary: openzro-ui
+    env:
+      - CGO_ENABLED=1
+      - MACOSX_DEPLOYMENT_TARGET=11.0
+    goos: [darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X github.com/openzro/openzro/version.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    tags: [load_wgnt_from_rsrc]
+
+universal_binaries:
+  - id: openzro-ui-darwin
+    replace: true
+
+archives:
+  - id: darwin
+    builds: [openzro-ui-darwin]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_darwin_universal"
+
+checksum:
+  name_template: "openzro-ui_darwin_checksums.txt"
+
+release:
+  github:
+    owner: openzro
+    name: openzro
+  draft: false
+  prerelease: auto
+  mode: append
+
+snapshot:
+  version_template: "{{ .Tag }}-snapshot-{{ .ShortCommit }}"
+
+changelog:
+  disable: true
