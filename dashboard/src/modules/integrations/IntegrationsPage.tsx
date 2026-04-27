@@ -339,11 +339,11 @@ function MDMProvidersSection() {
   return (
     <div>
       <Paragraph>
-        Connect Microsoft Intune, SentinelOne, or Huntress to require
-        devices in good security standing before they&apos;re allowed
-        in the network. Configured providers can be referenced from
-        any posture check via the &quot;Endpoint Security&quot; check
-        type.
+        Connect Microsoft Intune, SentinelOne, Huntress, or CrowdStrike
+        Falcon to require devices in good security standing before
+        they&apos;re allowed in the network. Configured providers can
+        be referenced from any posture check via the &quot;Endpoint
+        Security&quot; check type.
       </Paragraph>
       <HelpText>
         Credentials are encrypted at rest. Posture lookups are cached
@@ -367,7 +367,7 @@ function MDMProvidersSection() {
           <Paragraph className="text-nb-gray-300">Loading…</Paragraph>
         )}
         {!isLoading && (!data || data.length === 0) && (
-          <EmptyState message="No MDM/EDR providers configured. Click Add provider to connect Intune, SentinelOne, or Huntress." />
+          <EmptyState message="No MDM/EDR providers configured. Click Add provider to connect Intune, SentinelOne, Huntress, or CrowdStrike Falcon." />
         )}
         {data && data.length > 0 && (
           <table className="w-full text-sm">
@@ -442,6 +442,7 @@ function MDMTypeBadge({ type }: { type: MDMProviderType }) {
     intune: "Intune",
     sentinelone: "SentinelOne",
     huntress: "Huntress",
+    crowdstrike: "CrowdStrike",
   };
   return (
     <span className="inline-flex items-center gap-1 rounded bg-nb-gray-900 px-2 py-1 text-xs text-violet-300">
@@ -460,6 +461,10 @@ function mdmEndpointLabel(row: MDMProvider): string {
   }
   if (row.type === "huntress") {
     return "api.huntress.io";
+  }
+  if (row.type === "crowdstrike") {
+    const c = row.config as { cloud?: string };
+    return c?.cloud ? `cloud:${c.cloud}` : "cloud:us-1";
   }
   return "";
 }

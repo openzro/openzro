@@ -90,3 +90,34 @@ func (c HuntressConfig) PublicView() HuntressPublicConfig {
 type HuntressPublicConfig struct {
 	HasCredentials bool `json:"has_credentials"`
 }
+
+// CrowdStrikeConfig holds Falcon API credentials. CrowdStrike uses
+// OAuth2 client_credentials minted from a Falcon API client (Console
+// → Support → API Clients and Keys), and a regional cloud bucket
+// determines the base URL.
+type CrowdStrikeConfig struct {
+	// Cloud is the Falcon cloud region the tenant lives in. Empty
+	// defaults to us-1 (the original public cloud). The full set of
+	// recognized values is in cloudBaseURL().
+	Cloud string `json:"cloud"`
+
+	// ClientID is the Falcon API client ID. Public; safe to display.
+	ClientID string `json:"client_id"`
+
+	// ClientSecret is the Falcon API client secret. Sensitive.
+	ClientSecret string `json:"client_secret,omitempty"`
+}
+
+func (c CrowdStrikeConfig) PublicView() CrowdStrikePublicConfig {
+	return CrowdStrikePublicConfig{
+		Cloud:           c.Cloud,
+		ClientID:        c.ClientID,
+		HasClientSecret: c.ClientSecret != "",
+	}
+}
+
+type CrowdStrikePublicConfig struct {
+	Cloud           string `json:"cloud"`
+	ClientID        string `json:"client_id"`
+	HasClientSecret bool   `json:"has_client_secret"`
+}

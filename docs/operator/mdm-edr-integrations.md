@@ -1,10 +1,10 @@
 # Operator guide — MDM/EDR integrations
 
-openZro can talk to three MDM/EDR vendors out of the box: **Microsoft
-Intune**, **SentinelOne**, and **Huntress**. Each integration is the
-backing for the Posture Check type *Endpoint Security (MDM/EDR)*,
-which in turn is what Device Admission uses to refuse non-compliant
-devices.
+openZro can talk to four MDM/EDR vendors out of the box: **Microsoft
+Intune**, **SentinelOne**, **Huntress**, and **CrowdStrike Falcon**.
+Each integration is the backing for the Posture Check type *Endpoint
+Security (MDM/EDR)*, which in turn is what Device Admission uses to
+refuse non-compliant devices.
 
 This file is the per-vendor "what credentials do I need and what
 permissions do they need" walkthrough. After this you go to
@@ -185,6 +185,86 @@ Decision:
   your endpoints use FQDN-style hostnames internally, ensure the
   Huntress agent picks the same one.
 
+## CrowdStrike Falcon
+
+### What you need
+
+- A CrowdStrike Falcon tenant. Note the **cloud region** — Falcon
+  tenants live in one of `us-1`, `us-2`, `eu-1`, `us-gov-1`, or
+  `us-gov-2`, and an OAuth client minted in one cloud only works
+  against its home region.
+- A Falcon API client (Console → Support → **API Clients and Keys**)
+  with the **Hosts: Read** scope. Read-only is sufficient — we only
+  call the device query and entities endpoints.
+- The client ID + client secret pair from that API client.
+
+### Walkthrough
+
+1. **Falcon console** → Support → **API Clients and Keys** → **Add
+   new API client**.
+2. Name it `openzro-posture` or similar. Tick the **Hosts: Read**
+   scope only.
+3. **Save**. The console shows the *Client ID* and *Client Secret*
+   exactly once — copy both.
+4. Note the cloud region (top-right of the console URL —
+   `falcon.crowdstrike.com` is us-1, `falcon.us-2.crowdstrike.com`
+   is us-2, `falcon.eu-1.crowdstrike.com` is eu-1).
+
+### Configuration in openZro
+
+Settings → Integrations → MDM/EDR → **Add provider** → type
+**CrowdStrike Falcon**:
+
+| Field | What to paste |
+|---|---|
+| Name | Free-form, e.g. `Falcon Prod` |
+| Cloud | Pick your tenant's region |
+| API Client ID | From step 3 |
+| API Client Secret | From step 3 |
+
+### What openZro queries
+
+Two-step lookup:
+
+```http
+GET /devices/queries/devices/v1?filter=hostname:'<hostname>'
+Authorization: Bearer <oauth-token>
+```
+
+returns a list of Falcon AIDs (agent IDs); the first match feeds
+into:
+
+```http
+GET /devices/entities/devices/v2?ids=<aid>
+Authorization: Bearer <oauth-token>
+```
+
+The device record's `status` and `reduced_functionality_mode`
+fields drive the decision:
+
+| Condition | Decision |
+|---|---|
+| `status: "normal"`, `reduced_functionality_mode: "no"` | ✅ pass |
+| `status: "contained"` | ❌ fail, reason `"host is contained (network isolation active)"` |
+| `status: "containment_pending"` / `"lift_containment_pending"` | ❌ fail, reason names the transition |
+| `reduced_functionality_mode != "no"` | ❌ fail, reason `"sensor in reduced_functionality_mode=…"` |
+| `status` is anything else | ❌ fail, reason `"Falcon status=… (expected 'normal')"` |
+| no AID matches the hostname | ❌ fail, reason `"no Falcon sensor registered"` |
+
+Containment is treated as non-compliant on purpose — Falcon
+containment is the security team's "isolate this host now" action,
+and an isolated host should not be admitted into the network until
+the containment is lifted by the SOC.
+
+### Common CrowdStrike issues
+
+- **401 Unauthorized** → the API client is from a different cloud
+  than what you configured. The error names this hint explicitly.
+- **403 Forbidden** → API client lacks **Hosts: Read** scope.
+- **No matching device** → hostname mismatch. The Falcon sensor
+  reports the OS-level hostname; verify in the *Hosts → Host
+  Management* view first.
+
 ## Verifying end-to-end
 
 After configuring the provider, before flipping the Device Admission
@@ -236,6 +316,6 @@ type Provider interface {
 5. Add a test that hits `httptest` mocks of the vendor API — no live
    tenant required.
 
-CrowdStrike, Tanium, Jamf, Kandji are reasonable candidates. Open an
+Tanium, Jamf, and Kandji are reasonable next candidates. Open an
 issue first so we can scope the credential surface and the
 compliance attribute to use.

@@ -17,6 +17,7 @@ import { ShieldCheckIcon } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { useSWRConfig } from "swr";
 import {
+  CrowdStrikeCloud,
   MDMProvider,
   MDMProviderInput,
   MDMProviderType,
@@ -51,6 +52,11 @@ export default function MDMProviderModal({
   const [huntressKey, setHuntressKey] = useState("");
   const [huntressSecret, setHuntressSecret] = useState("");
 
+  // CrowdStrike Falcon fields
+  const [csCloud, setCSCloud] = useState<CrowdStrikeCloud>("us-1");
+  const [csClientID, setCSClientID] = useState("");
+  const [csClientSecret, setCSClientSecret] = useState("");
+
   const { mutate } = useSWRConfig();
   const apiCreate = useApiCall<MDMProvider>("/admin/mdm-providers");
   const apiUpdate = useApiCall<MDMProvider>(
@@ -77,6 +83,11 @@ export default function MDMProviderModal({
           setHuntressKey("");
           setHuntressSecret("");
           break;
+        case "crowdstrike":
+          setCSCloud((cfg?.cloud as CrowdStrikeCloud) || "us-1");
+          setCSClientID(cfg?.client_id ?? "");
+          setCSClientSecret("");
+          break;
       }
     } else {
       setName("");
@@ -88,6 +99,9 @@ export default function MDMProviderModal({
       setS1Token("");
       setHuntressKey("");
       setHuntressSecret("");
+      setCSCloud("us-1");
+      setCSClientID("");
+      setCSClientSecret("");
     }
   }, [open, existing]);
 
@@ -109,6 +123,12 @@ export default function MDMProviderModal({
         api_key: huntressKey || undefined,
         api_secret: huntressSecret || undefined,
       };
+    } else if (type === "crowdstrike") {
+      base.crowdstrike = {
+        cloud: csCloud,
+        client_id: csClientID,
+        client_secret: csClientSecret || undefined,
+      };
     }
     return base;
   };
@@ -126,6 +146,11 @@ export default function MDMProviderModal({
     } else if (type === "huntress") {
       if (!isEdit && (!huntressKey || !huntressSecret)) {
         return "API key and secret are required";
+      }
+    } else if (type === "crowdstrike") {
+      if (!csClientID) return "Falcon API client ID is required";
+      if (!isEdit && !csClientSecret) {
+        return "Falcon API client secret is required";
       }
     }
     return null;
@@ -164,7 +189,7 @@ export default function MDMProviderModal({
           description={
             isEdit
               ? "Update credentials. Leave secret fields blank to keep the current value."
-              : "Connect Microsoft Intune, SentinelOne, or Huntress to require devices in good security standing."
+              : "Connect Microsoft Intune, SentinelOne, Huntress, or CrowdStrike Falcon to require devices in good security standing."
           }
           truncate
         />
@@ -190,6 +215,7 @@ export default function MDMProviderModal({
               <option value="intune">Microsoft Intune</option>
               <option value="sentinelone">SentinelOne</option>
               <option value="huntress">Huntress</option>
+              <option value="crowdstrike">CrowdStrike Falcon</option>
             </select>
           </div>
 
@@ -274,6 +300,50 @@ export default function MDMProviderModal({
                   type="password"
                   value={huntressSecret}
                   onChange={(e) => setHuntressSecret(e.target.value)}
+                  placeholder={isEdit ? "(unchanged)" : ""}
+                />
+              </div>
+            </>
+          )}
+
+          {type === "crowdstrike" && (
+            <>
+              <Paragraph className="text-xs text-nb-gray-300">
+                Mint a Falcon API client in the CrowdStrike console
+                under Support → API Clients and Keys with the{" "}
+                <b>Hosts: Read</b> scope. Pick the cloud region your
+                Falcon tenant lives in — the same client cannot
+                cross regions.
+              </Paragraph>
+              <div>
+                <Label>Cloud</Label>
+                <select
+                  value={csCloud}
+                  onChange={(e) =>
+                    setCSCloud(e.target.value as CrowdStrikeCloud)
+                  }
+                  className="w-full rounded-md border border-nb-gray-700 bg-nb-gray-940 px-3 py-2 text-sm"
+                >
+                  <option value="us-1">US-1 (api.crowdstrike.com)</option>
+                  <option value="us-2">US-2 (api.us-2.crowdstrike.com)</option>
+                  <option value="eu-1">EU-1 (api.eu-1.crowdstrike.com)</option>
+                  <option value="us-gov-1">US-GOV-1 (Falcon GovCloud)</option>
+                  <option value="us-gov-2">US-GOV-2 (Falcon GovCloud 2)</option>
+                </select>
+              </div>
+              <div>
+                <Label>API Client ID</Label>
+                <Input
+                  value={csClientID}
+                  onChange={(e) => setCSClientID(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>API Client Secret</Label>
+                <Input
+                  type="password"
+                  value={csClientSecret}
+                  onChange={(e) => setCSClientSecret(e.target.value)}
                   placeholder={isEdit ? "(unchanged)" : ""}
                 />
               </div>

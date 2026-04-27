@@ -3,20 +3,20 @@
 //
 // Architecture (per ADR-0003 — to be written):
 //
-//   types.User / types.Peer
-//          │
-//          │ posture eval
-//          ▼
-//   posture.EndpointSecurityCheck
-//          │ delegate
-//          ▼
-//   mdm.Manager
-//          │ resolve provider by ID
-//          ▼
-//   mdm.Provider (Intune | SentinelOne | Huntress | …)
-//          │ HTTP
-//          ▼
-//   vendor SaaS
+//	types.User / types.Peer
+//	       │
+//	       │ posture eval
+//	       ▼
+//	posture.EndpointSecurityCheck
+//	       │ delegate
+//	       ▼
+//	mdm.Manager
+//	       │ resolve provider by ID
+//	       ▼
+//	mdm.Provider (Intune | SentinelOne | Huntress | …)
+//	       │ HTTP
+//	       ▼
+//	vendor SaaS
 //
 // The framework does not import any specific vendor SDK at the
 // posture-check level — vendors plug in by satisfying the Provider
@@ -40,9 +40,10 @@ import (
 type ProviderType string
 
 const (
-	TypeIntune       ProviderType = "intune"
-	TypeSentinelOne  ProviderType = "sentinelone"
-	TypeHuntress     ProviderType = "huntress"
+	TypeIntune      ProviderType = "intune"
+	TypeSentinelOne ProviderType = "sentinelone"
+	TypeHuntress    ProviderType = "huntress"
+	TypeCrowdStrike ProviderType = "crowdstrike"
 )
 
 // DeviceStatus is the vendor-agnostic projection of a device's

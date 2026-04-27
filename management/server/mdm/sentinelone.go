@@ -45,7 +45,7 @@ func NewSentinelOne(cfg SentinelOneConfig) (*SentinelOne, error) {
 }
 
 func (s *SentinelOne) Type() ProviderType { return TypeSentinelOne }
-func (s *SentinelOne) Close() error        { return nil }
+func (s *SentinelOne) Close() error       { return nil }
 
 // s1Resp is the relevant subset of the /agents response.
 type s1Resp struct {
@@ -53,15 +53,15 @@ type s1Resp struct {
 }
 
 type s1Agent struct {
-	UUID                string `json:"uuid"`
-	ComputerName        string `json:"computerName"`
-	IsActive            bool   `json:"isActive"`
-	IsDecommissioned    bool   `json:"isDecommissioned"`
-	Infected            bool   `json:"infected"`
-	NetworkStatus       string `json:"networkStatus"`
-	AgentVersion        string `json:"agentVersion"`
-	LastActiveDate      string `json:"lastActiveDate"`
-	OperationalState    string `json:"operationalState"`
+	UUID             string `json:"uuid"`
+	ComputerName     string `json:"computerName"`
+	IsActive         bool   `json:"isActive"`
+	IsDecommissioned bool   `json:"isDecommissioned"`
+	Infected         bool   `json:"infected"`
+	NetworkStatus    string `json:"networkStatus"`
+	AgentVersion     string `json:"agentVersion"`
+	LastActiveDate   string `json:"lastActiveDate"`
+	OperationalState string `json:"operationalState"`
 }
 
 func (s *SentinelOne) GetDeviceStatus(ctx context.Context, deviceID string) (DeviceStatus, error) {

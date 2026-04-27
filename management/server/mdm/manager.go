@@ -13,14 +13,15 @@ import (
 // Manager is the in-process orchestrator that:
 //
 //   - reads provider rows from the Store
-//   - constructs concrete drivers (Intune / SentinelOne / Huntress)
+//   - constructs concrete drivers (Intune / SentinelOne / Huntress /
+//     CrowdStrike)
 //   - wraps them in a CachedProvider with the configured TTL
 //   - serves status lookups to posture checks via Lookup()
 //
 // One Manager per process. Hot-reload happens via Refresh() — called
 // after the admin API mutates a provider.
 type Manager struct {
-	store  *Store
+	store    *Store
 	cacheTTL time.Duration
 
 	mu        sync.RWMutex
@@ -85,6 +86,8 @@ func (m *Manager) buildProvider(row *MDMProvider) (Provider, error) {
 		return NewSentinelOne(*plain.(*SentinelOneConfig))
 	case TypeHuntress:
 		return NewHuntress(*plain.(*HuntressConfig))
+	case TypeCrowdStrike:
+		return NewCrowdStrike(*plain.(*CrowdStrikeConfig))
 	}
 	return nil, fmt.Errorf("unknown provider type %q", row.Type)
 }

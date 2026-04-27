@@ -49,6 +49,7 @@ type SaveInput struct {
 	Intune      *IntuneConfig
 	SentinelOne *SentinelOneConfig
 	Huntress    *HuntressConfig
+	CrowdStrike *CrowdStrikeConfig
 }
 
 func (in *SaveInput) Validate() error {
@@ -71,6 +72,13 @@ func (in *SaveInput) Validate() error {
 		if in.Huntress == nil {
 			return errors.New("mdm: huntress config required for type=huntress")
 		}
+	case TypeCrowdStrike:
+		if in.CrowdStrike == nil {
+			return errors.New("mdm: crowdstrike config required for type=crowdstrike")
+		}
+		if in.CrowdStrike.ClientID == "" {
+			return errors.New("mdm: crowdstrike client_id is required")
+		}
 	default:
 		return fmt.Errorf("mdm: unsupported type %q", in.Type)
 	}
@@ -85,6 +93,8 @@ func (in *SaveInput) configBlob() ([]byte, error) {
 		return json.Marshal(in.SentinelOne)
 	case TypeHuntress:
 		return json.Marshal(in.Huntress)
+	case TypeCrowdStrike:
+		return json.Marshal(in.CrowdStrike)
 	}
 	return nil, fmt.Errorf("mdm: unknown type %q", in.Type)
 }
@@ -97,6 +107,8 @@ func (in *SaveInput) publicBlob() ([]byte, error) {
 		return json.Marshal(in.SentinelOne.PublicView())
 	case TypeHuntress:
 		return json.Marshal(in.Huntress.PublicView())
+	case TypeCrowdStrike:
+		return json.Marshal(in.CrowdStrike.PublicView())
 	}
 	return nil, fmt.Errorf("mdm: unknown type %q", in.Type)
 }
@@ -195,6 +207,9 @@ func (s *Store) Decrypt(row *MDMProvider) (any, error) {
 		return &c, json.Unmarshal(plain, &c)
 	case TypeHuntress:
 		var c HuntressConfig
+		return &c, json.Unmarshal(plain, &c)
+	case TypeCrowdStrike:
+		var c CrowdStrikeConfig
 		return &c, json.Unmarshal(plain, &c)
 	}
 	return nil, fmt.Errorf("mdm: unknown type %q on decrypt", row.Type)
