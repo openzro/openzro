@@ -204,15 +204,61 @@ posture. Practical guidance:
 
 ## Common operational scenarios
 
-### "I need to let one specific peer in even though it's failing"
+### "I need to bring up routing / gateway peers (no MDM agent)"
 
-Either fix the device at the vendor side or remove the relevant
-posture check from the admission list. There is **no per-peer
-override** — that's a deliberate choice (see ADR-0003 §Consequences).
+Use the **exempt groups** axis on the Device Admission settings
+page (added in ADR-0004). Recommended workflow:
 
-The fastest path: the auditor goes to the vendor (Intune / S1 /
-Huntress) and either marks the device compliant or removes the
-non-compliance flag. Within ~6 min the peer is back online.
+1. Create a Group `infrastructure-peers` under
+   `Team → Groups`.
+2. Issue or edit setup keys with
+   `AutoGroups: ["infrastructure-peers"]` for every gateway peer
+   you bring up (cloud VMs, Kubernetes pods, on-prem servers).
+3. In `Settings → Device Admission`, tick `infrastructure-peers`
+   under **Exempt groups** and save.
+
+New gateway peers join the mesh transparently — they never run
+the posture checks. The change emits an
+`account.setting.admission.exempt_groups.update` audit event so
+the auditor sees who set the exemption and when.
+
+### "I need to let one specific user laptop in temporarily"
+
+The break-glass path. CEO laptop failed the Intune compliance
+check, has a meeting in 10 minutes, the device is already in
+remediation. Grant a **per-peer bypass** with a mandatory reason
+and a time-bounded expiry:
+
+```bash
+curl -fsS -X POST \
+  -H "Authorization: Bearer <PAT>" \
+  -H "Content-Type: application/json" \
+  -d '{"reason":"Intune re-enrol pending — board meeting","expires_in_seconds":86400}' \
+  https://your-management.example.com/api/peers/<peer-id>/admission-bypass
+```
+
+The grant emits a `peer.admission.bypass.granted` event with the
+initiator (your user ID), the reason, and the expiry. When the
+bypass expires (or the operator revokes it via DELETE on the
+same URL), the worker emits `peer.admission.bypass.expired` /
+`.revoked` so the auditor sees the full lifecycle.
+
+Validation rules the API enforces:
+
+- `reason` is required.
+- Either `expires_in_seconds` (relative, recommended) or
+  `expires_at` (RFC3339) is required — no-expiry bypasses are
+  refused.
+- Maximum duration: 30 days. Longer windows require a re-grant.
+
+The bypass applies only to the admission gate. Per-policy posture
+checks still run, so the bypassed peer is still subject to the
+ACL rules of every policy whose source posture-check list it
+fails.
+
+For a longer-term fix without a bypass: either fix the device at
+the vendor (Intune / S1 / Huntress) so it reports compliant, or
+remove the relevant check from the admission list entirely.
 
 ### "I need to roll out admission gradually"
 
