@@ -39,3 +39,6 @@ deploy/dev-idp/machinekey/*
 # Local dev management — generated config (templated from .tmpl)
 deploy/dev-mgmt/management.json
 
+# Local Claude Code agent state — per-checkout, never check in.
+.claude/
+
