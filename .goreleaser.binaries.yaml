@@ -1,0 +1,255 @@
+# Simplified GoReleaser config for testing-stage releases.
+#
+# Compared to .goreleaser.yaml (the full upstream-derived config):
+#   - No Docker Hub push (only ghcr.io, which uses GITHUB_TOKEN).
+#   - No Homebrew tap push (avoids HOMEBREW_TAP_GITHUB_TOKEN).
+#   - No apt/yum repo upload to wiretrustee.com (defunct domain).
+#   - No code signing (Windows / macOS unsigned — alpha/beta only).
+#   - No goreleaser-pro features.
+#   - .deb / .rpm packages still produced and attached to the GitHub
+#     Release as plain downloadable artifacts.
+#
+# Use this config until we either (a) get OSS signing through
+# SignPath / Certum, or (b) decide to ship to a managed apt/yum
+# host (Cloudsmith free OSS plan is the pre-decided path).
+
+version: 2
+
+project_name: openzro
+
+builds:
+  - id: openzro
+    dir: client
+    binary: openzro
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64, arm, "386"]
+    ignore:
+      - { goos: windows, goarch: arm64 }
+      - { goos: windows, goarch: arm }
+      - { goos: windows, goarch: "386" }
+      - { goos: darwin,  goarch: arm }
+      - { goos: darwin,  goarch: "386" }
+    ldflags:
+      - -s -w -X github.com/openzro/openzro/version.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    tags:
+      - load_wgnt_from_rsrc
+
+  - id: openzro-mgmt
+    dir: management
+    binary: openzro-mgmt
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X github.com/openzro/openzro/version.version={{.Version}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: openzro-signal
+    dir: signal
+    binary: openzro-signal
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X github.com/openzro/openzro/version.version={{.Version}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: openzro-relay
+    dir: relay
+    binary: openzro-relay
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X github.com/openzro/openzro/version.version={{.Version}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: openzro-upload
+    dir: upload-server
+    binary: openzro-upload
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X github.com/openzro/openzro/version.version={{.Version}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: client
+    builds: [openzro]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+
+  - id: openzro-mgmt
+    builds: [openzro-mgmt]
+    name_template: >-
+      openzro-mgmt_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+  - id: openzro-signal
+    builds: [openzro-signal]
+    name_template: >-
+      openzro-signal_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+  - id: openzro-relay
+    builds: [openzro-relay]
+    name_template: >-
+      openzro-relay_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+  - id: openzro-upload
+    builds: [openzro-upload]
+    name_template: >-
+      openzro-upload_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+nfpms:
+  - id: openzro-deb
+    package_name: openzro
+    maintainer: openZro <dev@openzro.io>
+    description: openZro client (zero-trust mesh networking).
+    homepage: https://openzro.io/
+    license: BSD-3-Clause
+    bindir: /usr/bin
+    builds: [openzro]
+    formats: [deb]
+    scripts:
+      postinstall: release_files/post_install.sh
+      preremove: release_files/pre_remove.sh
+
+  - id: openzro-rpm
+    package_name: openzro
+    maintainer: openZro <dev@openzro.io>
+    description: openZro client (zero-trust mesh networking).
+    homepage: https://openzro.io/
+    license: BSD-3-Clause
+    bindir: /usr/bin
+    builds: [openzro]
+    formats: [rpm]
+    scripts:
+      postinstall: release_files/post_install.sh
+      preremove: release_files/pre_remove.sh
+
+# Docker images to ghcr.io only. GITHUB_TOKEN is sufficient — no
+# DOCKER_USER / DOCKER_TOKEN required.
+dockers:
+  - image_templates:
+      - ghcr.io/openzro/openzro:{{ .Version }}-amd64
+      - ghcr.io/openzro/openzro:latest-amd64
+    ids: [openzro]
+    goarch: amd64
+    use: buildx
+    dockerfile: client/Dockerfile
+    extra_files:
+      - client/openzro-entrypoint.sh
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/openzro"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+
+  - image_templates:
+      - ghcr.io/openzro/openzro:{{ .Version }}-arm64
+      - ghcr.io/openzro/openzro:latest-arm64
+    ids: [openzro]
+    goarch: arm64
+    use: buildx
+    dockerfile: client/Dockerfile
+    extra_files:
+      - client/openzro-entrypoint.sh
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/openzro"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+
+  - image_templates:
+      - ghcr.io/openzro/management:{{ .Version }}-amd64
+      - ghcr.io/openzro/management:latest-amd64
+    ids: [openzro-mgmt]
+    goarch: amd64
+    use: buildx
+    dockerfile: management/Dockerfile
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/openzro"
+
+  - image_templates:
+      - ghcr.io/openzro/signal:{{ .Version }}-amd64
+      - ghcr.io/openzro/signal:latest-amd64
+    ids: [openzro-signal]
+    goarch: amd64
+    use: buildx
+    dockerfile: signal/Dockerfile
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/openzro"
+
+  - image_templates:
+      - ghcr.io/openzro/relay:{{ .Version }}-amd64
+      - ghcr.io/openzro/relay:latest-amd64
+    ids: [openzro-relay]
+    goarch: amd64
+    use: buildx
+    dockerfile: relay/Dockerfile
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/openzro"
+
+docker_manifests:
+  - name_template: ghcr.io/openzro/openzro:{{ .Version }}
+    image_templates:
+      - ghcr.io/openzro/openzro:{{ .Version }}-amd64
+      - ghcr.io/openzro/openzro:{{ .Version }}-arm64
+  - name_template: ghcr.io/openzro/openzro:latest
+    image_templates:
+      - ghcr.io/openzro/openzro:latest-amd64
+      - ghcr.io/openzro/openzro:latest-arm64
+
+checksum:
+  name_template: "checksums.txt"
+
+release:
+  github:
+    owner: openzro
+    name: openzro
+  draft: false
+  prerelease: auto
+  header: |
+    ## openZro {{ .Tag }}
+
+    See `CHANGELOG.md` (or commit log) for the full list of changes
+    in this release.
+
+    ### Verifying downloads
+
+    All artifacts are listed in `checksums.txt` along with their
+    SHA-256. Verify with:
+
+    ```sh
+    sha256sum -c checksums.txt
+    ```
+
+    ### Notes
+
+    - **Windows binaries are unsigned** in this release stream. Windows
+      SmartScreen will warn — click "More info" → "Run anyway".
+    - **macOS binaries are not notarized** in this release stream. Run
+      `xattr -d com.apple.quarantine <path-to-binary>` to remove the
+      Gatekeeper quarantine flag.
+    - For signed builds, use a tagged release from the upstream
+      goreleaser pipeline (TODO: SignPath integration).
+
+snapshot:
+  version_template: "{{ .Tag }}-snapshot-{{ .ShortCommit }}"
+
+changelog:
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
