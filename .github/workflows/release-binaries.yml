@@ -1,11 +1,17 @@
-# Lightweight release pipeline: builds the binaries and Docker
-# images that we actually need for early-stage testing, and pushes
-# them to GitHub Releases + ghcr.io. No Docker Hub, no Homebrew tap,
+# Lightweight release pipeline: builds CLI / daemon binaries, the
+# desktop UI client, and Docker images, and publishes them to a
+# single GitHub Release + ghcr.io. No Docker Hub, no Homebrew tap,
 # no apt/yum repo upload, no code signing.
 #
 # Trigger: push of a `v*` tag, or manual dispatch (snapshot mode).
 # Sister to .github/workflows/release.yml (the heavyweight upstream
 # pipeline that depends on secrets we don't have set up yet).
+#
+# Job layout:
+#   1. release         (ubuntu-22.04) — CLI + 4 daemons + Docker, .deb/.rpm
+#   2. release_ui      (ubuntu-22.04) — desktop UI for Linux + Windows
+#   3. release_ui_macos (macos-14)    — desktop UI universal binary for macOS
+# All three jobs `mode: append` to the same GitHub Release on tag push.
 
 name: Release binaries
 
@@ -95,4 +101,109 @@ jobs:
             dist/*.deb
             dist/*.rpm
             dist/checksums.txt
+          retention-days: 14
+
+  release_ui:
+    name: Release desktop UI (Linux + Windows)
+    runs-on: ubuntu-22.04
+    # Run after the main `release` job creates the GitHub Release on
+    # tag push, so this one's `mode: append` has something to attach to.
+    needs: [release]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install desktop UI build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y -q \
+            libappindicator3-dev \
+            gir1.2-appindicator3-0.1 \
+            libxxf86vm-dev \
+            gcc-mingw-w64-x86-64
+
+      - name: Decide goreleaser flags
+        id: flags
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.snapshot }}" = "true" ]; then
+            echo "args=release --clean --snapshot --skip=publish" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            echo "args=release --clean" >> "$GITHUB_OUTPUT"
+          else
+            echo "args=release --clean --snapshot --skip=publish" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run GoReleaser (UI Linux + Windows)
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: ${{ env.GORELEASER_VER }}
+          args: ${{ steps.flags.outputs.args }} --config .goreleaser.ui-binaries.yaml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload UI snapshot artifacts
+        if: github.event_name != 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: openzro-ui-snapshot
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.deb
+            dist/*.rpm
+            dist/openzro-ui_checksums.txt
+          retention-days: 14
+
+  release_ui_macos:
+    name: Release desktop UI (macOS universal)
+    runs-on: macos-14
+    needs: [release]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Decide goreleaser flags
+        id: flags
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.snapshot }}" = "true" ]; then
+            echo "args=release --clean --snapshot --skip=publish" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            echo "args=release --clean" >> "$GITHUB_OUTPUT"
+          else
+            echo "args=release --clean --snapshot --skip=publish" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run GoReleaser (UI macOS)
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: ${{ env.GORELEASER_VER }}
+          args: ${{ steps.flags.outputs.args }} --config .goreleaser.ui-darwin.yaml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload UI macOS snapshot artifacts
+        if: github.event_name != 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: openzro-ui-macos-snapshot
+          path: |
+            dist/*.tar.gz
+            dist/openzro-ui_darwin_checksums.txt
           retention-days: 14

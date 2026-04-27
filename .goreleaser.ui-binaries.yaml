@@ -1,0 +1,101 @@
+# Lightweight desktop UI release for Linux + Windows.
+#
+# Compared to .goreleaser_ui.yaml (the upstream-derived config):
+#   - No apt/yum repo upload to wiretrustee.com (defunct domain).
+#   - No code signing for Windows (alpha/beta — SmartScreen warning
+#     is the cost). SignPath Foundation is the planned future path.
+#
+# macOS UI lives in .goreleaser.ui-darwin.yaml because it requires
+# a darwin runner (CGO Fyne build can't cross-compile from Linux).
+
+version: 2
+
+project_name: openzro-ui
+
+builds:
+  - id: openzro-ui
+    dir: client/ui
+    binary: openzro-ui
+    env: [CGO_ENABLED=1]
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w -X github.com/openzro/openzro/version.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: openzro-ui-windows
+    dir: client/ui
+    binary: openzro-ui
+    env:
+      - CGO_ENABLED=1
+      - CC=x86_64-w64-mingw32-gcc
+    goos: [windows]
+    goarch: [amd64]
+    ldflags:
+      - -s -w -X github.com/openzro/openzro/version.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
+      - -H windowsgui
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: linux
+    builds: [openzro-ui]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+  - id: windows
+    builds: [openzro-ui-windows]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format: zip
+
+nfpms:
+  - id: openzro-ui-deb
+    package_name: openzro-ui
+    maintainer: openZro <dev@openzro.io>
+    description: openZro desktop client (system tray GUI).
+    homepage: https://openzro.io/
+    license: BSD-3-Clause
+    builds: [openzro-ui]
+    formats: [deb]
+    dependencies: [openzro]
+    scripts:
+      postinstall: release_files/ui-post-install.sh
+    contents:
+      - src: client/ui/build/openzro.desktop
+        dst: /usr/share/applications/openzro.desktop
+      - src: client/ui/assets/openzro.png
+        dst: /usr/share/pixmaps/openzro.png
+
+  - id: openzro-ui-rpm
+    package_name: openzro-ui
+    maintainer: openZro <dev@openzro.io>
+    description: openZro desktop client (system tray GUI).
+    homepage: https://openzro.io/
+    license: BSD-3-Clause
+    builds: [openzro-ui]
+    formats: [rpm]
+    dependencies: [openzro]
+    scripts:
+      postinstall: release_files/ui-post-install.sh
+    contents:
+      - src: client/ui/build/openzro.desktop
+        dst: /usr/share/applications/openzro.desktop
+      - src: client/ui/assets/openzro.png
+        dst: /usr/share/pixmaps/openzro.png
+
+checksum:
+  name_template: "openzro-ui_checksums.txt"
+
+release:
+  github:
+    owner: openzro
+    name: openzro
+  draft: false
+  prerelease: auto
+  # Append to the existing release created by .goreleaser.binaries.yaml
+  # (same tag, both pipelines run from the same workflow).
+  mode: append
+
+snapshot:
+  version_template: "{{ .Tag }}-snapshot-{{ .ShortCommit }}"
+
+changelog:
+  disable: true
