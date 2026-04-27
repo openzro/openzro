@@ -246,10 +246,10 @@ release:
 snapshot:
   version_template: "{{ .Tag }}-snapshot-{{ .ShortCommit }}"
 
+# Changelog disabled. The fork inherited the full NetBird commit
+# history (~7k commits since 2019), which goreleaser's `use: github`
+# turns into a 120k+ char body that exceeds GitHub's 125k release-body
+# limit. Release notes live in the annotated git tag message instead
+# (`git tag -a vX.Y.Z -m "..."`), which goreleaser uses verbatim.
 changelog:
-  use: github
-  filters:
-    exclude:
-      - '^docs:'
-      - '^test:'
-      - '^chore:'
+  disable: true
