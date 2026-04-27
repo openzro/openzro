@@ -14,7 +14,14 @@ place.
 
 ## Generate the key
 
-On a trusted local machine (not CI), produce a fresh dedicated key:
+On a trusted local machine (not CI), produce a fresh dedicated key.
+
+The `%no-protection` line below skips the passphrase, which is fine
+for a CI signing key — both the key and any passphrase would live
+in the same secret store, so passphrase protection adds no defense
+in practice. If you prefer one anyway, drop the `%no-protection`
+line and you'll be prompted; then set `PKG_GPG_PASSPHRASE` to the
+value you chose.
 
 ```sh
 gpg --batch --gen-key <<'EOF'
@@ -25,16 +32,6 @@ Name-Real: openZro Package Signing
 Name-Email: dev@openzro.io
 Expire-Date: 0
 EOF
-```
-
-Or interactively:
-
-```sh
-gpg --full-generate-key
-# Choose: RSA and RSA, 4096 bits, no expiration,
-# Name: openZro Package Signing
-# Email: dev@openzro.io
-# Set a strong passphrase you'll save in step 3.
 ```
 
 Find the new key ID:
@@ -62,7 +59,7 @@ Repository → Settings → Secrets and variables → Actions →
 | Secret | Value |
 |---|---|
 | `PKG_GPG_PRIVATE_KEY` | contents of `/tmp/openzro-pkg.priv.asc` |
-| `PKG_GPG_PASSPHRASE` | the passphrase you set when generating |
+| `PKG_GPG_PASSPHRASE` | the passphrase you set when generating, **or empty** if you used `%no-protection` |
 
 ## Stash the public key in gh-pages
 
