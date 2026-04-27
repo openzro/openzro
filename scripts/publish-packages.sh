@@ -8,7 +8,12 @@
 # Inputs (env vars):
 #   VERSION              the tag we're publishing, e.g. "v0.1.0-alpha.3"
 #   GPG_PRIVATE_KEY      PEM-armored private key (passed as a secret)
-#   GPG_PASSPHRASE       passphrase for the key
+#   GPG_PASSPHRASE       passphrase for the key — set to an empty
+#                        string if the key has no passphrase (the
+#                        threat model for a CI signing key doesn't
+#                        meaningfully benefit from passphrase
+#                        protection when both the key and passphrase
+#                        live in the same secret store)
 #   GITHUB_TOKEN         to push to gh-pages
 #
 # Layout produced (rooted at $REPO_ROOT, which becomes pkg.openzro.io):
@@ -41,7 +46,7 @@ set -euo pipefail
 
 : "${VERSION:?VERSION is required (e.g. v0.1.0-alpha.3)}"
 : "${GPG_PRIVATE_KEY:?GPG_PRIVATE_KEY is required}"
-: "${GPG_PASSPHRASE:?GPG_PASSPHRASE is required}"
+GPG_PASSPHRASE="${GPG_PASSPHRASE-}"   # empty allowed
 
 WORK="${WORK:-$(pwd)/.pkg-publish}"
 mkdir -p "$WORK/downloads" "$WORK/repo/apt" "$WORK/repo/rpm"
@@ -98,9 +103,13 @@ aptly -config="$WORK/aptly.conf" repo add -force-replace openzro \
     "$WORK/downloads"/*.deb
 
 aptly -config="$WORK/aptly.conf" publish drop stable 2>/dev/null || true
+APTLY_PASS_FLAG=()
+if [ -n "$GPG_PASSPHRASE" ]; then
+    APTLY_PASS_FLAG=(-passphrase="$GPG_PASSPHRASE")
+fi
 aptly -config="$WORK/aptly.conf" publish repo \
     -gpg-key="$GPG_KEY_ID" \
-    -batch -passphrase="$GPG_PASSPHRASE" \
+    -batch "${APTLY_PASS_FLAG[@]}" \
     openzro
 
 cp -a "$APTLY_HOME/public/." "$WORK/repo/apt/"
@@ -136,15 +145,17 @@ for f in "$WORK/downloads"/*.rpm; do
     cp "$f" "$WORK/repo/rpm/$matched/"
 done
 
+GPG_SIGN_FLAGS=(--batch --yes --pinentry-mode loopback
+                --default-key "$GPG_KEY_ID" --detach-sign --armor)
+if [ -n "$GPG_PASSPHRASE" ]; then
+    GPG_SIGN_FLAGS+=(--passphrase "$GPG_PASSPHRASE")
+fi
+
 for ARCH in x86_64 aarch64 i686 armv6hl; do
     if compgen -G "$WORK/repo/rpm/$ARCH/*.rpm" >/dev/null; then
         createrepo_c --update "$WORK/repo/rpm/$ARCH"
         # Sign the repodata/repomd.xml (yum/dnf/zypper verify this).
-        gpg --batch --yes --pinentry-mode loopback \
-            --passphrase "$GPG_PASSPHRASE" \
-            --default-key "$GPG_KEY_ID" \
-            --detach-sign --armor \
-            "$WORK/repo/rpm/$ARCH/repodata/repomd.xml"
+        gpg "${GPG_SIGN_FLAGS[@]}" "$WORK/repo/rpm/$ARCH/repodata/repomd.xml"
     fi
 done
 
