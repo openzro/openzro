@@ -1,33 +1,10 @@
 package version
 
-import (
-	"os/exec"
-	"runtime"
-)
-
-const (
-	urlMacIntel = "https://pkgs.openzro.io/macos/amd64"
-	urlMacM1M2  = "https://pkgs.openzro.io/macos/arm64"
-)
-
-// DownloadUrl return with the proper download link
+// DownloadUrl returns the URL the UI shows when prompting the user
+// to download a newer release. macOS: the upstream branched on a
+// brew-formula probe vs a per-arch package URL; openZro does not
+// ship a brew tap nor per-arch package URLs (yet), so all paths
+// land on the GitHub Releases page.
 func DownloadUrl() string {
-	cmd := exec.Command("brew", "list --formula | grep -i openzro")
-	if err := cmd.Start(); err != nil {
-		goto PKGINSTALL
-	}
-
-	if err := cmd.Wait(); err == nil {
-		return downloadURL
-	}
-
-PKGINSTALL:
-	switch runtime.GOARCH {
-	case "amd64":
-		return urlMacIntel
-	case "arm64":
-		return urlMacM1M2
-	default:
-		return downloadURL
-	}
+	return resolvedDownloadURL()
 }
