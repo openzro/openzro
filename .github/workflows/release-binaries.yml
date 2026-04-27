@@ -216,6 +216,10 @@ jobs:
     # assets attached) before we try to download from it.
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: [release]
+    # Environment-scoped so secrets only resolve for tag pushes from
+    # main (matches the protection rule on the `production`
+    # environment); also creates a deployment record in the GH UI.
+    environment: production
 
     permissions:
       contents: write   # to push to gh-pages
