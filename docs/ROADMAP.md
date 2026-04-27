@@ -100,6 +100,40 @@ REST endpoint with a hostname-keyed lookup and a JSONPath assertion
 unblocks every long-tail vendor without touching Go code. Defer until
 a real customer asks.
 
+### Native OPNsense / pfSense plugins — 🟡
+
+Operators today install the upstream NetBird package
+(`os-netbird` from Deciso for OPNsense; `pfSense-pkg-NetBird` from
+Netgate for pfSense) and point the **Management URL** at their
+openZro server. The wire protocol is stable enough that this works
+unmodified.
+
+A native `os-openzro` / `pfSense-pkg-openZro` would mean:
+
+- Branding correct in the firewall UI (no NetBird label).
+- Default Management URL pointing at openZro out of the box.
+- Source pinned to openZro's release cadence, not NetBird's.
+
+The forks are legally clean — both repos are permissively licensed
+([netbirdio/OPNsensePlugins](https://github.com/netbirdio/OPNsensePlugins/tree/Netbird-devel) is BSD-2-Clause, the upstream OPNsense plugins fork;
+[netbirdio/pfsense-netbird](https://github.com/netbirdio/pfsense-netbird) is Apache 2.0, by Netgate).
+The catch is distribution:
+
+- **OPNsense plugin manager**: Deciso curates packages and is unlikely
+  to accept a duplicate `os-openzro` while `os-netbird` exists.
+  Realistic path is a third-party Git repo for manual install.
+- **pfSense .pkg**: standalone `pkg add` flow — autonomous, no
+  vendor approval. Easier to ship.
+
+**Deferred until either:**
+- The protocol drifts and the upstream NetBird package no longer
+  talks to openZro (then we *have* to ship our own), or
+- A pilot customer asks for native branding on their firewall.
+
+The docs intentionally instruct operators to use the upstream
+package today — see [pfSense](../docs/src/pages/get-started/install/pfsense.mdx)
+and [OPNsense](../docs/src/pages/get-started/install/opnsense.mdx).
+
 ---
 
 ## P3 — Deferred (waiting on demand or major lift)
