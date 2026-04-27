@@ -81,7 +81,7 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
           <Label>MDM/EDR Provider</Label>
           <HelpText>
             Pick a provider configured under Settings → Integrations →
-            MDM-EDR. The peer's hostname is used to look up the device on
+            MDM-EDR. The peer&apos;s hostname is used to look up the device on
             the vendor side.
           </HelpText>
           {noProviders ? (
