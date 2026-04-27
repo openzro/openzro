@@ -207,3 +207,62 @@ jobs:
             dist/*.tar.gz
             dist/openzro-ui_darwin_checksums.txt
           retention-days: 14
+
+  publish_packages:
+    name: Publish APT/YUM/DNF/zypper repos to pkg.openzro.io
+    runs-on: ubuntu-22.04
+    # Only on tag push — nothing to publish for snapshot builds, and
+    # we want the GitHub Release to exist (with the .deb / .rpm
+    # assets attached) before we try to download from it.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [release]
+
+    permissions:
+      contents: write   # to push to gh-pages
+
+    steps:
+      - name: Checkout main (for the publish-packages.sh script)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install repo build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y -q aptly createrepo-c gnupg
+
+      - name: Build APT + RPM repos
+        env:
+          VERSION: ${{ github.ref_name }}
+          GPG_PRIVATE_KEY: ${{ secrets.PKG_GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.PKG_GPG_PASSPHRASE }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./scripts/publish-packages.sh
+
+      - name: Push to gh-pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Fetch / create gh-pages branch worktree.
+          git fetch origin gh-pages 2>/dev/null || true
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null; then
+            git worktree add gh-pages-tree origin/gh-pages
+            cd gh-pages-tree && git checkout -B gh-pages
+          else
+            git worktree add --orphan -b gh-pages gh-pages-tree
+            cd gh-pages-tree
+          fi
+
+          # Replace pool/dists/repodata in place; preserve any other
+          # files an operator may have committed (CNAME etc).
+          rsync -a --delete-after \
+              --exclude='.git/' \
+              "$GITHUB_WORKSPACE/.pkg-publish/repo/" ./
+
+          git add -A
+          git -c user.name='openzro-ci' -c user.email='ci@openzro.io' \
+              commit -m "publish: ${GITHUB_REF_NAME} packages" || {
+              echo "No changes to publish"
+              exit 0
+          }
+          git push origin gh-pages
