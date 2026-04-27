@@ -7,7 +7,7 @@ import HelpText from "@components/HelpText";
 import InlineLink from "@components/InlineLink";
 import { notify } from "@components/Notification";
 import Paragraph from "@components/Paragraph";
-import { SegmentedTabs } from "@components/SegmentedTabs";
+import { cn } from "@utils/helpers";
 import * as Tabs from "@radix-ui/react-tabs";
 import useFetchApi, { useApiCall } from "@utils/api";
 import { API_ORIGIN } from "@utils/openzro";
@@ -18,11 +18,13 @@ import {
   GlobeIcon,
   KeyRoundIcon,
   PlusCircleIcon,
+  RadioTowerIcon,
   ShieldCheckIcon,
   Trash2Icon,
   UsersIcon,
 } from "lucide-react";
-import React, { useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import React, { useEffect, useState } from "react";
 import { useSWRConfig } from "swr";
 import SettingsIcon from "@/assets/icons/SettingsIcon";
 import { Account } from "@/interfaces/Account";
@@ -41,17 +43,76 @@ type Props = {
 };
 
 // IntegrationsTab is the dashboard surface for runtime-configurable
-// external integrations. Three sub-tabs:
+// external integrations. Four sub-sections, each on its own
+// deep-linkable sub-route:
 //
-//   Flow Exports — SIEM/archive destinations for traffic events
-//   MDM / EDR    — Intune/SentinelOne/Huntress posture providers
-//   SCIM         — read-only setup info for IdP provisioning
+//   /settings?tab=integrations&subtab=flow      Flow Exports
+//   /settings?tab=integrations&subtab=mdm       MDM / EDR
+//   /settings?tab=integrations&subtab=activity  Activity Streamer
+//   /settings?tab=integrations&subtab=idp-sync  Identity Provider Sync (SCIM)
 //
-// All three share the same encrypted-at-rest credential envelope on
-// the backend; they're grouped here because they're all "outbound
-// connections to corporate systems" from the operator's perspective.
+// Sub-tab is rendered as a vertical left rail inside the content
+// area (matches the Settings outer VerticalTabs pattern). Each
+// click pushes the URL so a refresh / share-link / browser back
+// keeps the user on the right section.
+//
+// The four sections share the same encrypted-at-rest credential
+// envelope on the backend; they're grouped here because they're
+// all "outbound connections to corporate systems" from the
+// operator's perspective.
+
+type SubTab = {
+  value: string;
+  label: string;
+  icon: React.ReactNode;
+};
+
+const SUB_TABS: SubTab[] = [
+  { value: "flow", label: "Flow Exports", icon: <CableIcon size={14} /> },
+  { value: "activity", label: "Activity Streamer", icon: <RadioTowerIcon size={14} /> },
+  { value: "mdm", label: "MDM / EDR", icon: <ShieldCheckIcon size={14} /> },
+  { value: "idp-sync", label: "Identity Provider Sync", icon: <UsersIcon size={14} /> },
+];
+
+const DEFAULT_SUB_TAB = "flow";
+
+function isValidSubTab(value: string | null): boolean {
+  return SUB_TABS.some((t) => t.value === value);
+}
+
 export default function IntegrationsTab(_: Readonly<Props>) {
-  const [inner, setInner] = useState<string>("flow");
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+
+  // Read ?subtab= once on mount, then track locally. We do not
+  // re-derive from params on every render because the click handler
+  // already updates both the URL and local state — keeping them in
+  // a useEffect would race with browser back/forward and cause a
+  // flicker. The effect below handles back/forward by syncing only
+  // when the URL value diverges.
+  const initial =
+    isValidSubTab(params.get("subtab"))
+      ? (params.get("subtab") as string)
+      : DEFAULT_SUB_TAB;
+  const [active, setActive] = useState<string>(initial);
+
+  useEffect(() => {
+    const fromURL = params.get("subtab");
+    if (isValidSubTab(fromURL) && fromURL !== active) {
+      setActive(fromURL as string);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
+
+  const select = (value: string) => {
+    setActive(value);
+    router.push(`${pathname}?tab=integrations&subtab=${value}`, {
+      scroll: false,
+    });
+  };
+
+  const activeMeta = SUB_TABS.find((t) => t.value === active) ?? SUB_TABS[0];
 
   return (
     <Tabs.Content value="integrations">
@@ -66,6 +127,11 @@ export default function IntegrationsTab(_: Readonly<Props>) {
             href={"/settings?tab=integrations"}
             label={"Integrations"}
             icon={<CableIcon size={14} />}
+          />
+          <Breadcrumbs.Item
+            href={`/settings?tab=integrations&subtab=${activeMeta.value}`}
+            label={activeMeta.label}
+            icon={activeMeta.icon}
             active
           />
         </Breadcrumbs>
@@ -76,36 +142,47 @@ export default function IntegrationsTab(_: Readonly<Props>) {
           compliance, and SCIM 2.0 for user provisioning from your IdP.
         </Paragraph>
 
-        <div className={"mt-6"}>
-          <SegmentedTabs value={inner} onChange={setInner}>
-            <SegmentedTabs.List>
-              <SegmentedTabs.Trigger value="flow">
-                <CableIcon size={14} /> Flow Exports
-              </SegmentedTabs.Trigger>
-              <SegmentedTabs.Trigger value="mdm">
-                <ShieldCheckIcon size={14} /> MDM / EDR
-              </SegmentedTabs.Trigger>
-              <SegmentedTabs.Trigger value="activity">
-                <CableIcon size={14} /> Activity Streamer
-              </SegmentedTabs.Trigger>
-              <SegmentedTabs.Trigger value="scim">
-                <UsersIcon size={14} /> SCIM Provisioning
-              </SegmentedTabs.Trigger>
-            </SegmentedTabs.List>
+        <div className={"mt-6 flex flex-col gap-6 lg:flex-row"}>
+          {/*
+            Vertical sub-nav. Each entry deep-links via
+            ?tab=integrations&subtab=<value> so refresh / share-link
+            keeps the user on the right section. The list is
+            shrink-0 so the content column flexes to fill.
+          */}
+          <nav
+            className={cn(
+              "shrink-0 lg:w-56 lg:border-r lg:border-nb-gray-930",
+              "lg:pr-4 lg:py-2",
+            )}
+          >
+            <ul className={"flex lg:flex-col gap-1 m-0 p-0 list-none overflow-x-auto"}>
+              {SUB_TABS.map((t) => (
+                <li key={t.value} className={"shrink-0"}>
+                  <button
+                    type={"button"}
+                    onClick={() => select(t.value)}
+                    className={cn(
+                      "w-full flex items-center gap-2 px-4 py-2 text-sm rounded-md transition-all whitespace-nowrap",
+                      "lg:text-left",
+                      active === t.value
+                        ? "bg-nb-gray-920 text-white"
+                        : "text-nb-gray-300 hover:bg-nb-gray-900/50",
+                    )}
+                  >
+                    {t.icon}
+                    {t.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
 
-            <SegmentedTabs.Content value="flow">
-              <FlowExportsSection />
-            </SegmentedTabs.Content>
-            <SegmentedTabs.Content value="mdm">
-              <MDMProvidersSection />
-            </SegmentedTabs.Content>
-            <SegmentedTabs.Content value="activity">
-              <ActivityExportersSection />
-            </SegmentedTabs.Content>
-            <SegmentedTabs.Content value="scim">
-              <SCIMSetupSection />
-            </SegmentedTabs.Content>
-          </SegmentedTabs>
+          <div className={"flex-1 min-w-0 lg:pl-4"}>
+            {active === "flow" && <FlowExportsSection />}
+            {active === "mdm" && <MDMProvidersSection />}
+            {active === "activity" && <ActivityExportersSection />}
+            {active === "idp-sync" && <SCIMSetupSection />}
+          </div>
         </div>
       </div>
     </Tabs.Content>
