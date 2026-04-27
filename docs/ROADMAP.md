@@ -210,6 +210,67 @@ these compliance frameworks as a requirement.
 
 ---
 
+## Possibilities (not roadmap — open ideas)
+
+Different from P1/P2/P3 above: these aren't committed work. They're
+ideas that came up during design, where the cost/benefit isn't yet
+clear and we don't have the trigger condition that would justify
+sequencing them. We keep them written down so we don't lose the
+analysis when someone asks "have you considered X?".
+
+Picking one of these up means:
+1. Naming a concrete trigger condition that's now been met (a
+   pilot customer with a specific need, a regulatory requirement,
+   a security advisory, etc.).
+2. Writing an ADR with the design and the cost.
+3. Then promoting it to P2 or P3 in this document.
+
+### Browser Client (in-browser SSH / RDP via WASM)
+
+NetBird's upstream ships a "Browser Client" — a full WireGuard peer
+compiled to WebAssembly that runs in the user's browser tab and
+provides SSH and RDP without installing anything locally. We
+intentionally removed the docs page for it
+([commit](https://github.com/openzro/docs/commit/0af05bb)) because
+the feature doesn't exist in the openZro fork.
+
+**To rebuild it ourselves we'd need:**
+
+- WireGuard userspace in Go compiled to WASM
+- gRPC-Web (or WebSocket) bridge in the management server, since
+  browsers can't speak HTTP/2 binary natively
+- WebRTC DataChannel for the actual peer-to-peer transport
+  (browsers can't open raw UDP)
+- Mandatory TURN server for the cases where DataChannel can't
+  hole-punch
+- Short-lived browser session tokens distinct from PATs
+- xterm.js + an SSH protocol implementation, plus an in-browser
+  RDP client (Guacamole-style or homegrown — RDP-in-browser is
+  notoriously hard)
+
+**Honest budget:** ~3–4 eng-months for one engineer to reach
+upstream parity, plus continuous maintenance every time Go's WASM
+runtime, the browser WebRTC SDK, or browser security policies
+change.
+
+**Why we'd defer:** the typical "I want SSH without installing"
+case is already covered by the openZro CLI on every desktop OS
+plus a normal `ssh` into the peer — the browser-native path
+shaves install steps for one specific edge case at a very high
+maintenance cost.
+
+**Trigger conditions to revisit:**
+- A pilot customer requirement that explicitly forbids installing
+  software on the user's device.
+- A self-host operator with the engineering capacity to maintain
+  the WASM build offering to drive it as a contribution.
+
+### Native pfSense / OPNsense plugins
+
+See the corresponding entry under P3.
+
+---
+
 ## Recently shipped (don't re-implement)
 
 For context — these were on the gap list at one point and are now
