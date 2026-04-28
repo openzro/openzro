@@ -3,8 +3,10 @@ package version
 import "os"
 
 // defaultDownloadURL points at the GitHub Releases page for the
-// project. openZro is GitHub-Releases-only; there is no
-// `pkgs.openzro.io` (the upstream's package CDN is not mirrored).
+// project. The package repository at `pkg.openzro.io` serves
+// signed APT/YUM repos and the install.sh wrapper, but binary
+// release tarballs continue to live on GitHub Releases (canonical
+// source for git-tag-based artifacts).
 //
 // Operators who run their own internal mirror can override via the
 // OPENZRO_DOWNLOAD_URL environment variable — useful for air-gapped

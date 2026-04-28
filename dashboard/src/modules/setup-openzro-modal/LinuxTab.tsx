@@ -39,7 +39,7 @@ export default function LinuxTab({
         </p>
         <Steps>
           <Steps.Step step={1}>
-            <Code>curl -fsSL https://pkgs.openzro.io/install.sh | sh</Code>
+            <Code>curl -fsSL https://pkg.openzro.io/install.sh | sh</Code>
           </Steps.Step>
           <Steps.Step step={2} line={false}>
             <p>
@@ -74,12 +74,12 @@ export default function LinuxTab({
                       sudo apt install ca-certificates curl gnupg -y
                     </Code.Line>
                     <Code.Line>
-                      curl -sSL https://pkgs.openzro.io/debian/public.key | sudo
-                      gpg --dearmor --output
+                      curl -sSL https://pkg.openzro.io/openzro-archive-key.asc
+                      | sudo gpg --dearmor --output
                       /usr/share/keyrings/openzro-archive-keyring.gpg
                     </Code.Line>
                     <Code.Line>
-                      {`echo 'deb [signed-by=/usr/share/keyrings/openzro-archive-keyring.gpg] https://pkgs.openzro.io/debian stable main' | sudo tee /etc/apt/sources.list.d/openzro.list`}
+                      {`echo 'deb [signed-by=/usr/share/keyrings/openzro-archive-keyring.gpg] https://pkg.openzro.io/apt stable main' | sudo tee /etc/apt/sources.list.d/openzro.list`}
                     </Code.Line>
                   </Code>
                 </Steps.Step>
