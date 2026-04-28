@@ -23,6 +23,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"github.com/openzro/openzro/management/server/activity"
 	"github.com/openzro/openzro/management/server/auth/providers"
 )
 
@@ -453,6 +454,141 @@ func TestLogout_ClearsSessionCookie(t *testing.T) {
 	require.NotNil(t, c)
 	assert.Less(t, c.MaxAge, 0)
 	assert.Empty(t, c.Value)
+}
+
+// --- audit emit --------------------------------------------------------
+
+type recordingEmitter struct {
+	mu     sync.Mutex
+	events []emittedEvent
+}
+
+type emittedEvent struct {
+	initiator, target, account string
+	code                       activity.Activity
+	meta                       map[string]any
+}
+
+func (r *recordingEmitter) emit(_ context.Context, initiator, target, account string,
+	code activity.Activity, meta map[string]any,
+) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.events = append(r.events, emittedEvent{initiator, target, account, code, meta})
+}
+
+func newAuditingHandler(t *testing.T, mgr *providers.Manager) (*Handler, *StateCookieSealer, *SessionService, *recordingEmitter) {
+	t.Helper()
+	sealer := newTestSealer(t)
+	sessions := newTestSession(t)
+	rec := &recordingEmitter{}
+	h, err := NewHandler(mgr, sealer, sessions,
+		WithSecureCookies(false),
+		WithDefaultReturnTo("/peers"),
+		WithEventEmitter(rec.emit))
+	require.NoError(t, err)
+	return h, sealer, sessions, rec
+}
+
+func TestCallback_EmitsSessionGranted(t *testing.T) {
+	idp := newFakeIdP(t, "client-uuid")
+	mgr, providerID := newTestProviders(t, idp, "client-uuid")
+	h, sealer, _, rec := newAuditingHandler(t, mgr)
+
+	idp.issueCode("test-code", issuedCode{
+		sub:   "upstream-user-1",
+		email: "u@example.com",
+		nonce: "test-nonce",
+	})
+
+	sealed, err := sealer.Seal(stateCookie{
+		ProviderID:   providerID,
+		CodeVerifier: "test-verifier",
+		URLState:     "test-url-state",
+		Nonce:        "test-nonce",
+		ReturnTo:     "/peers",
+	})
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/auth/callback?code=test-code&state=test-url-state", nil)
+	req.AddCookie(&http.Cookie{Name: StateCookieName, Value: sealed})
+	rr := httptest.NewRecorder()
+	routerFor(h).ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusFound, rr.Code, "body=%s", rr.Body.String())
+	require.Len(t, rec.events, 1)
+	assert.Equal(t, activity.AuthSessionGranted, rec.events[0].code)
+	assert.Equal(t, "upstream-user-1", rec.events[0].initiator)
+	assert.Equal(t, idp.URL, rec.events[0].meta["upstream_iss"])
+	assert.Equal(t, providerID, rec.events[0].meta["provider_id"])
+	assert.Equal(t, "u@example.com", rec.events[0].meta["email"])
+}
+
+func TestCallback_NoEmitOnFailure(t *testing.T) {
+	idp := newFakeIdP(t, "client-uuid")
+	mgr, _ := newTestProviders(t, idp, "client-uuid")
+	h, _, _, rec := newAuditingHandler(t, mgr)
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/callback?error=access_denied", nil)
+	rr := httptest.NewRecorder()
+	routerFor(h).ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	assert.Empty(t, rec.events,
+		"failed callback must not emit a session.granted event")
+}
+
+func TestLogout_EmitsSessionRevoked(t *testing.T) {
+	idp := newFakeIdP(t, "client-uuid")
+	mgr, _ := newTestProviders(t, idp, "client-uuid")
+	h, _, sessions, rec := newAuditingHandler(t, mgr)
+
+	tok, err := sessions.Issue(SessionClaims{
+		ProviderID:       42,
+		UpstreamIss:      "https://idp.example.com",
+		UpstreamSub:      "upstream-user-1",
+		Email:            "u@example.com",
+		RegisteredClaims: jwt.RegisteredClaims{Subject: "openzro-user-1"},
+	}, SessionTTL)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	req.AddCookie(&http.Cookie{Name: SessionCookieName, Value: tok})
+	rr := httptest.NewRecorder()
+	routerFor(h).ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusNoContent, rr.Code)
+	require.Len(t, rec.events, 1)
+	assert.Equal(t, activity.AuthSessionRevoked, rec.events[0].code)
+	assert.Equal(t, "upstream-user-1", rec.events[0].initiator)
+	assert.Equal(t, uint64(42), rec.events[0].meta["provider_id"])
+}
+
+func TestLogout_NoEmitWithoutSession(t *testing.T) {
+	idp := newFakeIdP(t, "client-uuid")
+	mgr, _ := newTestProviders(t, idp, "client-uuid")
+	h, _, _, rec := newAuditingHandler(t, mgr)
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	rr := httptest.NewRecorder()
+	routerFor(h).ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusNoContent, rr.Code)
+	assert.Empty(t, rec.events,
+		"logout without a session cookie should clear cookie + return 204 with no audit event")
+}
+
+func TestLogout_NoEmitWithInvalidSession(t *testing.T) {
+	idp := newFakeIdP(t, "client-uuid")
+	mgr, _ := newTestProviders(t, idp, "client-uuid")
+	h, _, _, rec := newAuditingHandler(t, mgr)
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	req.AddCookie(&http.Cookie{Name: SessionCookieName, Value: "not-a-valid-jwt"})
+	rr := httptest.NewRecorder()
+	routerFor(h).ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusNoContent, rr.Code)
+	assert.Empty(t, rec.events,
+		"unverifiable session must not produce an audit event")
 }
 
 // --- helpers -----------------------------------------------------------

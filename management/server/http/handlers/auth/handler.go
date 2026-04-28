@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"net/http"
@@ -9,7 +10,19 @@ import (
 
 	"github.com/gorilla/mux"
 
+	"github.com/openzro/openzro/management/server/activity"
 	"github.com/openzro/openzro/management/server/auth/providers"
+)
+
+// EventEmitter mirrors the activity-emit shape used by the rest
+// of the handler tree. Pass nil to skip auditing — useful for
+// in-memory tests and bootstrap installations that haven't
+// wired up the activity store yet.
+type EventEmitter func(
+	ctx context.Context,
+	initiatorID, targetID, accountID string,
+	activityCode activity.Activity,
+	meta map[string]any,
 )
 
 // Handler holds the runtime dependencies for the centralized
@@ -21,6 +34,7 @@ type Handler struct {
 	sealer    *StateCookieSealer
 	sessions  *SessionService
 	renderer  *loginRenderer
+	emit      EventEmitter
 
 	// httpClient is used for OIDC discovery + token-exchange HTTP
 	// calls. Tests inject a custom client (httptest); production
@@ -56,6 +70,12 @@ func WithSecureCookies(v bool) HandlerOption {
 // WithDefaultReturnTo overrides the post-login landing path.
 func WithDefaultReturnTo(p string) HandlerOption {
 	return func(h *Handler) { h.defaultReturnTo = p }
+}
+
+// WithEventEmitter wires the activity-stream callback. nil
+// skips auditing — appropriate for tests and bootstrap.
+func WithEventEmitter(e EventEmitter) HandlerOption {
+	return func(h *Handler) { h.emit = e }
 }
 
 // NewHandler wires the auth handler. The sealer + sessions are
