@@ -84,10 +84,12 @@ func NewAPIHandler(
 	authProvidersManager *authProviders.Manager,
 	authProvidersEmitter authProvidersHandler.EventEmitter,
 	centralizedAuthHandler *authHandler.Handler,
+	centralizedSessionService *authHandler.SessionService,
 ) (http.Handler, error) {
 
 	authMiddleware := middleware.NewAuthMiddleware(
 		authManager,
+		centralizedSessionService,
 		accountManager.GetAccountIDFromUserAuth,
 		accountManager.SyncUserJWTGroups,
 		accountManager.GetUserFromUserAuth,

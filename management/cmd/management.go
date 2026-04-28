@@ -472,25 +472,28 @@ var (
 				accountManager.StoreEvent(ctx, initiatorID, targetID, accountID, code, meta)
 			}
 
-			// Centralized openZro-branded login (ADR-0005). The handler
-			// is wired only when OPENZRO_BASE_URL is set: that's the
-			// public URL the upstream IdP redirects back to, which
-			// must match the redirect_uri whitelisted in each
-			// AuthenticationProvider's app config. Without it,
-			// /login + /auth/* stay dormant and the legacy single-IdP
-			// path keeps owning auth.
+			// Centralized openZro-branded login (ADR-0005). The
+			// SessionService is constructed unconditionally so the
+			// auth middleware can recognise the oz_session cookie
+			// even on deployments that haven't yet flipped on the
+			// /login surface (a bootstrap flow may mint cookies
+			// against the same key). The Handler — which actually
+			// serves /login + /auth/* — is wired only when
+			// OPENZRO_BASE_URL is set: that's the public URL the
+			// upstream IdP redirects back to, and must match the
+			// redirect_uri whitelisted in each provider's app config.
+			centralizedSessions, err := authHttpHandler.NewSessionService(config.DataStoreEncryptionKey)
+			if err != nil {
+				return fmt.Errorf("auth session service: %w", err)
+			}
 			var centralizedAuth *authHttpHandler.Handler
 			if base := openzroBaseURL(); base != "" && authProvidersManager != nil {
 				sealer, err := authHttpHandler.NewStateCookieSealer(config.DataStoreEncryptionKey)
 				if err != nil {
 					return fmt.Errorf("auth state sealer: %w", err)
 				}
-				sessions, err := authHttpHandler.NewSessionService(config.DataStoreEncryptionKey)
-				if err != nil {
-					return fmt.Errorf("auth session service: %w", err)
-				}
 				secureCookies := strings.HasPrefix(strings.ToLower(base), "https://")
-				h, err := authHttpHandler.NewHandler(authProvidersManager, sealer, sessions,
+				h, err := authHttpHandler.NewHandler(authProvidersManager, sealer, centralizedSessions,
 					authHttpHandler.WithSecureCookies(secureCookies),
 					authHttpHandler.WithEventEmitter(bypassEmitter),
 				)
@@ -502,7 +505,7 @@ var (
 				log.WithContext(ctx).Infof("OPENZRO_BASE_URL not set — /login + /auth/* dormant; admin CRUD for AuthenticationProvider remains active")
 			}
 
-			httpAPIHandler, err := nbhttp.NewAPIHandler(ctx, accountManager, networksManager, resourcesManager, routersManager, groupsManager, geo, authManager, appMetrics, integratedPeerValidator, proxyController, permissionsManager, peersManager, settingsManager, flowStore, flowExportsStore, flowExportsManager, mdmStore, mdmManager, activityExportersStore, activityExportersManager, admissionBypassStore, bypassEmitter, authProvidersStore, authProvidersManager, bypassEmitter, centralizedAuth)
+			httpAPIHandler, err := nbhttp.NewAPIHandler(ctx, accountManager, networksManager, resourcesManager, routersManager, groupsManager, geo, authManager, appMetrics, integratedPeerValidator, proxyController, permissionsManager, peersManager, settingsManager, flowStore, flowExportsStore, flowExportsManager, mdmStore, mdmManager, activityExportersStore, activityExportersManager, admissionBypassStore, bypassEmitter, authProvidersStore, authProvidersManager, bypassEmitter, centralizedAuth, centralizedSessions)
 
 			if err != nil {
 				return fmt.Errorf("failed creating HTTP API handler: %v", err)
