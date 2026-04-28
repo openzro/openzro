@@ -1,0 +1,209 @@
+/* openZro brand theme for Dex.
+ *
+ * Override Dex's stock light theme to match the dashboard's
+ * design tokens (see dashboard/src/app/globals.css and the
+ * brand rules in /CLAUDE.md). Dark mode follows prefers-color-scheme.
+ *
+ * Class names come from Dex's templates (web/templates/*.html);
+ * we override the visual without touching HTML.
+ */
+
+:root {
+  --oz-violet-50:  #f5f3ff;
+  --oz-violet-100: #ede9fe;
+  --oz-violet-200: #ddd6fe;
+  --oz-violet-300: #c4b5fd;
+  --oz-violet-400: #a78bfa;
+  --oz-violet-500: #8b5cf6;
+  --oz-violet-600: #7c3aed;
+  --oz-violet-700: #6d28d9;
+  --oz-violet-900: #4c1d95;
+  --oz-ink:    #0f0a1f;
+  --oz-ink-2:  #1a1330;
+
+  --oz-bg:        #ffffff;
+  --oz-bg-soft:   var(--oz-violet-50);
+  --oz-text:      var(--oz-ink);
+  --oz-text-muted: #6b7280;
+  --oz-border:    var(--oz-violet-200);
+  --oz-primary:       var(--oz-violet-600);
+  --oz-primary-hover: var(--oz-violet-700);
+
+  --oz-sans: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --oz-bg:        var(--oz-ink);
+    --oz-bg-soft:   var(--oz-ink-2);
+    --oz-text:      #ffffff;
+    --oz-text-muted: #9ca3af;
+    --oz-border:    #2d2347;
+    --oz-primary:       var(--oz-violet-500);
+    --oz-primary-hover: var(--oz-violet-400);
+  }
+}
+
+.theme-body {
+  background-color: var(--oz-bg);
+  color: var(--oz-text);
+  font-family: var(--oz-sans);
+  letter-spacing: -0.01em;
+}
+
+.theme-navbar {
+  background-color: var(--oz-bg);
+  border-bottom: 1px solid var(--oz-border);
+  color: var(--oz-text);
+}
+
+.theme-navbar__logo-wrap {
+  padding: 12px 15px;
+}
+
+.theme-navbar__logo {
+  max-height: 32px;
+  width: auto;
+}
+
+.theme-heading {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--oz-text);
+}
+
+.theme-panel {
+  background-color: var(--oz-bg);
+  border: 1px solid var(--oz-border);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(76, 29, 149, 0.08), 0 1px 2px rgba(76, 29, 149, 0.04);
+  padding: 36px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .theme-panel {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* "Log in with X" connector buttons (Google/GitHub/etc.) */
+.theme-btn-provider {
+  background-color: var(--oz-bg-soft);
+  border: 1px solid var(--oz-border);
+  border-radius: 10px;
+  color: var(--oz-text);
+  font-family: var(--oz-sans);
+  font-weight: 500;
+  font-size: 15px;
+  min-width: 280px;
+  padding: 12px 18px;
+  transition: background-color 0.15s, border-color 0.15s, transform 0.05s;
+}
+
+.theme-btn-provider:hover {
+  background-color: var(--oz-violet-100);
+  border-color: var(--oz-violet-300);
+  color: var(--oz-text);
+}
+
+.theme-btn-provider:active {
+  transform: translateY(1px);
+}
+
+@media (prefers-color-scheme: dark) {
+  .theme-btn-provider:hover {
+    background-color: var(--oz-violet-900);
+    border-color: var(--oz-violet-700);
+  }
+}
+
+/* Primary action — "Log in" submit when using staticPasswords */
+.theme-btn--primary {
+  background-color: var(--oz-primary);
+  border: none;
+  border-radius: 10px;
+  color: #ffffff;
+  font-family: var(--oz-sans);
+  font-weight: 600;
+  font-size: 15px;
+  min-width: 220px;
+  padding: 12px 22px;
+  transition: background-color 0.15s, transform 0.05s;
+}
+
+.theme-btn--primary:hover {
+  background-color: var(--oz-primary-hover);
+  color: #ffffff;
+}
+
+.theme-btn--primary:active {
+  transform: translateY(1px);
+}
+
+.theme-btn--primary:focus-visible {
+  outline: 2px solid var(--oz-violet-500);
+  outline-offset: 2px;
+}
+
+.theme-btn--success {
+  background-color: var(--oz-primary);
+  color: #ffffff;
+  border-radius: 10px;
+}
+
+.theme-btn--success:hover {
+  background-color: var(--oz-primary-hover);
+}
+
+.theme-form-row {
+  margin: 18px auto;
+}
+
+.theme-form-input {
+  background-color: var(--oz-bg);
+  border: 1px solid var(--oz-border);
+  border-radius: 10px;
+  color: var(--oz-text);
+  font-family: var(--oz-sans);
+  font-size: 14px;
+  height: 42px;
+  padding: 8px 14px;
+  width: 280px;
+}
+
+.theme-form-input:focus,
+.theme-form-input:active {
+  border-color: var(--oz-primary);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
+  outline: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .theme-form-input {
+    background-color: var(--oz-bg-soft);
+  }
+  .theme-form-input:focus,
+  .theme-form-input:active {
+    box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.18);
+  }
+}
+
+.theme-form-label {
+  color: var(--oz-text);
+  font-family: var(--oz-sans);
+  font-size: 13px;
+  font-weight: 500;
+  width: 280px;
+}
+
+.theme-link-back {
+  color: var(--oz-primary);
+  font-family: var(--oz-sans);
+}
+
+.theme-remember-me {
+  color: var(--oz-text);
+  font-family: var(--oz-sans);
+  width: 280px;
+}

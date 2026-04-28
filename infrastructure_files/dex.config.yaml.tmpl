@@ -12,6 +12,13 @@
 
 issuer: https://$OPENZRO_DOMAIN/dex
 
+# openZro brand theme (mirrored from dev). The compose volume
+# mount drops themes/openzro/ alongside Dex's bundled themes.
+frontend:
+  dir: /srv/dex/web
+  theme: openzro
+  issuer: openZro
+
 # Persistent storage so sessions survive container restarts.
 # sqlite is fine for single-instance deployments; HA setups
 # should switch to postgres (the management already needs one

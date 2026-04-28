@@ -330,3 +330,9 @@ envsubst <turnserver.conf.tmpl >$artifacts_path/turnserver.conf
 # substitution. The output sits next to docker-compose.yml so
 # the dex service's volume mount finds it.
 envsubst <dex.config.yaml.tmpl >$artifacts_path/dex.config.yaml
+# openZro brand theme assets (logo + favicon + styles.css).
+# The dex service mounts $artifacts_path/web/themes/openzro
+# into the container at /srv/dex/web/themes/openzro alongside
+# Dex's bundled themes/light + themes/dark.
+mkdir -p $artifacts_path/web/themes/openzro
+cp web/themes/openzro/{logo.png,favicon.png,styles.css} $artifacts_path/web/themes/openzro/
