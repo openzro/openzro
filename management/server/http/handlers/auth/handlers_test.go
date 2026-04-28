@@ -179,7 +179,8 @@ func newTestHandler(t *testing.T, mgr *providers.Manager) (*Handler, *StateCooki
 	t.Helper()
 	sealer := newTestSealer(t)
 	sessions := newTestSession(t)
-	h := NewHandler(mgr, sealer, sessions, WithSecureCookies(false), WithDefaultReturnTo("/peers"))
+	h, err := NewHandler(mgr, sealer, sessions, WithSecureCookies(false), WithDefaultReturnTo("/peers"))
+	require.NoError(t, err)
 	return h, sealer, sessions
 }
 
