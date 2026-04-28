@@ -19,11 +19,13 @@ import (
 	activityExporters "github.com/openzro/openzro/management/server/activity_exporters"
 	"github.com/openzro/openzro/management/server/admission"
 	"github.com/openzro/openzro/management/server/auth"
+	"github.com/openzro/openzro/management/server/dex_proxy"
 	"github.com/openzro/openzro/management/server/geolocation"
 	nbgroups "github.com/openzro/openzro/management/server/groups"
 	"github.com/openzro/openzro/management/server/http/handlers/accounts"
 	activityExportersHandler "github.com/openzro/openzro/management/server/http/handlers/activity_exporters"
 	admissionBypassHandler "github.com/openzro/openzro/management/server/http/handlers/admission_bypass"
+	authProvidersHandler "github.com/openzro/openzro/management/server/http/handlers/auth_providers"
 	"github.com/openzro/openzro/management/server/http/handlers/dns"
 	"github.com/openzro/openzro/management/server/http/handlers/events"
 	flowExportsHandler "github.com/openzro/openzro/management/server/http/handlers/flow_exports"
@@ -77,6 +79,7 @@ func NewAPIHandler(
 	activityExportersManager *activityExporters.Manager,
 	admissionBypassStore *admission.Store,
 	admissionBypassEmitter admissionBypassHandler.EventEmitter,
+	dexClient *dex_proxy.Client,
 ) (http.Handler, error) {
 
 	authMiddleware := middleware.NewAuthMiddleware(
@@ -117,6 +120,7 @@ func NewAPIHandler(
 	mdmProvidersHandler.AddEndpoints(permissionsManager, mdmStore, mdmManager, router)
 	activityExportersHandler.AddEndpoints(permissionsManager, activityExportersStore, activityExportersManager, router)
 	admissionBypassHandler.AddEndpoints(permissionsManager, admissionBypassStore, accountManager, admissionBypassEmitter, router)
+	authProvidersHandler.AddEndpoints(permissionsManager, dexClient, router)
 
 	// SCIM 2.0 lives at /scim/v2 per RFC 7644 — separate from /api so
 	// the path matches what every IdP expects out of the box. Same
