@@ -2,6 +2,7 @@
 
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { DialogTriggerProps } from "@radix-ui/react-dialog";
+import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { cn } from "@utils/helpers";
 import { X } from "lucide-react";
 import * as React from "react";
@@ -45,6 +46,12 @@ ModalOverlay.displayName = DialogPrimitive.Overlay.displayName;
 type ModalContentProps = {
   showClose?: boolean;
   maxWidthClass?: string;
+  // a11y title — Radix 1.1+ requires every Dialog.Content to be
+  // labeled by a Dialog.Title for screen readers. Most modals already
+  // render a visible <ModalTitle> inside `children`; the
+  // `accessibilityTitle` prop is the fallback we emit visually
+  // hidden when the caller hasn't supplied one. Defaults to "Dialog".
+  accessibilityTitle?: string;
 };
 
 const ModalContent = React.forwardRef<
@@ -58,6 +65,7 @@ const ModalContent = React.forwardRef<
       children,
       showClose = true,
       maxWidthClass = "max-w-3xl",
+      accessibilityTitle = "Dialog",
       ...props
     },
     ref,
@@ -75,6 +83,9 @@ const ModalContent = React.forwardRef<
           onClick={(e) => e.stopPropagation()}
         >
           <>
+            <VisuallyHidden.Root>
+              <DialogPrimitive.Title>{accessibilityTitle}</DialogPrimitive.Title>
+            </VisuallyHidden.Root>
             {children}
             {showClose && (
               <DialogPrimitive.Close
@@ -104,6 +115,7 @@ const SidebarModalContent = React.forwardRef<
       children,
       showClose = true,
       maxWidthClass = "max-w-3xl",
+      accessibilityTitle = "Dialog",
       ...props
     },
     ref,
@@ -130,6 +142,11 @@ const SidebarModalContent = React.forwardRef<
             onClick={(e) => e.stopPropagation()}
           >
             <>
+              <VisuallyHidden.Root>
+                <DialogPrimitive.Title>
+                  {accessibilityTitle}
+                </DialogPrimitive.Title>
+              </VisuallyHidden.Root>
               {children}
               {showClose && (
                 <DialogPrimitive.Close
