@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>First-time setup · openZro</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<style>
+  :root {
+    --oz-violet-50:  #f5f3ff;
+    --oz-violet-100: #ede9fe;
+    --oz-violet-200: #ddd6fe;
+    --oz-violet-300: #c4b5fd;
+    --oz-violet-400: #a78bfa;
+    --oz-violet-500: #8b5cf6;
+    --oz-violet-600: #7c3aed;
+    --oz-violet-700: #6d28d9;
+    --oz-violet-900: #4c1d95;
+    --oz-ink:    #0f0a1f;
+    --oz-paper:  #faf9fc;
+    --oz-bg:        #ffffff;
+    --oz-bg-soft:   var(--oz-violet-50);
+    --oz-text:      var(--oz-ink);
+    --oz-text-muted: #6b7280;
+    --oz-border:    var(--oz-violet-200);
+    --oz-primary:       var(--oz-violet-600);
+    --oz-primary-hover: var(--oz-violet-700);
+    --oz-z-color:       var(--oz-violet-600);
+    --oz-sans: 'Geist', -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif;
+    --oz-mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --oz-bg:        var(--oz-ink);
+      --oz-bg-soft:   #1a1330;
+      --oz-text:      #ffffff;
+      --oz-text-muted: #9ca3af;
+      --oz-border:    #2d2347;
+      --oz-z-color:   var(--oz-violet-400);
+      --oz-primary:       var(--oz-violet-500);
+      --oz-primary-hover: var(--oz-violet-400);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--oz-sans);
+    color: var(--oz-text);
+    background: var(--oz-bg);
+    min-height: 100vh;
+    display: grid;
+    place-items: start center;
+    padding: 32px 24px;
+    line-height: 1.55;
+  }
+  .oz-setup {
+    width: 100%;
+    max-width: 560px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+  .oz-setup__brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .oz-setup__brand svg { width: 48px; height: 48px; }
+  .oz-wordmark {
+    font-family: var(--oz-sans); font-weight: 600; font-size: 22px;
+    letter-spacing: -0.025em; line-height: 1; color: var(--oz-text);
+  }
+  .oz-wordmark .oz-z { color: var(--oz-z-color); font-weight: 700; }
+  .oz-setup__title { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .oz-setup__lead { margin: 0; color: var(--oz-text-muted); font-size: 14px; }
+  .oz-setup__error {
+    padding: 10px 14px; border-radius: 8px;
+    background: #fee2e2; border: 1px solid #fecaca; color: #991b1b; font-size: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    .oz-setup__error { background: #2a0e16; border-color: #7f1d1d; color: #fca5a5; }
+  }
+  form { display: flex; flex-direction: column; gap: 16px; }
+  .oz-field { display: flex; flex-direction: column; gap: 6px; }
+  .oz-field label { font-size: 13px; font-weight: 500; color: var(--oz-text); }
+  .oz-field input, .oz-field select {
+    padding: 10px 12px; border-radius: 8px;
+    border: 1px solid var(--oz-border); background: var(--oz-bg-soft);
+    color: var(--oz-text); font-family: var(--oz-sans); font-size: 14px;
+    width: 100%;
+  }
+  .oz-field input:focus, .oz-field select:focus {
+    outline: 2px solid var(--oz-primary); outline-offset: 1px;
+    border-color: var(--oz-primary);
+  }
+  .oz-field__hint { font-size: 12px; color: var(--oz-text-muted); }
+  .oz-grid { display: grid; gap: 16px; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 540px) { .oz-grid { grid-template-columns: 1fr; } }
+  .oz-actions { display: flex; justify-content: flex-end; padding-top: 6px; }
+  button.oz-btn-primary {
+    padding: 10px 18px; border-radius: 8px; border: 0;
+    background: var(--oz-primary); color: #fff;
+    font-family: var(--oz-sans); font-weight: 600; font-size: 14px; cursor: pointer;
+    transition: background 0.15s;
+  }
+  button.oz-btn-primary:hover { background: var(--oz-primary-hover); }
+  button.oz-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .oz-help {
+    padding: 12px 14px; border-radius: 8px; background: var(--oz-bg-soft);
+    border: 1px solid var(--oz-border); font-size: 13px; color: var(--oz-text-muted);
+  }
+  .oz-help code { font-family: var(--oz-mono); font-size: 12px; color: var(--oz-text); }
+</style>
+</head>
+<body>
+  <main class="oz-setup">
+    <div class="oz-setup__brand">
+      {{ozIcon}}
+      <span class="oz-wordmark">open<span class="oz-z">Z</span>ro</span>
+    </div>
+    <div>
+      <h1 class="oz-setup__title">First-time setup</h1>
+      <p class="oz-setup__lead">
+        Connect your first identity provider to finish bringing this
+        openZro instance online. Once you save, this wizard becomes
+        unreachable — sign in via the new provider going forward.
+      </p>
+    </div>
+
+    {{if .Error}}
+      <div class="oz-setup__error">{{.Error}}</div>
+    {{end}}
+
+    <form method="POST" action="/setup">
+      <input type="hidden" name="token" value="{{.Token}}">
+
+      <div class="oz-field">
+        <label for="name">Name</label>
+        <input id="name" name="name" required value="{{.Name}}" placeholder="prod-zitadel">
+        <span class="oz-field__hint">Internal label shown in Settings → Authentication Providers.</span>
+      </div>
+
+      <div class="oz-field">
+        <label for="type">Type</label>
+        <select id="type" name="type" required>
+          {{range .Types}}
+            <option value="{{.}}"{{if eq . $.Type}} selected{{end}}>{{.}}</option>
+          {{end}}
+        </select>
+      </div>
+
+      <div class="oz-field">
+        <label for="issuer_url">Issuer URL</label>
+        <input id="issuer_url" name="issuer_url" required value="{{.IssuerURL}}"
+               placeholder="https://idp.example.com">
+        <span class="oz-field__hint">
+          The OIDC issuer your IdP advertises in
+          <code>/.well-known/openid-configuration</code>.
+        </span>
+      </div>
+
+      <div class="oz-grid">
+        <div class="oz-field">
+          <label for="client_id">Client ID</label>
+          <input id="client_id" name="client_id" required value="{{.ClientID}}">
+        </div>
+        <div class="oz-field">
+          <label for="client_secret">Client Secret</label>
+          <input id="client_secret" name="client_secret" type="password" required>
+        </div>
+      </div>
+
+      <div class="oz-field">
+        <label for="brand_label">Brand label (optional)</label>
+        <input id="brand_label" name="brand_label" value="{{.BrandLabel}}"
+               placeholder="Acme SSO">
+        <span class="oz-field__hint">Shown on the Sign in with… button.</span>
+      </div>
+
+      <div class="oz-field">
+        <label for="scopes">Scopes (optional)</label>
+        <input id="scopes" name="scopes" placeholder="openid profile email">
+        <span class="oz-field__hint">Space-separated. Defaults to openid profile email.</span>
+      </div>
+
+      <div class="oz-help">
+        After save you&apos;ll be redirected to <code>/login</code>.
+        Sign in through the provider you just configured —
+        the bootstrap wizard becomes unreachable as soon as the
+        first provider is saved.
+      </div>
+
+      <div class="oz-actions">
+        <button type="submit" class="oz-btn-primary">Save and finish setup</button>
+      </div>
+    </form>
+  </main>
+</body>
+</html>

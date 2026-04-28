@@ -10,7 +10,7 @@ import (
 	"github.com/openzro/openzro/management/server/auth/providers"
 )
 
-//go:embed templates/login.tmpl templates/openzro-icon.svg
+//go:embed templates/login.tmpl templates/setup.tmpl templates/openzro-icon.svg
 var loginAssets embed.FS
 
 // providerLink is the per-row data the login template renders.
@@ -62,9 +62,9 @@ func newLoginRenderer() (*loginRenderer, error) {
 	}
 	t, err := template.New("login").
 		Funcs(funcs).
-		ParseFS(loginAssets, "templates/login.tmpl")
+		ParseFS(loginAssets, "templates/login.tmpl", "templates/setup.tmpl")
 	if err != nil {
-		return nil, fmt.Errorf("auth: parse login template: %w", err)
+		return nil, fmt.Errorf("auth: parse templates: %w", err)
 	}
 	return &loginRenderer{tmpl: t}, nil
 }
