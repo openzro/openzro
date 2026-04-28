@@ -1,0 +1,97 @@
+# openZro · production Dex configuration template
+#
+# Rendered by configure.sh from $OPENZRO_DOMAIN + (optional)
+# admin password / connector secrets in setup.env. The result
+# is mounted into the dex container as /etc/dex/config.yaml.
+#
+# The reverse proxy (nginx or traefik) terminates TLS and
+# forwards `/dex/*` to this container at port 5556 with the
+# `/dex` prefix STRIPPED. Dex generates external URLs from the
+# `issuer` field below — keeping them prefixed with /dex so
+# clients always hit the proxy, never the container directly.
+
+issuer: https://$OPENZRO_DOMAIN/dex
+
+# Persistent storage so sessions survive container restarts.
+# sqlite is fine for single-instance deployments; HA setups
+# should switch to postgres (the management already needs one
+# in HA mode — share it with a dedicated dex schema).
+storage:
+  type: sqlite3
+  config:
+    file: /var/lib/dex/dex.db
+
+web:
+  http: 0.0.0.0:5556
+  # Dex CORS gate. The dashboard's @axa-fr/react-oidc fetches
+  # the JWKs and userinfo endpoints from JS — those need to be
+  # reachable from the dashboard origin.
+  allowedOrigins:
+    - https://$OPENZRO_DOMAIN
+
+# Dashboard SPA — public client (PKCE; no client_secret in the
+# browser). Operators who want to authenticate other tools
+# (CLI, custom scripts) add additional staticClients here.
+staticClients:
+  - id: openzro-dashboard
+    name: openZro Dashboard
+    public: true
+    redirectURIs:
+      - https://$OPENZRO_DOMAIN/auth
+      - https://$OPENZRO_DOMAIN/silent-auth
+      - https://$OPENZRO_DOMAIN/peers
+      - https://$OPENZRO_DOMAIN/
+
+# First-time admin so the operator can sign in immediately
+# after `docker compose up -d`. configure.sh seeds this from
+# OPENZRO_DEX_ADMIN_EMAIL + OPENZRO_DEX_ADMIN_PASSWORD_BCRYPT.
+# Once the operator has configured a real connector below,
+# they can comment the staticPasswords block out and restart
+# Dex.
+enablePasswordDB: true
+staticPasswords:
+  - email: $OPENZRO_DEX_ADMIN_EMAIL
+    hash: '$OPENZRO_DEX_ADMIN_PASSWORD_BCRYPT'
+    username: admin
+    userID: openzro-admin
+
+# Production keeps the approval screen on — first sign-in via a
+# new client shows the user what permissions are being granted.
+oauth2:
+  responseTypes:
+    - code
+  skipApprovalScreen: false
+
+# Connectors are how Dex federates to external IdPs. Examples
+# below are commented; un-comment + fill in to enable. See
+# https://dexidp/docs/connectors/ for the full list (Google,
+# GitHub, Microsoft, GitLab, Bitbucket Cloud, LinkedIn, OIDC,
+# OAuth2, SAML, LDAP, OpenShift, Atlassian Crowd, Gitea,
+# OpenStack Keystone, AuthProxy).
+connectors: []
+#  - type: google
+#    id: google
+#    name: Google
+#    config:
+#      clientID: $OPENZRO_DEX_GOOGLE_CLIENT_ID
+#      clientSecret: $OPENZRO_DEX_GOOGLE_CLIENT_SECRET
+#      redirectURI: https://$OPENZRO_DOMAIN/dex/callback
+#  - type: github
+#    id: github
+#    name: GitHub
+#    config:
+#      clientID: $OPENZRO_DEX_GITHUB_CLIENT_ID
+#      clientSecret: $OPENZRO_DEX_GITHUB_CLIENT_SECRET
+#      redirectURI: https://$OPENZRO_DOMAIN/dex/callback
+#  - type: microsoft
+#    id: microsoft
+#    name: Microsoft Entra ID
+#    config:
+#      clientID: $OPENZRO_DEX_MICROSOFT_CLIENT_ID
+#      clientSecret: $OPENZRO_DEX_MICROSOFT_CLIENT_SECRET
+#      redirectURI: https://$OPENZRO_DOMAIN/dex/callback
+#      tenant: $OPENZRO_DEX_MICROSOFT_TENANT
+
+logger:
+  level: info
+  format: json

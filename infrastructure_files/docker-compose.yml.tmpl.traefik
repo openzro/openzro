@@ -7,6 +7,29 @@ x-default: &default
       max-file: '2'
 
 services:
+  # Dex IdP (ADR-0006). Owns /dex/* on the public domain via
+  # Traefik; serves OIDC discovery + auth + token + userinfo +
+  # JWKs. Federates to upstream IdPs through connectors
+  # configured in dex.config.yaml.
+  dex:
+    <<: *default
+    image: ghcr.io/dexidp/dex:$OPENZRO_DEX_TAG
+    command: ["dex", "serve", "/etc/dex/config.yaml"]
+    volumes:
+      - ./dex.config.yaml:/etc/dex/config.yaml:ro
+      - $DEX_VOLUMENAME:/var/lib/dex
+    labels:
+    - traefik.enable=true
+    # Strip the /dex prefix before forwarding so the Dex
+    # container — which serves at root paths — sees the request
+    # at the path it expects. Dex's `issuer` includes the prefix
+    # so external URLs in tokens and discovery doc round-trip
+    # correctly.
+    - traefik.http.middlewares.openzro-dex-strip.stripprefix.prefixes=/dex
+    - traefik.http.routers.openzro-dex.rule=Host(`$OPENZRO_DOMAIN`) && PathPrefix(`/dex`)
+    - traefik.http.routers.openzro-dex.middlewares=openzro-dex-strip
+    - traefik.http.services.openzro-dex.loadbalancer.server.port=5556
+
   # UI dashboard
   dashboard:
     <<: *default
@@ -125,3 +148,4 @@ volumes:
   $MGMT_VOLUMENAME:
   $SIGNAL_VOLUMENAME:
   $LETSENCRYPT_VOLUMENAME:
+  $DEX_VOLUMENAME:
