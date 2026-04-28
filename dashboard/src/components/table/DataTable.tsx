@@ -14,11 +14,15 @@ import {
   TableWrapper,
 } from "@components/table/Table";
 import NoResults from "@components/ui/NoResults";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-} from "@radix-ui/react-accordion";
+// Accordion state (open row IDs) is managed locally via useState.
+// We deliberately do NOT use @radix-ui/react-accordion here:
+// AccordionItem renders a <div> wrapper that the HTML5 parser
+// rejects between <tbody> and <tr> (See React hydration error
+// "<tr> cannot be a child of <div>"). The local state + manual
+// conditional render below produces valid HTML and preserves the
+// click-to-expand UX; the only loss is Radix's open/close
+// animation, which can be re-added later with a pure CSS height
+// transition if needed.
 import { RankingInfo } from "@tanstack/match-sorter-utils";
 import {
   ColumnDef,
@@ -491,130 +495,105 @@ export function DataTable<TData, TValue>({
               </TableHeaderComponent>
             )}
 
-            <Accordion
-              asChild={true}
-              type={"multiple"}
-              value={accordion}
-              onValueChange={setAccordion}
+            <TableBodyComponent
+              className={cn(
+                "relative",
+                data == undefined && "blur-sm",
+                wrapperClassName,
+              )}
             >
-              <TableBodyComponent
-                className={cn(
-                  "relative",
-                  data == undefined && "blur-sm",
-                  wrapperClassName,
-                )}
-              >
-                {table.getRowModel().rows?.length ? (
-                  table.getRowModel().rows.map((row) => {
-                    const expandedRow = renderExpandedRow?.(row.original);
-                    return (
-                      // display:contents lets AccordionItem render its
-                      // default <div> without disturbing the table
-                      // layout — the <tr> children appear as direct
-                      // siblings of <tbody>. Using asChild here used
-                      // to fail because Radix tried to clone data-*
-                      // props onto a React.Fragment, which only
-                      // accepts `key` and `children`.
-                      <AccordionItem
-                        value={row.original.id}
-                        className="contents"
-                        key={row.id}
-                      >
-                        <TableRowComponent
-                            minimal={minimal}
-                            data-row-id={row.original.id}
-                            className={cn(
-                              (onRowClick || renderExpandedRow) &&
-                                "relative group/accordion",
-                              (onRowClick || expandedRow) && "cursor-pointer",
-                              rowClassName,
-                            )}
-                            data-state={row.getIsSelected() && "selected"}
-                            data-accordion={
-                              accordion?.includes(row.original.id)
-                                ? "opened"
-                                : "closed"
-                            }
-                            onClick={(e) => {
-                              if (expandedRow) {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                setAccordion((prev) => {
-                                  if (prev?.includes(row.original.id)) {
-                                    return prev.filter(
-                                      (item) => item !== row.original.id,
-                                    );
-                                  } else {
-                                    return [...(prev ?? []), row.original.id];
-                                  }
-                                });
+              {table.getRowModel().rows?.length ? (
+                table.getRowModel().rows.map((row) => {
+                  const expandedRow = renderExpandedRow?.(row.original);
+                  const isOpen =
+                    accordion?.includes(row.original.id) ?? false;
+                  return (
+                    <React.Fragment key={row.id}>
+                      <TableRowComponent
+                        minimal={minimal}
+                        data-row-id={row.original.id}
+                        className={cn(
+                          (onRowClick || renderExpandedRow) &&
+                            "relative group/accordion",
+                          (onRowClick || expandedRow) && "cursor-pointer",
+                          rowClassName,
+                        )}
+                        data-state={row.getIsSelected() && "selected"}
+                        data-accordion={isOpen ? "opened" : "closed"}
+                        aria-expanded={expandedRow ? isOpen : undefined}
+                        onClick={(e) => {
+                          if (expandedRow) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setAccordion((prev) => {
+                              if (prev?.includes(row.original.id)) {
+                                return prev.filter(
+                                  (item) => item !== row.original.id,
+                                );
+                              } else {
+                                return [...(prev ?? []), row.original.id];
                               }
+                            });
+                          }
+                        }}
+                      >
+                        {row.getVisibleCells().map((cell) => (
+                          <TableCellComponent
+                            key={cell.id}
+                            className={cn("relative", tableCellClassName)}
+                            minimal={minimal}
+                            inset={inset}
+                            onClick={() => {
+                              onRowClick && onRowClick(row, cell.column.id);
                             }}
                           >
-                            <>
-                              {row.getVisibleCells().map((cell) => (
-                                <TableCellComponent
-                                  key={cell.id}
-                                  className={cn("relative", tableCellClassName)}
-                                  minimal={minimal}
-                                  inset={inset}
-                                  onClick={() => {
-                                    onRowClick &&
-                                      onRowClick(row, cell.column.id);
-                                  }}
-                                >
-                                  <div
-                                    className={
-                                      "absolute left-0 top-0 w-full h-full z-0"
-                                    }
-                                  ></div>
-                                  <div className={"relative z-[1]"}>
-                                    {flexRender(
-                                      cell.column.columnDef.cell,
-                                      cell.getContext(),
-                                    )}
-                                  </div>
-                                </TableCellComponent>
-                              ))}
-                            </>
-                          </TableRowComponent>
-
-                        {expandedRow && (
-                          <AccordionContent asChild={true}>
-                            <TableRowComponent
-                              data-row-id={row.id + "-expanded-row"}
-                              key={row.id + "-expanded-row"}
-                              minimal={minimal}
-                              className={cn(
-                                onRowClick && "cursor-pointer relative",
-                                rowClassName,
+                            <div
+                              className={
+                                "absolute left-0 top-0 w-full h-full z-0"
+                              }
+                            ></div>
+                            <div className={"relative z-[1]"}>
+                              {flexRender(
+                                cell.column.columnDef.cell,
+                                cell.getContext(),
                               )}
-                              data-state={row.getIsSelected() && "selected"}
-                            >
-                              <TableDataUnstyledComponent
-                                className={"w-full"}
-                                colSpan={row.getVisibleCells().length}
-                              >
-                                {expandedRow}
-                              </TableDataUnstyledComponent>
-                            </TableRowComponent>
-                          </AccordionContent>
-                        )}
-                      </AccordionItem>
-                    );
-                  })
-                ) : (
-                  <TableRowUnstyledComponent>
-                    <TableCellComponent
-                      colSpan={columns.length}
-                      className="!py-0 !px-0 text-center"
-                    >
-                      <NoResults className={"py-4"} />
-                    </TableCellComponent>
-                  </TableRowUnstyledComponent>
-                )}
-              </TableBodyComponent>
-            </Accordion>
+                            </div>
+                          </TableCellComponent>
+                        ))}
+                      </TableRowComponent>
+
+                      {expandedRow && isOpen && (
+                        <TableRowComponent
+                          data-row-id={row.id + "-expanded-row"}
+                          minimal={minimal}
+                          className={cn(
+                            onRowClick && "cursor-pointer relative",
+                            rowClassName,
+                          )}
+                          data-state={row.getIsSelected() && "selected"}
+                        >
+                          <TableDataUnstyledComponent
+                            className={"w-full"}
+                            colSpan={row.getVisibleCells().length}
+                          >
+                            {expandedRow}
+                          </TableDataUnstyledComponent>
+                        </TableRowComponent>
+                      )}
+                    </React.Fragment>
+                  );
+                })
+              ) : (
+                <TableRowUnstyledComponent>
+                  <TableCellComponent
+                    colSpan={columns.length}
+                    className="!py-0 !px-0 text-center"
+                  >
+                    <NoResults className={"py-4"} />
+                  </TableCellComponent>
+                </TableRowUnstyledComponent>
+              )}
+            </TableBodyComponent>
           </TableComponent>
         )}
       </TableWrapper>
