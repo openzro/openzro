@@ -92,6 +92,14 @@ services:
     - traefik.http.routers.openzro-management.service=openzro-management
     - traefik.http.services.openzro-management.loadbalancer.server.port=33073
     - traefik.http.services.openzro-management.loadbalancer.server.scheme=h2c
+
+    # ADR-0005 centralized login surfaces — /login, /auth/* and
+    # /setup are owned by the management server. Without these
+    # routers Traefik would fall through to the dashboard catch-
+    # all and 404 the new pages. Reuses the openzro-api service
+    # (same backend, same port).
+    - traefik.http.routers.openzro-login.rule=Host(`$OPENZRO_DOMAIN`) && (Path(`/login`) || PathPrefix(`/auth/`) || Path(`/setup`))
+    - traefik.http.routers.openzro-login.service=openzro-api
     environment:
       - OPENZRO_STORE_ENGINE_POSTGRES_DSN=$OPENZRO_STORE_ENGINE_POSTGRES_DSN
       - OPENZRO_STORE_ENGINE_MYSQL_DSN=$OPENZRO_STORE_ENGINE_MYSQL_DSN
