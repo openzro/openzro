@@ -1,5 +1,11 @@
 # Implementation plan: openZro-branded centralized login
 
+> **Superseded note (2026-04-28).** This plan implemented
+> ADR-0005, which is itself superseded by [ADR-0006 — Embed
+> Dex](../adr/0006-embed-dex.md). The retirement of the work
+> described below is tracked under ADR-0006's stages 4-5.
+> The text is preserved for historical context.
+
 Companion to [ADR-0005](../adr/0005-centralized-login.md). This
 file tracks the actual landing PRs.
 
