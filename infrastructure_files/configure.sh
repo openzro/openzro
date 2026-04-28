@@ -109,6 +109,46 @@ fi
 artifacts_path="./artifacts"
 mkdir -p $artifacts_path
 
+# Dex gRPC mTLS certs (ADR-0006). Generated once, persisted
+# under artifacts/grpc-certs/ across re-runs of configure.sh.
+# CA signs both the server cert (mounted into the dex container)
+# and the client cert (mounted into the management container).
+# The CN doesn't have to match anything externally — gRPC client
+# uses the docker-internal hostname `dex` when dialing.
+grpc_certs_path="$artifacts_path/grpc-certs"
+if [[ ! -f "$grpc_certs_path/ca.crt" ]]; then
+  echo "Generating Dex gRPC mTLS certs (one-time setup)…"
+  mkdir -p "$grpc_certs_path"
+  # CA
+  openssl req -x509 -newkey rsa:4096 -sha256 -nodes -days 3650 \
+    -keyout "$grpc_certs_path/ca.key" \
+    -out    "$grpc_certs_path/ca.crt" \
+    -subj   "/CN=openzro-dex-grpc-ca" 2>/dev/null
+  # Server cert (CN=dex matches the docker compose service name)
+  openssl req -newkey rsa:2048 -sha256 -nodes \
+    -keyout "$grpc_certs_path/server.key" \
+    -out    "$grpc_certs_path/server.csr" \
+    -subj   "/CN=dex" 2>/dev/null
+  echo "subjectAltName = DNS:dex,DNS:localhost,IP:127.0.0.1" \
+    >"$grpc_certs_path/server.ext"
+  openssl x509 -req -in "$grpc_certs_path/server.csr" \
+    -CA "$grpc_certs_path/ca.crt" -CAkey "$grpc_certs_path/ca.key" -CAcreateserial \
+    -out "$grpc_certs_path/server.crt" -days 3650 -sha256 \
+    -extfile "$grpc_certs_path/server.ext" 2>/dev/null
+  # Client cert
+  openssl req -newkey rsa:2048 -sha256 -nodes \
+    -keyout "$grpc_certs_path/client.key" \
+    -out    "$grpc_certs_path/client.csr" \
+    -subj   "/CN=openzro-management" 2>/dev/null
+  openssl x509 -req -in "$grpc_certs_path/client.csr" \
+    -CA "$grpc_certs_path/ca.crt" -CAkey "$grpc_certs_path/ca.key" -CAcreateserial \
+    -out "$grpc_certs_path/client.crt" -days 3650 -sha256 2>/dev/null
+  rm -f "$grpc_certs_path"/*.csr "$grpc_certs_path"/*.ext "$grpc_certs_path"/*.srl
+  chmod 600 "$grpc_certs_path"/*.key
+  chmod 644 "$grpc_certs_path"/*.crt
+  echo "  Wrote $grpc_certs_path/{ca,server,client}.{crt,key}"
+fi
+
 # Dex IdP defaults (ADR-0006). Pinned tag, default admin email,
 # bcrypt of a generated admin password when the operator hasn't
 # supplied one. The plaintext password is printed ONCE here and

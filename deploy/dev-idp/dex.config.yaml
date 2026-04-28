@@ -27,6 +27,14 @@ frontend:
 
 web:
   http: 0.0.0.0:5556
+
+# gRPC API for runtime connector management (ADR-0006). The
+# dashboard's Settings → Authentication Providers tab proxies
+# CRUD calls through the management binary into this endpoint.
+# Plaintext is fine in dev — host-only port forwarding via
+# compose; production runs mTLS over the Docker network.
+grpc:
+  addr: 0.0.0.0:5557
   # Skip approval is fine for dev — production keeps it on so
   # users see the consent step the first time. Per Dex docs.
   allowedOrigins:
