@@ -17,6 +17,16 @@ services:
     image: ghcr.io/dexidp/dex:v2.45.0-distroless
     restart: unless-stopped
     command: ["dex", "serve", "/etc/dex/config.yaml"]
+    environment:
+      # Dex hides connector CRUD on the gRPC API behind a feature
+      # gate (default off) — pkg/featureflags/set.go. The dashboard's
+      # Settings → Authentication Providers tab + management's
+      # dex_proxy depend on this. Without it, every Create/List/
+      # Update/Delete call returns `code = Unknown desc =
+      # api_connectors_crud feature flag is not enabled` (HTTP 500
+      # at the management's REST proxy). Same flag is set on the
+      # production compose template — see ADR-0006.
+      - DEX_API_CONNECTORS_CRUD=true
     volumes:
       - ./dev-idp/dex.config.yaml:/etc/dex/config.yaml:ro
       # openZro brand theme drops alongside Dex's bundled

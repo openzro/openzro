@@ -177,6 +177,7 @@ dev.management.up: build.management dev.idp.up ## Start the management server in
 	  echo "management already running (pid $$(cat $(MGMT_PIDFILE)))"; \
 	else \
 	  mkdir -p $(MGMT_DATADIR); \
+	  OPENZRO_DEX_GRPC_ADDR=localhost:5557 \
 	  ./$(MGMT_BIN) management \
 	    --config $(MGMT_CONFIG) \
 	    --datadir $(MGMT_DATADIR) \
