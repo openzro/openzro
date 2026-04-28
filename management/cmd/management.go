@@ -52,13 +52,11 @@ import (
 	activityExporters "github.com/openzro/openzro/management/server/activity_exporters"
 	"github.com/openzro/openzro/management/server/admission"
 	"github.com/openzro/openzro/management/server/auth"
-	authProviders "github.com/openzro/openzro/management/server/auth/providers"
 	nbContext "github.com/openzro/openzro/management/server/context"
 	flowExports "github.com/openzro/openzro/management/server/flow_exports"
 	"github.com/openzro/openzro/management/server/geolocation"
 	"github.com/openzro/openzro/management/server/groups"
 	nbhttp "github.com/openzro/openzro/management/server/http"
-	authHttpHandler "github.com/openzro/openzro/management/server/http/handlers/auth"
 	"github.com/openzro/openzro/management/server/idp"
 	"github.com/openzro/openzro/management/server/mdm"
 	"github.com/openzro/openzro/management/server/metrics"
@@ -294,38 +292,13 @@ var (
 			}
 
 			// auth/providers store + manager are constructed BEFORE
-			// auth.NewManager so the multi-issuer JWT validator can
-			// route incoming tokens by `iss` claim. When the SQL
-			// store isn't available (in-memory tests, exotic engines),
-			// or no providers are configured, the auth manager
-			// silently falls back to the legacy single-issuer path
-			// — same behavior as before centralized login landed.
-			var authProvidersStore *authProviders.Store
-			var authProvidersManager *authProviders.Manager
-			if sqlStore, ok := store.(*mgmtStore.SqlStore); ok {
-				var apErr error
-				authProvidersStore, apErr = authProviders.NewStore(sqlStore.GetGormDB(), config.DataStoreEncryptionKey)
-				if apErr != nil {
-					return fmt.Errorf("auth providers store: %w", apErr)
-				}
-				authProvidersManager = authProviders.NewManager(authProvidersStore, openzroBaseURL()+"/auth/callback")
-				if perRow, refreshErr := authProvidersManager.Refresh(ctx); refreshErr != nil {
-					log.WithContext(ctx).Errorf("auth providers boot refresh: %v", refreshErr)
-				} else {
-					for _, e := range perRow {
-						log.WithContext(ctx).Warnf("auth providers boot: %s", e.Error())
-					}
-				}
-			}
-
 			authManager := auth.NewManager(store,
 				config.HttpConfig.AuthIssuer,
 				config.HttpConfig.AuthAudience,
 				config.HttpConfig.AuthKeysLocation,
 				config.HttpConfig.AuthUserIDClaim,
 				config.GetAuthAudiences(),
-				config.HttpConfig.IdpSignKeyRefreshEnabled,
-				authProvidersManager)
+				config.HttpConfig.IdpSignKeyRefreshEnabled)
 
 			groupsManager := groups.NewManager(store, permissionsManager, accountManager)
 			resourcesManager := resources.NewManager(store, permissionsManager, groupsManager, accountManager)
@@ -472,74 +445,7 @@ var (
 				accountManager.StoreEvent(ctx, initiatorID, targetID, accountID, code, meta)
 			}
 
-			// Centralized openZro-branded login (ADR-0005). The
-			// SessionService is constructed unconditionally so the
-			// auth middleware can recognise the oz_session cookie
-			// even on deployments that haven't yet flipped on the
-			// /login surface (a bootstrap flow may mint cookies
-			// against the same key). The Handler — which actually
-			// serves /login + /auth/* — is wired only when
-			// OPENZRO_BASE_URL is set: that's the public URL the
-			// upstream IdP redirects back to, and must match the
-			// redirect_uri whitelisted in each provider's app config.
-			centralizedSessions, err := authHttpHandler.NewSessionService(config.DataStoreEncryptionKey)
-			if err != nil {
-				return fmt.Errorf("auth session service: %w", err)
-			}
-
-			// Bootstrap token (ADR-0005, Option B greenfield path).
-			// Activated by OPENZRO_ENABLE_BOOTSTRAP=true; mints a
-			// single-use token to disk and logs the /setup URL.
-			// The token is auto-invalidated by the wizard once the
-			// first provider is saved. nil store = bootstrap off.
-			var bootstrapStore *authHttpHandler.BootstrapTokenStore
-			if openzroBootstrapEnabled() && authProvidersStore != nil {
-				rows, listErr := authProvidersStore.List(ctx)
-				if listErr != nil {
-					return fmt.Errorf("bootstrap providers list: %w", listErr)
-				}
-				if len(rows) == 0 {
-					bootstrapStore, err = authHttpHandler.NewBootstrapTokenStore(config.Datadir)
-					if err != nil {
-						return fmt.Errorf("bootstrap store: %w", err)
-					}
-					token, err := bootstrapStore.EnsureMinted()
-					if err != nil {
-						return fmt.Errorf("bootstrap mint: %w", err)
-					}
-					setupURL := authHttpHandler.SetupURL(openzroBaseURL(), bootstrapStore)
-					log.WithContext(ctx).Warnf(
-						"BOOTSTRAP MODE — open %s to configure the first authentication provider (token: %s, file: %s/%s)",
-						setupURL, token, config.Datadir, authHttpHandler.BootstrapTokenFile)
-				} else {
-					log.WithContext(ctx).Infof("OPENZRO_ENABLE_BOOTSTRAP set but %d AuthenticationProvider rows already exist — bootstrap wizard inactive", len(rows))
-				}
-			}
-
-			var centralizedAuth *authHttpHandler.Handler
-			if base := openzroBaseURL(); base != "" && authProvidersManager != nil {
-				sealer, err := authHttpHandler.NewStateCookieSealer(config.DataStoreEncryptionKey)
-				if err != nil {
-					return fmt.Errorf("auth state sealer: %w", err)
-				}
-				secureCookies := strings.HasPrefix(strings.ToLower(base), "https://")
-				opts := []authHttpHandler.HandlerOption{
-					authHttpHandler.WithSecureCookies(secureCookies),
-					authHttpHandler.WithEventEmitter(bypassEmitter),
-				}
-				if bootstrapStore != nil {
-					opts = append(opts, authHttpHandler.WithBootstrap(bootstrapStore, authProvidersStore))
-				}
-				h, err := authHttpHandler.NewHandler(authProvidersManager, sealer, centralizedSessions, opts...)
-				if err != nil {
-					return fmt.Errorf("auth handler: %w", err)
-				}
-				centralizedAuth = h
-			} else if authProvidersManager != nil {
-				log.WithContext(ctx).Infof("OPENZRO_BASE_URL not set — /login + /auth/* dormant; admin CRUD for AuthenticationProvider remains active")
-			}
-
-			httpAPIHandler, err := nbhttp.NewAPIHandler(ctx, accountManager, networksManager, resourcesManager, routersManager, groupsManager, geo, authManager, appMetrics, integratedPeerValidator, proxyController, permissionsManager, peersManager, settingsManager, flowStore, flowExportsStore, flowExportsManager, mdmStore, mdmManager, activityExportersStore, activityExportersManager, admissionBypassStore, bypassEmitter, authProvidersStore, authProvidersManager, bypassEmitter, centralizedAuth, centralizedSessions)
+			httpAPIHandler, err := nbhttp.NewAPIHandler(ctx, accountManager, networksManager, resourcesManager, routersManager, groupsManager, geo, authManager, appMetrics, integratedPeerValidator, proxyController, permissionsManager, peersManager, settingsManager, flowStore, flowExportsStore, flowExportsManager, mdmStore, mdmManager, activityExportersStore, activityExportersManager, admissionBypassStore, bypassEmitter)
 
 			if err != nil {
 				return fmt.Errorf("failed creating HTTP API handler: %v", err)
@@ -1015,31 +921,3 @@ func migrateToOpenzro(oldPath, newPath string) bool {
 	return true
 }
 
-// openzroBaseURL returns the operator-configured public URL the
-// management is served at — the prefix the centralized /login
-// surface uses to build redirect URIs. Empty string means
-// "feature dormant"; the legacy single-IdP path keeps working.
-//
-// Read from env at every call (cheap) so a bootstrap restart
-// after `export OPENZRO_BASE_URL=…` picks it up without a code
-// change. Trailing "/" is trimmed so callers can append paths
-// like "/auth/callback" without doubling slashes.
-func openzroBaseURL() string {
-	v := strings.TrimSpace(os.Getenv("OPENZRO_BASE_URL"))
-	return strings.TrimRight(v, "/")
-}
-
-// openzroBootstrapEnabled reports whether OPENZRO_ENABLE_BOOTSTRAP
-// is set to a truthy value. Used to gate the one-shot greenfield
-// /setup wizard (ADR-0005, Option B): when set on a fresh deploy
-// with no AuthenticationProvider rows, the management mints a
-// single-use token at boot and logs the URL the operator visits
-// to configure their first IdP. Once the first provider is saved
-// the wizard becomes unreachable and the variable can be unset.
-func openzroBootstrapEnabled() bool {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv("OPENZRO_ENABLE_BOOTSTRAP"))) {
-	case "1", "true", "yes", "on":
-		return true
-	}
-	return false
-}
