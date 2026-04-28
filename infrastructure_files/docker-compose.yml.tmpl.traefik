@@ -18,6 +18,7 @@ services:
     volumes:
       - ./dex.config.yaml:/etc/dex/config.yaml:ro
       - ./web/themes/openzro:/srv/dex/web/themes/openzro:ro
+      - ./grpc-certs:/etc/dex/grpc-certs:ro
       - $DEX_VOLUMENAME:/var/lib/dex
     labels:
     - traefik.enable=true
@@ -94,10 +95,12 @@ services:
     image: openzro/management:$OPENZRO_MANAGEMENT_TAG
     depends_on:
       - dashboard
+      - dex
     volumes:
       - $MGMT_VOLUMENAME:/var/lib/openzro
       - $LETSENCRYPT_VOLUMENAME:/etc/letsencrypt:ro
       - ./management.json:/etc/openzro/management.json
+      - ./grpc-certs:/etc/openzro/grpc-certs:ro
     command: [
       "--port", "33073",
       "--log-file", "console",
@@ -119,6 +122,11 @@ services:
     environment:
       - OPENZRO_STORE_ENGINE_POSTGRES_DSN=$OPENZRO_STORE_ENGINE_POSTGRES_DSN
       - OPENZRO_STORE_ENGINE_MYSQL_DSN=$OPENZRO_STORE_ENGINE_MYSQL_DSN
+      # Dex gRPC for runtime connector management (ADR-0006).
+      - OPENZRO_DEX_GRPC_ADDR=dex:5557
+      - OPENZRO_DEX_GRPC_CA_CERT=/etc/openzro/grpc-certs/ca.crt
+      - OPENZRO_DEX_GRPC_CLIENT_CERT=/etc/openzro/grpc-certs/client.crt
+      - OPENZRO_DEX_GRPC_CLIENT_KEY=/etc/openzro/grpc-certs/client.key
 
   # Coturn
   coturn:

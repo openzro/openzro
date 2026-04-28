@@ -1,9 +1,35 @@
 # ADR-0006: Embed Dex as openZro's federated IdP
 
-- **Status**: Accepted
+- **Status**: Accepted (course-corrected 2026-04-28)
 - **Date**: 2026-04-28
 - **Supersedes**: [ADR-0005 — openZro-branded centralized login](./0005-centralized-login.md)
 - **Decision-makers**: openZro maintainers
+
+> **Course correction (2026-04-28).** The original draft of this
+> ADR (committed in 8d2019e3) said connectors would be managed
+> exclusively via `dex.config.yaml` edits, treating Dex's
+> configuration as file-only. That was a mistake — Dex's gRPC
+> API (`github.com/dexidp/dex/api/v2`) exposes
+> `CreateConnector` / `UpdateConnector` / `DeleteConnector` /
+> `ListConnectors` RPCs that persist to Dex's own storage
+> backend (sqlite/postgres) at runtime. Connectors added via
+> the API show up at `/dex/auth` immediately without restart.
+>
+> The downstream consequence is significant: the operator UX
+> we had built and retired in stage 4 — Settings →
+> Authentication Providers tab, admin REST CRUD — can come
+> back, this time as a thin proxy over Dex's gRPC API rather
+> than a parallel storage with custom encryption + the broker
+> code that ADR-0005 piled on. We get the dashboard UX of
+> ADR-0005 without the broker complexity.
+>
+> The "Operator UX" section below was rewritten to match.
+> The retire-the-old-code stages 4–5 stand: that code was
+> written against ADR-0005's parallel-storage model, which is
+> the wrong abstraction once Dex is the single source of
+> truth. The new admin tab + REST handlers will be reintroduced
+> as a fresh implementation against Dex's gRPC client, keeping
+> commit history clean.
 
 ## Context
 
@@ -275,11 +301,35 @@ is still the operator's, the path-prefix `/dex` makes the
 delegation visible but the brand template wraps the surface.
 
 ### Operator UX
-Provider configuration moves from "Settings → Authentication
-Providers" (ADR-0005's vision) to "edit `dex.config.yaml`,
-restart Dex". Less point-and-click; more declarative + GitOps-
-friendly. NetBird's documentation patterns suggest this is
-acceptable for the user base.
+
+**Original draft (incorrect):** "Provider configuration moves
+from Settings → Authentication Providers (ADR-0005's vision)
+to edit dex.config.yaml, restart Dex. Less point-and-click;
+more declarative + GitOps-friendly."
+
+**Course-corrected (2026-04-28):** Provider configuration stays
+in the dashboard. Settings → Authentication Providers tab is
+restored as a CRUD surface that proxies to Dex's gRPC API.
+Operator clicks "Add provider", picks Google/GitHub/Microsoft/
+LDAP/etc., fills in the per-type fields; the dashboard POSTs
+to `management/api/admin/auth-providers` which calls Dex's
+`CreateConnector` RPC over mTLS. Connectors land in Dex's
+storage backend, the new sign-in button appears at /dex/auth
+on the next page load — no Dex restart, no YAML edits.
+
+What lives in `dex.config.yaml` versus the gRPC API:
+
+| | Where | Why |
+|---|---|---|
+| Issuer URL, storage backend, web theme | YAML | Static infrastructure, set once at deploy |
+| Static admin password (greenfield) | YAML | Bootstrap path before any connector exists |
+| OAuth2 staticClients (e.g. dashboard) | YAML | Known at deploy, doesn't change |
+| Federated connectors (Google, GitHub, …) | gRPC + storage | Operator-managed at runtime |
+
+The mTLS between management ↔ Dex gRPC stays inside the Docker
+network. Cert generation is part of `configure.sh`'s setup
+step, certs persist across compose restarts in a dedicated
+volume.
 
 ### Code complexity
 Net reduction of ~5,000 lines after stages 4 and 5 land. The

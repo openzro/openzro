@@ -26,6 +26,11 @@ services:
       - ./dev-idp/web/themes/openzro:/srv/dex/web/themes/openzro:ro
     ports:
       - "5556:5556"
+      # gRPC API for runtime connector management. The
+      # local management binary runs on the host, so we
+      # expose this port on localhost — production uses
+      # the docker network only.
+      - "127.0.0.1:5557:5557"
     healthcheck:
       # Dex exposes /healthz on the same port as OIDC. The wait
       # in provision.sh polls this so dev.management.up doesn't
