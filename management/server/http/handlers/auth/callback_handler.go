@@ -6,6 +6,8 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
+
+	"github.com/openzro/openzro/management/server/activity"
 )
 
 // callback finalizes the PKCE flow. Inputs (all from the
@@ -150,6 +152,16 @@ func (h *Handler) callback(w http.ResponseWriter, r *http.Request) {
 		Secure:   h.secureCookies,
 		SameSite: http.SameSiteLaxMode,
 	})
+
+	if h.emit != nil {
+		h.emit(r.Context(), claims.Sub, claims.Sub, "",
+			activity.AuthSessionGranted, map[string]any{
+				"provider_id":  state.ProviderID,
+				"upstream_iss": idToken.Issuer,
+				"upstream_sub": claims.Sub,
+				"email":        claims.Email,
+			})
+	}
 
 	returnTo := state.ReturnTo
 	if !isSafeReturnTo(returnTo) {

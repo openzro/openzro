@@ -10,6 +10,7 @@
 package auth_providers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/gorilla/mux"
 
+	"github.com/openzro/openzro/management/server/activity"
 	"github.com/openzro/openzro/management/server/auth/providers"
 	nbcontext "github.com/openzro/openzro/management/server/context"
 	"github.com/openzro/openzro/management/server/http/util"
@@ -28,28 +30,56 @@ import (
 	"github.com/openzro/openzro/management/server/status"
 )
 
+// EventEmitter mirrors the shape used by mdm_providers and
+// admission_bypass — same contract, same audit pipeline. Callers
+// pass nil to skip auditing (in-memory tests, single-tenant
+// installations without the activity store wired up).
+type EventEmitter func(
+	ctx context.Context,
+	initiatorID, targetID, accountID string,
+	activityCode activity.Activity,
+	meta map[string]any,
+)
+
 // Handler holds the persistent store and the live Manager. Each
 // successful mutation triggers Manager.Refresh so the new
-// configuration goes live without a server restart.
+// configuration goes live without a server restart, and emits an
+// activity event so audit-stream consumers see provider lifecycle
+// alongside peer / policy / admission events.
 type Handler struct {
 	permissions permissions.Manager
 	store       *providers.Store
 	manager     *providers.Manager
+	emit        EventEmitter
 }
 
 // AddEndpoints registers the CRUD endpoints under /admin/auth-
 // providers. Mounted on the same /api router as mdm_providers
-// so the same auth middleware enforces the admin gate.
-func AddEndpoints(perms permissions.Manager, store *providers.Store, manager *providers.Manager, router *mux.Router) {
+// so the same auth middleware enforces the admin gate. emit may
+// be nil — callers that don't have the activity stream wired up
+// just skip the audit emit.
+func AddEndpoints(perms permissions.Manager, store *providers.Store, manager *providers.Manager, emit EventEmitter, router *mux.Router) {
 	if store == nil || manager == nil {
 		return
 	}
-	h := &Handler{permissions: perms, store: store, manager: manager}
+	h := &Handler{permissions: perms, store: store, manager: manager, emit: emit}
 	router.HandleFunc("/admin/auth-providers", h.list).Methods(http.MethodGet, http.MethodOptions)
 	router.HandleFunc("/admin/auth-providers", h.create).Methods(http.MethodPost, http.MethodOptions)
 	router.HandleFunc("/admin/auth-providers/{id}", h.get).Methods(http.MethodGet, http.MethodOptions)
 	router.HandleFunc("/admin/auth-providers/{id}", h.update).Methods(http.MethodPut, http.MethodOptions)
 	router.HandleFunc("/admin/auth-providers/{id}", h.delete).Methods(http.MethodDelete, http.MethodOptions)
+}
+
+// activityMeta returns the metadata map embedded on every audit
+// event for this handler. Includes the row's identifying fields
+// — name, type, ID — without leaking the encrypted Config.
+func activityMeta(row *providers.AuthenticationProvider) map[string]any {
+	return map[string]any{
+		"id":      row.ID,
+		"name":    row.Name,
+		"type":    string(row.Type),
+		"enabled": row.Enabled,
+	}
 }
 
 // requestBody is the wire shape POSTed by the dashboard. Enabled
@@ -174,7 +204,8 @@ func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
-	if _, _, err := h.auth(r); err != nil {
+	accountID, userID, err := h.auth(r)
+	if err != nil {
 		util.WriteError(r.Context(), err, w)
 		return
 	}
@@ -192,12 +223,17 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		util.WriteError(r.Context(), err, w)
 		return
 	}
+	if h.emit != nil {
+		h.emit(r.Context(), userID, fmt.Sprintf("%d", row.ID), accountID,
+			activity.AuthProviderCreated, activityMeta(row))
+	}
 	w.WriteHeader(http.StatusCreated)
 	util.WriteJSONObject(r.Context(), w, toResponse(row))
 }
 
 func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
-	if _, _, err := h.auth(r); err != nil {
+	accountID, userID, err := h.auth(r)
+	if err != nil {
 		util.WriteError(r.Context(), err, w)
 		return
 	}
@@ -220,17 +256,30 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 		util.WriteError(r.Context(), err, w)
 		return
 	}
+	if h.emit != nil {
+		h.emit(r.Context(), userID, fmt.Sprintf("%d", row.ID), accountID,
+			activity.AuthProviderUpdated, activityMeta(row))
+	}
 	util.WriteJSONObject(r.Context(), w, toResponse(row))
 }
 
 func (h *Handler) delete(w http.ResponseWriter, r *http.Request) {
-	if _, _, err := h.auth(r); err != nil {
+	accountID, userID, err := h.auth(r)
+	if err != nil {
 		util.WriteError(r.Context(), err, w)
 		return
 	}
 	id, err := pathID(r)
 	if err != nil {
 		util.WriteErrorResponse(err.Error(), http.StatusBadRequest, w)
+		return
+	}
+	// Snapshot the row pre-delete so the audit event captures the
+	// name + type that is about to vanish — joining against the
+	// row post-delete is not possible.
+	row, err := h.store.Get(r.Context(), id)
+	if err != nil {
+		writeNotFoundOrErr(w, r, err)
 		return
 	}
 	if err := h.store.Delete(r.Context(), id); err != nil {
@@ -240,6 +289,10 @@ func (h *Handler) delete(w http.ResponseWriter, r *http.Request) {
 	if _, err := h.manager.Refresh(r.Context()); err != nil {
 		util.WriteError(r.Context(), err, w)
 		return
+	}
+	if h.emit != nil {
+		h.emit(r.Context(), userID, fmt.Sprintf("%d", row.ID), accountID,
+			activity.AuthProviderDeleted, activityMeta(row))
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

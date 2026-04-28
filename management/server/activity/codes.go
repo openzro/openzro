@@ -204,6 +204,17 @@ const (
 	// admission gate (gateway / routing peers without MDM).
 	AdmissionExemptGroupsUpdated Activity = 94
 
+	// Authentication provider lifecycle (ADR-0005). The admin
+	// audit stream emits Created / Updated / Deleted alongside
+	// the per-session Granted / Revoked records so the full
+	// "who configured what, who signed in via it, who logged
+	// out" picture is one query against the activity log.
+	AuthProviderCreated Activity = 95
+	AuthProviderUpdated Activity = 96
+	AuthProviderDeleted Activity = 97
+	AuthSessionGranted  Activity = 98
+	AuthSessionRevoked  Activity = 99
+
 	AccountDeleted Activity = 99999
 )
 
@@ -316,6 +327,12 @@ var activityMap = map[Activity]Code{
 	PeerAdmissionBypassRevoked:   {"Peer admission bypass revoked", "peer.admission.bypass.revoked"},
 	PeerAdmissionBypassExpired:   {"Peer admission bypass expired", "peer.admission.bypass.expired"},
 	AdmissionExemptGroupsUpdated: {"Admission exempt groups updated", "account.setting.admission.exempt_groups.update"},
+
+	AuthProviderCreated: {"Authentication provider created", "authentication.provider.created"},
+	AuthProviderUpdated: {"Authentication provider updated", "authentication.provider.updated"},
+	AuthProviderDeleted: {"Authentication provider deleted", "authentication.provider.deleted"},
+	AuthSessionGranted:  {"Authentication session granted", "authentication.session.granted"},
+	AuthSessionRevoked:  {"Authentication session revoked", "authentication.session.revoked"},
 }
 
 // StringCode returns a string code of the activity
