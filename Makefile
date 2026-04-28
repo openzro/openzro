@@ -162,19 +162,14 @@ MGMT_PIDFILE := /tmp/openzro-mgmt.pid
 MGMT_LOGFILE := /tmp/openzro-mgmt.log
 MGMT_DATADIR := /tmp/openzro-mgmt-data
 MGMT_CONFIG  := deploy/dev-mgmt/management.json
-# OPENZRO_BASE_URL drives the centralized /login + /auth/* + /setup
-# surfaces (ADR-0005). Defaulted to the local dev port so /login
-# is reachable when contributors run `make dev.dashboard`. Override
-# in the calling shell to point at a tunnel / different host.
-MGMT_BASE_URL ?= http://localhost:33071
 
-.PHONY: dev.management.up dev.management.up.bootstrap dev.management.down dev.management.logs dev.management.status dev.management.reset
+.PHONY: dev.management.up dev.management.down dev.management.logs dev.management.status
 # dev.idp.up is an explicit prerequisite so a fresh `make dev.dashboard`
-# from a stopped state runs Zitadel boot + provision.sh's wait_api
+# from a stopped state runs Dex boot + provision.sh's wait_dex
 # BEFORE management starts. Without this, Make is free to interleave
 # the two recipes and management hits "connection refused" trying to
-# fetch OIDC discovery from a still-booting Zitadel.
-dev.management.up: build.management dev.idp.up ## Start the management server in the background (HTTP :33071, /login active)
+# fetch OIDC discovery from a still-booting Dex.
+dev.management.up: build.management dev.idp.up ## Start the management server in the background (HTTP :33071)
 	@if [ ! -f $(MGMT_CONFIG) ]; then \
 	  echo "ERROR: $(MGMT_CONFIG) missing. Run 'make dev.idp.up' first."; exit 1; \
 	fi
@@ -182,7 +177,6 @@ dev.management.up: build.management dev.idp.up ## Start the management server in
 	  echo "management already running (pid $$(cat $(MGMT_PIDFILE)))"; \
 	else \
 	  mkdir -p $(MGMT_DATADIR); \
-	  OPENZRO_BASE_URL=$(MGMT_BASE_URL) \
 	  ./$(MGMT_BIN) management \
 	    --config $(MGMT_CONFIG) \
 	    --datadir $(MGMT_DATADIR) \
@@ -198,49 +192,7 @@ dev.management.up: build.management dev.idp.up ## Start the management server in
 	    echo "management failed to start. Last 20 log lines:"; tail -20 $(MGMT_LOGFILE); exit 1; \
 	  fi; \
 	  echo "management started (pid $$(cat $(MGMT_PIDFILE))). Logs: $(MGMT_LOGFILE)"; \
-	  echo "  /login        $(MGMT_BASE_URL)/login"; \
-	  echo "  /auth/start   $(MGMT_BASE_URL)/auth/start?provider=<id>"; \
 	fi
-
-# dev.management.up.bootstrap exercises the greenfield bootstrap
-# flow (ADR-0005 Option B): wipes the datadir, sets
-# OPENZRO_ENABLE_BOOTSTRAP=true, restarts the management. On boot
-# the binary mints a single-use token, writes it to
-# $(MGMT_DATADIR)/bootstrap-token.txt, and logs the /setup URL.
-# Use this to test the wizard without standing up a fresh stack.
-dev.management.up.bootstrap: build.management dev.idp.up dev.management.down dev.management.reset ## Restart management with a clean DB + /setup wizard armed
-	@if [ ! -f $(MGMT_CONFIG) ]; then \
-	  echo "ERROR: $(MGMT_CONFIG) missing. Run 'make dev.idp.up' first."; exit 1; \
-	fi
-	@mkdir -p $(MGMT_DATADIR)
-	@OPENZRO_BASE_URL=$(MGMT_BASE_URL) \
-	OPENZRO_ENABLE_BOOTSTRAP=true \
-	./$(MGMT_BIN) management \
-	    --config $(MGMT_CONFIG) \
-	    --datadir $(MGMT_DATADIR) \
-	    --port 33071 \
-	    --log-file $(MGMT_LOGFILE) \
-	    --log-level info \
-	    --disable-anonymous-metrics \
-	    --disable-geolite-update \
-	    >>$(MGMT_LOGFILE) 2>&1 & \
-	  echo $$! > $(MGMT_PIDFILE); \
-	  sleep 1; \
-	  if ! kill -0 $$(cat $(MGMT_PIDFILE)) 2>/dev/null; then \
-	    echo "management failed to start. Last 20 log lines:"; tail -20 $(MGMT_LOGFILE); exit 1; \
-	  fi; \
-	  echo "management started (pid $$(cat $(MGMT_PIDFILE))). Logs: $(MGMT_LOGFILE)"; \
-	  echo ""; \
-	  echo "Bootstrap mode active. Retrieve the /setup URL with:"; \
-	  echo "  cat $(MGMT_DATADIR)/bootstrap-token.txt | xargs -I{} echo $(MGMT_BASE_URL)/setup?token={}"; \
-	  echo "  grep -i 'BOOTSTRAP MODE' $(MGMT_LOGFILE)"
-
-dev.management.reset: ## Wipe management's local sqlite + bootstrap token (greenfield reset)
-	@if [ -f $(MGMT_PIDFILE) ] && kill -0 $$(cat $(MGMT_PIDFILE)) 2>/dev/null; then \
-	  echo "ERROR: management is running (pid $$(cat $(MGMT_PIDFILE))). Stop it first with 'make dev.management.down'."; exit 1; \
-	fi
-	@rm -rf $(MGMT_DATADIR)
-	@echo "wiped $(MGMT_DATADIR)"
 
 dev.management.down: ## Stop the management server
 	@if [ -f $(MGMT_PIDFILE) ]; then \
