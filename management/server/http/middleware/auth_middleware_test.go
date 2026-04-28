@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -17,12 +16,9 @@ import (
 	nbcontext "github.com/openzro/openzro/management/server/context"
 	"github.com/openzro/openzro/management/server/util"
 
-	authHandlerPkg "github.com/openzro/openzro/management/server/http/handlers/auth"
 	"github.com/openzro/openzro/management/server/http/middleware/bypass"
 	"github.com/openzro/openzro/management/server/types"
 )
-
-var base64StdEncoder = base64.StdEncoding
 
 const (
 	audience       = "audience"
@@ -188,7 +184,6 @@ func TestAuthMiddleware_Handler(t *testing.T) {
 
 	authMiddleware := NewAuthMiddleware(
 		mockAuth,
-		nil,
 		func(ctx context.Context, userAuth nbcontext.UserAuth) (string, string, error) {
 			return userAuth.AccountId, userAuth.UserId, nil
 		},
@@ -296,7 +291,6 @@ func TestAuthMiddleware_Handler_Child(t *testing.T) {
 
 	authMiddleware := NewAuthMiddleware(
 		mockAuth,
-		nil,
 		func(ctx context.Context, userAuth nbcontext.UserAuth) (string, string, error) {
 			return userAuth.AccountId, userAuth.UserId, nil
 		},
@@ -337,122 +331,4 @@ func TestAuthMiddleware_Handler_Child(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestAuthMiddleware_SessionCookie(t *testing.T) {
-	// Build a real SessionService against a random key so the
-	// cookie path runs end-to-end (Issue + Verify) — no mocks for
-	// the JWT signing piece.
-	keyRaw := make([]byte, 32)
-	for i := range keyRaw {
-		keyRaw[i] = byte(i + 1)
-	}
-	keyB64 := base64Std(keyRaw)
-	sessions, err := authHandlerPkg.NewSessionService(keyB64)
-	assert.NoError(t, err)
-
-	mockAuth := &auth.MockManager{
-		ValidateAndParseTokenFunc:       mockValidateAndParseToken,
-		EnsureUserAccessByJWTGroupsFunc: mockEnsureUserAccessByJWTGroups,
-		MarkPATUsedFunc:                 mockMarkPATUsed,
-		GetPATInfoFunc:                  mockGetAccountInfoFromPAT,
-	}
-
-	var ensureCalls int
-	mw := NewAuthMiddleware(
-		mockAuth,
-		sessions,
-		func(_ context.Context, ua nbcontext.UserAuth) (string, string, error) {
-			ensureCalls++
-			return accountID, ua.UserId, nil
-		},
-		func(_ context.Context, _ nbcontext.UserAuth) error { return nil },
-		func(_ context.Context, _ nbcontext.UserAuth) (*types.User, error) { return &types.User{}, nil },
-	)
-
-	mintCookie := func(t *testing.T, ttl time.Duration, sub string) string {
-		t.Helper()
-		raw, err := sessions.Issue(authHandlerPkg.SessionClaims{
-			ProviderID:  7,
-			UpstreamIss: "https://idp.example.com",
-			UpstreamSub: sub,
-		}, ttl)
-		assert.NoError(t, err)
-		return raw
-	}
-
-	t.Run("valid cookie reaches the inner handler", func(t *testing.T) {
-		ensureCalls = 0
-		raw := mintCookie(t, time.Hour, "user-1")
-		var saw nbcontext.UserAuth
-		h := mw.Handler(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-			saw, _ = nbcontext.GetUserAuthFromRequest(r)
-		}))
-		req := httptest.NewRequest("GET", "/test", nil)
-		req.AddCookie(&http.Cookie{Name: authHandlerPkg.SessionCookieName, Value: raw})
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, req)
-		assert.Equal(t, 200, rec.Result().StatusCode)
-		assert.Equal(t, "user-1", saw.UserId)
-		assert.Equal(t, accountID, saw.AccountId)
-		assert.Equal(t, 1, ensureCalls,
-			"ensureAccount must run for cookie-authenticated requests")
-	})
-
-	t.Run("missing cookie 401s", func(t *testing.T) {
-		h := mw.Handler(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
-			t.Fatalf("inner handler must not run when no auth supplied")
-		}))
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, httptest.NewRequest("GET", "/test", nil))
-		assert.Equal(t, 401, rec.Result().StatusCode)
-	})
-
-	t.Run("expired cookie 401s", func(t *testing.T) {
-		raw := mintCookie(t, -time.Second, "user-1")
-		h := mw.Handler(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
-			t.Fatalf("inner handler must not run for expired cookie")
-		}))
-		req := httptest.NewRequest("GET", "/test", nil)
-		req.AddCookie(&http.Cookie{Name: authHandlerPkg.SessionCookieName, Value: raw})
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, req)
-		assert.Equal(t, 401, rec.Result().StatusCode)
-	})
-
-	t.Run("cookie not consulted when Bearer header present", func(t *testing.T) {
-		// Setting a malformed cookie alongside a valid Bearer must
-		// not 401 — the Bearer path wins.
-		req := httptest.NewRequest("GET", "/test", nil)
-		req.Header.Set("Authorization", "Bearer "+JWT)
-		req.AddCookie(&http.Cookie{Name: authHandlerPkg.SessionCookieName, Value: "garbage"})
-		rec := httptest.NewRecorder()
-		mw.Handler(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {})).ServeHTTP(rec, req)
-		assert.Equal(t, 200, rec.Result().StatusCode)
-	})
-
-	t.Run("cookie path off when sessions is nil", func(t *testing.T) {
-		mwNoCookies := NewAuthMiddleware(
-			mockAuth, nil,
-			func(_ context.Context, ua nbcontext.UserAuth) (string, string, error) {
-				return ua.AccountId, ua.UserId, nil
-			},
-			func(_ context.Context, _ nbcontext.UserAuth) error { return nil },
-			func(_ context.Context, _ nbcontext.UserAuth) (*types.User, error) { return &types.User{}, nil },
-		)
-		raw := mintCookie(t, time.Hour, "user-1")
-		req := httptest.NewRequest("GET", "/test", nil)
-		req.AddCookie(&http.Cookie{Name: authHandlerPkg.SessionCookieName, Value: raw})
-		rec := httptest.NewRecorder()
-		mwNoCookies.Handler(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
-			t.Fatalf("nil sessions must not unlock the cookie path")
-		})).ServeHTTP(rec, req)
-		assert.Equal(t, 401, rec.Result().StatusCode)
-	})
-}
-
-// base64Std mirrors what flow_exports.NewFieldEncrypt expects —
-// no padding stripping, RFC 4648 std alphabet.
-func base64Std(b []byte) string {
-	return base64StdEncoder.EncodeToString(b)
 }

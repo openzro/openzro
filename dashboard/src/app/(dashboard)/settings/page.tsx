@@ -5,7 +5,6 @@ import { VerticalTabs } from "@components/VerticalTabs";
 import {
   AlertOctagonIcon,
   FolderGit2Icon,
-  KeyRoundIcon,
   LockIcon,
   MonitorSmartphoneIcon,
   NetworkIcon,
@@ -18,7 +17,6 @@ import { usePermissions } from "@/contexts/PermissionsProvider";
 import { useLoggedInUser } from "@/contexts/UsersProvider";
 import PageContainer from "@/layouts/PageContainer";
 import { useAccount } from "@/modules/account/useAccount";
-import AuthenticationProvidersTab from "@/modules/auth-providers/AuthenticationProvidersTab";
 import AuthenticationTab from "@/modules/settings/AuthenticationTab";
 import ClientSettingsTab from "@/modules/settings/ClientSettingsTab";
 import DangerZoneTab from "@/modules/settings/DangerZoneTab";
@@ -57,10 +55,6 @@ export default function OpenzroSettings() {
                 <ShieldIcon size={14} />
                 Authentication
               </VerticalTabs.Trigger>
-              <VerticalTabs.Trigger value="auth-providers">
-                <KeyRoundIcon size={14} />
-                Authentication Providers
-              </VerticalTabs.Trigger>
               <VerticalTabs.Trigger value="groups">
                 <FolderGit2Icon size={14} />
                 Groups
@@ -92,7 +86,6 @@ export default function OpenzroSettings() {
         >
           <div className={"border-l border-nb-gray-930 w-full"}>
             {account && <AuthenticationTab account={account} />}
-            <AuthenticationProvidersTab />
             {account && <PermissionsTab account={account} />}
             {account && <GroupsTab account={account} />}
             {account && <NetworkSettingsTab account={account} />}

@@ -12,7 +12,6 @@ import (
 
 	"github.com/openzro/openzro/management/server/auth"
 	nbcontext "github.com/openzro/openzro/management/server/context"
-	authHandler "github.com/openzro/openzro/management/server/http/handlers/auth"
 	"github.com/openzro/openzro/management/server/http/middleware/bypass"
 	"github.com/openzro/openzro/management/server/http/util"
 	"github.com/openzro/openzro/management/server/status"
@@ -24,32 +23,23 @@ type SyncUserJWTGroupsFunc func(ctx context.Context, userAuth nbcontext.UserAuth
 
 type GetUserFromUserAuthFunc func(ctx context.Context, userAuth nbcontext.UserAuth) (*types.User, error)
 
-// AuthMiddleware middleware to verify personal access tokens (PAT)
-// and JWT tokens. Optionally accepts the openZro session cookie
-// (oz_session) minted by the centralized /auth/callback handler;
-// when configured, requests without an Authorization header but
-// carrying a valid session cookie are accepted (ADR-0005).
+// AuthMiddleware middleware to verify personal access tokens (PAT) and JWT tokens
 type AuthMiddleware struct {
 	authManager         auth.Manager
-	sessions            *authHandler.SessionService
 	ensureAccount       EnsureAccountFunc
 	getUserFromUserAuth GetUserFromUserAuthFunc
 	syncUserJWTGroups   SyncUserJWTGroupsFunc
 }
 
-// NewAuthMiddleware instance constructor. sessions may be nil —
-// when nil, only the legacy Bearer (JWT) and Token (PAT) paths
-// are accepted; the cookie-session bridge stays off.
+// NewAuthMiddleware instance constructor
 func NewAuthMiddleware(
 	authManager auth.Manager,
-	sessions *authHandler.SessionService,
 	ensureAccount EnsureAccountFunc,
 	syncUserJWTGroups SyncUserJWTGroupsFunc,
 	getUserFromUserAuth GetUserFromUserAuthFunc,
 ) *AuthMiddleware {
 	return &AuthMiddleware{
 		authManager:         authManager,
-		sessions:            sessions,
 		ensureAccount:       ensureAccount,
 		syncUserJWTGroups:   syncUserJWTGroups,
 		getUserFromUserAuth: getUserFromUserAuth,
@@ -91,57 +81,10 @@ func (m *AuthMiddleware) Handler(h http.Handler) http.Handler {
 			}
 			h.ServeHTTP(w, request)
 		default:
-			// No Authorization header (or unrecognized scheme):
-			// try the session cookie minted by /auth/callback. The
-			// dashboard's same-origin fetch automatically sends it,
-			// so the operator gets API access right after a /login
-			// round-trip without the dashboard having to manage a
-			// Bearer token in localStorage.
-			if m.sessions != nil {
-				if cookie, err := r.Cookie(authHandler.SessionCookieName); err == nil {
-					request, sessionErr := m.checkSessionCookie(r, cookie.Value)
-					if sessionErr == nil {
-						h.ServeHTTP(w, request)
-						return
-					}
-					log.WithContext(r.Context()).Debugf("session cookie rejected: %v", sessionErr)
-				}
-			}
 			util.WriteError(r.Context(), status.Errorf(status.Unauthorized, "no valid authentication provided"), w)
 			return
 		}
 	})
-}
-
-// checkSessionCookie verifies an oz_session cookie and synthesizes
-// a UserAuth from its claims. The downstream ensureAccount call
-// auto-provisions the account / user the same way it does for a
-// first-time JWT login — UpstreamSub takes the role normally
-// played by the JWT's `sub` claim.
-//
-// Group sync is skipped: the session JWT we mint doesn't carry
-// upstream IdP group claims (the callback didn't extract them).
-// Group membership for cookie-authenticated users comes from the
-// openZro user record (SCIM provisioning, manual assignment) —
-// see ADR-0005 V2 for the upstream-claims passthrough plan.
-func (m *AuthMiddleware) checkSessionCookie(r *http.Request, raw string) (*http.Request, error) {
-	ctx := r.Context()
-	claims, err := m.sessions.Verify(raw)
-	if err != nil {
-		return r, fmt.Errorf("session verify: %w", err)
-	}
-	userAuth := nbcontext.UserAuth{
-		UserId: claims.UpstreamSub,
-	}
-	accountID, _, err := m.ensureAccount(ctx, userAuth)
-	if err != nil {
-		return r, fmt.Errorf("ensure account: %w", err)
-	}
-	userAuth.AccountId = accountID
-	if _, err := m.getUserFromUserAuth(ctx, userAuth); err != nil {
-		return r, fmt.Errorf("get user: %w", err)
-	}
-	return nbcontext.SetUserAuthInRequest(r, userAuth), nil
 }
 
 // CheckJWTFromRequest checks if the JWT is valid

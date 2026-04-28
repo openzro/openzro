@@ -73,27 +73,6 @@ if [[ $OPENZRO_DOMAIN == "localhost" || $OPENZRO_DOMAIN == "127.0.0.1" ]]; then
   unset OPENZRO_MGMT_API_CERT_KEY_FILE
 fi
 
-# OPENZRO_BASE_URL drives the centralized openZro-branded login
-# surface (ADR-0005). When the operator hasn't set it explicitly,
-# derive it from OPENZRO_DOMAIN so the quickstart bundle has /login
-# wired automatically — local dev keeps the API port suffix, prod
-# drops to plain HTTPS on the dashboard domain.
-if [[ "x-$OPENZRO_BASE_URL" == "x-" ]]; then
-  if [[ $OPENZRO_DOMAIN == "localhost" || $OPENZRO_DOMAIN == "127.0.0.1" ]]; then
-    export OPENZRO_BASE_URL="http://$OPENZRO_DOMAIN:$OPENZRO_MGMT_API_PORT"
-  else
-    export OPENZRO_BASE_URL="https://$OPENZRO_DOMAIN"
-  fi
-fi
-
-# OPENZRO_ENABLE_BOOTSTRAP defaults to false. Operators flip it on
-# only on a fresh deploy where no IdP is configured yet — the
-# /setup wizard mints a one-shot token and lets them configure the
-# first provider through the browser.
-if [[ "x-$OPENZRO_ENABLE_BOOTSTRAP" == "x-" ]]; then
-  export OPENZRO_ENABLE_BOOTSTRAP="false"
-fi
-
 # if not provided, we generate a turn password
 if [[ "x-$TURN_PASSWORD" == "x-" ]]; then
   export TURN_PASSWORD=$(openssl rand -base64 32 | sed 's/=//g')
