@@ -13,6 +13,7 @@ import ModalHeader from "@components/modal/ModalHeader";
 import { notify } from "@components/Notification";
 import Paragraph from "@components/Paragraph";
 import { useApiCall } from "@utils/api";
+import loadConfig from "@utils/config";
 import { ShieldIcon } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
@@ -22,7 +23,12 @@ import {
   CONNECTOR_TYPES,
   ConnectorType,
   defaultRedirectURI,
+  dexConnectorType,
+  inferConnectorType,
+  issuerPlaceholder,
 } from "@/interfaces/AuthenticationProvider";
+
+const dashboardConfig = loadConfig();
 
 type Props = {
   open: boolean;
@@ -62,15 +68,17 @@ export default function AuthenticationProviderModal({
 
   useEffect(() => {
     if (!open) return;
-    const fallbackRedirect = defaultRedirectURI();
+    const fallbackRedirect = defaultRedirectURI(dashboardConfig.authority);
     if (existing) {
       setId(existing.id);
       setName(existing.name);
       // existing.type may be a Dex type we don't model (saml/ldap):
       // we still surface it but the form's per-type fields will
-      // be limited to the OAuth-style ones below.
-      setType((existing.type as ConnectorType) ?? "oidc");
+      // be limited to the OAuth-style ones below. For type=oidc we
+      // also sniff the issuer URL to label Keycloak / Okta.
       const cfg = (existing.config as Record<string, unknown>) ?? {};
+      const inferred = inferConnectorType(existing.type, cfg);
+      setType((inferred as ConnectorType) ?? "oidc");
       setClientID(typeof cfg.clientID === "string" ? cfg.clientID : "");
       // Secrets never come back on the wire (Dex returns them
       // but the management layer could redact in the future).
@@ -94,20 +102,23 @@ export default function AuthenticationProviderModal({
     }
   }, [open, existing]);
 
+  const isOIDC = type === "oidc" || type === "keycloak" || type === "okta";
+
   const buildConfig = (): Record<string, unknown> => {
     const base: Record<string, unknown> = {
       clientID,
       clientSecret,
       redirectURI,
     };
-    if (type === "oidc") base.issuer = issuer;
+    if (isOIDC) base.issuer = issuer;
     if (type === "microsoft" && tenant) base.tenant = tenant;
     return base;
   };
 
   const buildInput = (): AuthenticationProviderInput => ({
     id: id.trim(),
-    type,
+    // Keycloak / Okta are UI-only labels; Dex stores them as `oidc`.
+    type: dexConnectorType(type),
     name: name.trim(),
     config: buildConfig(),
   });
@@ -119,7 +130,7 @@ export default function AuthenticationProviderModal({
     if (!name.trim()) return "Name is required";
     if (!clientID.trim()) return "Client ID is required";
     if (!isEdit && !clientSecret) return "Client Secret is required on create";
-    if (type === "oidc" && !issuer.trim()) return "Issuer URL is required for OIDC";
+    if (isOIDC && !issuer.trim()) return "Issuer URL is required";
     if (!redirectURI.trim()) return "Redirect URI is required";
     return null;
   };
@@ -213,13 +224,13 @@ export default function AuthenticationProviderModal({
             </Paragraph>
           </div>
 
-          {type === "oidc" && (
+          {isOIDC && (
             <div>
               <Label>Issuer URL</Label>
               <Input
                 value={issuer}
                 onChange={(e) => setIssuer(e.target.value)}
-                placeholder="https://idp.example.com"
+                placeholder={issuerPlaceholder(type)}
               />
             </div>
           )}
@@ -261,8 +272,13 @@ export default function AuthenticationProviderModal({
               onChange={(e) => setRedirectURI(e.target.value)}
             />
             <Paragraph className="text-xs text-nb-gray-300 mt-1">
-              Whitelist this exact URL in your IdP&apos;s app config.
-              Defaults to <code>{defaultRedirectURI()}</code>.
+              This is Dex&apos;s callback endpoint, not the
+              dashboard&apos;s — Dex receives the OIDC response from
+              your IdP, then forwards a session token to the
+              dashboard. Whitelist this exact URL in your IdP&apos;s
+              app config (e.g. Keycloak: Clients →{" "}
+              <em>your-client</em> → Valid redirect URIs). Defaults to{" "}
+              <code>{defaultRedirectURI(dashboardConfig.authority)}</code>.
             </Paragraph>
           </div>
         </div>

@@ -18,6 +18,7 @@ import {
   AuthenticationProvider,
   CONNECTOR_TYPES,
   ConnectorType,
+  inferConnectorType,
 } from "@/interfaces/AuthenticationProvider";
 import AuthenticationProviderModal from "@/modules/auth-providers/AuthenticationProviderModal";
 
@@ -133,10 +134,14 @@ function ProviderRow({
     }
   };
 
+  // Dex stores Keycloak/Okta as `oidc`; recover the visual label by
+  // sniffing the issuer URL — same logic the modal uses on edit.
+  const visualType = inferConnectorType(row.type, row.config);
+
   return (
     <tr className="border-t border-nb-gray-900">
       <td className="py-3">
-        <ProviderTypeBadge type={row.type as ConnectorType | string} />
+        <ProviderTypeBadge type={visualType as ConnectorType | string} />
       </td>
       <td className="py-3 font-mono text-xs text-nb-gray-300">{row.id}</td>
       <td className="py-3">{row.name}</td>
