@@ -293,13 +293,39 @@ var (
 				tlsEnabled = true
 			}
 
+			// auth/providers store + manager are constructed BEFORE
+			// auth.NewManager so the multi-issuer JWT validator can
+			// route incoming tokens by `iss` claim. When the SQL
+			// store isn't available (in-memory tests, exotic engines),
+			// or no providers are configured, the auth manager
+			// silently falls back to the legacy single-issuer path
+			// — same behavior as before centralized login landed.
+			var authProvidersStore *authProviders.Store
+			var authProvidersManager *authProviders.Manager
+			if sqlStore, ok := store.(*mgmtStore.SqlStore); ok {
+				var apErr error
+				authProvidersStore, apErr = authProviders.NewStore(sqlStore.GetGormDB(), config.DataStoreEncryptionKey)
+				if apErr != nil {
+					return fmt.Errorf("auth providers store: %w", apErr)
+				}
+				authProvidersManager = authProviders.NewManager(authProvidersStore, openzroBaseURL()+"/auth/callback")
+				if perRow, refreshErr := authProvidersManager.Refresh(ctx); refreshErr != nil {
+					log.WithContext(ctx).Errorf("auth providers boot refresh: %v", refreshErr)
+				} else {
+					for _, e := range perRow {
+						log.WithContext(ctx).Warnf("auth providers boot: %s", e.Error())
+					}
+				}
+			}
+
 			authManager := auth.NewManager(store,
 				config.HttpConfig.AuthIssuer,
 				config.HttpConfig.AuthAudience,
 				config.HttpConfig.AuthKeysLocation,
 				config.HttpConfig.AuthUserIDClaim,
 				config.GetAuthAudiences(),
-				config.HttpConfig.IdpSignKeyRefreshEnabled)
+				config.HttpConfig.IdpSignKeyRefreshEnabled,
+				authProvidersManager)
 
 			groupsManager := groups.NewManager(store, permissionsManager, accountManager)
 			resourcesManager := resources.NewManager(store, permissionsManager, groupsManager, accountManager)
@@ -329,8 +355,6 @@ var (
 			var activityExportersStore *activityExporters.Store
 			var activityExportersManager *activityExporters.Manager
 			var admissionBypassStore *admission.Store
-			var authProvidersStore *authProviders.Store
-			var authProvidersManager *authProviders.Manager
 			if sqlStore, ok := store.(*mgmtStore.SqlStore); ok {
 				flowExportsStore, err = flowExports.NewStore(sqlStore.GetGormDB(), config.DataStoreEncryptionKey)
 				if err != nil {
@@ -362,23 +386,10 @@ var (
 				if err != nil {
 					return fmt.Errorf("admission bypass store: %w", err)
 				}
-				// auth/providers: configured OIDC IdPs that drive the
-				// centralized openZro-branded login (ADR-0005). Same
-				// at-rest envelope as flow_exports + mdm. Refresh
-				// pre-loads enabled rows so /login is ready as soon
-				// as the HTTP listener comes up.
-				authProvidersStore, err = authProviders.NewStore(sqlStore.GetGormDB(), config.DataStoreEncryptionKey)
-				if err != nil {
-					return fmt.Errorf("auth providers store: %w", err)
-				}
-				authProvidersManager = authProviders.NewManager(authProvidersStore, openzroBaseURL()+"/auth/callback")
-				if perRow, err := authProvidersManager.Refresh(ctx); err != nil {
-					log.WithContext(ctx).Errorf("auth providers boot refresh: %v", err)
-				} else {
-					for _, e := range perRow {
-						log.WithContext(ctx).Warnf("auth providers boot: %s", e.Error())
-					}
-				}
+				// auth/providers store + manager are constructed
+				// earlier (just before auth.NewManager) so the
+				// multi-issuer JWT validator can route incoming
+				// tokens. Nothing more to wire here.
 				// Wire the posture check into the live manager. Set
 				// the package-level resolver once so every Account's
 				// posture eval can call the manager without threading

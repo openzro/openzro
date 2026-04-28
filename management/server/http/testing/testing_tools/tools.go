@@ -144,7 +144,7 @@ func BuildApiBlackBoxWithDBState(t TB, sqlFile string, expectedPeerUpdate *serve
 	}
 
 	// @note this is required so that PAT's validate from store, but JWT's are mocked
-	authManager := auth.NewManager(store, "", "", "", "", []string{}, false)
+	authManager := auth.NewManager(store, "", "", "", "", []string{}, false, nil)
 	authManagerMock := &auth.MockManager{
 		ValidateAndParseTokenFunc:       mockValidateAndParseToken,
 		EnsureUserAccessByJWTGroupsFunc: authManager.EnsureUserAccessByJWTGroups,

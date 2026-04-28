@@ -11,6 +11,7 @@ import (
 
 	"github.com/openzro/openzro/base62"
 	nbjwt "github.com/openzro/openzro/management/server/auth/jwt"
+	"github.com/openzro/openzro/management/server/auth/providers"
 	nbcontext "github.com/openzro/openzro/management/server/context"
 	"github.com/openzro/openzro/management/server/store"
 	"github.com/openzro/openzro/management/server/types"
@@ -28,19 +29,37 @@ type Manager interface {
 type manager struct {
 	store store.Store
 
-	validator *nbjwt.Validator
+	validator nbjwt.FallbackValidator
 	extractor *nbjwt.ClaimsExtractor
 }
 
-func NewManager(store store.Store, issuer, audience, keysLocation, userIdClaim string, allAudiences []string, idpRefreshKeys bool) Manager {
+// NewManager wires the auth manager. providersManager is the live
+// cache of configured AuthenticationProvider rows (ADR-0005); when
+// non-nil, incoming JWTs are routed by their `iss` claim to the
+// matching upstream OIDC verifier and only fall through to the
+// legacy single-issuer Validator when the issuer is unknown.
+// Pass nil to keep the pure single-issuer path (no AuthenticationProvider
+// rows, no centralized login surface — same behavior as before V1).
+func NewManager(store store.Store, issuer, audience, keysLocation, userIdClaim string, allAudiences []string, idpRefreshKeys bool, providersManager *providers.Manager) Manager {
 	// @note if invalid/missing parameters are sent the validator will instantiate
 	// but it will fail when validating and parsing the token
-	jwtValidator := nbjwt.NewValidator(
+	legacy := nbjwt.NewValidator(
 		issuer,
 		allAudiences,
 		keysLocation,
 		idpRefreshKeys,
 	)
+
+	var validator nbjwt.FallbackValidator = legacy
+	if providersManager != nil {
+		// Multi-issuer path: tokens with an `iss` matching a
+		// configured provider are verified through go-oidc's
+		// IDTokenVerifier; everything else falls through to the
+		// legacy. The legacy keeps owning the path until the
+		// operator both configures a provider AND points their
+		// tokens at it — zero-downtime migration.
+		validator = nbjwt.NewMultiIssuerValidator(providersManager, legacy)
+	}
 
 	claimsExtractor := nbjwt.NewClaimsExtractor(
 		nbjwt.WithAudience(audience),
@@ -50,7 +69,7 @@ func NewManager(store store.Store, issuer, audience, keysLocation, userIdClaim s
 	return &manager{
 		store: store,
 
-		validator: jwtValidator,
+		validator: validator,
 		extractor: claimsExtractor,
 	}
 }
