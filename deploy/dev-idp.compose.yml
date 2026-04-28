@@ -19,6 +19,11 @@ services:
     command: ["dex", "serve", "/etc/dex/config.yaml"]
     volumes:
       - ./dev-idp/dex.config.yaml:/etc/dex/config.yaml:ro
+      # openZro brand theme drops alongside Dex's bundled
+      # themes/light + themes/dark. Mounting a subpath leaves
+      # the rest of /srv/dex/web (static, templates, other
+      # themes) intact so we override colour + logo only.
+      - ./dev-idp/web/themes/openzro:/srv/dex/web/themes/openzro:ro
     ports:
       - "5556:5556"
     healthcheck:

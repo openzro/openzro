@@ -17,6 +17,7 @@ services:
     command: ["dex", "serve", "/etc/dex/config.yaml"]
     volumes:
       - ./dex.config.yaml:/etc/dex/config.yaml:ro
+      - ./web/themes/openzro:/srv/dex/web/themes/openzro:ro
       - $DEX_VOLUMENAME:/var/lib/dex
     labels:
     - traefik.enable=true

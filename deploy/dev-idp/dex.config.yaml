@@ -16,6 +16,15 @@ issuer: http://localhost:5556
 storage:
   type: memory
 
+# openZro brand theme. The compose volume mount drops our
+# custom themes/openzro/ alongside Dex's bundled themes; this
+# config selects ours. dir keeps Dex's default static + templates
+# (we override only the colour palette + logo, not the HTML).
+frontend:
+  dir: /srv/dex/web
+  theme: openzro
+  issuer: openZro
+
 web:
   http: 0.0.0.0:5556
   # Skip approval is fine for dev — production keeps it on so
