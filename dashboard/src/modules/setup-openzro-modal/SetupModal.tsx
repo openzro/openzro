@@ -9,21 +9,25 @@ import { cn } from "@utils/helpers";
 import { ExternalLinkIcon } from "lucide-react";
 import { usePathname } from "next/navigation";
 import React, { useMemo } from "react";
-import AndroidIcon from "@/assets/icons/AndroidIcon";
 import AppleIcon from "@/assets/icons/AppleIcon";
 import DockerIcon from "@/assets/icons/DockerIcon";
-import IOSIcon from "@/assets/icons/IOSIcon";
 import ShellIcon from "@/assets/icons/ShellIcon";
 import WindowsIcon from "@/assets/icons/WindowsIcon";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import useOperatingSystem from "@/hooks/useOperatingSystem";
 import { OperatingSystem } from "@/interfaces/OperatingSystem";
-import AndroidTab from "@/modules/setup-openzro-modal/AndroidTab";
 import DockerTab from "@/modules/setup-openzro-modal/DockerTab";
-import IOSTab from "@/modules/setup-openzro-modal/IOSTab";
 import LinuxTab from "@/modules/setup-openzro-modal/LinuxTab";
 import MacOSTab from "@/modules/setup-openzro-modal/MacOSTab";
 import WindowsTab from "@/modules/setup-openzro-modal/WindowsTab";
+
+// Android / iOS clients are temporarily hidden from the install
+// modal: the agent apps are not yet published on the openZro side
+// (no F-Droid / Play / App Store listings yet). Re-enable the
+// imports + the JSX blocks below once the apps ship. The component
+// files (AndroidTab.tsx / IOSTab.tsx) are kept on disk to avoid
+// rewriting them when we revive this — they only contain copy +
+// store badges which still apply.
 
 type OidcUserInfo = {
   given_name?: string;
@@ -79,6 +83,14 @@ export function SetupModalContent({
   hideDocker = false,
 }: Readonly<SetupModalContentProps>) {
   const os = useOperatingSystem();
+  // useOperatingSystem can return IOS/ANDROID, but those tabs are
+  // hidden right now (see import block at top of file). Map them to
+  // Linux so a user opening this modal from a phone gets a clickable
+  // default tab instead of an empty Tabs container.
+  const safeDefaultOS = (detected: OperatingSystem): OperatingSystem =>
+    detected === OperatingSystem.IOS || detected === OperatingSystem.ANDROID
+      ? OperatingSystem.LINUX
+      : detected;
   const [isFirstRun] = useLocalStorage<boolean>("openzro-first-run", true);
   const pathname = usePathname();
   const isInstallPage = pathname === "/install";
@@ -120,7 +132,7 @@ export function SetupModalContent({
         </div>
       )}
 
-      <Tabs defaultValue={String(setupKey ? OperatingSystem.LINUX : os)}>
+      <Tabs defaultValue={String(setupKey ? OperatingSystem.LINUX : safeDefaultOS(os))}>
         <TabsList justify={tabAlignment} className={"pt-2 px-3"}>
           <TabsTrigger value={String(OperatingSystem.LINUX)}>
             <ShellIcon
@@ -148,26 +160,8 @@ export function SetupModalContent({
             macOS
           </TabsTrigger>
 
-          {!setupKey && (
-            <>
-              <TabsTrigger value={String(OperatingSystem.IOS)}>
-                <IOSIcon
-                  className={
-                    "fill-nb-gray-500 group-data-[state=active]/trigger:fill-openzro transition-all"
-                  }
-                />
-                iOS
-              </TabsTrigger>
-              <TabsTrigger value={String(OperatingSystem.ANDROID)}>
-                <AndroidIcon
-                  className={
-                    "fill-nb-gray-500 group-data-[state=active]/trigger:fill-openzro transition-all"
-                  }
-                />
-                Android
-              </TabsTrigger>
-            </>
-          )}
+          {/* iOS / Android tab triggers temporarily hidden — see the
+              import block at the top of the file for context. */}
 
           {!hideDocker && (
             <TabsTrigger value={String(OperatingSystem.DOCKER)}>
@@ -197,12 +191,7 @@ export function SetupModalContent({
           hostname={hostname}
         />
 
-        {!setupKey && (
-          <>
-            <AndroidTab />
-            <IOSTab />
-          </>
-        )}
+        {/* AndroidTab / IOSTab content temporarily hidden — see top of file. */}
 
         {!hideDocker && (
           <DockerTab
