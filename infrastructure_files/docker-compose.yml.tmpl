@@ -86,7 +86,14 @@ services:
     environment:
       - OPENZRO_STORE_ENGINE_POSTGRES_DSN=$OPENZRO_STORE_ENGINE_POSTGRES_DSN
       - OPENZRO_STORE_ENGINE_MYSQL_DSN=$OPENZRO_STORE_ENGINE_MYSQL_DSN
-      
+      # Centralized openZro-branded login (ADR-0005). BASE_URL is
+      # the public URL upstream IdPs redirect back to (must match
+      # each provider's whitelisted redirect_uri). ENABLE_BOOTSTRAP
+      # gates the one-shot /setup wizard for greenfield deploys.
+      - OPENZRO_BASE_URL=$OPENZRO_BASE_URL
+      - OPENZRO_ENABLE_BOOTSTRAP=$OPENZRO_ENABLE_BOOTSTRAP
+
+
   # Coturn
   coturn:
     <<: *default
