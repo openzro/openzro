@@ -27,6 +27,12 @@ frontend:
 
 web:
   http: 0.0.0.0:5556
+  # CORS allowlist — applied by Dex to /.well-known/openid-
+  # configuration, /token and /keys. The dashboard's
+  # @axa-fr/react-oidc fetches the discovery doc from JS, so
+  # it must come back with Access-Control-Allow-Origin set.
+  allowedOrigins:
+    - http://localhost:3000
 
 # gRPC API for runtime connector management (ADR-0006). The
 # dashboard's Settings → Authentication Providers tab proxies
@@ -35,10 +41,6 @@ web:
 # compose; production runs mTLS over the Docker network.
 grpc:
   addr: 0.0.0.0:5557
-  # Skip approval is fine for dev — production keeps it on so
-  # users see the consent step the first time. Per Dex docs.
-  allowedOrigins:
-    - http://localhost:3000
 
 # The dashboard SPA points its @axa-fr/react-oidc here.
 # Public client (PKCE; no client_secret) so the dashboard can
