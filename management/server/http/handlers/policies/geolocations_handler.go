@@ -50,9 +50,14 @@ func (l *geolocationsHandler) getAllCountries(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// CountryProvider in the dashboard is mounted at the dashboard layout
+	// root, so this endpoint fires on every page. Returning 412 here put
+	// SWR into an unbounded retry loop on every dev environment that
+	// doesn't have a GeoLite2 DB on disk. An empty list is a truthful
+	// response — there are no countries we can resolve — and the
+	// dashboard already treats unknown country codes as "Unknown".
 	if l.geolocationManager == nil {
-		// TODO: update error message to include geo db self hosted doc link when ready
-		util.WriteError(r.Context(), status.Errorf(status.PreconditionFailed, "Geo location database is not initialized"), w)
+		util.WriteJSONObject(r.Context(), w, []api.Country{})
 		return
 	}
 
@@ -83,9 +88,12 @@ func (l *geolocationsHandler) getCitiesByCountry(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// Same rationale as getAllCountries — empty list keeps clients quiet
+	// when the geo DB hasn't been provisioned. Operators who *do* want
+	// the feature get the same 200 with [] until they configure the DB,
+	// at which point the path lights up automatically.
 	if l.geolocationManager == nil {
-		util.WriteError(r.Context(), status.Errorf(status.PreconditionFailed, "Geo location database is not initialized. "+
-			"Check the self-hosted Geo database documentation at https://docs.openzro.io/selfhosted/geo-support"), w)
+		util.WriteJSONObject(r.Context(), w, []api.City{})
 		return
 	}
 

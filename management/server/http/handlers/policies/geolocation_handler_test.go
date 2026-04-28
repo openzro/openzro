@@ -244,3 +244,85 @@ func TestGetAllCountries(t *testing.T) {
 		})
 	}
 }
+
+// Regression: when the geo DB hasn't been provisioned, the handlers
+// must respond with 200 + an empty list rather than 412. The dashboard
+// mounts CountryProvider at the layout root, so any non-2xx puts SWR
+// into a retry loop on every page. Empty-list-as-success is the right
+// signal: there are no countries we can resolve.
+func TestGeolocationsHandler_GeoDBNotInitialized(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	permissionsManagerMock := permissions.NewMockManager(ctrl)
+	permissionsManagerMock.
+		EXPECT().
+		ValidateUserPermissions(gomock.Any(), gomock.Any(), gomock.Any(), modules.Policies, operations.Read).
+		Return(true, nil).
+		AnyTimes()
+
+	handler := &geolocationsHandler{
+		accountManager: &mock_server.MockAccountManager{
+			GetUserByIDFunc: func(ctx context.Context, id string) (*types.User, error) {
+				return types.NewAdminUser(id), nil
+			},
+		},
+		geolocationManager: nil, // simulate "geo DB never provisioned"
+		permissionsManager: permissionsManagerMock,
+	}
+
+	cases := []struct {
+		name        string
+		path        string
+		register    func(*mux.Router)
+		decodeEmpty func(*testing.T, []byte)
+	}{
+		{
+			name: "countries returns 200 + empty list",
+			path: "/api/locations/countries",
+			register: func(r *mux.Router) {
+				r.HandleFunc("/api/locations/countries", handler.getAllCountries).Methods("GET")
+			},
+			decodeEmpty: func(t *testing.T, body []byte) {
+				out := make([]api.Country, 0)
+				assert.NoError(t, json.Unmarshal(body, &out))
+				assert.Empty(t, out)
+			},
+		},
+		{
+			name: "cities returns 200 + empty list",
+			path: "/api/locations/countries/CY/cities",
+			register: func(r *mux.Router) {
+				r.HandleFunc("/api/locations/countries/{country}/cities", handler.getCitiesByCountry).Methods("GET")
+			},
+			decodeEmpty: func(t *testing.T, body []byte) {
+				out := make([]api.City, 0)
+				assert.NoError(t, json.Unmarshal(body, &out))
+				assert.Empty(t, out)
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			req = nbcontext.SetUserAuthInRequest(req, nbcontext.UserAuth{
+				UserId:    "test_user",
+				Domain:    "hotmail.com",
+				AccountId: "test_id",
+			})
+
+			router := mux.NewRouter()
+			tc.register(router)
+			router.ServeHTTP(recorder, req)
+
+			res := recorder.Result()
+			defer res.Body.Close()
+			body, err := io.ReadAll(res.Body)
+			assert.NoError(t, err)
+
+			assert.Equal(t, http.StatusOK, recorder.Code,
+				"expected 200, got %d (body: %s)", recorder.Code, string(body))
+			tc.decodeEmpty(t, body)
+		})
+	}
+}
