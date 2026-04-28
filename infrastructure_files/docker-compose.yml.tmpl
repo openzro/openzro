@@ -15,6 +15,13 @@ services:
     <<: *default
     image: ghcr.io/dexidp/dex:$OPENZRO_DEX_TAG
     command: ["dex", "serve", "/etc/dex/config.yaml"]
+    environment:
+      # Connector CRUD over gRPC is gated by a feature flag (default
+      # off — pkg/featureflags/set.go). The Authentication Providers
+      # tab + management's dex_proxy depend on it; without it, every
+      # call returns "api_connectors_crud feature flag is not
+      # enabled" (HTTP 500 at the management proxy).
+      - DEX_API_CONNECTORS_CRUD=true
     volumes:
       - ./dex.config.yaml:/etc/dex/config.yaml:ro
       - ./web/themes/openzro:/srv/dex/web/themes/openzro:ro
