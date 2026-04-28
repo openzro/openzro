@@ -42,3 +42,14 @@ func WithAuthHeader(value string) option {
 		c.authHeader = value
 	}
 }
+
+// WithUserAgent sets a custom User-Agent header on every request
+// the client makes. Used by openzro/openzro-operator and other
+// integrations to identify themselves in management server logs
+// (e.g. "openzro-operator/v0.3.1 controller-runtime/0.x"). When
+// not set, no User-Agent is added — Go's default is also omitted.
+func WithUserAgent(userAgent string) option {
+	return func(c *Client) {
+		c.userAgent = userAgent
+	}
+}
