@@ -508,13 +508,19 @@ export function DataTable<TData, TValue>({
                   table.getRowModel().rows.map((row) => {
                     const expandedRow = renderExpandedRow?.(row.original);
                     return (
+                      // display:contents lets AccordionItem render its
+                      // default <div> without disturbing the table
+                      // layout — the <tr> children appear as direct
+                      // siblings of <tbody>. Using asChild here used
+                      // to fail because Radix tried to clone data-*
+                      // props onto a React.Fragment, which only
+                      // accepts `key` and `children`.
                       <AccordionItem
                         value={row.original.id}
-                        asChild={true}
+                        className="contents"
                         key={row.id}
                       >
-                        <>
-                          <TableRowComponent
+                        <TableRowComponent
                             minimal={minimal}
                             data-row-id={row.original.id}
                             className={cn(
@@ -573,28 +579,27 @@ export function DataTable<TData, TValue>({
                             </>
                           </TableRowComponent>
 
-                          {expandedRow && (
-                            <AccordionContent asChild={true}>
-                              <TableRowComponent
-                                data-row-id={row.id + "-expanded-row"}
-                                key={row.id + "-expanded-row"}
-                                minimal={minimal}
-                                className={cn(
-                                  onRowClick && "cursor-pointer relative",
-                                  rowClassName,
-                                )}
-                                data-state={row.getIsSelected() && "selected"}
+                        {expandedRow && (
+                          <AccordionContent asChild={true}>
+                            <TableRowComponent
+                              data-row-id={row.id + "-expanded-row"}
+                              key={row.id + "-expanded-row"}
+                              minimal={minimal}
+                              className={cn(
+                                onRowClick && "cursor-pointer relative",
+                                rowClassName,
+                              )}
+                              data-state={row.getIsSelected() && "selected"}
+                            >
+                              <TableDataUnstyledComponent
+                                className={"w-full"}
+                                colSpan={row.getVisibleCells().length}
                               >
-                                <TableDataUnstyledComponent
-                                  className={"w-full"}
-                                  colSpan={row.getVisibleCells().length}
-                                >
-                                  {expandedRow}
-                                </TableDataUnstyledComponent>
-                              </TableRowComponent>
-                            </AccordionContent>
-                          )}
-                        </>
+                                {expandedRow}
+                              </TableDataUnstyledComponent>
+                            </TableRowComponent>
+                          </AccordionContent>
+                        )}
                       </AccordionItem>
                     );
                   })
