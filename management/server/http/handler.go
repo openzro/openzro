@@ -16,18 +16,21 @@ import (
 	"github.com/openzro/openzro/management/server/integrations/port_forwarding"
 	"github.com/openzro/openzro/management/server/permissions"
 
+	activityExporters "github.com/openzro/openzro/management/server/activity_exporters"
+	"github.com/openzro/openzro/management/server/admission"
 	"github.com/openzro/openzro/management/server/auth"
+	authProviders "github.com/openzro/openzro/management/server/auth/providers"
 	"github.com/openzro/openzro/management/server/geolocation"
 	nbgroups "github.com/openzro/openzro/management/server/groups"
 	"github.com/openzro/openzro/management/server/http/handlers/accounts"
-	"github.com/openzro/openzro/management/server/http/handlers/dns"
-	"github.com/openzro/openzro/management/server/http/handlers/events"
-	"github.com/openzro/openzro/management/server/http/handlers/groups"
-	flowExportsHandler "github.com/openzro/openzro/management/server/http/handlers/flow_exports"
-	activityExporters "github.com/openzro/openzro/management/server/activity_exporters"
-	"github.com/openzro/openzro/management/server/admission"
 	activityExportersHandler "github.com/openzro/openzro/management/server/http/handlers/activity_exporters"
 	admissionBypassHandler "github.com/openzro/openzro/management/server/http/handlers/admission_bypass"
+	authHandler "github.com/openzro/openzro/management/server/http/handlers/auth"
+	authProvidersHandler "github.com/openzro/openzro/management/server/http/handlers/auth_providers"
+	"github.com/openzro/openzro/management/server/http/handlers/dns"
+	"github.com/openzro/openzro/management/server/http/handlers/events"
+	flowExportsHandler "github.com/openzro/openzro/management/server/http/handlers/flow_exports"
+	"github.com/openzro/openzro/management/server/http/handlers/groups"
 	mdmProvidersHandler "github.com/openzro/openzro/management/server/http/handlers/mdm_providers"
 	"github.com/openzro/openzro/management/server/http/handlers/network_events"
 	"github.com/openzro/openzro/management/server/http/handlers/networks"
@@ -35,7 +38,6 @@ import (
 
 	flowstore "github.com/openzro/openzro/flow/store"
 	flowExports "github.com/openzro/openzro/management/server/flow_exports"
-	"github.com/openzro/openzro/management/server/mdm"
 	"github.com/openzro/openzro/management/server/http/handlers/policies"
 	"github.com/openzro/openzro/management/server/http/handlers/routes"
 	"github.com/openzro/openzro/management/server/http/handlers/scim"
@@ -43,6 +45,7 @@ import (
 	"github.com/openzro/openzro/management/server/http/handlers/users"
 	"github.com/openzro/openzro/management/server/http/middleware"
 	"github.com/openzro/openzro/management/server/integrations/integrated_validator"
+	"github.com/openzro/openzro/management/server/mdm"
 	nbnetworks "github.com/openzro/openzro/management/server/networks"
 	"github.com/openzro/openzro/management/server/networks/resources"
 	"github.com/openzro/openzro/management/server/networks/routers"
@@ -77,6 +80,10 @@ func NewAPIHandler(
 	activityExportersManager *activityExporters.Manager,
 	admissionBypassStore *admission.Store,
 	admissionBypassEmitter admissionBypassHandler.EventEmitter,
+	authProvidersStore *authProviders.Store,
+	authProvidersManager *authProviders.Manager,
+	authProvidersEmitter authProvidersHandler.EventEmitter,
+	centralizedAuthHandler *authHandler.Handler,
 ) (http.Handler, error) {
 
 	authMiddleware := middleware.NewAuthMiddleware(
@@ -117,6 +124,16 @@ func NewAPIHandler(
 	mdmProvidersHandler.AddEndpoints(permissionsManager, mdmStore, mdmManager, router)
 	activityExportersHandler.AddEndpoints(permissionsManager, activityExportersStore, activityExportersManager, router)
 	admissionBypassHandler.AddEndpoints(permissionsManager, admissionBypassStore, accountManager, admissionBypassEmitter, router)
+	authProvidersHandler.AddEndpoints(permissionsManager, authProvidersStore, authProvidersManager, authProvidersEmitter, router)
+
+	// Centralized openZro-branded login surface (ADR-0005). Mounted
+	// on rootRouter so /login + /auth/* are reachable WITHOUT the
+	// auth middleware — this is how a user gets authenticated in
+	// the first place. nil handler means the env-var (OPENZRO_BASE_URL)
+	// is unset and we leave the legacy single-IdP path in charge.
+	if centralizedAuthHandler != nil {
+		authHandler.AddEndpoints(centralizedAuthHandler, rootRouter)
+	}
 
 	// SCIM 2.0 lives at /scim/v2 per RFC 7644 — separate from /api so
 	// the path matches what every IdP expects out of the box. Same
