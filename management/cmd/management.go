@@ -53,6 +53,7 @@ import (
 	"github.com/openzro/openzro/management/server/admission"
 	"github.com/openzro/openzro/management/server/auth"
 	nbContext "github.com/openzro/openzro/management/server/context"
+	"github.com/openzro/openzro/management/server/dex_proxy"
 	flowExports "github.com/openzro/openzro/management/server/flow_exports"
 	"github.com/openzro/openzro/management/server/geolocation"
 	"github.com/openzro/openzro/management/server/groups"
@@ -445,7 +446,29 @@ var (
 				accountManager.StoreEvent(ctx, initiatorID, targetID, accountID, code, meta)
 			}
 
-			httpAPIHandler, err := nbhttp.NewAPIHandler(ctx, accountManager, networksManager, resourcesManager, routersManager, groupsManager, geo, authManager, appMetrics, integratedPeerValidator, proxyController, permissionsManager, peersManager, settingsManager, flowStore, flowExportsStore, flowExportsManager, mdmStore, mdmManager, activityExportersStore, activityExportersManager, admissionBypassStore, bypassEmitter)
+			// Dex gRPC client (ADR-0006). Built from env vars
+			// the operator's setup.env / configure.sh emit. nil
+			// when the env is empty — the dashboard's auth-
+			// providers admin endpoints respond with 503 in that
+			// case so the UI shows an "IdP not configured" empty
+			// state rather than crashing.
+			var dexClient *dex_proxy.Client
+			if dexCfg, dcErr := dex_proxy.FromEnv(); dcErr != nil {
+				return fmt.Errorf("dex_proxy config: %w", dcErr)
+			} else if dexCfg != nil {
+				dexClient, err = dex_proxy.New(*dexCfg)
+				if err != nil {
+					return fmt.Errorf("dex_proxy client: %w", err)
+				}
+				defer func() { _ = dexClient.Close() }()
+				if hcErr := dexClient.HealthCheck(ctx); hcErr != nil {
+					log.WithContext(ctx).Warnf("dex_proxy HealthCheck failed at boot: %v (admin auth-providers API may return 503 until Dex becomes reachable)", hcErr)
+				} else {
+					log.WithContext(ctx).Infof("dex_proxy connected to %s", dexCfg.Addr)
+				}
+			}
+
+			httpAPIHandler, err := nbhttp.NewAPIHandler(ctx, accountManager, networksManager, resourcesManager, routersManager, groupsManager, geo, authManager, appMetrics, integratedPeerValidator, proxyController, permissionsManager, peersManager, settingsManager, flowStore, flowExportsStore, flowExportsManager, mdmStore, mdmManager, activityExportersStore, activityExportersManager, admissionBypassStore, bypassEmitter, dexClient)
 
 			if err != nil {
 				return fmt.Errorf("failed creating HTTP API handler: %v", err)

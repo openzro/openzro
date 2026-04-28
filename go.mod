@@ -44,8 +44,8 @@ require (
 	github.com/cilium/ebpf v0.15.0
 	github.com/coder/websocket v1.8.12
 	github.com/coreos/go-iptables v0.7.0
-	github.com/coreos/go-oidc/v3 v3.18.0
 	github.com/creack/pty v1.1.18
+	github.com/dexidp/dex/api/v2 v2.4.0
 	github.com/eko/gocache/lib/v4 v4.2.0
 	github.com/eko/gocache/store/go_cache/v4 v4.2.2
 	github.com/eko/gocache/store/redis/v4 v4.2.2
