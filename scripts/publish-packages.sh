@@ -160,7 +160,24 @@ for ARCH in x86_64 aarch64 i686 armv6hl; do
 done
 
 # ----------------------------------------------------------------------
-# 5. Static index + CNAME for GitHub Pages.
+# 5. install.sh — distro-detecting bootstrap script the dashboard's
+#    SetupModal points at (`curl -fsSL https://pkg.openzro.io/install.sh
+#    | sh`). Lives in the source tree at release_files/install.sh and
+#    is the canonical client install path for distros our packaged
+#    repos don't cover (Arch/AUR + binary fallback for everything else).
+# ----------------------------------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT_GIT="$(cd "$SCRIPT_DIR/.." && pwd)"
+if [ -f "$REPO_ROOT_GIT/release_files/install.sh" ]; then
+    cp "$REPO_ROOT_GIT/release_files/install.sh" "$WORK/repo/install.sh"
+    chmod 0755 "$WORK/repo/install.sh"
+    echo "Copied install.sh ($(wc -l < "$WORK/repo/install.sh") lines) to repo root."
+else
+    echo "WARN: release_files/install.sh not found at $REPO_ROOT_GIT — skipping."
+fi
+
+# ----------------------------------------------------------------------
+# 6. Static index + CNAME for GitHub Pages.
 # ----------------------------------------------------------------------
 echo "pkg.openzro.io" > "$WORK/repo/CNAME"
 
@@ -206,6 +223,16 @@ sudo dnf install openzro</pre>
   https://pkg.openzro.io/rpm/x86_64/openzro.repo openzro
 sudo rpm --import https://pkg.openzro.io/openzro-archive-key.asc
 sudo zypper install openzro</pre>
+
+<h2>One-line install (covers Arch, CachyOS, Gentoo, …)</h2>
+<p>For distros not covered by the package repos above, the
+<code>install.sh</code> script auto-detects your distro and falls
+through APT, YUM/DNF, zypper, pacman/AUR, or the binary tarball:</p>
+<pre>curl -fsSL https://pkg.openzro.io/install.sh | sh</pre>
+<p>The script source is at
+<a href="https://github.com/openzro/openzro/blob/main/release_files/install.sh"><code>release_files/install.sh</code></a>
+in the openzro/openzro repo — review before piping to a shell, as
+always.</p>
 
 <p>Source for the repository tooling lives under
 <code>scripts/publish-packages.sh</code> in

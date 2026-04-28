@@ -6,22 +6,24 @@ import {
 } from "@components/Accordion";
 import Button from "@components/Button";
 import Code from "@components/Code";
-import InlineLink from "@components/InlineLink";
 import Separator from "@components/Separator";
 import Steps from "@components/Steps";
 import TabsContentPadding, { TabsContent } from "@components/Tabs";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@components/Tooltip";
 import { getOpenzroUpCommand, GRPC_API_ORIGIN } from "@utils/openzro";
 import {
   BeerIcon,
   DownloadIcon,
   ExternalLinkIcon,
-  HelpCircle,
   PackageOpenIcon,
   TerminalSquareIcon,
 } from "lucide-react";
 import Link from "next/link";
 import React from "react";
+import {
+  findAsset,
+  releaseFallbackURL,
+  useLatestRelease,
+} from "@/hooks/useLatestRelease";
 import { OperatingSystem } from "@/interfaces/OperatingSystem";
 import {
   HostnameParameter,
@@ -34,11 +36,37 @@ type Props = {
   showSetupKeyInfo?: boolean;
   hostname?: string;
 };
+// Asset preference for macOS, in order:
+//   1. .pkg (Stage 1 of ADR-0007 — `pkgbuild` from release_pkg
+//      CI job, double-click installer that drops binaries into
+//      /usr/local/bin and registers the launchd daemon)
+//   2. universal UI tarball (Fyne app, brew-friendly)
+//   3. universal CLI tarball (terminal users)
+// All assets are fat universal (amd64+arm64) — one download
+// works on both Intel and Apple Silicon, no chip detection needed.
+const MACOS_PKG = /^openzro_.*_darwin_universal\.pkg$/;
+const MACOS_UI_UNIVERSAL = /^openzro-ui_.*_darwin_universal\.tar\.gz$/;
+const MACOS_CLI_UNIVERSAL = /^openzro_.*_darwin_(universal|all)\.tar\.gz$/;
+
 export default function MacOSTab({
   setupKey,
   showSetupKeyInfo,
   hostname,
 }: Readonly<Props>) {
+  const { data: release, isLoading } = useLatestRelease();
+  const macAsset =
+    findAsset(release, MACOS_PKG) ??
+    findAsset(release, MACOS_UI_UNIVERSAL) ??
+    findAsset(release, MACOS_CLI_UNIVERSAL);
+  const downloadHref =
+    macAsset?.browser_download_url ?? releaseFallbackURL(release);
+  const isPkg = macAsset ? MACOS_PKG.test(macAsset.name) : false;
+  const downloadLabel = release?.tag_name
+    ? `${release.tag_name} (${isPkg ? "Installer" : "Universal"})`
+    : isPkg
+      ? "Installer"
+      : "Universal";
+
   return (
     <TabsContent value={String(OperatingSystem.APPLE)}>
       <TabsContentPadding>
@@ -48,57 +76,42 @@ export default function MacOSTab({
         </p>
         <Steps>
           <Steps.Step step={1}>
-            <div className={"flex items-center gap-1 text-sm font-light"}>
-              Download and run macOS Installer
-              <Tooltip>
-                <TooltipTrigger>
-                  <HelpCircle
-                    size={16}
-                    className={"inline-block ml-1 text-openzro"}
-                  />
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className={"max-w-[200px] text-xs"}>
-                    {`If you don't know what chip your Mac has, you can find out
-                    by clicking on the Apple logo in the top left corner of your
-                    screen and selecting 'About This Mac'.`}
-                  </p>
-                  <div className={"text-xs mt-1.5"}>
-                    <InlineLink
-                      href={"https://support.apple.com/en-us/HT211814"}
-                      passHref
-                      target={"_blank"}
-                      className={"flex gap-1 items-center"}
-                    >
-                      Learn more
-                      <ExternalLinkIcon size={12} />
-                    </InlineLink>
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            </div>
+            <p className={"text-sm font-light"}>
+              Download the latest macOS build
+            </p>
             <div className={"flex gap-4 mt-1 flex-wrap"}>
-              <Link
-                href={"https://pkgs.openzro.io/macos/amd64"}
-                passHref
-                target={"_blank"}
-              >
-                <Button variant={"primary"}>
+              <Link href={downloadHref} passHref target={"_blank"}>
+                <Button variant={"primary"} disabled={isLoading}>
                   <DownloadIcon size={14} />
-                  Download for Intel
-                </Button>
-              </Link>
-              <Link
-                href={"https://pkgs.openzro.io/macos/arm64"}
-                passHref
-                target={"_blank"}
-              >
-                <Button variant={"outline"}>
-                  <DownloadIcon size={14} />
-                  Download for Apple Silicon
+                  {isLoading ? "Loading…" : `Download Openzro ${downloadLabel}`}
                 </Button>
               </Link>
             </div>
+            {isPkg ? (
+              <p className={"text-xs text-nb-gray-300 mt-2"}>
+                Universal installer — works on both Intel and Apple
+                Silicon. Double-click the .pkg, follow the prompts, and
+                the daemon registers automatically. On first run macOS
+                may show a Gatekeeper warning (&quot;cannot be opened
+                because Apple cannot check it&quot;) — right-click →{" "}
+                <em>Open</em> to bypass once, or run{" "}
+                <code>xattr -d com.apple.quarantine ~/Downloads/openzro_*.pkg</code>.
+                Apple Developer ID notarization is coming soon and will
+                eliminate the warning.
+              </p>
+            ) : (
+              <p className={"text-xs text-nb-gray-300 mt-2"}>
+                Universal binary works on both Intel and Apple Silicon.
+                Extract the .tar.gz, then run{" "}
+                <code>sudo install -m 0755 openzro-ui /usr/local/bin/</code>{" "}
+                and launch from <code>/usr/local/bin/openzro-ui</code>. On
+                first launch macOS may show a Gatekeeper warning — open with
+                right-click → Open, or run{" "}
+                <code>xattr -d com.apple.quarantine</code> on the binary.
+                Signed .pkg installer + Apple Developer ID notarization are
+                tracked as part of the packaging epic.
+              </p>
+            )}
           </Steps.Step>
 
           {GRPC_API_ORIGIN && (
@@ -154,7 +167,7 @@ export default function MacOSTab({
               <Steps>
                 <Steps.Step step={1}>
                   <Code>
-                    curl -fsSL https://pkgs.openzro.io/install.sh | sh
+                    curl -fsSL https://pkg.openzro.io/install.sh | sh
                   </Code>
                 </Steps.Step>
                 <Steps.Step step={2} line={false}>
@@ -196,26 +209,33 @@ export default function MacOSTab({
                   </div>
                 </Steps.Step>
                 <Steps.Step step={2}>
-                  <p>Install Openzro </p>
-                  <Code
-                    codeToCopy={[
-                      `brew install openzro/tap/openzro`,
-                      `brew install --cask openzro/tap/openzro-ui`,
-                    ].join("\n")}
-                  >
-                    <Code.Comment># for CLI only</Code.Comment>
+                  <p>Install the openzro CLI</p>
+                  <Code codeToCopy={`brew install openzro/tap/openzro`}>
                     <Code.Line>brew install openzro/tap/openzro</Code.Line>
-                    <Code.Comment># for GUI package</Code.Comment>
-                    <Code.Line>
-                      brew install --cask openzro/tap/openzro-ui
-                    </Code.Line>
                   </Code>
+                  <p
+                    className={
+                      "text-xs text-nb-gray-300 mt-2 flex items-center gap-1"
+                    }
+                  >
+                    <BeerIcon size={12} className="opacity-60" />
+                    For the system-tray GUI app, use the .pkg installer
+                    above instead — a Homebrew Cask for openzro-ui will
+                    ship once we publish the macOS .app bundle (tracked
+                    as part of the packaging epic).
+                  </p>
                 </Steps.Step>
                 <Steps.Step step={3}>
                   <p>Start Openzro daemon</p>
-                  <Code>
-                    <Code.Line>sudo openzro service install</Code.Line>
-                    <Code.Line>sudo openzro service start</Code.Line>
+                  <Code
+                    codeToCopy={[
+                      `sudo brew services start openzro`,
+                    ].join("\n")}
+                  >
+                    <Code.Comment>
+                      # daemon needs root to manage WireGuard interfaces
+                    </Code.Comment>
+                    <Code.Line>sudo brew services start openzro</Code.Line>
                   </Code>
                 </Steps.Step>
                 <Steps.Step step={4} line={false}>

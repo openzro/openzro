@@ -33,7 +33,7 @@ get_release() {
     local RELEASE=$1
     if [ "$RELEASE" = "latest" ]; then
         local TAG="latest"
-        local URL="https://pkgs.openzro.io/releases/latest"
+        local URL="https://pkg.openzro.io/releases/latest"
     else
         local TAG="tags/${RELEASE}"
         local URL="https://api.github.com/repos/${OWNER}/${REPO}/releases/${TAG}"
@@ -106,13 +106,15 @@ add_apt_repo() {
         /usr/share/keyrings/openzro-archive-keyring.gpg \
         /usr/share/keyrings/wiretrustee-archive-keyring.gpg
 
-    curl -sSL https://pkgs.openzro.io/debian/public.key \
+    # The repo serves the GPG key in ASCII-armored form at the root
+    # path; both apt and yum use the same canonical key file.
+    curl -sSL https://pkg.openzro.io/openzro-archive-key.asc \
     | ${SUDO} gpg --dearmor -o /usr/share/keyrings/openzro-archive-keyring.gpg
 
     # Explicitly set the file permission
     ${SUDO} chmod 0644 /usr/share/keyrings/openzro-archive-keyring.gpg
 
-    echo 'deb [signed-by=/usr/share/keyrings/openzro-archive-keyring.gpg] https://pkgs.openzro.io/debian stable main' \
+    echo 'deb [signed-by=/usr/share/keyrings/openzro-archive-keyring.gpg] https://pkg.openzro.io/apt stable main' \
     | ${SUDO} tee /etc/apt/sources.list.d/openzro.list
 
     ${SUDO} apt-get update
@@ -122,11 +124,11 @@ add_rpm_repo() {
 cat <<-EOF | ${SUDO} tee /etc/yum.repos.d/openzro.repo
 [Openzro]
 name=Openzro
-baseurl=https://pkgs.openzro.io/yum/
+baseurl=https://pkg.openzro.io/rpm/\$basearch
 enabled=1
-gpgcheck=0
-gpgkey=https://pkgs.openzro.io/yum/repodata/repomd.xml.key
-repo_gpgcheck=1
+gpgcheck=1
+gpgkey=https://pkg.openzro.io/openzro-archive-key.asc
+repo_gpgcheck=0
 EOF
 }
 
@@ -209,8 +211,8 @@ install_pkg() {
     *) echo "Unsupported macOS arch: $(uname -m)" >&2; exit 1 ;;
   esac
 
-  PKG_URL=$(curl -sIL -o /dev/null -w '%{url_effective}' "https://pkgs.openzro.io/macos/${ARCH}")
-  echo "Downloading Openzro macOS installer from https://pkgs.openzro.io/macos/${ARCH}"
+  PKG_URL=$(curl -sIL -o /dev/null -w '%{url_effective}' "https://pkg.openzro.io/macos/${ARCH}")
+  echo "Downloading Openzro macOS installer from https://pkg.openzro.io/macos/${ARCH}"
   curl -fsSL -o /tmp/openzro.pkg "${PKG_URL}"
   ${SUDO} installer -pkg /tmp/openzro.pkg -target /
   rm -f /tmp/openzro.pkg
