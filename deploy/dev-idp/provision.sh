@@ -45,7 +45,12 @@ wait_dex() {
     fi
     sleep 2
     elapsed=$((elapsed + 2))
-    [[ $((elapsed % 10)) -eq 0 ]] && echo "  …still waiting for Dex (${elapsed}s)"
+    # `[[ ]] && echo …` would propagate the test's false exit
+    # under `set -e`, killing the script mid-wait. The `if`
+    # block keeps the script-wide error semantics clean.
+    if (( elapsed % 10 == 0 )); then
+      echo "  …still waiting for Dex (${elapsed}s)"
+    fi
   done
 }
 
