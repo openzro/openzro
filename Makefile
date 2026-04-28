@@ -139,19 +139,19 @@ dev.deps.logs: ## Tail logs from the local dev dependencies
 # ---------------------------------------------------------------------------
 
 .PHONY: dev.idp.up dev.idp.down dev.idp.logs dev.idp.reset
-dev.idp.up: ## Bring up local Zitadel and provision an OIDC app for the dashboard
+dev.idp.up: ## Bring up the local Dex IdP and seed the dashboard + management dev configs
 	$(DOCKER_COMPOSE) -f deploy/dev-idp.compose.yml up -d
 	@bash deploy/dev-idp/provision.sh
 
-dev.idp.down: ## Stop the local Zitadel (keeps volume so subsequent ups are fast)
+dev.idp.down: ## Stop the local Dex IdP
 	$(DOCKER_COMPOSE) -f deploy/dev-idp.compose.yml down
 
-dev.idp.logs: ## Tail Zitadel logs
+dev.idp.logs: ## Tail Dex logs
 	$(DOCKER_COMPOSE) -f deploy/dev-idp.compose.yml logs -f --tail=100
 
-dev.idp.reset: ## Wipe the IdP volume and force a fresh provisioning on next dev.idp.up
+dev.idp.reset: ## Force a fresh Dex container + reprovision on next dev.idp.up
 	$(DOCKER_COMPOSE) -f deploy/dev-idp.compose.yml down -v
-	rm -rf deploy/dev-idp/machinekey/*
+	@rm -f deploy/dev-mgmt/management.json dashboard/.local-config.json
 
 # ---------------------------------------------------------------------------
 # Local dev: management server (foreground binary, sqlite store, IdP=none)
@@ -299,5 +299,4 @@ clean: ## Remove build artefacts, coverage output, and the dashboard's .next dir
 	rm -f management/management signal/signal relay/relay client/client
 	rm -rf $(DASHBOARD_DIR)/.next $(DASHBOARD_DIR)/out
 	rm -f $(DASHBOARD_DIR)/.local-config.json
-	rm -f deploy/dev-idp/machinekey/zitadel-admin-sa.token
-	rm -f deploy/dev-idp/machinekey/provisioned.json
+	rm -f deploy/dev-mgmt/management.json
