@@ -2,12 +2,15 @@
 #
 # Compared to .goreleaser.yaml (the full upstream-derived config):
 #   - No Docker Hub push (only ghcr.io, which uses GITHUB_TOKEN).
-#   - No Homebrew tap push (avoids HOMEBREW_TAP_GITHUB_TOKEN).
-#   - No apt/yum repo upload to wiretrustee.com (defunct domain).
-#   - No code signing (Windows / macOS unsigned — alpha/beta only).
+#   - No apt/yum repo upload to wiretrustee.com (defunct domain) —
+#     ours go to pkg.openzro.io via scripts/publish-packages.sh.
+#   - No code signing (Windows / macOS unsigned — alpha/beta only;
+#     SignPath EV + Apple Dev ID tracked as ADR-0007 Phase 2).
 #   - No goreleaser-pro features.
 #   - .deb / .rpm packages still produced and attached to the GitHub
 #     Release as plain downloadable artifacts.
+#   - Homebrew tap push to openzro/homebrew-tap (Stage 5 of ADR-0007)
+#     gated on the HOMEBREW_TAP_TOKEN secret being set.
 #
 # Use this config until we either (a) get OSS signing through
 # SignPath / Certum, or (b) decide to ship to a managed apt/yum
@@ -132,6 +135,66 @@ nfpms:
     scripts:
       postinstall: release_files/post_install.sh
       preremove: release_files/pre_remove.sh
+
+# Homebrew tap for macOS users (Stage 5 of ADR-0007). Goreleaser
+# auto-generates a formula on every tag push and pushes it to
+# `openzro/homebrew-tap`. Users then `brew install openzro/tap/openzro`
+# — the dashboard's macOS tab already documents this in the
+# "Install with HomeBrew" accordion.
+#
+# Prerequisites (one-time, on the org side):
+#   1. Create the tap repo:
+#        gh repo create openzro/homebrew-tap --public \
+#          --description "Homebrew tap for openZro"
+#      It can start empty — goreleaser will write Formula/openzro.rb
+#      on the first tag push.
+#   2. Add a HOMEBREW_TAP_TOKEN secret to this repo (`production`
+#      environment) — a PAT with `contents:write` on the tap repo.
+#      The default GITHUB_TOKEN only has access to the calling repo,
+#      hence the separate token.
+#
+# Until those are in place, snapshot builds are unaffected
+# (skip_upload: auto skips on snapshots / prereleases) and tag
+# builds will fail at the brew push step. To temporarily disable
+# without removing this block, set HOMEBREW_TAP_TOKEN="" in the
+# CI env — goreleaser will skip with a warning.
+brews:
+  - name: openzro
+    ids: [openzro]
+    # When the HOMEBREW_TAP_TOKEN secret is absent, the calling
+    # workflow adds `--skip=homebrew` to the goreleaser invocation
+    # so this entire block is bypassed (no formula build, no push).
+    # Goreleaser v2.x doesn't have a `disable:` field on brews, and
+    # template errors on `{{ .Env.HOMEBREW_TAP_TOKEN }}` are avoided
+    # by always exporting the env (empty string when secret missing).
+    # See `release_binaries.yml` "Decide goreleaser flags" step.
+    repository:
+      owner: openzro
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: "https://openzro.io/"
+    description: "Open-source mesh networking with WireGuard"
+    license: "BSD-3-Clause"
+    # auto = skip push for snapshots / prereleases (still builds the
+    # formula file in dist/ for inspection). For tag-mode the formula
+    # gets pushed.
+    skip_upload: auto
+    install: |
+      bin.install "openzro"
+    test: |
+      system "#{bin}/openzro", "version"
+    service: |
+      run [opt_bin/"openzro", "service", "run"]
+      keep_alive true
+      log_path var/"log/openzro.log"
+      error_log_path var/"log/openzro.err"
+    caveats: |
+      The openzro daemon needs root to manage WireGuard interfaces.
+      To start it on login:
+        sudo brew services start openzro
+      To check status:
+        sudo brew services info openzro
 
 # Docker images to ghcr.io only. GITHUB_TOKEN is sufficient — no
 # DOCKER_USER / DOCKER_TOKEN required.

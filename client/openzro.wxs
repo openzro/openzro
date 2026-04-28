@@ -22,7 +22,13 @@
 						<Shortcut Id="OpenzroStartMenuShortcut" Directory="StartMenuFolder" Name="Openzro" WorkingDirectory="OpenzroInstallDir" Icon="OpenzroIcon" />
 					</File>
 					<File ProcessorArchitecture="x64" Source=".\dist\openzro_windows_amd64\wintun.dll" />
-					<File ProcessorArchitecture="x64" Source=".\dist\openzro_windows_amd64\opengl32.dll" />
+					<!-- opengl32.dll dropped from the bundle: Fyne dynamically
+					     links against the system's opengl32.dll on Windows
+					     (present in C:\Windows\System32 since Win 7), so
+					     bundling ANGLE adds ~12MB without a clear win.
+					     Re-add if customers report rendering issues on
+					     headless / Server Core / GPU-less VMs. -->
+
 
 					<ServiceInstall
                                      Id="OpenzroService"
