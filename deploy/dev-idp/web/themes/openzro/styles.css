@@ -165,9 +165,11 @@
   border: 1px solid var(--oz-border);
   border-radius: 10px;
   color: var(--oz-text);
+  display: block;
   font-family: var(--oz-sans);
   font-size: 14px;
   height: 42px;
+  margin: 0 auto;
   padding: 8px 14px;
   width: 280px;
 }
@@ -189,11 +191,18 @@
   }
 }
 
+/* Labels and inputs share the same 280px width and the same
+ * `margin: auto` — keeping them aligned at the input's left
+ * edge. text-align: left makes the label copy hug that edge
+ * inside its centered block. */
 .theme-form-label {
   color: var(--oz-text);
+  display: block;
   font-family: var(--oz-sans);
   font-size: 13px;
   font-weight: 500;
+  margin: 4px auto;
+  text-align: left;
   width: 280px;
 }
 
