@@ -7,6 +7,24 @@ x-default: &default
       max-file: '2'
 
 services:
+  # Dex IdP (ADR-0006). Owns /dex/* on the public domain via
+  # nginx; serves OIDC discovery + auth + token + userinfo +
+  # JWKs. Federates to upstream IdPs through connectors
+  # configured in dex.config.yaml.
+  dex:
+    <<: *default
+    image: ghcr.io/dexidp/dex:$OPENZRO_DEX_TAG
+    command: ["dex", "serve", "/etc/dex/config.yaml"]
+    volumes:
+      - ./dex.config.yaml:/etc/dex/config.yaml:ro
+      - $DEX_VOLUMENAME:/var/lib/dex
+    healthcheck:
+      test:
+        ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5556/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   # UI dashboard
   dashboard:
     <<: *default
@@ -111,3 +129,4 @@ volumes:
   $MGMT_VOLUMENAME:
   $SIGNAL_VOLUMENAME:
   $LETSENCRYPT_VOLUMENAME:
+  $DEX_VOLUMENAME:

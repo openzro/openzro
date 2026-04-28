@@ -130,9 +130,54 @@ fi
 artifacts_path="./artifacts"
 mkdir -p $artifacts_path
 
+# Dex IdP defaults (ADR-0006). Pinned tag, default admin email,
+# bcrypt of a generated admin password when the operator hasn't
+# supplied one. The plaintext password is printed ONCE here and
+# never persisted — operator must capture it now or rotate via
+# dex.config.yaml.
+#
+# Note: every variable below is `export`-ed unconditionally so
+# envsubst sees it regardless of whether the operator set it in
+# setup.env (sourced, not auto-exported) or we defaulted it.
+if [[ "x-$OPENZRO_DEX_TAG" == "x-" ]]; then
+  OPENZRO_DEX_TAG="v2.45.0-distroless"
+fi
+export OPENZRO_DEX_TAG
+if [[ "x-$OPENZRO_DEX_ADMIN_EMAIL" == "x-" ]]; then
+  OPENZRO_DEX_ADMIN_EMAIL="admin@${OPENZRO_DOMAIN}"
+fi
+export OPENZRO_DEX_ADMIN_EMAIL
+if [[ "x-$OPENZRO_DEX_ADMIN_PASSWORD_BCRYPT" == "x-" ]]; then
+  generated_admin_password=$(openssl rand -base64 24 | tr -d '/+=' | head -c 24)
+  if command -v htpasswd >/dev/null 2>&1; then
+    OPENZRO_DEX_ADMIN_PASSWORD_BCRYPT=$(htpasswd -bnBC 10 "" "$generated_admin_password" | tr -d ':\n')
+  else
+    # Fallback: use Dex's own bundled hash-password command.
+    OPENZRO_DEX_ADMIN_PASSWORD_BCRYPT=$(docker run --rm ghcr.io/dexidp/dex:$OPENZRO_DEX_TAG dex hash-password "$generated_admin_password" 2>/dev/null | tr -d '\n')
+  fi
+  export OPENZRO_DEX_ADMIN_PASSWORD_BCRYPT
+  cat >&2 <<EOF
+
+================================================================
+  Generated Dex admin credentials — capture these NOW. The
+  plaintext password is not stored anywhere; only its bcrypt
+  hash lands in dex.config.yaml.
+
+    Email:    $OPENZRO_DEX_ADMIN_EMAIL
+    Password: $generated_admin_password
+
+  Sign in at https://${OPENZRO_DOMAIN}/dex once the stack is up.
+  Rotate by re-running configure.sh with
+  OPENZRO_DEX_ADMIN_PASSWORD_BCRYPT set in setup.env.
+================================================================
+
+EOF
+fi
+
 MGMT_VOLUMENAME="${VOLUME_PREFIX}${MGMT_VOLUMESUFFIX}"
 SIGNAL_VOLUMENAME="${VOLUME_PREFIX}${SIGNAL_VOLUMESUFFIX}"
 LETSENCRYPT_VOLUMENAME="${VOLUME_PREFIX}${LETSENCRYPT_VOLUMESUFFIX}"
+DEX_VOLUMENAME="${VOLUME_PREFIX}dex"
 # if volume with wiretrustee- prefix already exists, use it, else create new with openzro-
 OLD_PREFIX='wiretrustee-'
 if docker volume ls | grep -q "${OLD_PREFIX}${MGMT_VOLUMESUFFIX}"; then
@@ -148,6 +193,7 @@ fi
 export MGMT_VOLUMENAME
 export SIGNAL_VOLUMENAME
 export LETSENCRYPT_VOLUMENAME
+export DEX_VOLUMENAME
 
 #backwards compatibility after migrating to generic OIDC with Auth0
 if [[ -z "${OPENZRO_AUTH_OIDC_CONFIGURATION_ENDPOINT}" ]]; then
@@ -277,3 +323,8 @@ fi
 envsubst <docker-compose.yml.tmpl >$artifacts_path/docker-compose.yml
 envsubst <management.json.tmpl | jq . >$artifacts_path/management.json
 envsubst <turnserver.conf.tmpl >$artifacts_path/turnserver.conf
+# Dex config (ADR-0006). Single-quoted bcrypt placeholders in the
+# template need a YAML-friendly value; envsubst handles the
+# substitution. The output sits next to docker-compose.yml so
+# the dex service's volume mount finds it.
+envsubst <dex.config.yaml.tmpl >$artifacts_path/dex.config.yaml
