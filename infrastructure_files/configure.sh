@@ -198,31 +198,54 @@ export DEX_VOLUMENAME
 #backwards compatibility after migrating to generic OIDC with Auth0
 if [[ -z "${OPENZRO_AUTH_OIDC_CONFIGURATION_ENDPOINT}" ]]; then
 
-  if [[ -z "${OPENZRO_AUTH0_DOMAIN}" ]]; then
-    # not a backward compatible state
-    echo "OPENZRO_AUTH_OIDC_CONFIGURATION_ENDPOINT property must be set in the setup.env file"
-    exit 1
+  if [[ -n "${OPENZRO_AUTH0_DOMAIN}" ]]; then
+    # Pre-v0.8.10 setup.env shape — operator only had Auth0
+    # config. Bridge into the post-v0.8.10 OIDC-generic shape.
+    echo "It seems like you provided an old setup.env file."
+    echo "Since the release of v0.8.10, we introduced a new set of properties."
+    echo "The script is backward compatible and will continue automatically."
+    echo "In the future versions it will be deprecated. Please refer to the documentation to learn about the changes http://openzro.io/docs/getting-started/self-hosting"
+
+    export OPENZRO_AUTH_OIDC_CONFIGURATION_ENDPOINT="https://${OPENZRO_AUTH0_DOMAIN}/.well-known/openid-configuration"
+    export OPENZRO_USE_AUTH0="true"
+    export OPENZRO_AUTH_AUDIENCE=${OPENZRO_AUTH0_AUDIENCE}
+    export OPENZRO_AUTH_CLIENT_ID=${OPENZRO_AUTH0_CLIENT_ID}
+  else
+    # ADR-0006 default path: when no external OIDC endpoint is
+    # supplied, point everything at the embedded Dex container
+    # the operator gets in this same compose bundle. Skip the
+    # discovery-doc fetch — Dex is not running yet when this
+    # script executes and we know its URL shape from its
+    # issuer; the management server will refresh JWKs at
+    # runtime against the live Dex.
+    echo "Using embedded Dex IdP at https://${OPENZRO_DOMAIN}/dex (set OPENZRO_AUTH_OIDC_CONFIGURATION_ENDPOINT in setup.env to override)."
+    export OPENZRO_AUTH_OIDC_CONFIGURATION_ENDPOINT="https://${OPENZRO_DOMAIN}/dex/.well-known/openid-configuration"
+    export OPENZRO_AUTH_AUTHORITY="https://${OPENZRO_DOMAIN}/dex"
+    export OPENZRO_AUTH_JWT_CERTS="https://${OPENZRO_DOMAIN}/dex/keys"
+    export OPENZRO_AUTH_TOKEN_ENDPOINT="https://${OPENZRO_DOMAIN}/dex/token"
+    export OPENZRO_AUTH_DEVICE_AUTH_ENDPOINT="https://${OPENZRO_DOMAIN}/dex/device/code"
+    export OPENZRO_AUTH_PKCE_AUTHORIZATION_ENDPOINT="https://${OPENZRO_DOMAIN}/dex/auth"
+    export OPENZRO_USE_AUTH0="false"
+    export OPENZRO_AUTH_CLIENT_ID="${OPENZRO_AUTH_CLIENT_ID:-openzro-dashboard}"
+    export OPENZRO_AUTH_AUDIENCE="${OPENZRO_AUTH_AUDIENCE:-openzro-dashboard}"
+    export OPENZRO_DASH_AUTH_AUDIENCE="${OPENZRO_DASH_AUTH_AUDIENCE:-openzro-dashboard}"
+    export OPENZRO_AUTH_SUPPORTED_SCOPES="${OPENZRO_AUTH_SUPPORTED_SCOPES:-openid profile email offline_access groups}"
+    # Marker so the rest of the script knows to skip the
+    # discovery-doc download below.
+    OPENZRO_AUTH_USING_EMBEDDED_DEX=1
   fi
-
-  echo "It seems like you provided an old setup.env file."
-  echo "Since the release of v0.8.10, we introduced a new set of properties."
-  echo "The script is backward compatible and will continue automatically."
-  echo "In the future versions it will be deprecated. Please refer to the documentation to learn about the changes http://openzro.io/docs/getting-started/self-hosting"
-
-  export OPENZRO_AUTH_OIDC_CONFIGURATION_ENDPOINT="https://${OPENZRO_AUTH0_DOMAIN}/.well-known/openid-configuration"
-  export OPENZRO_USE_AUTH0="true"
-  export OPENZRO_AUTH_AUDIENCE=${OPENZRO_AUTH0_AUDIENCE}
-  export OPENZRO_AUTH_CLIENT_ID=${OPENZRO_AUTH0_CLIENT_ID}
 fi
 
-echo "loading OpenID configuration from ${OPENZRO_AUTH_OIDC_CONFIGURATION_ENDPOINT} to the openid-configuration.json file"
-curl "${OPENZRO_AUTH_OIDC_CONFIGURATION_ENDPOINT}" -q -o ${artifacts_path}/openid-configuration.json
+if [[ -z "${OPENZRO_AUTH_USING_EMBEDDED_DEX:-}" ]]; then
+  echo "loading OpenID configuration from ${OPENZRO_AUTH_OIDC_CONFIGURATION_ENDPOINT} to the openid-configuration.json file"
+  curl "${OPENZRO_AUTH_OIDC_CONFIGURATION_ENDPOINT}" -q -o ${artifacts_path}/openid-configuration.json
 
-export OPENZRO_AUTH_AUTHORITY=$(jq -r '.issuer' ${artifacts_path}/openid-configuration.json)
-export OPENZRO_AUTH_JWT_CERTS=$(jq -r '.jwks_uri' ${artifacts_path}/openid-configuration.json)
-export OPENZRO_AUTH_TOKEN_ENDPOINT=$(jq -r '.token_endpoint' ${artifacts_path}/openid-configuration.json)
-export OPENZRO_AUTH_DEVICE_AUTH_ENDPOINT=$(jq -r '.device_authorization_endpoint' ${artifacts_path}/openid-configuration.json)
-export OPENZRO_AUTH_PKCE_AUTHORIZATION_ENDPOINT=$(jq -r '.authorization_endpoint' ${artifacts_path}/openid-configuration.json)
+  export OPENZRO_AUTH_AUTHORITY=$(jq -r '.issuer' ${artifacts_path}/openid-configuration.json)
+  export OPENZRO_AUTH_JWT_CERTS=$(jq -r '.jwks_uri' ${artifacts_path}/openid-configuration.json)
+  export OPENZRO_AUTH_TOKEN_ENDPOINT=$(jq -r '.token_endpoint' ${artifacts_path}/openid-configuration.json)
+  export OPENZRO_AUTH_DEVICE_AUTH_ENDPOINT=$(jq -r '.device_authorization_endpoint' ${artifacts_path}/openid-configuration.json)
+  export OPENZRO_AUTH_PKCE_AUTHORIZATION_ENDPOINT=$(jq -r '.authorization_endpoint' ${artifacts_path}/openid-configuration.json)
+fi
 
 if [[ ! -z "${OPENZRO_AUTH_DEVICE_AUTH_CLIENT_ID}" ]]; then
   # user enabled Device Authorization Grant feature
