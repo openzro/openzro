@@ -41,31 +41,33 @@ import (
 	"github.com/openzro/openzro/management/server/types"
 
 	"github.com/openzro/openzro/encryption"
-	"github.com/openzro/openzro/formatter/hook"
 	flowProto "github.com/openzro/openzro/flow/proto"
 	flowSinks "github.com/openzro/openzro/flow/sinks"
+	flowstore "github.com/openzro/openzro/flow/store"
 	flowFactory "github.com/openzro/openzro/flow/store/factory"
+	"github.com/openzro/openzro/formatter/hook"
+	mgmtProto "github.com/openzro/openzro/management/proto"
+	"github.com/openzro/openzro/management/server"
 	"github.com/openzro/openzro/management/server/activity"
 	activityExporters "github.com/openzro/openzro/management/server/activity_exporters"
 	"github.com/openzro/openzro/management/server/admission"
-	flowExports "github.com/openzro/openzro/management/server/flow_exports"
-	"github.com/openzro/openzro/management/server/mdm"
-	"github.com/openzro/openzro/management/server/posture"
-	mgmtProto "github.com/openzro/openzro/management/proto"
-	"github.com/openzro/openzro/management/server"
 	"github.com/openzro/openzro/management/server/auth"
+	authProviders "github.com/openzro/openzro/management/server/auth/providers"
 	nbContext "github.com/openzro/openzro/management/server/context"
+	flowExports "github.com/openzro/openzro/management/server/flow_exports"
 	"github.com/openzro/openzro/management/server/geolocation"
 	"github.com/openzro/openzro/management/server/groups"
 	nbhttp "github.com/openzro/openzro/management/server/http"
+	authHttpHandler "github.com/openzro/openzro/management/server/http/handlers/auth"
 	"github.com/openzro/openzro/management/server/idp"
+	"github.com/openzro/openzro/management/server/mdm"
 	"github.com/openzro/openzro/management/server/metrics"
 	"github.com/openzro/openzro/management/server/networks"
 	"github.com/openzro/openzro/management/server/networks/resources"
 	"github.com/openzro/openzro/management/server/networks/routers"
+	"github.com/openzro/openzro/management/server/posture"
 	"github.com/openzro/openzro/management/server/settings"
 	mgmtStore "github.com/openzro/openzro/management/server/store"
-	flowstore "github.com/openzro/openzro/flow/store"
 	"github.com/openzro/openzro/management/server/telemetry"
 	"github.com/openzro/openzro/management/server/users"
 	"github.com/openzro/openzro/util"
@@ -327,6 +329,8 @@ var (
 			var activityExportersStore *activityExporters.Store
 			var activityExportersManager *activityExporters.Manager
 			var admissionBypassStore *admission.Store
+			var authProvidersStore *authProviders.Store
+			var authProvidersManager *authProviders.Manager
 			if sqlStore, ok := store.(*mgmtStore.SqlStore); ok {
 				flowExportsStore, err = flowExports.NewStore(sqlStore.GetGormDB(), config.DataStoreEncryptionKey)
 				if err != nil {
@@ -357,6 +361,23 @@ var (
 				admissionBypassStore, err = admission.NewStore(sqlStore.GetGormDB())
 				if err != nil {
 					return fmt.Errorf("admission bypass store: %w", err)
+				}
+				// auth/providers: configured OIDC IdPs that drive the
+				// centralized openZro-branded login (ADR-0005). Same
+				// at-rest envelope as flow_exports + mdm. Refresh
+				// pre-loads enabled rows so /login is ready as soon
+				// as the HTTP listener comes up.
+				authProvidersStore, err = authProviders.NewStore(sqlStore.GetGormDB(), config.DataStoreEncryptionKey)
+				if err != nil {
+					return fmt.Errorf("auth providers store: %w", err)
+				}
+				authProvidersManager = authProviders.NewManager(authProvidersStore, openzroBaseURL()+"/auth/callback")
+				if perRow, err := authProvidersManager.Refresh(ctx); err != nil {
+					log.WithContext(ctx).Errorf("auth providers boot refresh: %v", err)
+				} else {
+					for _, e := range perRow {
+						log.WithContext(ctx).Warnf("auth providers boot: %s", e.Error())
+					}
 				}
 				// Wire the posture check into the live manager. Set
 				// the package-level resolver once so every Account's
@@ -439,7 +460,38 @@ var (
 			bypassEmitter := func(ctx context.Context, initiatorID, targetID, accountID string, code activity.Activity, meta map[string]any) {
 				accountManager.StoreEvent(ctx, initiatorID, targetID, accountID, code, meta)
 			}
-			httpAPIHandler, err := nbhttp.NewAPIHandler(ctx, accountManager, networksManager, resourcesManager, routersManager, groupsManager, geo, authManager, appMetrics, integratedPeerValidator, proxyController, permissionsManager, peersManager, settingsManager, flowStore, flowExportsStore, flowExportsManager, mdmStore, mdmManager, activityExportersStore, activityExportersManager, admissionBypassStore, bypassEmitter)
+
+			// Centralized openZro-branded login (ADR-0005). The handler
+			// is wired only when OPENZRO_BASE_URL is set: that's the
+			// public URL the upstream IdP redirects back to, which
+			// must match the redirect_uri whitelisted in each
+			// AuthenticationProvider's app config. Without it,
+			// /login + /auth/* stay dormant and the legacy single-IdP
+			// path keeps owning auth.
+			var centralizedAuth *authHttpHandler.Handler
+			if base := openzroBaseURL(); base != "" && authProvidersManager != nil {
+				sealer, err := authHttpHandler.NewStateCookieSealer(config.DataStoreEncryptionKey)
+				if err != nil {
+					return fmt.Errorf("auth state sealer: %w", err)
+				}
+				sessions, err := authHttpHandler.NewSessionService(config.DataStoreEncryptionKey)
+				if err != nil {
+					return fmt.Errorf("auth session service: %w", err)
+				}
+				secureCookies := strings.HasPrefix(strings.ToLower(base), "https://")
+				h, err := authHttpHandler.NewHandler(authProvidersManager, sealer, sessions,
+					authHttpHandler.WithSecureCookies(secureCookies),
+					authHttpHandler.WithEventEmitter(bypassEmitter),
+				)
+				if err != nil {
+					return fmt.Errorf("auth handler: %w", err)
+				}
+				centralizedAuth = h
+			} else if authProvidersManager != nil {
+				log.WithContext(ctx).Infof("OPENZRO_BASE_URL not set — /login + /auth/* dormant; admin CRUD for AuthenticationProvider remains active")
+			}
+
+			httpAPIHandler, err := nbhttp.NewAPIHandler(ctx, accountManager, networksManager, resourcesManager, routersManager, groupsManager, geo, authManager, appMetrics, integratedPeerValidator, proxyController, permissionsManager, peersManager, settingsManager, flowStore, flowExportsStore, flowExportsManager, mdmStore, mdmManager, activityExportersStore, activityExportersManager, admissionBypassStore, bypassEmitter, authProvidersStore, authProvidersManager, bypassEmitter, centralizedAuth)
 
 			if err != nil {
 				return fmt.Errorf("failed creating HTTP API handler: %v", err)
@@ -913,4 +965,18 @@ func migrateToOpenzro(oldPath, newPath string) bool {
 	}
 
 	return true
+}
+
+// openzroBaseURL returns the operator-configured public URL the
+// management is served at — the prefix the centralized /login
+// surface uses to build redirect URIs. Empty string means
+// "feature dormant"; the legacy single-IdP path keeps working.
+//
+// Read from env at every call (cheap) so a bootstrap restart
+// after `export OPENZRO_BASE_URL=…` picks it up without a code
+// change. Trailing "/" is trimmed so callers can append paths
+// like "/auth/callback" without doubling slashes.
+func openzroBaseURL() string {
+	v := strings.TrimSpace(os.Getenv("OPENZRO_BASE_URL"))
+	return strings.TrimRight(v, "/")
 }
