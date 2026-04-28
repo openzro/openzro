@@ -3,10 +3,17 @@
 // JSON blob whose shape depends on `type` — see ConnectorConfig
 // below for the per-type schemas the dashboard form composes.
 
+// `keycloak` and `okta` are UI-only labels — Dex's storage doesn't have
+// dedicated connectors for them; both are persisted as `oidc`. We keep
+// the visual distinction by sniffing the issuer URL on round-trip
+// (see inferConnectorType below) and by mapping back to `oidc` on save
+// (see dexConnectorType). The trade-off is documented in ADR-0006.
 export type ConnectorType =
   | "google"
   | "github"
   | "microsoft"
+  | "keycloak"
+  | "okta"
   | "oidc"
   | "ldap"
   | "saml";
@@ -98,18 +105,95 @@ export const CONNECTOR_TYPES: ConnectorTypeMeta[] = [
     description: "Microsoft Entra ID / Azure AD (multi-tenant or per-tenant)",
   },
   {
+    value: "keycloak",
+    label: "Keycloak",
+    description:
+      "Self-hosted Keycloak realm. Issuer is realm-scoped, e.g. https://kc.example.com/realms/master.",
+  },
+  {
+    value: "okta",
+    label: "Okta",
+    description:
+      "Okta Workforce / Customer Identity. Issuer is your Okta domain, e.g. https://your-tenant.okta.com.",
+  },
+  {
     value: "oidc",
     label: "Generic OIDC",
     description:
-      "Any OIDC-compliant IdP (Okta, Auth0, Keycloak, Authentik, Zitadel, …)",
+      "Any other OIDC-compliant IdP (Auth0, Authentik, Zitadel, Google IDaaS, …).",
   },
 ];
 
-// Default redirect URI Dex expects for every connector. Same
-// path regardless of connector type; the operator's IdP must
-// whitelist it. Computed from window.location.origin at form
-// render time.
-export function defaultRedirectURI(): string {
-  if (typeof window === "undefined") return "";
-  return `${window.location.origin}/dex/callback`;
+// Callback URL the **upstream IdP** (Keycloak, Okta, Google, …)
+// redirects to after authenticating the user. The OIDC flow goes:
+// dashboard → Dex → upstream IdP → Dex → dashboard. The redirect
+// at the connector level lands on Dex's own /callback, NOT the
+// dashboard's — Dex is the one with the connector state and code
+// verifier; it then re-issues its own auth code to the dashboard.
+// This must match what the operator whitelists in their IdP.
+//
+// Computed from the dashboard's authority config (which already
+// points at Dex's issuer URL — `http://localhost:5556` in dev,
+// `https://<domain>/dex` in production).
+export function defaultRedirectURI(authority: string): string {
+  if (!authority) return "";
+  return `${authority.replace(/\/+$/, "")}/callback`;
+}
+
+// Dex collapses Keycloak/Okta into the generic `oidc` connector. We
+// preserve the UI label by sniffing the issuer URL on round-trip:
+//   - `*.okta.com` / `*.oktapreview.com` → "okta"
+//   - any path containing `/realms/`        → "keycloak"
+//   - everything else                       → "oidc"
+// Native types (google/github/microsoft/ldap/saml) pass through.
+export function inferConnectorType(
+  type: ConnectorType | string,
+  config: unknown,
+): ConnectorType | string {
+  if (type !== "oidc") return type;
+
+  const issuer =
+    config && typeof config === "object" && "issuer" in config &&
+    typeof (config as { issuer?: unknown }).issuer === "string"
+      ? (config as { issuer: string }).issuer.trim()
+      : "";
+  if (!issuer) return "oidc";
+
+  let url: URL;
+  try {
+    url = new URL(issuer);
+  } catch {
+    return "oidc";
+  }
+
+  const host = url.host.toLowerCase();
+  if (host.endsWith(".okta.com") || host.endsWith(".oktapreview.com")) {
+    return "okta";
+  }
+  if (/\/realms\//.test(url.pathname)) {
+    return "keycloak";
+  }
+  return "oidc";
+}
+
+// Map a UI-side ConnectorType back to what Dex actually persists.
+// The UI offers Keycloak/Okta as separate dropdown entries for clarity,
+// but Dex's storage only knows the generic `oidc` connector for both.
+export function dexConnectorType(t: ConnectorType): ConnectorType {
+  if (t === "keycloak" || t === "okta") return "oidc";
+  return t;
+}
+
+// Issuer URL placeholder per UI type. Helps operators get the shape
+// right on first try (the URL pattern is what powers inferConnectorType
+// on the round-trip).
+export function issuerPlaceholder(t: ConnectorType): string {
+  switch (t) {
+    case "keycloak":
+      return "https://kc.example.com/realms/master";
+    case "okta":
+      return "https://your-tenant.okta.com";
+    default:
+      return "https://idp.example.com";
+  }
 }
