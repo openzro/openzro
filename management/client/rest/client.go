@@ -3,7 +3,6 @@ package rest
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +14,7 @@ import (
 type Client struct {
 	managementURL string
 	authHeader    string
+	userAgent     string
 	httpClient    HttpClient
 
 	// Accounts Openzro account APIs
@@ -60,6 +60,19 @@ type Client struct {
 	// DNS Openzro DNS APIs
 	// see more: https://docs.openzro.io/api/resources/routes
 	DNS *DNSAPI
+
+	// DNSZones Openzro DNS-as-a-Service APIs (zones + records).
+	// Consumed primarily by openzro/openzro-operator's NetworkResource
+	// controller. Server-side handlers are tracked separately —
+	// see ADR-TBD on DNS Zones.
+	DNSZones *DNSZonesAPI
+
+	// ReverseProxyServices Openzro reverse-proxy Services API.
+	// Consumed by openzro/openzro-operator's HTTPRoute controller,
+	// which materialises Gateway API HTTPRoutes as services.
+	// Server-side handlers tracked separately — see
+	// project_enterprise_gaps.md "Reverse-proxy Services".
+	ReverseProxyServices *ReverseProxyServicesAPI
 
 	// GeoLocation Openzro Geo Location APIs
 	// see more: https://docs.openzro.io/api/resources/geo-locations
@@ -112,6 +125,8 @@ func (c *Client) initialize() {
 	c.Networks = &NetworksAPI{c}
 	c.Routes = &RoutesAPI{c}
 	c.DNS = &DNSAPI{c}
+	c.DNSZones = &DNSZonesAPI{c}
+	c.ReverseProxyServices = &ReverseProxyServicesAPI{c}
 	c.GeoLocation = &GeoLocationAPI{c}
 	c.Events = &EventsAPI{c}
 }
@@ -128,6 +143,9 @@ func (c *Client) NewRequest(ctx context.Context, method, path string, body io.Re
 	if body != nil {
 		req.Header.Add("Content-Type", "application/json")
 	}
+	if c.userAgent != "" {
+		req.Header.Set("User-Agent", c.userAgent)
+	}
 
 	if len(query) != 0 {
 		q := req.URL.Query()
@@ -143,12 +161,16 @@ func (c *Client) NewRequest(ctx context.Context, method, path string, body io.Re
 	}
 
 	if resp.StatusCode > 299 {
+		// Surface a typed *APIError so callers (notably reconcilers
+		// in openzro/openzro-operator) can branch on the HTTP status
+		// via errors.As / IsNotFound / IsConflict / etc. We still
+		// fall through to the parsed message body so the error
+		// message remains human-readable.
 		parsedErr, pErr := parseResponse[util.ErrorResponse](resp)
 		if pErr != nil {
-
-			return nil, pErr
+			return nil, &APIError{StatusCode: resp.StatusCode, Message: pErr.Error()}
 		}
-		return nil, errors.New(parsedErr.Message)
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: parsedErr.Message}
 	}
 
 	return resp, nil

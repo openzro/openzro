@@ -27,6 +27,31 @@ func (a *GroupsAPI) List(ctx context.Context) ([]api.Group, error) {
 	return ret, err
 }
 
+// GetByName looks up a group by its display name. Returns the
+// first match (group names are not strictly unique upstream — the
+// dashboard enforces uniqueness on create, but two accounts merged
+// post-fact could have collisions). Used by the operator's
+// reconcilers to resolve a CRD's `groupRef.name` to a server-side
+// group ID.
+//
+// Errors: returns a *APIError with StatusCode 404 (testable via
+// IsNotFound) when no group with that name exists in the account.
+func (a *GroupsAPI) GetByName(ctx context.Context, name string) (api.Group, error) {
+	groups, err := a.List(ctx)
+	if err != nil {
+		return api.Group{}, err
+	}
+	for _, g := range groups {
+		if g.Name == name {
+			return g, nil
+		}
+	}
+	return api.Group{}, &APIError{
+		StatusCode: 404,
+		Message:    "group not found: " + name,
+	}
+}
+
 // Get get group info
 // See more: https://docs.openzro.io/api/resources/groups#retrieve-a-group
 func (a *GroupsAPI) Get(ctx context.Context, groupID string) (*api.Group, error) {
