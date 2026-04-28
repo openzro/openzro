@@ -20,6 +20,7 @@ type Handler struct {
 	providers *providers.Manager
 	sealer    *StateCookieSealer
 	sessions  *SessionService
+	renderer  *loginRenderer
 
 	// httpClient is used for OIDC discovery + token-exchange HTTP
 	// calls. Tests inject a custom client (httptest); production
@@ -61,11 +62,16 @@ func WithDefaultReturnTo(p string) HandlerOption {
 // constructed by the caller from the management's data-store
 // encryption key (single key reused — same threat model as the
 // at-rest envelope).
-func NewHandler(mgr *providers.Manager, sealer *StateCookieSealer, sessions *SessionService, opts ...HandlerOption) *Handler {
+func NewHandler(mgr *providers.Manager, sealer *StateCookieSealer, sessions *SessionService, opts ...HandlerOption) (*Handler, error) {
+	renderer, err := newLoginRenderer()
+	if err != nil {
+		return nil, err
+	}
 	h := &Handler{
 		providers:       mgr,
 		sealer:          sealer,
 		sessions:        sessions,
+		renderer:        renderer,
 		httpClient:      &http.Client{Timeout: 10 * time.Second},
 		secureCookies:   true,
 		defaultReturnTo: "/peers",
@@ -73,7 +79,7 @@ func NewHandler(mgr *providers.Manager, sealer *StateCookieSealer, sessions *Ses
 	for _, o := range opts {
 		o(h)
 	}
-	return h
+	return h, nil
 }
 
 // AddEndpoints registers the auth routes onto router. Mount it on
@@ -81,6 +87,7 @@ func NewHandler(mgr *providers.Manager, sealer *StateCookieSealer, sessions *Ses
 // browser's redirect from the upstream IdP can reach
 // /auth/callback unauthenticated.
 func AddEndpoints(h *Handler, router *mux.Router) {
+	router.HandleFunc("/login", h.login).Methods(http.MethodGet)
 	router.HandleFunc("/auth/start", h.start).Methods(http.MethodGet)
 	router.HandleFunc("/auth/callback", h.callback).Methods(http.MethodGet)
 	router.HandleFunc("/auth/logout", h.logout).Methods(http.MethodPost)
