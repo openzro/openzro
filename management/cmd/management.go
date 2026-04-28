@@ -486,6 +486,36 @@ var (
 			if err != nil {
 				return fmt.Errorf("auth session service: %w", err)
 			}
+
+			// Bootstrap token (ADR-0005, Option B greenfield path).
+			// Activated by OPENZRO_ENABLE_BOOTSTRAP=true; mints a
+			// single-use token to disk and logs the /setup URL.
+			// The token is auto-invalidated by the wizard once the
+			// first provider is saved. nil store = bootstrap off.
+			var bootstrapStore *authHttpHandler.BootstrapTokenStore
+			if openzroBootstrapEnabled() && authProvidersStore != nil {
+				rows, listErr := authProvidersStore.List(ctx)
+				if listErr != nil {
+					return fmt.Errorf("bootstrap providers list: %w", listErr)
+				}
+				if len(rows) == 0 {
+					bootstrapStore, err = authHttpHandler.NewBootstrapTokenStore(config.Datadir)
+					if err != nil {
+						return fmt.Errorf("bootstrap store: %w", err)
+					}
+					token, err := bootstrapStore.EnsureMinted()
+					if err != nil {
+						return fmt.Errorf("bootstrap mint: %w", err)
+					}
+					setupURL := authHttpHandler.SetupURL(openzroBaseURL(), bootstrapStore)
+					log.WithContext(ctx).Warnf(
+						"BOOTSTRAP MODE — open %s to configure the first authentication provider (token: %s, file: %s/%s)",
+						setupURL, token, config.Datadir, authHttpHandler.BootstrapTokenFile)
+				} else {
+					log.WithContext(ctx).Infof("OPENZRO_ENABLE_BOOTSTRAP set but %d AuthenticationProvider rows already exist — bootstrap wizard inactive", len(rows))
+				}
+			}
+
 			var centralizedAuth *authHttpHandler.Handler
 			if base := openzroBaseURL(); base != "" && authProvidersManager != nil {
 				sealer, err := authHttpHandler.NewStateCookieSealer(config.DataStoreEncryptionKey)
@@ -493,10 +523,14 @@ var (
 					return fmt.Errorf("auth state sealer: %w", err)
 				}
 				secureCookies := strings.HasPrefix(strings.ToLower(base), "https://")
-				h, err := authHttpHandler.NewHandler(authProvidersManager, sealer, centralizedSessions,
+				opts := []authHttpHandler.HandlerOption{
 					authHttpHandler.WithSecureCookies(secureCookies),
 					authHttpHandler.WithEventEmitter(bypassEmitter),
-				)
+				}
+				if bootstrapStore != nil {
+					opts = append(opts, authHttpHandler.WithBootstrap(bootstrapStore, authProvidersStore))
+				}
+				h, err := authHttpHandler.NewHandler(authProvidersManager, sealer, centralizedSessions, opts...)
 				if err != nil {
 					return fmt.Errorf("auth handler: %w", err)
 				}
@@ -993,4 +1027,19 @@ func migrateToOpenzro(oldPath, newPath string) bool {
 func openzroBaseURL() string {
 	v := strings.TrimSpace(os.Getenv("OPENZRO_BASE_URL"))
 	return strings.TrimRight(v, "/")
+}
+
+// openzroBootstrapEnabled reports whether OPENZRO_ENABLE_BOOTSTRAP
+// is set to a truthy value. Used to gate the one-shot greenfield
+// /setup wizard (ADR-0005, Option B): when set on a fresh deploy
+// with no AuthenticationProvider rows, the management mints a
+// single-use token at boot and logs the URL the operator visits
+// to configure their first IdP. Once the first provider is saved
+// the wizard becomes unreachable and the variable can be unset.
+func openzroBootstrapEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("OPENZRO_ENABLE_BOOTSTRAP"))) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
 }

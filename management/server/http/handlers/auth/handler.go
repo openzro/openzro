@@ -36,6 +36,14 @@ type Handler struct {
 	renderer  *loginRenderer
 	emit      EventEmitter
 
+	// bootstrap drives the one-shot greenfield wizard at /setup.
+	// nil means bootstrap mode is off (token file absent or not
+	// enabled); /setup returns 404. Set via WithBootstrap; the
+	// store the wizard writes to is bootstrapStore (separate so
+	// nil checks stay simple).
+	bootstrap      *BootstrapTokenStore
+	bootstrapStore *providers.Store
+
 	// httpClient is used for OIDC discovery + token-exchange HTTP
 	// calls. Tests inject a custom client (httptest); production
 	// uses the default 10s-timeout client.
@@ -78,6 +86,17 @@ func WithEventEmitter(e EventEmitter) HandlerOption {
 	return func(h *Handler) { h.emit = e }
 }
 
+// WithBootstrap wires the one-shot greenfield wizard at /setup.
+// store is the providers.Store the wizard writes the first row
+// to (typically the same instance the runtime providers.Manager
+// reads from). Pass either both or neither.
+func WithBootstrap(token *BootstrapTokenStore, store *providers.Store) HandlerOption {
+	return func(h *Handler) {
+		h.bootstrap = token
+		h.bootstrapStore = store
+	}
+}
+
 // NewHandler wires the auth handler. The sealer + sessions are
 // constructed by the caller from the management's data-store
 // encryption key (single key reused — same threat model as the
@@ -106,11 +125,18 @@ func NewHandler(mgr *providers.Manager, sealer *StateCookieSealer, sessions *Ses
 // the rootRouter (no /api prefix, no auth middleware) so the
 // browser's redirect from the upstream IdP can reach
 // /auth/callback unauthenticated.
+//
+// /setup is only registered when WithBootstrap was supplied; the
+// route returns 404 in non-bootstrap deployments to keep the
+// surface invisible to scanners.
 func AddEndpoints(h *Handler, router *mux.Router) {
 	router.HandleFunc("/login", h.login).Methods(http.MethodGet)
 	router.HandleFunc("/auth/start", h.start).Methods(http.MethodGet)
 	router.HandleFunc("/auth/callback", h.callback).Methods(http.MethodGet)
 	router.HandleFunc("/auth/logout", h.logout).Methods(http.MethodPost)
+	if h.bootstrap != nil && h.bootstrapStore != nil {
+		router.HandleFunc("/setup", h.setup).Methods(http.MethodGet, http.MethodPost)
+	}
 }
 
 // randomURLString returns n bytes of crypto-random base64-url
