@@ -13,6 +13,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { useEffect, useState } from "react";
 import { OIDCError } from "@/auth/OIDCError";
 import { SecureProvider } from "@/auth/SecureProvider";
+import { SessionLost } from "@/auth/SessionLost";
 
 type Props = {
   children: React.ReactNode;
@@ -112,8 +113,15 @@ export default function OIDCProvider({ children }: Props) {
       loadingComponent={FullScreenLoading}
       callbackSuccessComponent={CallBackSuccess}
       onEvent={onEvent}
-      onSessionLost={() => void 0}
-      //sessionLostComponent={SessionLost}
+      // The lib's session-lost path renders sessionLostComponent ONLY
+      // when onSessionLost is null/undefined — otherwise the handler
+      // short-circuits the render (see @axa-fr/react-oidc dist
+      // index.js: refreshTokensAsync_error / syncTokensAsync_error).
+      // Leaving onSessionLost out lets SessionLost render and trigger
+      // a clean logout, so a stale/invalid token (Dex restart in dev,
+      // signing key rotation, expired refresh token in prod) ends in
+      // a re-login flow instead of silent stuck-with-bad-Bearer.
+      sessionLostComponent={SessionLost}
     >
       <SecureProvider>{children}</SecureProvider>
     </OidcProvider>

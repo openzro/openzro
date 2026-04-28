@@ -3,20 +3,31 @@ import Button from "@components/Button";
 import Paragraph from "@components/Paragraph";
 import loadConfig from "@utils/config";
 import { LogIn } from "lucide-react";
-import { useRouter } from "next/navigation";
 import * as React from "react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import OpenzroIcon from "@/assets/icons/OpenzroIcon";
 
 const config = loadConfig();
 
+// Rendered by @axa-fr/react-oidc when refresh/sync fails — i.e. the
+// stored token can no longer be validated against the issuer (Dex
+// restart in dev, signing key rotation, expired refresh token, etc.).
+// We trigger logout() on mount so the lib clears its session storage
+// and bounces the user back to the IdP's login page; the visible UI
+// is a one-frame fallback in case the redirect takes a moment, with
+// a manual button if it doesn't fire (e.g. logout endpoint unreachable).
 export const SessionLost = () => {
-  const router = useRouter();
   const { logout } = useOidc();
+  const triggered = useRef(false);
 
   useEffect(() => {
-    router.push("/peers");
-  });
+    if (triggered.current) return;
+    triggered.current = true;
+    // Empty post-logout target = the dashboard origin. After Dex
+    // logs the user out, the dashboard root re-arms the OIDC flow
+    // and pushes them through the login form again.
+    void logout("", { client_id: config.clientId });
+  }, [logout]);
 
   return (
     <div
@@ -33,8 +44,7 @@ export const SessionLost = () => {
       </div>
       <h1>Session Expired</h1>
       <Paragraph className={"text-center"}>
-        It looks like your login session is no longer active or has expired.
-        Please login again to continue using the app.
+        Your session is no longer active. Redirecting you to sign in again…
       </Paragraph>
       <Button
         variant={"primary"}
