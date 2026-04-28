@@ -1,11 +1,15 @@
 /* openZro brand theme for Dex.
  *
- * Override Dex's stock light theme to match the dashboard's
- * design tokens (see dashboard/src/app/globals.css and the
- * brand rules in /CLAUDE.md). Dark mode follows prefers-color-scheme.
+ * Forces a single dark, branded look (matches the dashboard's dark
+ * mode tokens — see dashboard/src/app/globals.css and the brand
+ * rules in /CLAUDE.md). The login screen is opinionated: one polished
+ * dark surface regardless of prefers-color-scheme, like Linear / Vercel.
  *
- * Class names come from Dex's templates (web/templates/*.html);
- * we override the visual without touching HTML.
+ * Class names come from Dex's stock templates (web/templates/*.html)
+ * — we override the visual without forking HTML. The navbar/logo
+ * block is hidden; the logo is re-injected above the panel via
+ * .dex-container::before so the layout reads as a single centered
+ * lockup + form.
  */
 
 :root {
@@ -17,31 +21,29 @@
   --oz-violet-500: #8b5cf6;
   --oz-violet-600: #7c3aed;
   --oz-violet-700: #6d28d9;
+  --oz-violet-800: #5b21b6;
   --oz-violet-900: #4c1d95;
-  --oz-ink:    #0f0a1f;
-  --oz-ink-2:  #1a1330;
 
-  --oz-bg:        #ffffff;
-  --oz-bg-soft:   var(--oz-violet-50);
-  --oz-text:      var(--oz-ink);
-  --oz-text-muted: #6b7280;
-  --oz-border:    var(--oz-violet-200);
-  --oz-primary:       var(--oz-violet-600);
-  --oz-primary-hover: var(--oz-violet-700);
+  --oz-ink:    #0f0a1f;
+  --oz-ink-2:  #15102a;
+  --oz-ink-3:  #1a1330;
+
+  --oz-bg:            var(--oz-ink);
+  --oz-bg-panel:      var(--oz-ink-2);
+  --oz-bg-input:      var(--oz-ink-3);
+  --oz-text:          #ffffff;
+  --oz-text-muted:    #9ca3af;
+  --oz-text-subtle:   #6b7280;
+  --oz-border:        rgba(167, 139, 250, 0.18);
+  --oz-border-strong: rgba(167, 139, 250, 0.32);
+  --oz-primary:       var(--oz-violet-500);
+  --oz-primary-hover: var(--oz-violet-400);
 
   --oz-sans: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --oz-bg:        var(--oz-ink);
-    --oz-bg-soft:   var(--oz-ink-2);
-    --oz-text:      #ffffff;
-    --oz-text-muted: #9ca3af;
-    --oz-border:    #2d2347;
-    --oz-primary:       var(--oz-violet-500);
-    --oz-primary-hover: var(--oz-violet-400);
-  }
+html, body {
+  background-color: var(--oz-bg);
 }
 
 .theme-body {
@@ -49,76 +51,227 @@
   color: var(--oz-text);
   font-family: var(--oz-sans);
   letter-spacing: -0.01em;
+  /* Vertical-center the dex-container by turning the body into a flex
+   * column. min-height fills the viewport so short forms still center. */
+  min-height: 100vh;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
 }
 
+/* Subtle violet glow at the top so the page doesn't feel flat-black. */
+body.theme-body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(800px 400px at 50% -10%, rgba(124, 58, 237, 0.18), transparent 60%),
+    radial-gradient(600px 400px at 100% 100%, rgba(91, 33, 182, 0.10), transparent 70%);
+  z-index: 0;
+}
+
+/* The default Dex navbar is hidden — we re-render the logo above the
+ * panel inside .dex-container so the lockup + form reads as one unit. */
 .theme-navbar {
-  background-color: var(--oz-bg);
-  border-bottom: 1px solid var(--oz-border);
-  color: var(--oz-text);
+  display: none;
 }
 
-.theme-navbar__logo-wrap {
-  padding: 12px 15px;
+.dex-container {
+  position: relative;
+  z-index: 1;
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 48px 20px;
+  text-align: center;
 }
 
-.theme-navbar__logo {
-  max-height: 32px;
-  width: auto;
+/* Logo above the panel — pseudo-element keeps Dex's HTML untouched. */
+.dex-container::before {
+  content: '';
+  display: block;
+  width: 220px;
+  height: 56px;
+  margin-bottom: 32px;
+  background-image: url('logo-dark.png');
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+/* Card / panel — the centered surface holding the form. */
+.theme-panel {
+  background-color: var(--oz-bg-panel);
+  border: 1px solid var(--oz-border);
+  border-radius: 16px;
+  box-shadow:
+    0 24px 64px -16px rgba(0, 0, 0, 0.5),
+    0 1px 0 0 rgba(255, 255, 255, 0.04) inset;
+  padding: 40px 44px;
+  width: 100%;
+  max-width: 420px;
+  text-align: left;
 }
 
 .theme-heading {
+  color: var(--oz-text);
+  font-family: var(--oz-sans);
   font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  color: var(--oz-text);
+  margin: 0 0 8px;
+  text-align: left;
 }
 
-.theme-panel {
-  background-color: var(--oz-bg);
-  border: 1px solid var(--oz-border);
-  border-radius: 12px;
-  box-shadow: 0 4px 16px rgba(76, 29, 149, 0.08), 0 1px 2px rgba(76, 29, 149, 0.04);
-  padding: 36px;
+/* Subtle helper line under the heading — Dex's templates don't render
+ * one, but if we ever add a `<p class="dex-subtle-text">` it will
+ * inherit this. Keeps the rule cheap. */
+.dex-subtle-text {
+  color: var(--oz-text-muted);
+  font-size: 13px;
 }
 
-@media (prefers-color-scheme: dark) {
-  .theme-panel {
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
-  }
+/* "Log in with X" connector buttons (Google / GitHub / OIDC / …).
+ *
+ * Layout: icon tile on the left, text in the middle, a chevron on the
+ * right that slides on hover to reinforce "this navigates somewhere".
+ * Dex's HTML stamps `<span class="dex-btn-icon dex-btn-icon--{type}">`
+ * with a background-image — we keep that mechanism but normalize the
+ * tile so a Google / GitHub / Email / OIDC button all look uniform.
+ *
+ * The wrapping anchor adds extra DOM around the button; we make it
+ * full-width-block so the row hit area matches what the user sees.
+ */
+.theme-form-row > a {
+  display: block;
+  text-decoration: none;
 }
 
-/* "Log in with X" connector buttons (Google/GitHub/etc.) */
 .theme-btn-provider {
-  background-color: var(--oz-bg-soft);
-  border: 1px solid var(--oz-border);
-  border-radius: 10px;
+  /* Borderless — relies on the faint surface tint + hover state for
+   * affordance, like Linear/Vercel. Slightly stronger bg than the
+   * panel so the row still reads as a target without an outline. */
+  background-color: rgba(255, 255, 255, 0.04);
+  border: none;
+  border-radius: 12px;
   color: var(--oz-text);
   font-family: var(--oz-sans);
   font-weight: 500;
-  font-size: 15px;
-  min-width: 280px;
-  padding: 12px 18px;
-  transition: background-color 0.15s, border-color 0.15s, transform 0.05s;
+  font-size: 14.5px;
+  width: 100%;
+  min-width: 0;
+  padding: 11px 16px 11px 11px;
+  /* Flex layout: icon | text (flex-1, left-aligned) | chevron */
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+  position: relative;
+  transition: background-color 0.15s, transform 0.05s, box-shadow 0.15s;
+  cursor: pointer;
 }
 
 .theme-btn-provider:hover {
-  background-color: var(--oz-violet-100);
-  border-color: var(--oz-violet-300);
+  background-color: rgba(124, 58, 237, 0.12);
   color: var(--oz-text);
+  box-shadow: 0 4px 16px -6px rgba(124, 58, 237, 0.3);
 }
 
 .theme-btn-provider:active {
   transform: translateY(1px);
 }
 
-@media (prefers-color-scheme: dark) {
-  .theme-btn-provider:hover {
-    background-color: var(--oz-violet-900);
-    border-color: var(--oz-violet-700);
-  }
+.theme-btn-provider:focus-visible {
+  outline: 2px solid var(--oz-violet-400);
+  outline-offset: 2px;
 }
 
-/* Primary action — "Log in" submit when using staticPasswords */
+/* Icon tile — fixed-size square with a faint background so every
+ * provider's bundled glyph (Dex sets the SVG via background-image
+ * on .dex-btn-icon--{type}) sits in the same visual frame regardless
+ * of whether it's Google's white wordmark or Keycloak's OIDC default. */
+.theme-btn-provider .dex-btn-icon,
+.dex-btn-icon {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: 8px;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 22px;
+  /* Override Dex's float-left + half-pill border-radius. */
+  float: none;
+  margin: 0;
+  /* Provider-specific colors come from main.css via .dex-btn-icon--*;
+   * we keep them so the Google/GitHub buttons retain their brand
+   * coloring. The fallback below covers `local` (email) and other
+   * neutral types. */
+}
+
+/* Email / local / unknown connector — neutral violet tile so it
+ * picks up the brand instead of Dex's stock light blue. The
+ * specificity has to beat .dex-btn-icon--local in main.css. */
+.theme-btn-provider .dex-btn-icon--local,
+.dex-btn-icon--local {
+  background-color: rgba(167, 139, 250, 0.18);
+  /* Inline SVG envelope (currentColor-friendly violet). */
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a78bfa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='5' width='18' height='14' rx='2'/><path d='m3 7 9 6 9-6'/></svg>");
+}
+
+/* OIDC default (covers Keycloak / Auth0 / Authentik / Zitadel and
+ * any generic OIDC connector that doesn't have a dedicated brand
+ * icon in Dex's bundle). Dex ships a colorful pinwheel SVG that
+ * clashes with our violet palette — replace with a Lucide key-round
+ * (same icon used in the dashboard's Authentication Providers tab,
+ * settings/page.tsx) so the brand surface stays consistent. */
+.theme-btn-provider .dex-btn-icon--oidc,
+.dex-btn-icon--oidc {
+  background-color: rgba(167, 139, 250, 0.18);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a78bfa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z'/><circle cx='16.5' cy='7.5' r='.5' fill='%23a78bfa'/></svg>");
+}
+
+/* Text block fills the remaining space and keeps left-aligned, so
+ * "Log in with Keycloak" doesn't drift towards the middle when the
+ * label is short. */
+.theme-btn-provider .dex-btn-text {
+  flex: 1 1 auto;
+  text-align: left;
+  /* Dex applies `display: inline-block` upstream — flex children with
+   * implicit baseline alignment can shift; explicit centering below. */
+  line-height: 1.2;
+}
+
+/* Chevron on the right — slides on hover to reinforce "navigates
+ * somewhere". Inline Lucide chevron-right (matches the line/stroke
+ * style of the connector icons). 20px keeps it readable next to the
+ * 36px icon tile without crowding it; the 6px hover slide is large
+ * enough to read as motion at this size. Pure CSS, no extra DOM. */
+.theme-btn-provider::after {
+  content: "";
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  margin-left: 4px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a78bfa' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='m9 18 6-6-6-6'/></svg>");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 18px;
+  opacity: 0.45;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+.theme-btn-provider:hover::after {
+  transform: translateX(6px);
+  opacity: 1;
+}
+
+/* Primary action ("Login" submit). */
 .theme-btn--primary {
   background-color: var(--oz-primary);
   border: none;
@@ -126,10 +279,15 @@
   color: #ffffff;
   font-family: var(--oz-sans);
   font-weight: 600;
-  font-size: 15px;
-  min-width: 220px;
+  font-size: 14.5px;
+  width: 100%;
+  min-width: 0;
   padding: 12px 22px;
-  transition: background-color 0.15s, transform 0.05s;
+  margin-top: 8px;
+  transition: background-color 0.15s, transform 0.05s, box-shadow 0.15s;
+  cursor: pointer;
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.08) inset,
+              0 8px 24px -8px rgba(124, 58, 237, 0.6);
 }
 
 .theme-btn--primary:hover {
@@ -142,7 +300,7 @@
 }
 
 .theme-btn--primary:focus-visible {
-  outline: 2px solid var(--oz-violet-500);
+  outline: 2px solid var(--oz-violet-400);
   outline-offset: 2px;
 }
 
@@ -156,54 +314,101 @@
   background-color: var(--oz-primary-hover);
 }
 
+/* Form layout. Dex's row wraps label + input pairs. */
 .theme-form-row {
-  margin: 18px auto;
+  margin: 14px 0;
+  width: 100%;
 }
 
 .theme-form-input {
-  background-color: var(--oz-bg);
+  background-color: var(--oz-bg-input);
   border: 1px solid var(--oz-border);
   border-radius: 10px;
   color: var(--oz-text);
+  display: block;
   font-family: var(--oz-sans);
   font-size: 14px;
   height: 42px;
+  margin: 0;
   padding: 8px 14px;
-  width: 280px;
+  width: 100%;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.theme-form-input::placeholder {
+  color: var(--oz-text-subtle);
 }
 
 .theme-form-input:focus,
 .theme-form-input:active {
   border-color: var(--oz-primary);
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
   outline: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  .theme-form-input {
-    background-color: var(--oz-bg-soft);
-  }
-  .theme-form-input:focus,
-  .theme-form-input:active {
-    box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.18);
-  }
-}
-
 .theme-form-label {
-  color: var(--oz-text);
+  color: var(--oz-text-muted);
+  display: block;
   font-family: var(--oz-sans);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 500;
-  width: 280px;
+  letter-spacing: 0.01em;
+  margin: 0 0 6px;
+  text-align: left;
+  text-transform: uppercase;
+  width: 100%;
 }
 
 .theme-link-back {
   color: var(--oz-primary);
   font-family: var(--oz-sans);
+  font-size: 13px;
+  margin-top: 18px;
+  text-align: center;
+}
+
+.theme-link-back a {
+  color: var(--oz-primary);
+  text-decoration: none;
+}
+.theme-link-back a:hover {
+  color: var(--oz-primary-hover);
+  text-decoration: underline;
 }
 
 .theme-remember-me {
-  color: var(--oz-text);
+  color: var(--oz-text-muted);
   font-family: var(--oz-sans);
-  width: 280px;
+  font-size: 13px;
+  width: 100%;
+  margin: 6px 0 4px;
+}
+
+/* Validation / error box (Dex renders this when login fails). */
+.dex-error-box {
+  background-color: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 10px;
+  color: #fca5a5;
+  font-family: var(--oz-sans);
+  font-size: 13px;
+  margin: 12px 0;
+  padding: 10px 14px;
+  text-align: left;
+}
+
+/* Mobile: tighter padding so the panel doesn't crop on narrow screens. */
+@media (max-width: 480px) {
+  .dex-container {
+    padding: 32px 16px;
+  }
+  .theme-panel {
+    padding: 28px 22px;
+    border-radius: 14px;
+  }
+  .dex-container::before {
+    width: 180px;
+    height: 48px;
+    margin-bottom: 24px;
+  }
 }
