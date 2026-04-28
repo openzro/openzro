@@ -73,14 +73,26 @@ jobs:
 
       - name: Decide goreleaser flags
         id: flags
+        env:
+          # Resolves to "" when the secret isn't configured (GH Actions
+          # silently substitutes empty); we use that as the signal to
+          # skip the brew step instead of letting goreleaser fail at
+          # push-time. Once the org creates openzro/homebrew-tap and
+          # adds the secret, this branch flips automatically.
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.snapshot }}" = "true" ]; then
-            echo "args=release --clean --snapshot --skip=publish" >> "$GITHUB_OUTPUT"
+            args="release --clean --snapshot --skip=publish"
           elif [ "${{ github.event_name }}" = "push" ]; then
-            echo "args=release --clean" >> "$GITHUB_OUTPUT"
+            args="release --clean"
           else
-            echo "args=release --clean --snapshot --skip=publish" >> "$GITHUB_OUTPUT"
+            args="release --clean --snapshot --skip=publish"
           fi
+          if [ -z "$HOMEBREW_TAP_TOKEN" ]; then
+            args="$args --skip=homebrew"
+            echo "::notice::HOMEBREW_TAP_TOKEN not set — skipping brew formula push (ADR-0007 Stage 5)"
+          fi
+          echo "args=$args" >> "$GITHUB_OUTPUT"
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
@@ -89,6 +101,12 @@ jobs:
           args: ${{ steps.flags.outputs.args }} --config .goreleaser.binaries.yaml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Always export — goreleaser's brews template references
+          # `{{ .Env.HOMEBREW_TAP_TOKEN }}` and would error on a
+          # truly-undefined env var. Empty string is fine; the
+          # `--skip=homebrew` flag (set above when token is absent)
+          # bypasses the brews step entirely.
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
       - name: Upload snapshot artifacts
         if: github.event_name != 'push'
@@ -207,6 +225,362 @@ jobs:
             dist/*.tar.gz
             dist/openzro-ui_darwin_checksums.txt
           retention-days: 14
+
+  release_msi:
+    name: Build Windows MSI installer (unsigned)
+    runs-on: windows-latest
+    # Only on tag push — needs the GH Release to exist (so we can
+    # download the openzro / openzro-ui Windows zips that the
+    # `release` and `release_ui` jobs uploaded). Snapshot builds
+    # skip the MSI; users can grab the .zip from artifacts.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [release, release_ui]
+    permissions:
+      contents: write   # gh release upload
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          # Two version forms emit:
+          #
+          #   - `version`  : SemVer-flavoured, with the leading `v`
+          #     stripped — used in artifact filenames so MSI users
+          #     see `openzro_0.53.1-alpha.1_windows_amd64.msi` (matches
+          #     what `useLatestRelease()` regex in the dashboard expects).
+          #
+          #   - `msi_version` : strict Major.Minor.Build.Revision
+          #     numeric. WiX rejects pre-release suffixes (`-alpha.1`)
+          #     and complains "version is not a four-part dot-numeric".
+          #     We coerce by promoting the tail of the pre-release
+          #     identifier to Revision (so `0.53.1-alpha.1` →
+          #     `0.53.1.1`, stable `0.53.1` → `0.53.1.0`). Upgrade
+          #     ordering between alpha.N and the eventual stable is
+          #     correct: `0.53.1.1` < `0.53.1.0` is false (1 > 0)
+          #     so the stable revision has its own "1" continuation
+          #     — re-tag the operator MSI on stable as `0.53.1.99`
+          #     or similar if pre-release count exceeded that.
+          TAG="${GITHUB_REF_NAME}"
+          SEMVER="${TAG#v}"
+          BASE="${SEMVER%%-*}"
+          PRE="${SEMVER#${BASE}}"
+          if [ -n "$PRE" ]; then
+            # PRE looks like "-alpha.1" — take the trailing number.
+            REVISION="${PRE##*.}"
+            # If the pre-release had no dotted number (e.g. just
+            # "-alpha"), coerce to 0.
+            case "$REVISION" in
+              ''|*[!0-9]*) REVISION=0 ;;
+            esac
+          else
+            REVISION=0
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${SEMVER}" >> "$GITHUB_OUTPUT"
+          echo "msi_version=${BASE}.${REVISION}" >> "$GITHUB_OUTPUT"
+
+      - name: Stage binaries from GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $stage = "dist\openzro_windows_amd64"
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+
+          # The CLI/daemon zip and the desktop UI zip both ship a
+          # single .exe at the archive root (openzro.exe and
+          # openzro-ui.exe respectively). Goreleaser names them
+          # `openzro_<v>_windows_amd64.zip` / `openzro-ui_<v>_windows_amd64.zip`.
+          gh release download "${{ steps.ver.outputs.tag }}" `
+            --repo "${{ github.repository }}" `
+            --pattern "openzro_*_windows_amd64.zip" `
+            --pattern "openzro-ui_*_windows_amd64.zip" `
+            --dir "dist"
+
+          Get-ChildItem "dist\openzro*_windows_amd64.zip" | ForEach-Object {
+            Write-Host "Extracting $($_.Name)"
+            Expand-Archive -Path $_.FullName -DestinationPath $stage -Force
+          }
+
+          Get-ChildItem $stage
+
+      - name: Download wintun driver
+        shell: pwsh
+        run: |
+          # Canonical source — wintun.net is operated by the
+          # WireGuard team. SHA matches the same archive we use in
+          # golang-test-windows.yml so the dev-test and release
+          # builds bundle bit-identical drivers.
+          $url  = "https://www.wintun.net/builds/wintun-0.14.1.zip"
+          $sha  = "07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51"
+
+          Invoke-WebRequest -Uri $url -OutFile "wintun.zip"
+          $got = (Get-FileHash -Algorithm SHA256 "wintun.zip").Hash.ToLower()
+          if ($got -ne $sha) {
+            throw "wintun.zip SHA256 mismatch: expected $sha, got $got"
+          }
+
+          Expand-Archive -Path "wintun.zip" -DestinationPath "wintun-extract" -Force
+          Copy-Item "wintun-extract\wintun\bin\amd64\wintun.dll" `
+            "dist\openzro_windows_amd64\wintun.dll" -Force
+
+      - name: Install WiX 4 toolset
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 4.0.5
+          # The dotnet tools dir lands on PATH only for new shells —
+          # a fresh pwsh step picks it up automatically, but emit
+          # the version here as a smoke test.
+          wix --version
+
+      - name: Add WiX Util extension
+        shell: pwsh
+        run: |
+          # The wxs uses <util:CloseApplication>, which lives in the
+          # Util extension. `wix extension add -g` registers it in
+          # the global cache so `wix build -ext WixToolset.Util.wixext`
+          # picks it up.
+          wix extension add -g WixToolset.Util.wixext/4.0.5
+
+      - name: Build MSI
+        shell: pwsh
+        env:
+          # WiX's <Package Version="$(env.OPENZRO_VERSION)"> reads
+          # this env var and rejects anything not Major.Minor.Build
+          # [.Revision] all-numeric. The msi_version output coerces
+          # pre-release tags into the dot-numeric form (see the
+          # version step's comment).
+          OPENZRO_VERSION: ${{ steps.ver.outputs.msi_version }}
+        run: |
+          # Artifact name keeps the SemVer flavour for users who
+          # download manually + for the dashboard's useLatestRelease
+          # asset regex.
+          $msi = "dist\openzro_${{ steps.ver.outputs.version }}_windows_amd64.msi"
+          wix build client/openzro.wxs `
+            -ext WixToolset.Util.wixext `
+            -arch x64 `
+            -out $msi
+          if (-not (Test-Path $msi)) {
+            throw "MSI build did not produce $msi"
+          }
+          Write-Host "Built $msi ($([math]::Round((Get-Item $msi).Length/1MB, 1)) MB)"
+          Write-Host "MSI Package Version: ${{ steps.ver.outputs.msi_version }}"
+
+      - name: Upload MSI to GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ steps.ver.outputs.tag }}" `
+            "dist\openzro_${{ steps.ver.outputs.version }}_windows_amd64.msi" `
+            --repo "${{ github.repository }}" --clobber
+
+  release_pkg:
+    name: Build macOS PKG installer (unsigned)
+    runs-on: macos-14
+    # Tag push only — pkgbuild needs the universal CLI + UI tarballs
+    # that the `release` and `release_ui_macos` jobs upload to the
+    # GitHub Release. Snapshot users get the .tar.gz from artifacts.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [release, release_ui_macos]
+    permissions:
+      contents: write   # gh release upload
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        run: |
+          # pkgbuild accepts SemVer-flavoured strings (it stores them
+          # verbatim in `pkg-info`'s `version` attribute and only
+          # compares them via macOS's looser version-parser, which
+          # tolerates pre-release tails). We still emit a `pkg_version`
+          # that matches the MSI's dot-numeric form so the release
+          # tooling can use one canonical numeric version when
+          # publishing to operator-managed channels (e.g.
+          # pkg.openzro.io/macos/<arch>/openzro-<pkg_version>.pkg
+          # for stable URLs that don't fight the macOS Installer).
+          TAG="${GITHUB_REF_NAME}"
+          SEMVER="${TAG#v}"
+          BASE="${SEMVER%%-*}"
+          PRE="${SEMVER#${BASE}}"
+          if [ -n "$PRE" ]; then
+            REVISION="${PRE##*.}"
+            case "$REVISION" in
+              ''|*[!0-9]*) REVISION=0 ;;
+            esac
+          else
+            REVISION=0
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${SEMVER}" >> "$GITHUB_OUTPUT"
+          echo "pkg_version=${BASE}.${REVISION}" >> "$GITHUB_OUTPUT"
+
+      - name: Stage binaries from GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p pkg-stage/usr/local/bin
+          mkdir -p downloads
+
+          # Both archives are universal (fat amd64+arm64) — the CLI
+          # via goreleaser's universal_binaries feature, the UI via
+          # `name_template: …_darwin_universal` in
+          # .goreleaser.ui-darwin.yaml.
+          gh release download "${{ steps.ver.outputs.tag }}" \
+            --repo "${{ github.repository }}" \
+            --pattern 'openzro_*_darwin_all.tar.gz' \
+            --pattern 'openzro-ui_*_darwin_universal.tar.gz' \
+            --dir downloads
+
+          for f in downloads/*.tar.gz; do
+            echo "Extracting $f"
+            tar -xzf "$f" -C pkg-stage/usr/local/bin/ \
+              --strip-components=0
+          done
+
+          # tar may have created a CHANGELOG/README sibling; we only
+          # want the executables in /usr/local/bin/. Goreleaser
+          # archives ship just the binary at the archive root, so
+          # this is normally a no-op.
+          find pkg-stage/usr/local/bin -type f ! -name 'openzro*' -delete
+
+          chmod 0755 pkg-stage/usr/local/bin/*
+          ls -la pkg-stage/usr/local/bin/
+
+      - name: Author postinstall script
+        run: |
+          set -euo pipefail
+          mkdir -p pkg-scripts
+
+          cat > pkg-scripts/postinstall <<'POSTINSTALL'
+          #!/bin/bash
+          # openZro pkg postinstall — register the daemon via the
+          # binary's built-in `service install` (kardianos/service
+          # writes a /Library/LaunchDaemons/io.openzro.client.plist).
+          # Failures are non-fatal: the package still installs the
+          # binaries, the user can run `sudo openzro service install`
+          # by hand if anything blocks here.
+          set -u
+          /usr/local/bin/openzro service install >/dev/null 2>&1 || true
+          /usr/local/bin/openzro service start   >/dev/null 2>&1 || true
+          exit 0
+          POSTINSTALL
+          chmod 0755 pkg-scripts/postinstall
+
+      - name: Build PKG via pkgbuild
+        run: |
+          set -euo pipefail
+          PKG="dist/openzro_${{ steps.ver.outputs.version }}_darwin_universal.pkg"
+          mkdir -p dist
+
+          # pkgbuild produces a single-component .pkg. The identifier
+          # must be reverse-DNS and stable across versions (drives
+          # Apple's upgrade-detection on (re)install). The version
+          # drives <pkg-info version=…/> in the package — don't
+          # include build metadata, just dot-numeric.
+          pkgbuild \
+            --root pkg-stage \
+            --identifier io.openzro.client \
+            --version "${{ steps.ver.outputs.version }}" \
+            --install-location / \
+            --scripts pkg-scripts \
+            "$PKG"
+
+          # Sanity-check: the pkg should expand to two binaries.
+          pkgutil --payload-files "$PKG" | sort
+          ls -lh "$PKG"
+
+      - name: Upload PKG to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ steps.ver.outputs.tag }}" \
+            "dist/openzro_${{ steps.ver.outputs.version }}_darwin_universal.pkg" \
+            --repo "${{ github.repository }}" --clobber
+
+  release_dashboard:
+    name: Build + push dashboard container image
+    runs-on: ubuntu-22.04
+    # Tag-only — there's no value in re-pushing per snapshot, and
+    # the helm chart points at versioned tags. The dashboard image
+    # is what `charts/openzro/values.yaml` references via
+    # `dashboard.image.repository: ghcr.io/openzro/dashboard`. Without
+    # this job, `helm install` against the chart fails with
+    # ImagePullBackOff because no tag matching the chart's
+    # appVersion exists in ghcr.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [release]
+    permissions:
+      contents: read
+      packages: write   # push to ghcr.io/openzro/dashboard
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Install + build dashboard
+        # Output goes to dashboard/out/ via Next 15's `output: 'export'`
+        # config (see dashboard/next.config.js). The Dockerfile copies
+        # this directory into nginx's web root.
+        run: |
+          cd dashboard
+          npm ci
+          npm run build
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build + push dashboard image
+        uses: docker/build-push-action@v6
+        with:
+          context: dashboard
+          file: dashboard/docker/Dockerfile
+          push: true
+          # amd64 first; arm64 multi-arch is a follow-up (the static
+          # nginx + html bundle works on any arch, so it's a one-line
+          # `platforms: linux/amd64,linux/arm64` addition once we
+          # confirm the alpine base behaves under QEMU).
+          platforms: linux/amd64
+          tags: |
+            ghcr.io/openzro/dashboard:${{ steps.ver.outputs.version }}
+            ghcr.io/openzro/dashboard:latest
+          labels: |
+            org.opencontainers.image.title=openzro-dashboard
+            org.opencontainers.image.version=${{ steps.ver.outputs.version }}
+            org.opencontainers.image.source=https://github.com/openzro/openzro
+            org.opencontainers.image.licenses=BSD-3-Clause
 
   publish_packages:
     name: Publish APT/YUM/DNF/zypper repos to pkg.openzro.io
