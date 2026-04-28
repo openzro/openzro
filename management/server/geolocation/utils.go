@@ -181,15 +181,32 @@ func getFilenameFromURL(url string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
 	defer resp.Body.Close()
 
-	_, params, err := mime.ParseMediaType(resp.Header["Content-Disposition"][0])
+	// A non-2xx response has no useful Content-Disposition. Surface
+	// it as an error rather than panicking on the empty header below
+	// — this is the only path that hits the network from
+	// NewGeolocation, so a hard-down upstream (DNS failure, 404 from
+	// pkg.openzro.io's geo prefix, etc.) used to crash management at
+	// startup. Caller handles the error by warning + continuing
+	// without geolocation support.
+	if resp.StatusCode/100 != 2 {
+		return "", fmt.Errorf("HEAD %s: %s", url, resp.Status)
+	}
+
+	cd := resp.Header.Values("Content-Disposition")
+	if len(cd) == 0 {
+		return "", fmt.Errorf("HEAD %s: no Content-Disposition header", url)
+	}
+
+	_, params, err := mime.ParseMediaType(cd[0])
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("parse Content-Disposition: %w", err)
 	}
 
 	filename := params["filename"]
-
+	if filename == "" {
+		return "", fmt.Errorf("HEAD %s: Content-Disposition has no filename param", url)
+	}
 	return filename, nil
 }
