@@ -1,8 +1,22 @@
 # ADR-0005: openZro-branded centralized login
 
-- **Status**: Proposed
+- **Status**: Superseded by [ADR-0006 — Embed Dex as openZro's federated IdP](./0006-embed-dex.md)
 - **Date**: 2026-04-28
 - **Decision-makers**: openZro maintainers
+
+> **Superseded note (2026-04-28).** The architecture proposed
+> here was implemented across 18 commits (PR 1 through PR 8 of
+> the original plan plus wiring) but the dashboard SPA never
+> integrated with the new `/login` surface — the `@axa-fr/react-oidc`
+> shell continued forcing legacy single-IdP redirects. Closing
+> that gap required either a 400-line dashboard refactor or
+> a 700-line broker implementation on the management server.
+> Investigating the upstream NetBird Cloud architecture revealed
+> they ship Dex (a CNCF OIDC provider) rather than building a
+> broker. ADR-0006 documents the pivot to the same approach.
+> This file is preserved unchanged below for historical context;
+> the implementation it describes is being retired in stages
+> tracked under ADR-0006.
 
 ## Context
 
