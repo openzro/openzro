@@ -1,10 +1,14 @@
 openapi: 3.1.0
 servers:
-  - url: https://api.openzro.io
-    description: Default server
+  - url: https://management.example.com
+    description: Self-hosted openZro management server (replace with your own deployment URL — openZro is self-hosted only)
 info:
-  title: Openzro REST API
-  description: API to manipulate groups, rules, policies and retrieve information about peers and users
+  title: openZro REST API
+  description: |
+    API to manipulate groups, rules, policies and retrieve information
+    about peers and users on a self-hosted openZro management server.
+    Substitute the example server URL above with the host of your own
+    deployment.
   version: 0.0.1
 tags:
   - name: Users
