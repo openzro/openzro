@@ -9,27 +9,35 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Dark scale shifted from upstream NetBird's neutral grays to a
+        // violet-undertone palette — same lightness curve, but every
+        // shade leans toward the brand violet (--oz-ink at the bottom,
+        // gradually less violet as the scale lightens). Keeps the
+        // sidebar / cards visibly "openZro" without going saturated
+        // purple. CLAUDE.md tokens `--oz-ink` (#0f0a1f) and
+        // `--oz-ink-2` (#1a1330) anchor the deep end. Light end stays
+        // close to neutral so light-mode (still WIP) reads correctly.
         "nb-gray": {
-          DEFAULT: "#181A1D",
-          "50": "#f4f6f7",
-          "100": "#e4e7e9",
-          "200": "#cbd2d6",
-          "250": "#b7c0c6",
-          "300": "#aab4bd",
-          "350": "#8f9ca8",
-          "400": "#7c8994",
-          "500": "#616e79",
-          "600": "#535d67",
-          "700": "#474e57",
-          "800": "#3f444b",
-          "850": "#363b40",
-          "900": "#32363D",
-          "910": "#2b2f33",
-          "920": "#25282d",
-          "925": "#1e2123",
-          "930": "#25282c",
-          "940": "#1c1d21",
-          "950": "#181a1d",
+          DEFAULT: "#0f0a1f",
+          "50":  "#f1f1f4",
+          "100": "#e3e3eb",
+          "200": "#d0d0db",
+          "250": "#c1c1d0",
+          "300": "#b4b3c6",
+          "350": "#a7a6b8",
+          "400": "#9594a8",
+          "500": "#75748b",
+          "600": "#605f78",
+          "700": "#535168",
+          "800": "#403e60",
+          "850": "#3a3658",
+          "900": "#332f50",
+          "910": "#2c2848",
+          "920": "#252040",
+          "925": "#1f1838",
+          "930": "#1a1330",
+          "940": "#13102a",
+          "950": "#0f0a1f",
         },
         // The `openzro` palette name is preserved (every existing
         // component uses bg-openzro-500, text-openzro-400, etc.) but

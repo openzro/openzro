@@ -27,7 +27,13 @@ export function GlobalThemeProvider({
       {...props}
     >
       <Flowbite theme={{ theme: openzroTheme }}>
-        <SkeletonTheme baseColor={"#25282d"} highlightColor={"#33373e"}>
+        {/* Skeleton placeholder colors aligned with the violet-shifted
+            nb-gray palette — base = nb-gray-920 (#252040, card surface),
+            highlight = nb-gray-800 (#403e60, slightly lighter shimmer).
+            Matches the brand-aware dark theme; previously these were
+            hardcoded to the neutral gray scale and visually clashed
+            with the rest of the dashboard after the palette shift. */}
+        <SkeletonTheme baseColor={"#252040"} highlightColor={"#403e60"}>
           {children}
         </SkeletonTheme>
       </Flowbite>
