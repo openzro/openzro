@@ -1,17 +1,26 @@
-# Lightweight release pipeline: builds CLI / daemon binaries, the
-# desktop UI client, and Docker images, and publishes them to a
-# single GitHub Release + ghcr.io. No Docker Hub, no Homebrew tap,
-# no apt/yum repo upload, no code signing.
+# Single release pipeline. Builds CLI / daemon binaries, the desktop
+# UI client, Docker images, MSI / PKG installers, dashboard image, the
+# APT/YUM/DNF/zypper/pacman repos at pkg.openzro.io, and pushes the
+# `openzro-bin` PKGBUILD to AUR. Everything publishes to one GitHub
+# Release + ghcr.io. No Docker Hub. No Homebrew tap creds yet (gated
+# by the HOMEBREW_TAP_TOKEN secret).
 #
 # Trigger: push of a `v*` tag, or manual dispatch (snapshot mode).
-# Sister to .github/workflows/release.yml (the heavyweight upstream
-# pipeline that depends on secrets we don't have set up yet).
+# This is the only release entrypoint — the upstream `release.yml`
+# was removed because it duplicated the UI builds (causing GitHub
+# `asset already_exists` 422 conflicts) and depended on Docker Hub
+# secrets we don't have.
 #
 # Job layout:
-#   1. release         (ubuntu-22.04) — CLI + 4 daemons + Docker, .deb/.rpm
-#   2. release_ui      (ubuntu-22.04) — desktop UI for Linux + Windows
-#   3. release_ui_macos (macos-14)    — desktop UI universal binary for macOS
-# All three jobs `mode: append` to the same GitHub Release on tag push.
+#   1. release            (ubuntu-22.04) — CLI + 4 daemons + Docker, .deb/.rpm/.pkg.tar.zst
+#   2. release_ui         (ubuntu-22.04) — desktop UI for Linux + Windows
+#   3. release_ui_macos   (macos-14)     — desktop UI universal binary for macOS
+#   4. build_dashboard    (ubuntu-22.04) — ghcr.io/openzro/dashboard image
+#   5. build_macos_pkg    (macos-14)     — unsigned macOS PKG installer
+#   6. build_windows_msi  (windows-2022) — unsigned Windows MSI installer
+#   7. publish_packages   (ubuntu-22.04) — APT/YUM/DNF/zypper/pacman repos to gh-pages
+#   8. publish_aur        (ubuntu-22.04) — push openzro-bin PKGBUILD to AUR
+# Everything `mode: append`s to the same GitHub Release on tag push.
 
 name: Release binaries
 
@@ -696,17 +705,23 @@ jobs:
           SHA_AMD64=$(sha256sum "/tmp/aur/openzro_${REALVER}_linux_amd64.tar.gz" | awk '{print $1}')
           SHA_ARM64=$(sha256sum "/tmp/aur/openzro_${REALVER}_linux_arm64.tar.gz" | awk '{print $1}')
 
-          mkdir -p /tmp/openzro-bin
+          # The deploy-aur action runs in a Docker container that mounts
+          # ${GITHUB_WORKSPACE} as /github/workspace. The `pkgbuild:`
+          # input must therefore live INSIDE the workspace and be passed
+          # as a relative path — absolute paths like /tmp/openzro-bin/
+          # aren't visible to the container and break the action with
+          # `bash: --command: invalid option`.
+          mkdir -p .aur-build/openzro-bin
           sed \
             -e "s/__PKGVER__/${PKGVER}/g" \
             -e "s/__REALVER__/${REALVER}/g" \
             -e "s/__SHA256_X86_64__/${SHA_AMD64}/g" \
             -e "s/__SHA256_AARCH64__/${SHA_ARM64}/g" \
             aur/openzro-bin/PKGBUILD.template \
-            > /tmp/openzro-bin/PKGBUILD
+            > .aur-build/openzro-bin/PKGBUILD
 
           echo "--- rendered PKGBUILD ---"
-          cat /tmp/openzro-bin/PKGBUILD
+          cat .aur-build/openzro-bin/PKGBUILD
 
       - name: Push openzro-bin to AUR
         # The action does the SSH dance + .SRCINFO regeneration + git
@@ -715,7 +730,7 @@ jobs:
         uses: KSXGitHub/github-actions-deploy-aur@v2.7.2
         with:
           pkgname: openzro-bin
-          pkgbuild: /tmp/openzro-bin/PKGBUILD
+          pkgbuild: .aur-build/openzro-bin/PKGBUILD
           commit_username: openZro
           commit_email: dev@openzro.io
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
