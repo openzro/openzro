@@ -11,10 +11,16 @@ import { Check, Monitor, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import * as React from "react";
 
+// Light mode is currently labelled "Beta" — the dashboard inherits
+// hundreds of `bg-nb-gray-*` / `text-nb-gray-*` classes from upstream
+// NetBird that were authored without the `dark:` prefix, so they
+// render dark in light mode too. The fix is a per-component audit
+// (166 files at last grep) tracked separately from the switcher
+// itself. The Beta badge sets the user expectation honestly.
 const THEMES = [
-  { value: "light", label: "Light", Icon: Sun },
-  { value: "dark", label: "Dark", Icon: Moon },
-  { value: "system", label: "System", Icon: Monitor },
+  { value: "light", label: "Light", Icon: Sun, beta: true },
+  { value: "dark", label: "Dark", Icon: Moon, beta: false },
+  { value: "system", label: "System", Icon: Monitor, beta: false },
 ] as const;
 
 export default function OzThemeSwitcher() {
@@ -48,8 +54,8 @@ export default function OzThemeSwitcher() {
       >
         <TriggerIcon size={18} />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-40">
-        {THEMES.map(({ value, label, Icon }) => {
+      <DropdownMenuContent align="end" className="w-44">
+        {THEMES.map(({ value, label, Icon, beta }) => {
           const active = mounted && theme === value;
           return (
             <DropdownMenuItem
@@ -59,6 +65,17 @@ export default function OzThemeSwitcher() {
             >
               <Icon size={14} className="text-nb-gray-300" />
               <span className="flex-1">{label}</span>
+              {beta && (
+                <span
+                  className={cn(
+                    "text-[10px] uppercase tracking-wide font-medium",
+                    "px-1.5 py-0.5 rounded",
+                    "bg-netbird-900/40 text-netbird-200",
+                  )}
+                >
+                  Beta
+                </span>
+              )}
               {active && (
                 <Check size={14} className="text-netbird-200" />
               )}
