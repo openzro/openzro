@@ -121,20 +121,17 @@ add_apt_repo() {
 }
 
 add_rpm_repo() {
-# Repo metadata (repomd.xml) is signed by publish-packages.sh,
-# but individual .rpm packages aren't yet (rpm --addsign is a
-# planned addition — see #TBD). Until then:
-#   gpgcheck=0      — skip per-package signature check
-#   repo_gpgcheck=1 — DO verify the repomd.xml.asc signature
-# This still gives users origin verification (they trust the
-# signed metadata + sha256-pinned rpms inside it). When package
-# signing lands, flip both to 1 simultaneously with the bump.
+# Full-chain GPG verification — publish-packages.sh signs both
+# the individual .rpm files (via rpmsign --addsign) and the
+# repodata/repomd.xml. dnf/yum/zypper verify both:
+#   gpgcheck=1      — each .rpm signature
+#   repo_gpgcheck=1 — repodata/repomd.xml.asc signature
 cat <<-EOF | ${SUDO} tee /etc/yum.repos.d/openzro.repo
 [Openzro]
 name=Openzro
 baseurl=https://pkg.openzro.io/rpm/\$basearch
 enabled=1
-gpgcheck=0
+gpgcheck=1
 gpgkey=https://pkg.openzro.io/openzro-archive-key.asc
 repo_gpgcheck=1
 EOF
