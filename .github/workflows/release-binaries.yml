@@ -724,15 +724,53 @@ jobs:
           cat .aur-build/openzro-bin/PKGBUILD
 
       - name: Push openzro-bin to AUR
-        # The action does the SSH dance + .SRCINFO regeneration + git
-        # push to ssh://aur@aur.archlinux.org/openzro-bin.git. On the
-        # first run the AUR repo is created from this push.
-        uses: KSXGitHub/github-actions-deploy-aur@v2.7.2
-        with:
-          pkgname: openzro-bin
-          pkgbuild: .aur-build/openzro-bin/PKGBUILD
-          commit_username: openZro
-          commit_email: dev@openzro.io
-          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          commit_message: "openzro-bin ${{ github.ref_name }}"
-          ssh_keyscan_types: rsa,ed25519
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # AUR push done inline instead of via KSXGitHub/github-
+          # actions-deploy-aur — that action's entrypoint passes
+          # `bash --command` (bug) and fails with `bash: --command:
+          # invalid option` regardless of pkgbuild path. Inline shell
+          # is also smaller surface (no third-party action) + every
+          # step auditable here.
+
+          # 1. SSH key setup
+          mkdir -p ~/.ssh
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan -t rsa,ed25519 aur.archlinux.org >> ~/.ssh/known_hosts 2>/dev/null
+          cat > ~/.ssh/config <<EOF
+          Host aur.archlinux.org
+            IdentityFile ~/.ssh/aur
+            IdentitiesOnly yes
+            User aur
+          EOF
+          chmod 600 ~/.ssh/config
+
+          # 2. Clone the AUR repo (already bootstrapped by the
+          # maintainer's first manual push)
+          rm -rf .aur-clone
+          git clone ssh://aur@aur.archlinux.org/openzro-bin.git .aur-clone
+
+          # 3. Copy in the rendered PKGBUILD + regenerate .SRCINFO
+          # via an archlinux container (makepkg isn't on ubuntu)
+          cp .aur-build/openzro-bin/PKGBUILD .aur-clone/PKGBUILD
+          docker run --rm -v "$(pwd)/.aur-clone:/work" -w /work \
+            archlinux:base bash -c \
+            'pacman -Sy --noconfirm --needed pacman-contrib >/dev/null 2>&1; \
+             useradd -m b 2>/dev/null || true; chown -R b /work; \
+             su b -c "cd /work && makepkg --printsrcinfo > .SRCINFO"'
+
+          # 4. Commit + push
+          cd .aur-clone
+          git -c user.name=openZro -c user.email=dev@openzro.io \
+              add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+              echo "No changes to publish — PKGBUILD is identical to AUR"
+              exit 0
+          fi
+          git -c user.name=openZro -c user.email=dev@openzro.io \
+              commit -m "openzro-bin ${REF_NAME}"
+          git push origin master
