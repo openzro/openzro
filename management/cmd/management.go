@@ -221,7 +221,13 @@ var (
 
 			geo, err := geolocation.NewGeolocation(ctx, config.Datadir, !disableGeoliteUpdate)
 			if err != nil {
-				log.WithContext(ctx).Warnf("could not initialize geolocation service. proceeding without geolocation support: %v", err)
+				// Geolocation is opt-in: when neither a local mmdb is
+				// staged nor auto-update is enabled, this returns a
+				// "not configured" error and the daemon runs without
+				// geolocation. INFO instead of WARN reflects the
+				// configuration choice — the operator decided not to
+				// wire it.
+				log.WithContext(ctx).Infof("geolocation service not initialized (running without geolocation support): %v", err)
 			} else {
 				log.WithContext(ctx).Infof("geolocation service has been initialized from %s", config.Datadir)
 			}
