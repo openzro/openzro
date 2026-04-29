@@ -17,10 +17,10 @@ import (
 	"strings"
 	"time"
 
+	gormsqlite "github.com/glebarez/sqlite"
 	log "github.com/sirupsen/logrus"
 	gormmysql "gorm.io/driver/mysql"
 	gormpostgres "gorm.io/driver/postgres"
-	gormsqlite "gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 

@@ -15,11 +15,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/glebarez/sqlite"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
 	"github.com/openzro/openzro/dns"
