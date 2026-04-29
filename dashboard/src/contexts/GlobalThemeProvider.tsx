@@ -17,17 +17,21 @@ const NextThemesProvider = dynamic(
 // Skeleton (react-loading-skeleton) doesn't read CSS variables — it
 // takes hex strings at provider level and bakes them into inline
 // styles. So we resolve the right pair based on the active theme and
-// re-render the SkeletonTheme when next-themes flips. Tied to the
-// nb-gray scale: base = -920 (card surface), highlight = -800
-// (slightly lighter shimmer), values mirrored between light and dark
-// in src/app/globals.css.
+// re-render the SkeletonTheme when next-themes flips.
+//
+// Dark: base = nb-gray-920 (#252040, slightly above card surface),
+//       highlight = nb-gray-800 (#403e60, lighter shimmer).
+// Light: base = #e3e3eb, highlight = #f1f1f4 — both lighter than
+//       the card surface so placeholders read as a subtle wash, not
+//       as competing dark bars on the page (the previous
+//       nb-gray-925/930 light values were too saturated).
 function ThemedSkeleton({ children }: { children: React.ReactNode }) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
   return (
     <SkeletonTheme
-      baseColor={isDark ? "#252040" : "#c1c1d0"}
-      highlightColor={isDark ? "#403e60" : "#d0d0db"}
+      baseColor={isDark ? "#252040" : "#e3e3eb"}
+      highlightColor={isDark ? "#403e60" : "#f1f1f4"}
     >
       {children}
     </SkeletonTheme>
