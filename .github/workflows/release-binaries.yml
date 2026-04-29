@@ -658,3 +658,66 @@ jobs:
           git -c user.name='openzro-ci' -c user.email='ci@openzro.io' \
               commit -m "publish: ${GITHUB_REF_NAME} packages"
           git push origin gh-pages
+
+  publish_aur:
+    name: Publish openzro-bin to AUR
+    runs-on: ubuntu-22.04
+    # Same gate as publish_packages — only fire on real tag pushes
+    # after the GitHub Release exists (we read its tarballs to compute
+    # sha256sums for the PKGBUILD).
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [release]
+    environment: production
+
+    steps:
+      - name: Checkout (for the PKGBUILD template under aur/)
+        uses: actions/checkout@v4
+
+      - name: Render PKGBUILD from template
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # `github.ref_name` is the tag (e.g. v0.53.1-alpha.1).
+          REALVER: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # Strip leading 'v' for the upstream version field.
+          REALVER="${REALVER#v}"
+          # AUR pkgver disallows hyphens — rewrite `-` as `.`.
+          PKGVER="${REALVER//-/.}"
+
+          # Pull the linux/amd64 + linux/arm64 tarballs and hash them.
+          mkdir -p /tmp/aur
+          gh release download "v${REALVER}" \
+              --repo openzro/openzro \
+              --pattern "openzro_${REALVER}_linux_amd64.tar.gz" \
+              --pattern "openzro_${REALVER}_linux_arm64.tar.gz" \
+              --dir /tmp/aur
+
+          SHA_AMD64=$(sha256sum "/tmp/aur/openzro_${REALVER}_linux_amd64.tar.gz" | awk '{print $1}')
+          SHA_ARM64=$(sha256sum "/tmp/aur/openzro_${REALVER}_linux_arm64.tar.gz" | awk '{print $1}')
+
+          mkdir -p /tmp/openzro-bin
+          sed \
+            -e "s/__PKGVER__/${PKGVER}/g" \
+            -e "s/__REALVER__/${REALVER}/g" \
+            -e "s/__SHA256_X86_64__/${SHA_AMD64}/g" \
+            -e "s/__SHA256_AARCH64__/${SHA_ARM64}/g" \
+            aur/openzro-bin/PKGBUILD.template \
+            > /tmp/openzro-bin/PKGBUILD
+
+          echo "--- rendered PKGBUILD ---"
+          cat /tmp/openzro-bin/PKGBUILD
+
+      - name: Push openzro-bin to AUR
+        # The action does the SSH dance + .SRCINFO regeneration + git
+        # push to ssh://aur@aur.archlinux.org/openzro-bin.git. On the
+        # first run the AUR repo is created from this push.
+        uses: KSXGitHub/github-actions-deploy-aur@v2.7.2
+        with:
+          pkgname: openzro-bin
+          pkgbuild: /tmp/openzro-bin/PKGBUILD
+          commit_username: openZro
+          commit_email: dev@openzro.io
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "openzro-bin ${{ github.ref_name }}"
+          ssh_keyscan_types: rsa,ed25519
