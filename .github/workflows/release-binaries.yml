@@ -755,13 +755,22 @@ jobs:
           git clone ssh://aur@aur.archlinux.org/openzro-bin.git .aur-clone
 
           # 3. Copy in the rendered PKGBUILD + regenerate .SRCINFO
-          # via an archlinux container (makepkg isn't on ubuntu)
+          # via an archlinux container (makepkg isn't on ubuntu).
+          # The container runs `makepkg --printsrcinfo` as a non-root
+          # user (makepkg refuses root). To avoid leaving the host's
+          # .git/ chowned to that container UID, we generate .SRCINFO
+          # in a SCRATCH dir inside the container and only emit the
+          # final output to a host file that we explicitly chown back.
           cp .aur-build/openzro-bin/PKGBUILD .aur-clone/PKGBUILD
-          docker run --rm -v "$(pwd)/.aur-clone:/work" -w /work \
-            archlinux:base bash -c \
-            'pacman -Sy --noconfirm --needed pacman-contrib >/dev/null 2>&1; \
-             useradd -m b 2>/dev/null || true; chown -R b /work; \
-             su b -c "cd /work && makepkg --printsrcinfo > .SRCINFO"'
+          docker run --rm -v "$(pwd)/.aur-clone/PKGBUILD:/tmp/PKGBUILD:ro" \
+            archlinux:base bash -c '
+              set -e
+              pacman -Sy --noconfirm --needed pacman-contrib >/dev/null 2>&1
+              useradd -m b
+              mkdir -p /tmp/build && cp /tmp/PKGBUILD /tmp/build/
+              chown -R b /tmp/build
+              su b -c "cd /tmp/build && makepkg --printsrcinfo"
+            ' > .aur-clone/.SRCINFO
 
           # 4. Commit + push
           cd .aur-clone
