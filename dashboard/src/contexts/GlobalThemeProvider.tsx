@@ -22,7 +22,7 @@ export function GlobalThemeProvider({
       attribute="class"
       defaultTheme="dark"
       storageKey="openzro-theme"
-      enableSystem={false}
+      enableSystem={true}
       disableTransitionOnChange
       {...props}
     >
