@@ -137,34 +137,42 @@ repo_gpgcheck=1
 EOF
 }
 
-install_aur_package() {
-    INSTALL_PKGS="git base-devel go"
-    REMOVE_PKGS=""
+add_pacman_repo() {
+    # pkg.openzro.io publishes a signed pacman repo at /pacman/<arch>/.
+    # Older versions of this script built openzro from AUR with
+    # makepkg — that path is removed; the AUR package is currently
+    # not maintained, and the upstream repo is the supported flow.
+    ${SUDO} pacman -Sy --noconfirm --needed gnupg curl
 
-    # Check if dependencies are installed
-    for PKG in $INSTALL_PKGS; do
-        if ! pacman -Q "$PKG" > /dev/null 2>&1; then
-            # Install missing package(s)
-            ${SUDO} pacman -S "$PKG" --noconfirm
+    ${SUDO} pacman-key --init >/dev/null 2>&1 || true
 
-            # Add installed package for clean up later
-            REMOVE_PKGS="$REMOVE_PKGS $PKG"
-        fi
-    done
-
-    # Build package from AUR
-    cd /tmp && git clone https://aur.archlinux.org/openzro.git
-    cd openzro && makepkg -sri --noconfirm
-
-    if ! $SKIP_UI_APP; then
-        cd /tmp && git clone https://aur.archlinux.org/openzro-ui.git
-        cd openzro-ui && makepkg -sri --noconfirm
+    # Fetch the public key, extract its fingerprint, import + locally
+    # sign so pacman trusts it for SigLevel = Required.
+    TMP_KEY=$(mktemp)
+    curl -fsSL https://pkg.openzro.io/openzro-archive-key.asc -o "$TMP_KEY"
+    FP=$(gpg --show-keys --with-colons --import-options show-only "$TMP_KEY" \
+         | awk -F: '/^fpr:/ {print $10; exit}')
+    if [ -z "$FP" ]; then
+        echo "Could not determine GPG fingerprint for openZro repo key"
+        rm -f "$TMP_KEY"
+        exit 1
     fi
+    ${SUDO} pacman-key -a "$TMP_KEY"
+    ${SUDO} pacman-key --lsign-key "$FP"
+    rm -f "$TMP_KEY"
 
-    if [ -n "$REMOVE_PKGS" ]; then
-      # Clean up the installed packages
-      ${SUDO} pacman -Rs "$REMOVE_PKGS" --noconfirm
+    # Drop in the repo definition. /etc/pacman.conf has no .d
+    # directory; we append once and skip on re-runs.
+    if ! grep -q '^\[openzro\]' /etc/pacman.conf; then
+        PAC_ARCH="$(uname -m)"
+        ${SUDO} tee -a /etc/pacman.conf > /dev/null <<EOF
+
+[openzro]
+SigLevel = Required DatabaseRequired
+Server = https://pkg.openzro.io/pacman/$PAC_ARCH
+EOF
     fi
+    ${SUDO} pacman -Sy
 }
 
 prepare_tun_module() {
@@ -285,10 +293,15 @@ install_openzro() {
         fi
     ;;
     pacman)
-        ${SUDO} pacman -Syy
-        install_aur_package
-        # in-line with the docs at https://wiki.archlinux.org/title/Openzro
-        ${SUDO} systemctl enable --now openzro@main.service
+        add_pacman_repo
+        ${SUDO} pacman -S --noconfirm openzro
+        # openzro-ui is not yet packaged for pacman; users who want
+        # the UI on Arch can grab the binary from the GitHub release
+        # tarball or use AUR once the package is published.
+        if ! $SKIP_UI_APP; then
+            echo "Note: openzro-ui is not packaged for pacman yet."
+            echo "      Skipping UI install; CLI 'openzro' is available."
+        fi
     ;;
     pkg)
         # Check if the package is already installed

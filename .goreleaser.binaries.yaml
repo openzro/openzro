@@ -136,6 +136,28 @@ nfpms:
       postinstall: release_files/post_install.sh
       preremove: release_files/pre_remove.sh
 
+  # Arch Linux / CachyOS / Manjaro / EndeavourOS native package.
+  # Goreleaser produces openzro-<version>-1-<arch>.pkg.tar.zst,
+  # which scripts/publish-packages.sh signs (rpmsign-style detached
+  # gpg signature) + assembles into a pacman repo at
+  # pkg.openzro.io/pacman/<arch>/. Paralel to the apt + yum repos,
+  # no AUR dependency.
+  - id: openzro-archlinux
+    package_name: openzro
+    maintainer: openZro <dev@openzro.io>
+    description: openZro client (zero-trust mesh networking).
+    homepage: https://openzro.io/
+    license: BSD-3-Clause
+    bindir: /usr/bin
+    builds: [openzro]
+    formats: [archlinux]
+    archlinux:
+      pkgbase: openzro
+      packager: openZro <dev@openzro.io>
+    scripts:
+      postinstall: release_files/post_install.sh
+      preremove: release_files/pre_remove.sh
+
 # Homebrew tap for macOS users (Stage 5 of ADR-0007). Goreleaser
 # auto-generates a formula on every tag push and pushes it to
 # `openzro/homebrew-tap`. Users then `brew install openzro/tap/openzro`

@@ -49,7 +49,7 @@ set -euo pipefail
 GPG_PASSPHRASE="${GPG_PASSPHRASE-}"   # empty allowed
 
 WORK="${WORK:-$(pwd)/.pkg-publish}"
-mkdir -p "$WORK/downloads" "$WORK/repo/apt" "$WORK/repo/rpm"
+mkdir -p "$WORK/downloads" "$WORK/repo/apt" "$WORK/repo/rpm" "$WORK/repo/pacman"
 
 # ----------------------------------------------------------------------
 # 1. Import the signing key into a scratch GPG home so we don't pollute
@@ -74,7 +74,7 @@ gpg --armor --export "$GPG_KEY_ID" > "$WORK/repo/openzro-archive-key.asc"
 echo "Downloading release assets for $VERSION..."
 gh release download "$VERSION" \
     --repo openzro/openzro \
-    --pattern '*.deb' --pattern '*.rpm' \
+    --pattern '*.deb' --pattern '*.rpm' --pattern '*.pkg.tar.zst' \
     --dir "$WORK/downloads"
 
 # ----------------------------------------------------------------------
@@ -184,7 +184,91 @@ for ARCH in x86_64 aarch64 i686 armv6hl; do
 done
 
 # ----------------------------------------------------------------------
-# 5. install.sh — distro-detecting bootstrap script the dashboard's
+# 5. Build the pacman repo. goreleaser nfpms with format `archlinux`
+#    produces `openzro_<v>_linux_<arch>.pkg.tar.zst` files which we
+#    arrange into pkg.openzro.io/pacman/<arch>/ + a signed `openzro.db`
+#    repo database. This avoids the AUR makepkg path entirely (no
+#    second account, no review queue) and parallels the apt + rpm flows.
+#
+#    `repo-add` is a bash script shipped in pacman, which Ubuntu
+#    doesn't have — we run it inside a transient archlinux Docker
+#    container. Each package gets a detached gpg sig done on the host
+#    (so the sig is keyed by our existing GPG_KEY_ID); the container
+#    only does `repo-add` + signs the resulting db file.
+# ----------------------------------------------------------------------
+declare -A PACMAN_ARCH_MAP=(
+    [linux_amd64]=x86_64
+    [linux_arm64]=aarch64
+)
+
+PACMAN_ANY_FOUND=""
+for f in "$WORK/downloads"/*.pkg.tar.zst; do
+    [ -e "$f" ] || continue
+    PACMAN_ANY_FOUND=1
+    base="$(basename "$f")"
+    matched=""
+    for k in "${!PACMAN_ARCH_MAP[@]}"; do
+        if [[ "$base" == *"$k"*.pkg.tar.zst ]]; then
+            matched="${PACMAN_ARCH_MAP[$k]}"
+            break
+        fi
+    done
+    [ -z "$matched" ] && { echo "WARN: cannot map arch for $base"; continue; }
+    mkdir -p "$WORK/repo/pacman/$matched"
+    cp "$f" "$WORK/repo/pacman/$matched/"
+done
+
+if [ -n "$PACMAN_ANY_FOUND" ]; then
+    # Detached-sign each .pkg.tar.zst on the host so pacman's
+    # SigLevel = Required Verify checks pass.
+    for ARCH_DIR in "$WORK/repo/pacman"/*/; do
+        for pkg in "$ARCH_DIR"*.pkg.tar.zst; do
+            [ -e "$pkg" ] || continue
+            gpg --batch --yes --pinentry-mode loopback \
+                ${GPG_PASSPHRASE:+--passphrase "$GPG_PASSPHRASE"} \
+                --default-key "$GPG_KEY_ID" \
+                --detach-sign --no-armor \
+                --output "${pkg}.sig" "$pkg"
+        done
+    done
+
+    # `repo-add` lives in pacman; spin up archlinux:latest, mount the
+    # arch dirs and the gnupg home, and let it build + sign the db.
+    for ARCH in x86_64 aarch64; do
+        ARCH_DIR="$WORK/repo/pacman/$ARCH"
+        [ -d "$ARCH_DIR" ] || continue
+        compgen -G "$ARCH_DIR/*.pkg.tar.zst" >/dev/null || continue
+
+        # Pass the passphrase so gpg inside the container can sign
+        # the db. Mount the host's gnupg dir read-write since gpg
+        # needs to write trust db updates on first use.
+        docker run --rm \
+            -v "$ARCH_DIR:/repo" \
+            -v "$GNUPGHOME:/root/.gnupg" \
+            -e GPG_PASSPHRASE="$GPG_PASSPHRASE" \
+            -e GPG_KEY_ID="$GPG_KEY_ID" \
+            -w /repo \
+            archlinux:latest \
+            bash -c '
+                set -eu
+                # repo-add invokes gpg directly; ensure loopback +
+                # passphrase via a wrapper so non-interactive sign works.
+                cat > /usr/local/bin/gpg-wrap <<EOF
+#!/bin/sh
+exec /usr/bin/gpg --batch --yes --pinentry-mode loopback \
+    ${GPG_PASSPHRASE:+--passphrase "$GPG_PASSPHRASE"} "\$@"
+EOF
+                chmod +x /usr/local/bin/gpg-wrap
+                # repo-add reads $GPG to override the gpg binary.
+                GPGKEY="$GPG_KEY_ID" GPG=/usr/local/bin/gpg-wrap \
+                    repo-add --sign --key "$GPG_KEY_ID" \
+                    /repo/openzro.db.tar.gz /repo/*.pkg.tar.zst
+            '
+    done
+fi
+
+# ----------------------------------------------------------------------
+# 6. install.sh — distro-detecting bootstrap script the dashboard's
 #    SetupModal points at (`curl -fsSL https://pkg.openzro.io/install.sh
 #    | sh`). Lives in the source tree at release_files/install.sh and
 #    is the canonical client install path for distros our packaged
@@ -248,10 +332,22 @@ sudo dnf install openzro</pre>
 sudo rpm --import https://pkg.openzro.io/openzro-archive-key.asc
 sudo zypper install openzro</pre>
 
-<h2>One-line install (covers Arch, CachyOS, Gentoo, …)</h2>
+<h2>pacman (Arch, CachyOS, Manjaro, EndeavourOS)</h2>
+<pre>curl -fsSL https://pkg.openzro.io/openzro-archive-key.asc \
+  | sudo pacman-key -a -
+sudo pacman-key --lsign-key dev@openzro.io
+sudo tee -a /etc/pacman.conf &lt;&lt;EOF
+[openzro]
+SigLevel = Required DatabaseRequired
+Server = https://pkg.openzro.io/pacman/\$arch
+EOF
+sudo pacman -Sy
+sudo pacman -S openzro</pre>
+
+<h2>One-line install (covers Gentoo, Alpine, …)</h2>
 <p>For distros not covered by the package repos above, the
 <code>install.sh</code> script auto-detects your distro and falls
-through APT, YUM/DNF, zypper, pacman/AUR, or the binary tarball:</p>
+through APT, YUM/DNF, zypper, pacman, or the binary tarball:</p>
 <pre>curl -fsSL https://pkg.openzro.io/install.sh | sh</pre>
 <p>The script source is at
 <a href="https://github.com/openzro/openzro/blob/main/release_files/install.sh"><code>release_files/install.sh</code></a>
