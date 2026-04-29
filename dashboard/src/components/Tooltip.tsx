@@ -46,6 +46,7 @@ const TooltipContent = React.forwardRef<
       className = "px-4 py-2.5",
       sideOffset = 7,
       variant = "default",
+      children,
       ...props
     },
     ref,
@@ -53,12 +54,11 @@ const TooltipContent = React.forwardRef<
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
         ref={ref}
-        asChild={true}
         sideOffset={sideOffset}
         className={cn(tooltipVariants({ variant }), className)}
         {...props}
       >
-        <div>{props.children}</div>
+        {children}
       </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>
   ),
