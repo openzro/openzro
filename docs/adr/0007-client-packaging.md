@@ -1,6 +1,8 @@
 # ADR-0007: Client packaging — native installers, signing, and the package matrix
 
-- **Status**: Proposed
+- **Status**: Accepted (Phase 0 + Phase 1 shipped in `v0.53.1-alpha.1`,
+  2026-04-29; Phase 2 + Phase 3 tracked as GitHub issues #1–#7 with
+  the `packaging` label)
 - **Date**: 2026-04-28
 - **Decision-makers**: openZro maintainers
 

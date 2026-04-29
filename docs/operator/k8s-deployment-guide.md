@@ -6,9 +6,18 @@ relay, embedded Dex IdP, and (optionally) the openZro
 Kubernetes operator that reconciles peers / groups / policies / setup
 keys / network resources from CRDs.
 
+**Current versions** (as of 2026-04-29):
+
+| Artifact | Version | Source |
+|---|---|---|
+| Helm chart `openzro` | `2.0.0-alpha.3` (appVersion `0.53.1-alpha.1`) | https://openzro.github.io/helms |
+| Helm chart `openzro-operator` | `0.3.2-alpha.1` | same repo |
+| Container images | `0.53.1-alpha.1` (core) / `0.3.2-alpha.1` (operator) | `ghcr.io/openzro/{management,signal,relay,dashboard,openzro-operator}` |
+
 For the architectural decisions behind this layout, see
 [ADR-0008](../adr/0008-kubernetes-helm-operator.md). For the IdP
 choice (Dex vs external), see [ADR-0006](../adr/0006-embed-dex.md).
+For client-side packaging see [ADR-0007](../adr/0007-client-packaging.md).
 
 ## Prerequisites
 
@@ -25,6 +34,35 @@ choice (Dex vs external), see [ADR-0006](../adr/0006-embed-dex.md).
   ```
   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/latest/download/standard-install.yaml
   ```
+
+### Pull-secret note (private GHCR packages)
+
+At the time of writing the openZro container packages on `ghcr.io`
+are private by default. Until they are flipped to public via the
+GitHub UI (`https://github.com/orgs/openzro/packages/container/<name>/settings`
+→ Danger Zone → Change visibility → Public), `kubectl` needs an
+`imagePullSecret` to pull. Create one with a Personal Access Token
+that has `read:packages`:
+
+```bash
+kubectl -n openzro create secret docker-registry ghcr-openzro \
+  --docker-server=ghcr.io \
+  --docker-username=<your-github-handle> \
+  --docker-password=<PAT-with-read:packages>
+```
+
+Then pass it to all components in your values override:
+
+```yaml
+management:    {imagePullSecrets: [{name: ghcr-openzro}]}
+signal:        {imagePullSecrets: [{name: ghcr-openzro}]}
+relay:         {imagePullSecrets: [{name: ghcr-openzro}]}
+dashboard:     {imagePullSecrets: [{name: ghcr-openzro}]}
+dex:           {imagePullSecrets: [{name: ghcr-openzro}]}
+```
+
+Once the packages are flipped public this section becomes obsolete
+and the secret can be removed.
 
 ## Quick start
 
@@ -175,14 +213,17 @@ peers, setup keys, network resources) from Kubernetes manifests so
 GitOps + multi-tenant patterns work naturally.
 
 ```bash
-# Issue a Personal Access Token in the dashboard:
-#   Settings → Users → admin → Personal Access Tokens → Generate
+# 1. Issue a Personal Access Token in the dashboard:
+#    Settings → Users → admin → Personal Access Tokens → Generate
 PAT="oz_pat_..."
 
+# 2. Store it as a Kubernetes secret
 kubectl -n openzro create secret generic openzro-operator-mgmt \
   --from-literal=managementApiUrl=https://openzro.example.com \
   --from-literal=managementApiToken="$PAT"
 
+# 3. Install the operator chart (currently 0.3.2-alpha.1 — pulls
+#    ghcr.io/openzro/openzro-operator:0.3.2-alpha.1 multi-arch image)
 helm install openzro-operator openzro/openzro-operator \
   --namespace openzro \
   --set managementApiSecret=openzro-operator-mgmt
