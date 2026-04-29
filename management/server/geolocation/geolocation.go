@@ -211,16 +211,19 @@ func getDatabaseFilename(ctx context.Context, databaseURL string, filenamePatter
 	} else {
 		files := getExistingDatabases(filenamePattern)
 		if len(files) < 1 {
-			filename, err = getFilenameFromURL(databaseURL)
-			if err != nil {
-				log.WithContext(ctx).Debugf("Failed to get database from url: %s", databaseURL)
-				return "", err
-			}
-		} else {
-			filename = filepath.Base(files[len(files)-1])
-			log.WithContext(ctx).Debugf("Using existing database, %s", filename)
-			return filename, nil
+			// Auto-update is disabled and no local database is staged
+			// in dataDir. Don't reach for the network — we'd 404
+			// against `pkg.openzro.io/geolocation-dbs/` which the
+			// project doesn't host (the upstream NetBird operator
+			// distributed GeoLite2 from their package server). Return
+			// a clean "not configured" error; the management.go
+			// wrapper logs it as INFO once and continues without
+			// geolocation support.
+			return "", fmt.Errorf("geolocation database not configured (no local %s found and --disable-geolite-update is set; drop a GeoLite2 mmdb in dataDir or pass --disable-geolite-update=false to auto-fetch)", filepath.Base(filenamePattern))
 		}
+		filename = filepath.Base(files[len(files)-1])
+		log.WithContext(ctx).Debugf("Using existing database, %s", filename)
+		return filename, nil
 	}
 
 	// strip suffixes that may be nested, such as .tar.gz
