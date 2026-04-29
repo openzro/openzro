@@ -20,26 +20,9 @@ know what's queued, not as a substitute for reading the code.
 
 ## P1 — Maintenance / security
 
-### Bump Next.js 14.2.28 → 15.5.15+ (or 16.x) — 🟡
-
-Closes [GHSA-q4gf-8mx6-v5v3](https://github.com/advisories/GHSA-q4gf-8mx6-v5v3)
-and [GHSA-h25m-26qc-wcjf](https://github.com/advisories/GHSA-h25m-26qc-wcjf),
-both DoS advisories on the App Router. Triage details in
-[`docs/security/advisories.md`](security/advisories.md).
-
-The bump itself is not hard; the surface that needs verification is the
-App Router rewrites, the dynamic-import boundaries, and the few
-`"use client"` leaves that touch `next/navigation`. Plan:
-
-1. Bump `next` + `eslint-config-next` in `dashboard/package.json`.
-2. Run `npm run build` and `npx tsc --noEmit`.
-3. Smoke-test the dashboard locally: peers list, settings, integrations,
-   network-traffic.
-4. Run the Cypress suite (`make test.dashboard`).
-
-Skip Next 15.0.0–15.5.14 entirely — that range carries
-[CVE-2025-55182](https://github.com/advisories/GHSA-f82v-jwr5-mffw)
-(RCE in Server Components). Jump straight to 15.5.15+.
+(Originally listed Next.js 14 → 15.5.15+ here; that bump landed
+2026-04-29 alongside the react-day-picker 8 → 9 upgrade — see
+the "Recently shipped" section below.)
 
 ---
 
@@ -276,6 +259,25 @@ See the corresponding entry under P3.
 For context — these were on the gap list at one point and are now
 done. Skip these when picking up tasks.
 
+- **Next.js 14.2.28 → 15.5.15+** (closes
+  [GHSA-q4gf-8mx6-v5v3](https://github.com/advisories/GHSA-q4gf-8mx6-v5v3),
+  [GHSA-h25m-26qc-wcjf](https://github.com/advisories/GHSA-h25m-26qc-wcjf),
+  jumps over CVE-2025-55182 RCE window). Pulled in
+  react-day-picker 9.x at the same time — Calendar.tsx rewritten
+  for v9 API. See `dashboard/package.json` and the
+  `fix(dashboard): audit page works on Next 15` commit.
+- **Helm chart + K8s operator** ([ADR-0008](adr/0008-kubernetes-helm-operator.md)):
+  `openzro-2.0.0-alpha.3` published at https://openzro.github.io/helms,
+  operator image at `ghcr.io/openzro/openzro-operator:0.3.2-alpha.1`.
+- **Native installers** ([ADR-0007](adr/0007-client-packaging.md)
+  Phase 1): unsigned Windows MSI (WiX 4) + macOS PKG (pkgbuild) +
+  Homebrew tap on every tag push. Linux apt/yum repos at
+  `pkg.openzro.io` populate from the same pipeline.
+- **Embedded Dex IdP** ([ADR-0006](adr/0006-embed-dex.md)):
+  Dashboard's Settings → Authentication Providers manages
+  Google / GitHub / Microsoft / Keycloak / Okta / generic OIDC
+  connectors at runtime via Dex's gRPC API. Dex shipped as a
+  helm subchart in the openzro chart.
 - Peer approval (real implementation, not the no-op stub) —
   [`management/integrations/integrations/validator.go`](../management/integrations/integrations/validator.go)
 - SCIM 2.0 endpoints —

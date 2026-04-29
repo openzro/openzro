@@ -1,7 +1,9 @@
 # ADR-0008: Kubernetes deployment — Helm chart + Operator
 
-- **Status**: Proposed (chart + operator both build green; field
-  validation pending kind/k3d smoke test)
+- **Status**: Accepted (Stages 1 + 2 shipped 2026-04-29; chart
+  `openzro-2.0.0-alpha.3` published at https://openzro.github.io/helms,
+  operator image at `ghcr.io/openzro/openzro-operator:0.3.2-alpha.1`,
+  Stage 3 + 4 deferred — see "Plan" below)
 - **Date**: 2026-04-28
 - **Decision-makers**: openZro maintainers
 - **Related**: [ADR-0006](./0006-embed-dex.md) (embedded Dex IdP),
@@ -207,26 +209,33 @@ Kustomize can layer on top of the chart's output if needed
 This ADR covers the build-green, tests-passing checkpoint. Field
 validation needs:
 
-### Stage 1 — kind / k3d smoke test
+### Stage 1 — chart publishing first release ✓ shipped 2026-04-29
 
-1. Spin up a kind cluster locally.
-2. `helm install` the chart with a minimal `values.yaml`.
-3. Verify pods start, dashboard is reachable via the bundled
-   Ingress, Dex login works with the bootstrap admin.
-4. `helm install` the operator chart, register a Personal Access
-   Token, apply an `OZGroup` CRD instance, watch it reconcile
-   into the openZro account.
+Chart `openzro-2.0.0-alpha.3` (chart version) tracking
+`appVersion: 0.53.1-alpha.1` (core release) is published at:
 
-### Stage 2 — chart publishing first release
+- gh-pages: https://openzro.github.io/helms — operators add via
+  `helm repo add openzro https://openzro.github.io/helms`
+- OCI: `oci://ghcr.io/openzro/charts/openzro:2.0.0-alpha.3` —
+  manually bootstrapped (the CI step is non-blocking, see
+  "Open questions" below for the namespace-collision rationale)
 
-1. Tag `helms` repo with `helm-openzro-v2.0.0-alpha.1`.
-2. CI publishes to `https://openzro.github.io/helms` and
-   `oci://ghcr.io/openzro/charts/openzro`.
-3. Smoke-test from a fresh shell:
-   ```bash
-   helm repo add openzro https://openzro.github.io/helms
-   helm install test openzro/openzro --dry-run
-   ```
+### Stage 2 — operator publishing ✓ shipped 2026-04-29
+
+`openzro/openzro-operator` tagged `v0.3.2-alpha.1`. CI publishes
+multi-arch image at `ghcr.io/openzro/openzro-operator:0.3.2-alpha.1`
+(linux/amd64 + linux/arm64) on every tag push. The operator's
+helm chart at `openzro-operator-0.3.2-alpha.1` references the
+matching image tag automatically.
+
+### Stage 1 (interim) — kind / k3d smoke test (deferred)
+
+Field validation against a real cluster needs a `helm install`
+end-to-end and a CRD-reconcile flow. Pre-reqs are met (chart
+publishes, operator image publishes, package visibility is
+flippable to public via UI), so this becomes a single
+afternoon's work whenever an operator or maintainer takes it
+on. Not blocking the release.
 
 ### Stage 3 — server-side handlers for DNS Zones + Reverse Proxy Services
 

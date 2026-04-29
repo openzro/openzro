@@ -100,6 +100,80 @@ openzro/
     └── security/         Security advisories tracking
 ```
 
+## Install
+
+### Client agent (Linux / macOS / Windows)
+
+**Linux** — distro-detecting one-liner (covers Debian/Ubuntu/RHEL/Fedora/SUSE
+via signed apt/yum/zypper repos, falls through to pacman/AUR for
+Arch/CachyOS, binary tarball otherwise):
+
+```bash
+curl -fsSL https://pkg.openzro.io/install.sh | sh
+```
+
+Manual repo setup (apt example):
+
+```bash
+curl -sSL https://pkg.openzro.io/openzro-archive-key.asc | \
+  sudo gpg --dearmor -o /usr/share/keyrings/openzro-archive-keyring.gpg
+echo 'deb [signed-by=/usr/share/keyrings/openzro-archive-keyring.gpg] \
+  https://pkg.openzro.io/apt stable main' | \
+  sudo tee /etc/apt/sources.list.d/openzro.list
+sudo apt-get update && sudo apt-get install openzro
+```
+
+**Windows** — `.msi` installer + `.zip` for portable use:
+
+- Installer: [`openzro_<version>_windows_amd64.msi`](https://github.com/openzro/openzro/releases/latest)
+- Tray UI: extract `openzro-ui_<version>_windows_amd64.zip`, run `openzro-ui.exe` as administrator
+
+The MSI is currently unsigned (Windows shows a SmartScreen warning on first
+run; click *More info → Run anyway*). EV signing via [SignPath
+Foundation](https://signpath.org/foundation) is tracked as
+[issue #1](https://github.com/openzro/openzro/issues/1).
+
+**macOS** — universal `.pkg` installer or Homebrew tap:
+
+```bash
+# Homebrew (CLI)
+brew install openzro/tap/openzro
+sudo brew services start openzro
+
+# Or .pkg installer from GH Releases
+# https://github.com/openzro/openzro/releases/latest →
+#   openzro_<version>_darwin_universal.pkg
+```
+
+The `.pkg` is unsigned; first run may need `xattr -d com.apple.quarantine`
+or right-click → *Open*. Apple Developer ID notarization is tracked as
+[issue #2](https://github.com/openzro/openzro/issues/2).
+
+### Self-hosted control plane on Kubernetes
+
+```bash
+helm repo add openzro https://openzro.github.io/helms
+helm repo update
+
+# Control plane (management + signal + relay + dashboard + Dex)
+helm install openzro openzro/openzro \
+  --create-namespace -n openzro \
+  -f my-values.yaml
+
+# Optional: K8s operator (CRDs that reconcile peers/groups/policies)
+helm install openzro-operator openzro/openzro-operator -n openzro
+```
+
+See [`docs/operator/k8s-deployment-guide.md`](docs/operator/k8s-deployment-guide.md)
+for the full walk-through (values overrides, Gateway API instead of Ingress,
+operator Personal Access Token wiring, troubleshooting).
+
+### Self-hosted control plane on a single VM
+
+`infrastructure_files/configure.sh` generates the docker-compose stack
+(management + signal + relay + dashboard + Dex + mTLS PKI). See
+[ADR-0006](docs/adr/0006-embed-dex.md) for the IdP architecture.
+
 ## Quick start (development)
 
 ```bash
@@ -142,10 +216,23 @@ export OPENZRO_CLUSTER_PEERS=nats://localhost:6222
 | Document | What's there |
 |---|---|
 | [docs/adr/0001-openzro-foundation.md](docs/adr/0001-openzro-foundation.md) | Why this fork exists, license posture, HA architecture |
+| [docs/adr/0006-embed-dex.md](docs/adr/0006-embed-dex.md) | Embedded Dex IdP — federation via gRPC API |
+| [docs/adr/0007-client-packaging.md](docs/adr/0007-client-packaging.md) | MSI / PKG / Homebrew / Linux packages strategy + roadmap |
+| [docs/adr/0008-kubernetes-helm-operator.md](docs/adr/0008-kubernetes-helm-operator.md) | Helm chart + Kubernetes operator architecture |
+| [docs/operator/k8s-deployment-guide.md](docs/operator/k8s-deployment-guide.md) | Hands-on guide for K8s self-hosting (helm + operator + CRDs) |
 | [docs/FORK.md](docs/FORK.md) | Exact fork point and license boundary |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Prioritized roadmap (security backports, posture providers, …) |
 | [docs/security/advisories.md](docs/security/advisories.md) | Triage record of every CVE/GHSA we've evaluated |
 | [CLAUDE.md](CLAUDE.md) | Brand + engineering rules (read by AI assistants) |
 | [dashboard/CLAUDE.md](dashboard/CLAUDE.md) | Frontend-specific engineering rules |
+
+Sibling repos:
+
+| Repo | What's there |
+|---|---|
+| [`openzro/helms`](https://github.com/openzro/helms) | Helm charts (`openzro` control plane, `openzro-operator`, `openzro-operator-config`) |
+| [`openzro/openzro-operator`](https://github.com/openzro/openzro-operator) | Kubernetes operator — CRDs for peers/groups/policies/setup-keys/network-resources |
+| [`openzro/homebrew-tap`](https://github.com/openzro/homebrew-tap) | Homebrew formula for macOS (auto-published from this repo on tag) |
 
 ## Contributing
 
