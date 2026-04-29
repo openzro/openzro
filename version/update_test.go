@@ -96,10 +96,12 @@ func TestUpdate_SkipsDrafts(t *testing.T) {
 	}
 }
 
-// TestUpdate_SkipsPrereleases — same reasoning as drafts. A
-// release candidate for openZro should not appear as an
-// "update available" badge in production deployments.
-func TestUpdate_SkipsPrereleases(t *testing.T) {
+// TestUpdate_AcceptsPrereleases — openZro's release stream is currently
+// 100% prerelease (alpha.x). Skipping them would silence the update
+// notifier across the whole alpha phase, leaving operators in the dark
+// about CVE backports. Drafts remain skipped (see TestUpdate_SkipsDrafts).
+// The skip-prereleases behaviour will return when we cut a stable.
+func TestUpdate_AcceptsPrereleases(t *testing.T) {
 	version = "1.0.0"
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, `{"tag_name":"v99.0.0-rc1","draft":false,"prerelease":true}`)
@@ -118,8 +120,35 @@ func TestUpdate_SkipsPrereleases(t *testing.T) {
 	})
 
 	waitTimeout(wg)
-	if onUpdate {
-		t.Errorf("prerelease must not trigger update notification")
+	if !onUpdate {
+		t.Errorf("prerelease must trigger update notification during alpha phase")
+	}
+}
+
+// TestUpdate_AcceptsArrayResponse covers the /releases?per_page=N
+// endpoint shape used by default since GitHub's /releases/latest
+// excludes prereleases (see defaultVersionURL comment).
+func TestUpdate_AcceptsArrayResponse(t *testing.T) {
+	version = "1.0.0"
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, `[{"tag_name":"v99.0.0-alpha.5","draft":false,"prerelease":true}]`)
+	}))
+	defer svr.Close()
+
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+
+	onUpdate := false
+	u := newUpdateWithURL(httpAgent, svr.URL)
+	defer u.StopWatch()
+	u.SetOnUpdateListener(func() {
+		onUpdate = true
+		wg.Done()
+	})
+
+	waitTimeout(wg)
+	if !onUpdate {
+		t.Errorf("array-shaped releases response must trigger update notification")
 	}
 }
 

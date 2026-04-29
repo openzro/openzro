@@ -17,11 +17,15 @@ import (
 const (
 	fetchPeriod = 30 * time.Minute
 
-	// defaultVersionURL points at GitHub's "latest release" API for
-	// this repository. The upstream pointed at pkgs.netbird.io which
-	// it operated; openZro is GitHub-Releases-only so this is the
-	// canonical source.
-	defaultVersionURL = "https://api.github.com/repos/openzro/openzro/releases/latest"
+	// defaultVersionURL points at GitHub's "list releases" API limited
+	// to one entry. The /releases/latest endpoint excludes prereleases
+	// and returns 404 when only prereleases exist — which is openZro's
+	// situation today (we have v0.53.1-alpha.x but no stable). The
+	// /releases?per_page=1 endpoint returns the most recent release of
+	// any type, so the version checker keeps working through the alpha
+	// phase. The upstream pointed at pkgs.netbird.io which it operated;
+	// openZro is GitHub-Releases-only so this is the canonical source.
+	defaultVersionURL = "https://api.github.com/repos/openzro/openzro/releases?per_page=1"
 
 	// envVersionURL lets operators override the endpoint or disable
 	// the check entirely. Empty value (`OPENZRO_UPDATE_CHECK_URL=`)
@@ -221,24 +225,28 @@ func (u *Update) fetchVersion() bool {
 	return true
 }
 
-// parseLatestTag accepts either a GitHub release JSON document
-// (preferred) or a bare version string (legacy / custom endpoint).
-// Drafts and pre-releases are skipped — operators do not want a
-// release-candidate badge nudging them in production. The leading
-// "v" prefix conventional in Git tags is stripped before returning.
+// parseLatestTag accepts three GitHub-flavoured response shapes:
+//   - an array of release objects (`/releases?per_page=N`, current
+//     default), in which case the first element is taken as latest
+//   - a single release object (`/releases/latest`, legacy), kept for
+//     operators who override OPENZRO_UPDATE_CHECK_URL
+//   - a bare version string from a custom endpoint
+//
+// Drafts are skipped (draft releases are unpublished). Prereleases are
+// NOT skipped — openZro's release stream is currently 100% prerelease
+// (alpha.x), and rejecting them would silence the version checker
+// across the whole alpha phase. The skip will return when we cut a
+// stable release; track via TODO. The leading "v" prefix conventional
+// in Git tags is stripped before returning.
 func parseLatestTag(body []byte) (string, error) {
 	trimmed := strings.TrimSpace(string(body))
 	if trimmed == "" {
 		return "", fmt.Errorf("empty body")
 	}
 
-	if trimmed[0] == '{' {
-		var rel githubRelease
-		if err := json.Unmarshal([]byte(trimmed), &rel); err != nil {
-			return "", fmt.Errorf("decode release json: %w", err)
-		}
-		if rel.Draft || rel.Prerelease {
-			return "", fmt.Errorf("latest is draft/prerelease (%s); skipping", rel.TagName)
+	pickRelease := func(rel githubRelease) (string, error) {
+		if rel.Draft {
+			return "", fmt.Errorf("latest release is a draft (%s); skipping", rel.TagName)
 		}
 		if rel.TagName == "" {
 			return "", fmt.Errorf("release json has no tag_name")
@@ -246,8 +254,26 @@ func parseLatestTag(body []byte) (string, error) {
 		return strings.TrimPrefix(rel.TagName, "v"), nil
 	}
 
-	// Legacy / custom endpoint that returns a bare version string.
-	return strings.TrimPrefix(trimmed, "v"), nil
+	switch trimmed[0] {
+	case '[':
+		var rels []githubRelease
+		if err := json.Unmarshal([]byte(trimmed), &rels); err != nil {
+			return "", fmt.Errorf("decode releases json array: %w", err)
+		}
+		if len(rels) == 0 {
+			return "", fmt.Errorf("releases json array is empty")
+		}
+		return pickRelease(rels[0])
+	case '{':
+		var rel githubRelease
+		if err := json.Unmarshal([]byte(trimmed), &rel); err != nil {
+			return "", fmt.Errorf("decode release json: %w", err)
+		}
+		return pickRelease(rel)
+	default:
+		// Legacy / custom endpoint that returns a bare version string.
+		return strings.TrimPrefix(trimmed, "v"), nil
+	}
 }
 
 func (u *Update) checkUpdate() bool {
