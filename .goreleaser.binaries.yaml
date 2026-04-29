@@ -263,6 +263,17 @@ dockers:
       - "--label=org.opencontainers.image.source=https://github.com/openzro/openzro"
 
   - image_templates:
+      - ghcr.io/openzro/management:{{ .Version }}-arm64
+      - ghcr.io/openzro/management:latest-arm64
+    ids: [openzro-mgmt]
+    goarch: arm64
+    use: buildx
+    dockerfile: management/Dockerfile
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/openzro"
+
+  - image_templates:
       - ghcr.io/openzro/signal:{{ .Version }}-amd64
       - ghcr.io/openzro/signal:latest-amd64
     ids: [openzro-signal]
@@ -271,6 +282,17 @@ dockers:
     dockerfile: signal/Dockerfile
     build_flag_templates:
       - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/openzro"
+
+  - image_templates:
+      - ghcr.io/openzro/signal:{{ .Version }}-arm64
+      - ghcr.io/openzro/signal:latest-arm64
+    ids: [openzro-signal]
+    goarch: arm64
+    use: buildx
+    dockerfile: signal/Dockerfile
+    build_flag_templates:
+      - "--platform=linux/arm64"
       - "--label=org.opencontainers.image.source=https://github.com/openzro/openzro"
 
   - image_templates:
@@ -284,6 +306,23 @@ dockers:
       - "--platform=linux/amd64"
       - "--label=org.opencontainers.image.source=https://github.com/openzro/openzro"
 
+  - image_templates:
+      - ghcr.io/openzro/relay:{{ .Version }}-arm64
+      - ghcr.io/openzro/relay:latest-arm64
+    ids: [openzro-relay]
+    goarch: arm64
+    use: buildx
+    dockerfile: relay/Dockerfile
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.source=https://github.com/openzro/openzro"
+
+# Multi-arch manifest lists. Each `name_template` is the unsuffixed
+# tag operators reference (e.g. `ghcr.io/openzro/management:0.53.1-alpha.2`),
+# which the docker client resolves to the right per-arch image at pull
+# time. Without these the helm chart's
+# `{repository}:{appVersion}` reference 404s on every cluster — see
+# the v0.53.1-alpha.1 smoke test that surfaced this bug.
 docker_manifests:
   - name_template: ghcr.io/openzro/openzro:{{ .Version }}
     image_templates:
@@ -293,6 +332,30 @@ docker_manifests:
     image_templates:
       - ghcr.io/openzro/openzro:latest-amd64
       - ghcr.io/openzro/openzro:latest-arm64
+  - name_template: ghcr.io/openzro/management:{{ .Version }}
+    image_templates:
+      - ghcr.io/openzro/management:{{ .Version }}-amd64
+      - ghcr.io/openzro/management:{{ .Version }}-arm64
+  - name_template: ghcr.io/openzro/management:latest
+    image_templates:
+      - ghcr.io/openzro/management:latest-amd64
+      - ghcr.io/openzro/management:latest-arm64
+  - name_template: ghcr.io/openzro/signal:{{ .Version }}
+    image_templates:
+      - ghcr.io/openzro/signal:{{ .Version }}-amd64
+      - ghcr.io/openzro/signal:{{ .Version }}-arm64
+  - name_template: ghcr.io/openzro/signal:latest
+    image_templates:
+      - ghcr.io/openzro/signal:latest-amd64
+      - ghcr.io/openzro/signal:latest-arm64
+  - name_template: ghcr.io/openzro/relay:{{ .Version }}
+    image_templates:
+      - ghcr.io/openzro/relay:{{ .Version }}-amd64
+      - ghcr.io/openzro/relay:{{ .Version }}-arm64
+  - name_template: ghcr.io/openzro/relay:latest
+    image_templates:
+      - ghcr.io/openzro/relay:latest-amd64
+      - ghcr.io/openzro/relay:latest-arm64
 
 checksum:
   name_template: "checksums.txt"
