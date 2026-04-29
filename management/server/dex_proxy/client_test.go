@@ -255,6 +255,37 @@ func TestFromEnv_LoopbackAllowsPlaintext(t *testing.T) {
 	assert.True(t, cfg.InsecureNoTLS)
 }
 
+// TestFromEnv_InsecureOptInOverridesLoopbackCheck — operator-explicit
+// opt-in to plaintext for non-loopback Dex (lab/smoke clusters where
+// management + Dex live in the same namespace and mTLS is overkill).
+func TestFromEnv_InsecureOptInOverridesLoopbackCheck(t *testing.T) {
+	t.Setenv("OPENZRO_DEX_GRPC_ADDR", "openzro-dex:5557")
+	t.Setenv("OPENZRO_DEX_GRPC_CA_CERT", "")
+	t.Setenv("OPENZRO_DEX_GRPC_CLIENT_CERT", "")
+	t.Setenv("OPENZRO_DEX_GRPC_CLIENT_KEY", "")
+	t.Setenv("OPENZRO_DEX_GRPC_INSECURE", "true")
+	cfg, err := FromEnv()
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+	assert.True(t, cfg.InsecureNoTLS)
+}
+
+// TestFromEnv_InsecureOptInIsCaseInsensitive guards against operators
+// setting OPENZRO_DEX_GRPC_INSECURE=True / TRUE in their helm values.
+func TestFromEnv_InsecureOptInIsCaseInsensitive(t *testing.T) {
+	for _, v := range []string{"true", "True", "TRUE"} {
+		t.Setenv("OPENZRO_DEX_GRPC_ADDR", "openzro-dex:5557")
+		t.Setenv("OPENZRO_DEX_GRPC_CA_CERT", "")
+		t.Setenv("OPENZRO_DEX_GRPC_CLIENT_CERT", "")
+		t.Setenv("OPENZRO_DEX_GRPC_CLIENT_KEY", "")
+		t.Setenv("OPENZRO_DEX_GRPC_INSECURE", v)
+		cfg, err := FromEnv()
+		require.NoError(t, err, "value %q should be accepted", v)
+		require.NotNil(t, cfg)
+		assert.True(t, cfg.InsecureNoTLS)
+	}
+}
+
 func TestServerNameFromAddr(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"dex:5557", "dex"},
