@@ -607,7 +607,11 @@ jobs:
       - name: Install repo build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y -q aptly createrepo-c gnupg
+          # `rpm` provides /usr/bin/rpmsign — needed by
+          # publish-packages.sh to sign individual .rpm files (the
+          # `dnf install` flow's gpgcheck=1 requires per-package
+          # signatures, beyond just the repodata signature).
+          sudo apt-get install -y -q aptly createrepo-c gnupg rpm
 
       - name: Build APT + RPM repos
         env:

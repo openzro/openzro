@@ -151,10 +151,34 @@ if [ -n "$GPG_PASSPHRASE" ]; then
     GPG_SIGN_FLAGS+=(--passphrase "$GPG_PASSPHRASE")
 fi
 
+# rpmsign needs ~/.rpmmacros telling it how to sign + which key.
+# We use a custom __gpg_sign_cmd that pipes the passphrase via
+# loopback (the default macro expects an interactive pinentry,
+# which CI doesn't have). The passphrase is interpolated into the
+# macro at sign time via --define '_gpg_pass …'.
+mkdir -p "$HOME"
+cat > "$HOME/.rpmmacros" <<RPMMACROS
+%_signature gpg
+%_gpg_name $GPG_KEY_ID
+%__gpg_sign_cmd %{__gpg} gpg --batch --yes --pinentry-mode loopback --passphrase "%{_gpg_pass}" --no-secmem-warning --no-tty --default-key %{_gpg_name} --detach-sign --output %{__signature_filename} %{__plaintext_filename}
+RPMMACROS
+
 for ARCH in x86_64 aarch64 i686 armv6hl; do
     if compgen -G "$WORK/repo/rpm/$ARCH/*.rpm" >/dev/null; then
+        # Sign each .rpm with the same key as the repo metadata.
+        # Without this, dnf/yum reject the package with "not signed"
+        # when the operator's repo file has gpgcheck=1 (the recommended
+        # setting). Pre-sign the packages so install.sh's add_rpm_repo
+        # can use gpgcheck=1, repo_gpgcheck=1 (full chain verified).
+        rpmsign --define="_gpg_pass $GPG_PASSPHRASE" \
+                --addsign "$WORK/repo/rpm/$ARCH"/*.rpm
+
+        # Build the repo metadata index AFTER signing so the
+        # createrepo_c index records the post-sign sha256.
         createrepo_c --update "$WORK/repo/rpm/$ARCH"
-        # Sign the repodata/repomd.xml (yum/dnf/zypper verify this).
+
+        # Sign the repodata/repomd.xml (yum/dnf/zypper verify this
+        # via repo_gpgcheck=1).
         gpg "${GPG_SIGN_FLAGS[@]}" "$WORK/repo/rpm/$ARCH/repodata/repomd.xml"
     fi
 done

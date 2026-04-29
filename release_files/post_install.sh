@@ -9,8 +9,39 @@ else
     systemd_version=$(systemctl --version | head -1 | sed 's/systemd //g')
 fi
 
+# Detect environments where service registration won't work — typical
+# in container images that ship without an init system (Docker minimal
+# bases: alpine, fedora, debian). In those, `openzro service install`
+# would fail with "no such file or directory: /etc/init.d/openzro" or
+# "exec: service: executable file not found". We skip with a friendly
+# message instead of failing the package install — operators can run
+# `openzro service install` manually if/when an init system shows up.
+have_usable_init() {
+    # systemctl present AND functional (running, degraded — not "offline"
+    # which is what containers report).
+    if [ "${use_systemctl}" = "True" ] && systemctl is-system-running >/dev/null 2>&1; then
+        return 0
+    fi
+    # sysv fallback: /etc/init.d/ + `service` command both present.
+    if [ -d /etc/init.d ] && command -V service >/dev/null 2>&1; then
+        return 0
+    fi
+    return 1
+}
+
+skip_service_install_msg() {
+    printf "\033[33m  No init system detected (container? minimal chroot?). "
+    printf "Skipping service registration —\033[0m\n"
+    printf "\033[33m  run 'sudo openzro service install && sudo openzro service start' "
+    printf "manually once systemd/sysv is available.\033[0m\n"
+}
+
 cleanInstall() {
-    printf "\033[32m Post Install of an clean install\033[0m\n"
+    printf "\033[32m Post Install of a clean install\033[0m\n"
+    if ! have_usable_init; then
+        skip_service_install_msg
+        return 0
+    fi
     # Step 3 (clean install), enable the service in the proper way for this platform
     /usr/bin/openzro service install
     /usr/bin/openzro service start
@@ -24,9 +55,13 @@ upgrade() {
     fi
     if [ -e /lib/systemd/system/openzro.service ]; then
       rm -f /lib/systemd/system/openzro.service
-      systemctl daemon-reload
+      systemctl daemon-reload 2>/dev/null || true
     fi
-    # will trow an error until everyone upgrade
+    if ! have_usable_init; then
+        skip_service_install_msg
+        return 0
+    fi
+    # will throw an error until everyone upgrade
     /usr/bin/openzro service uninstall 2> /dev/null || true
     /usr/bin/openzro service install
     /usr/bin/openzro service start
