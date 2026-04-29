@@ -40,6 +40,16 @@ sudo dnf install openzro</pre>
 sudo rpm --import https://pkg.openzro.io/openzro-archive-key.asc
 sudo zypper install openzro</pre>
 
+<h2>One-line install (covers Arch, CachyOS, Gentoo, …)</h2>
+<p>For distros not covered by the package repos above, the
+<code>install.sh</code> script auto-detects your distro and falls
+through APT, YUM/DNF, zypper, pacman/AUR, or the binary tarball:</p>
+<pre>curl -fsSL https://pkg.openzro.io/install.sh | sh</pre>
+<p>The script source is at
+<a href="https://github.com/openzro/openzro/blob/main/release_files/install.sh"><code>release_files/install.sh</code></a>
+in the openzro/openzro repo — review before piping to a shell, as
+always.</p>
+
 <p>Source for the repository tooling lives under
 <code>scripts/publish-packages.sh</code> in
 <a href="https://github.com/openzro/openzro">openzro/openzro</a>.</p>
