@@ -3,6 +3,7 @@
 import Button from "@components/Button";
 import { OpenzroLogo } from "@components/OpenzroLogo";
 import { AnnouncementBanner } from "@components/ui/AnnouncementBanner";
+import OzThemeSwitcher from "@components/ui/OzThemeSwitcher";
 import UserDropdown from "@components/ui/UserDropdown";
 import { cn } from "@utils/helpers";
 import { MenuIcon, PanelLeftCloseIcon, PanelLeftOpenIcon } from "lucide-react";
@@ -62,7 +63,8 @@ export default function NavbarWithDropdown() {
             <ToggleCollapsableNavigationButton />
           </div>
 
-          <div className="flex md:order-2 gap-4 items-center">
+          <div className="flex md:order-2 gap-2 items-center">
+            <OzThemeSwitcher />
             <UserDropdown />
           </div>
         </div>
