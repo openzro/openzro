@@ -24,6 +24,21 @@ func GetColumnName(db *gorm.DB, column string) string {
 	return column
 }
 
+// bytesOrString coerces a column value into a string regardless of
+// whether the SQLite driver returned it as `string` (mattn/go-sqlite3)
+// or `[]byte` (modernc.org/sqlite via github.com/glebarez/sqlite).
+// Returns an error if the underlying type is neither.
+func bytesOrString(v any) (string, error) {
+	switch t := v.(type) {
+	case string:
+		return t, nil
+	case []byte:
+		return string(t), nil
+	default:
+		return "", fmt.Errorf("type assertion failed: expected string or []byte, got %T", v)
+	}
+}
+
 // MigrateFieldFromGobToJSON migrates a column from Gob encoding to JSON encoding.
 // T is the type of the model that contains the field to be migrated.
 // S is the type of the field to be migrated.
@@ -79,9 +94,12 @@ func MigrateFieldFromGobToJSON[T any, S any](ctx context.Context, db *gorm.DB, f
 		for _, row := range rows {
 			var field S
 
-			str, ok := row[orgColumnName].(string)
-			if !ok {
-				return fmt.Errorf("type assertion failed")
+			// Different SQLite drivers return BLOB columns as either string
+			// (mattn/go-sqlite3) or []byte (modernc.org/sqlite via glebarez).
+			// Handle both so the migration is driver-agnostic.
+			str, err := bytesOrString(row[orgColumnName])
+			if err != nil {
+				return err
 			}
 			reader := strings.NewReader(str)
 
@@ -172,9 +190,9 @@ func MigrateNetIPFieldFromBlobToJSON[T any](ctx context.Context, db *gorm.DB, fi
 		for _, row := range rows {
 			var blobValue string
 			if columnValue := row[orgColumnName]; columnValue != nil {
-				value, ok := columnValue.(string)
-				if !ok {
-					return fmt.Errorf("type assertion failed")
+				value, err := bytesOrString(columnValue)
+				if err != nil {
+					return err
 				}
 				blobValue = value
 			}
@@ -262,9 +280,9 @@ func MigrateSetupKeyToHashedSetupKey[T any](ctx context.Context, db *gorm.DB) er
 
 			var plainKey string
 			if columnValue := row[orgColumnName]; columnValue != nil {
-				value, ok := columnValue.(string)
-				if !ok {
-					return fmt.Errorf("type assertion failed")
+				value, err := bytesOrString(columnValue)
+				if err != nil {
+					return err
 				}
 				plainKey = value
 			}

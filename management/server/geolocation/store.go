@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/glebarez/sqlite"
 	log "github.com/sirupsen/logrus"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
