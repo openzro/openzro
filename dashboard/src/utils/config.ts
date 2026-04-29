@@ -14,9 +14,6 @@ interface Config {
   silentRedirectURI: string;
   tokenSource: string;
   dragQueryParams: boolean;
-  hotjarTrackID?: number;
-  googleAnalyticsID?: string;
-  googleTagManagerID?: string;
 }
 
 /**
@@ -63,9 +60,6 @@ const loadConfig = (): Config => {
     silentRedirectURI: silentRedirectURI,
     tokenSource: tokenSource,
     dragQueryParams: configJson.dragQueryParams == "true", // Drags all the query params to the auth layer specified in the URL when accessing dashboard.
-    hotjarTrackID: configJson?.hotjarTrackID || undefined,
-    googleAnalyticsID: configJson?.googleAnalyticsID || undefined,
-    googleTagManagerID: configJson?.googleTagManagerID || undefined,
   } as Config;
 };
 

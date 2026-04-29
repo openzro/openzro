@@ -10,8 +10,5 @@
   "redirectURI": "$AUTH_REDIRECT_URI",
   "silentRedirectURI": "$AUTH_SILENT_REDIRECT_URI",
   "tokenSource": "$OPENZRO_TOKEN_SOURCE",
-  "dragQueryParams": "$OPENZRO_DRAG_QUERY_PARAMS",
-  "hotjarTrackID": "$OPENZRO_HOTJAR_TRACK_ID",
-  "googleAnalyticsID": "$OPENZRO_GOOGLE_ANALYTICS_ID",
-  "googleTagManagerID": "$OPENZRO_GOOGLE_TAG_MANAGER_ID"
+  "dragQueryParams": "$OPENZRO_DRAG_QUERY_PARAMS"
 }
