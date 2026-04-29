@@ -28,6 +28,34 @@
   --oz-bg-soft:       var(--oz-violet-50);
   --oz-bg-dark:       var(--oz-ink);
   --oz-border:        var(--oz-violet-200);
+
+  /* nb-gray-* RGB channels, light mode (mirror of dark scale). The
+     same `bg-nb-gray-950` class that paints the page bg dark in dark
+     mode paints it light here — see tailwind.config.ts where every
+     nb-gray shade is wired to `rgb(var(--nb-gray-X) / <alpha-value>)`.
+     This is what makes the existing 166 components that hardcode
+     `bg-nb-gray-*` / `text-nb-gray-*` work in both themes without a
+     per-file audit. */
+  --nb-gray-50:  15 10 31;     /* deepest text/border in light */
+  --nb-gray-100: 19 16 42;
+  --nb-gray-200: 26 19 48;
+  --nb-gray-250: 31 24 56;
+  --nb-gray-300: 37 32 64;
+  --nb-gray-350: 44 40 72;
+  --nb-gray-400: 51 47 80;
+  --nb-gray-500: 58 54 88;
+  --nb-gray-600: 64 62 96;
+  --nb-gray-700: 83 81 104;    /* mid-mid (self-mirror) */
+  --nb-gray-800: 96 95 120;
+  --nb-gray-850: 117 116 139;
+  --nb-gray-900: 149 148 168;
+  --nb-gray-910: 167 166 184;
+  --nb-gray-920: 180 179 198;
+  --nb-gray-925: 193 193 208;
+  --nb-gray-930: 208 208 219;
+  --nb-gray-940: 227 227 235;
+  --nb-gray-950: 241 241 244;  /* lightest surface in light */
+  --nb-gray-DEFAULT: 241 241 244;
 }
 
 /* Dark theme (Tailwind `darkMode: "class"`, applied as <html class="dark">). */
@@ -41,6 +69,29 @@
   --oz-bg-soft:       var(--oz-ink-2);
   --oz-bg-dark:       #000000;
   --oz-border:        var(--oz-violet-800);
+
+  /* nb-gray-* RGB channels, dark mode (the violet-shifted scale that
+     anchors body/sidebar/cards to `--oz-ink`). Mirror of :root above. */
+  --nb-gray-50:  241 241 244;  /* lightest text on dark */
+  --nb-gray-100: 227 227 235;
+  --nb-gray-200: 208 208 219;
+  --nb-gray-250: 193 193 208;
+  --nb-gray-300: 180 179 198;
+  --nb-gray-350: 167 166 184;
+  --nb-gray-400: 149 148 168;
+  --nb-gray-500: 117 116 139;
+  --nb-gray-600: 96 95 120;
+  --nb-gray-700: 83 81 104;
+  --nb-gray-800: 64 62 96;
+  --nb-gray-850: 58 54 88;
+  --nb-gray-900: 51 47 80;
+  --nb-gray-910: 44 40 72;
+  --nb-gray-920: 37 32 64;
+  --nb-gray-925: 31 24 56;
+  --nb-gray-930: 26 19 48;
+  --nb-gray-940: 19 16 42;
+  --nb-gray-950: 15 10 31;     /* deepest surface (page bg, oz-ink) */
+  --nb-gray-DEFAULT: 15 10 31;
 }
 
 /* Wordmark: open + Z + ro, with the middle Z heavier and brand-colored. */

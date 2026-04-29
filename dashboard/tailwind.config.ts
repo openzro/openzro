@@ -9,35 +9,41 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Dark scale shifted from upstream NetBird's neutral grays to a
-        // violet-undertone palette — same lightness curve, but every
-        // shade leans toward the brand violet (--oz-ink at the bottom,
-        // gradually less violet as the scale lightens). Keeps the
-        // sidebar / cards visibly "openZro" without going saturated
-        // purple. CLAUDE.md tokens `--oz-ink` (#0f0a1f) and
-        // `--oz-ink-2` (#1a1330) anchor the deep end. Light end stays
-        // close to neutral so light-mode (still WIP) reads correctly.
+        // nb-gray is wired to CSS variables (RGB channels) defined in
+        // src/app/globals.css `:root` (light mode) and `.dark` (dark
+        // mode). Same Tailwind class name — `bg-nb-gray-950`,
+        // `text-nb-gray-300`, etc — auto-flips to the right value
+        // based on the html class. This is what makes the 166
+        // components that hardcode `bg-nb-gray-*` work in both themes
+        // without a per-file audit.
+        //
+        // Dark mode anchors at `--oz-ink` (#0f0a1f) for 950 and the
+        // violet-shifted scale up to a near-white #f1f1f4 at 50.
+        // Light mode mirrors that scale: 950 becomes the lightest
+        // surface (page bg) and 50 becomes the deepest text/border.
+        // The `<alpha-value>` token preserves Tailwind's opacity
+        // suffix support — `bg-nb-gray-950/50` still works.
         "nb-gray": {
-          DEFAULT: "#0f0a1f",
-          "50":  "#f1f1f4",
-          "100": "#e3e3eb",
-          "200": "#d0d0db",
-          "250": "#c1c1d0",
-          "300": "#b4b3c6",
-          "350": "#a7a6b8",
-          "400": "#9594a8",
-          "500": "#75748b",
-          "600": "#605f78",
-          "700": "#535168",
-          "800": "#403e60",
-          "850": "#3a3658",
-          "900": "#332f50",
-          "910": "#2c2848",
-          "920": "#252040",
-          "925": "#1f1838",
-          "930": "#1a1330",
-          "940": "#13102a",
-          "950": "#0f0a1f",
+          DEFAULT: "rgb(var(--nb-gray-DEFAULT) / <alpha-value>)",
+          "50":  "rgb(var(--nb-gray-50)  / <alpha-value>)",
+          "100": "rgb(var(--nb-gray-100) / <alpha-value>)",
+          "200": "rgb(var(--nb-gray-200) / <alpha-value>)",
+          "250": "rgb(var(--nb-gray-250) / <alpha-value>)",
+          "300": "rgb(var(--nb-gray-300) / <alpha-value>)",
+          "350": "rgb(var(--nb-gray-350) / <alpha-value>)",
+          "400": "rgb(var(--nb-gray-400) / <alpha-value>)",
+          "500": "rgb(var(--nb-gray-500) / <alpha-value>)",
+          "600": "rgb(var(--nb-gray-600) / <alpha-value>)",
+          "700": "rgb(var(--nb-gray-700) / <alpha-value>)",
+          "800": "rgb(var(--nb-gray-800) / <alpha-value>)",
+          "850": "rgb(var(--nb-gray-850) / <alpha-value>)",
+          "900": "rgb(var(--nb-gray-900) / <alpha-value>)",
+          "910": "rgb(var(--nb-gray-910) / <alpha-value>)",
+          "920": "rgb(var(--nb-gray-920) / <alpha-value>)",
+          "925": "rgb(var(--nb-gray-925) / <alpha-value>)",
+          "930": "rgb(var(--nb-gray-930) / <alpha-value>)",
+          "940": "rgb(var(--nb-gray-940) / <alpha-value>)",
+          "950": "rgb(var(--nb-gray-950) / <alpha-value>)",
         },
         // The `openzro` palette name is preserved (every existing
         // component uses bg-openzro-500, text-openzro-400, etc.) but
