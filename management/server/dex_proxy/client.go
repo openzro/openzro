@@ -58,11 +58,20 @@ func FromEnv() (*Config, error) {
 		ClientCertPath: os.Getenv("OPENZRO_DEX_GRPC_CLIENT_CERT"),
 		ClientKeyPath:  os.Getenv("OPENZRO_DEX_GRPC_CLIENT_KEY"),
 	}
-	// Plaintext path is only valid for loopback addresses (dev).
-	// Anything reaching off-host MUST present mTLS material.
+	// Plaintext path is normally restricted to loopback (dev). Two
+	// escape hatches for non-loopback plaintext:
+	//   1. OPENZRO_DEX_GRPC_INSECURE=true — explicit operator opt-in,
+	//      e.g. lab/smoke clusters where the Dex pod runs in the
+	//      same namespace as management with NetworkPolicy gating.
+	//      Documented in the helm chart so operators don't have to
+	//      provision mTLS just to validate a fresh install.
+	//   2. mTLS material present (CACert + ClientCert + ClientKey).
+	//      Production path; provisioned by the openzro-operator-config
+	//      chart via cert-manager.
+	insecureOpt := strings.EqualFold(strings.TrimSpace(os.Getenv("OPENZRO_DEX_GRPC_INSECURE")), "true")
 	if cfg.CACertPath == "" && cfg.ClientCertPath == "" && cfg.ClientKeyPath == "" {
-		if !isLoopbackAddr(addr) {
-			return nil, fmt.Errorf("dex_proxy: gRPC addr %q is non-loopback but no mTLS certs configured", addr)
+		if !isLoopbackAddr(addr) && !insecureOpt {
+			return nil, fmt.Errorf("dex_proxy: gRPC addr %q is non-loopback but no mTLS certs configured (set OPENZRO_DEX_GRPC_INSECURE=true to opt in to plaintext, or provision OPENZRO_DEX_GRPC_{CA,CLIENT}_CERT)", addr)
 		}
 		cfg.InsecureNoTLS = true
 	}
