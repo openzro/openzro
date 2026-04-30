@@ -12,3 +12,4 @@ This directory contains the ADRs for openzro. Each ADR captures a single decisio
 | [0006](./0006-embed-dex.md) | Embed Dex as openZro's federated IdP | Accepted (course-corrected 2026-04-28) |
 | [0007](./0007-client-packaging.md) | Client packaging — native installers, signing, package matrix | Proposed |
 | [0008](./0008-kubernetes-helm-operator.md) | Kubernetes deployment — Helm chart + Operator | Proposed |
+| [0009](./0009-bare-metal-ansible-and-ha.md) | Bare-metal Ansible flow + HA via embedded NATS + Dex single-ingress | Accepted |
