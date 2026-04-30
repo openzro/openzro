@@ -81,6 +81,30 @@ nfpms:
       - src: client/ui/assets/openzro.png
         dst: /usr/share/pixmaps/openzro.png
 
+  # Pacman package — picked up by scripts/publish-packages.sh and pushed
+  # to pkg.openzro.io/pacman/x86_64/, alongside the openzro CLI package.
+  # AUR continues to be served via aur/openzro-ui-bin (PKGBUILD) for
+  # users who prefer makepkg over a binary repo.
+  - id: openzro-ui-archlinux
+    package_name: openzro-ui
+    maintainer: openZro <dev@openzro.io>
+    description: openZro desktop client (system tray GUI).
+    homepage: https://openzro.io/
+    license: BSD-3-Clause
+    builds: [openzro-ui]
+    formats: [archlinux]
+    archlinux:
+      pkgbase: openzro-ui
+      packager: openZro <dev@openzro.io>
+    dependencies: [openzro]
+    scripts:
+      postinstall: release_files/ui-post-install.sh
+    contents:
+      - src: client/ui/build/openzro.desktop
+        dst: /usr/share/applications/openzro.desktop
+      - src: client/ui/assets/openzro.png
+        dst: /usr/share/pixmaps/openzro.png
+
 checksum:
   name_template: "openzro-ui_checksums.txt"
 
