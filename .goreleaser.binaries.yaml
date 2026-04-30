@@ -158,6 +158,210 @@ nfpms:
       postinstall: release_files/post_install.sh
       preremove: release_files/pre_remove.sh
 
+  # =====================================================================
+  # SERVER-SIDE PACKAGES (bare-metal install path)
+  # =====================================================================
+  # Until now the openZro server (management + signal + relay) was
+  # K8s/Docker-only. The bare-metal Ansible playbook needs deb / rpm /
+  # archlinux packages so operators can `apt install openzro-management`,
+  # tweak /etc/openzro/management.json, and `systemctl start` without
+  # ever touching containers. The binaries themselves are already
+  # built (openzro-mgmt, openzro-signal, openzro-relay above) — we
+  # just wrap them in nfpms metadata + systemd unit + post-install.
+  # =====================================================================
+
+  # ---------- openzro-management (deb / rpm / archlinux) ----------
+  - id: openzro-management-deb
+    package_name: openzro-management
+    maintainer: openZro <dev@openzro.io>
+    description: openZro management server (control plane, IdP integration, peer registry).
+    homepage: https://openzro.io/
+    license: BSD-3-Clause
+    bindir: /usr/bin
+    builds: [openzro-mgmt]
+    formats: [deb]
+    contents:
+      - src: release_files/management/openzro-management.service
+        dst: /lib/systemd/system/openzro-management.service
+      - src: release_files/management/management.json.example
+        dst: /etc/openzro/management.json.example
+        type: config|noreplace
+      - src: release_files/management/openzro-management.env
+        dst: /etc/default/openzro-management
+        type: config|noreplace
+    scripts:
+      postinstall: release_files/management/post_install.sh
+      preremove: release_files/management/pre_remove.sh
+
+  - id: openzro-management-rpm
+    package_name: openzro-management
+    maintainer: openZro <dev@openzro.io>
+    description: openZro management server (control plane, IdP integration, peer registry).
+    homepage: https://openzro.io/
+    license: BSD-3-Clause
+    bindir: /usr/bin
+    builds: [openzro-mgmt]
+    formats: [rpm]
+    contents:
+      - src: release_files/management/openzro-management.service
+        dst: /lib/systemd/system/openzro-management.service
+      - src: release_files/management/management.json.example
+        dst: /etc/openzro/management.json.example
+        type: config|noreplace
+      - src: release_files/management/openzro-management.env
+        dst: /etc/sysconfig/openzro-management
+        type: config|noreplace
+    scripts:
+      postinstall: release_files/management/post_install.sh
+      preremove: release_files/management/pre_remove.sh
+
+  - id: openzro-management-archlinux
+    package_name: openzro-management
+    maintainer: openZro <dev@openzro.io>
+    description: openZro management server (control plane, IdP integration, peer registry).
+    homepage: https://openzro.io/
+    license: BSD-3-Clause
+    bindir: /usr/bin
+    builds: [openzro-mgmt]
+    formats: [archlinux]
+    archlinux:
+      pkgbase: openzro-management
+      packager: openZro <dev@openzro.io>
+    contents:
+      - src: release_files/management/openzro-management.service
+        dst: /usr/lib/systemd/system/openzro-management.service
+      - src: release_files/management/management.json.example
+        dst: /etc/openzro/management.json.example
+        type: config|noreplace
+      - src: release_files/management/openzro-management.env
+        dst: /etc/default/openzro-management
+        type: config|noreplace
+    scripts:
+      postinstall: release_files/management/post_install.sh
+      preremove: release_files/management/pre_remove.sh
+
+  # ---------- openzro-signal (deb / rpm / archlinux) ----------
+  - id: openzro-signal-deb
+    package_name: openzro-signal
+    maintainer: openZro <dev@openzro.io>
+    description: openZro signal server (peer rendezvous, stateless).
+    homepage: https://openzro.io/
+    license: BSD-3-Clause
+    bindir: /usr/bin
+    builds: [openzro-signal]
+    formats: [deb]
+    contents:
+      - src: release_files/signal/openzro-signal.service
+        dst: /lib/systemd/system/openzro-signal.service
+      - src: release_files/signal/openzro-signal.env
+        dst: /etc/default/openzro-signal
+        type: config|noreplace
+    scripts:
+      postinstall: release_files/signal/post_install.sh
+      preremove: release_files/signal/pre_remove.sh
+
+  - id: openzro-signal-rpm
+    package_name: openzro-signal
+    maintainer: openZro <dev@openzro.io>
+    description: openZro signal server (peer rendezvous, stateless).
+    homepage: https://openzro.io/
+    license: BSD-3-Clause
+    bindir: /usr/bin
+    builds: [openzro-signal]
+    formats: [rpm]
+    contents:
+      - src: release_files/signal/openzro-signal.service
+        dst: /lib/systemd/system/openzro-signal.service
+      - src: release_files/signal/openzro-signal.env
+        dst: /etc/sysconfig/openzro-signal
+        type: config|noreplace
+    scripts:
+      postinstall: release_files/signal/post_install.sh
+      preremove: release_files/signal/pre_remove.sh
+
+  - id: openzro-signal-archlinux
+    package_name: openzro-signal
+    maintainer: openZro <dev@openzro.io>
+    description: openZro signal server (peer rendezvous, stateless).
+    homepage: https://openzro.io/
+    license: BSD-3-Clause
+    bindir: /usr/bin
+    builds: [openzro-signal]
+    formats: [archlinux]
+    archlinux:
+      pkgbase: openzro-signal
+      packager: openZro <dev@openzro.io>
+    contents:
+      - src: release_files/signal/openzro-signal.service
+        dst: /usr/lib/systemd/system/openzro-signal.service
+      - src: release_files/signal/openzro-signal.env
+        dst: /etc/default/openzro-signal
+        type: config|noreplace
+    scripts:
+      postinstall: release_files/signal/post_install.sh
+      preremove: release_files/signal/pre_remove.sh
+
+  # ---------- openzro-relay (deb / rpm / archlinux) ----------
+  - id: openzro-relay-deb
+    package_name: openzro-relay
+    maintainer: openZro <dev@openzro.io>
+    description: openZro relay server (TURN-style fallback for peers behind symmetric NAT).
+    homepage: https://openzro.io/
+    license: BSD-3-Clause
+    bindir: /usr/bin
+    builds: [openzro-relay]
+    formats: [deb]
+    contents:
+      - src: release_files/relay/openzro-relay.service
+        dst: /lib/systemd/system/openzro-relay.service
+      - src: release_files/relay/openzro-relay.env
+        dst: /etc/default/openzro-relay
+        type: config|noreplace
+    scripts:
+      postinstall: release_files/relay/post_install.sh
+      preremove: release_files/relay/pre_remove.sh
+
+  - id: openzro-relay-rpm
+    package_name: openzro-relay
+    maintainer: openZro <dev@openzro.io>
+    description: openZro relay server (TURN-style fallback for peers behind symmetric NAT).
+    homepage: https://openzro.io/
+    license: BSD-3-Clause
+    bindir: /usr/bin
+    builds: [openzro-relay]
+    formats: [rpm]
+    contents:
+      - src: release_files/relay/openzro-relay.service
+        dst: /lib/systemd/system/openzro-relay.service
+      - src: release_files/relay/openzro-relay.env
+        dst: /etc/sysconfig/openzro-relay
+        type: config|noreplace
+    scripts:
+      postinstall: release_files/relay/post_install.sh
+      preremove: release_files/relay/pre_remove.sh
+
+  - id: openzro-relay-archlinux
+    package_name: openzro-relay
+    maintainer: openZro <dev@openzro.io>
+    description: openZro relay server (TURN-style fallback for peers behind symmetric NAT).
+    homepage: https://openzro.io/
+    license: BSD-3-Clause
+    bindir: /usr/bin
+    builds: [openzro-relay]
+    formats: [archlinux]
+    archlinux:
+      pkgbase: openzro-relay
+      packager: openZro <dev@openzro.io>
+    contents:
+      - src: release_files/relay/openzro-relay.service
+        dst: /usr/lib/systemd/system/openzro-relay.service
+      - src: release_files/relay/openzro-relay.env
+        dst: /etc/default/openzro-relay
+        type: config|noreplace
+    scripts:
+      postinstall: release_files/relay/post_install.sh
+      preremove: release_files/relay/pre_remove.sh
+
 # Homebrew tap for macOS users (Stage 5 of ADR-0007). Goreleaser
 # auto-generates a formula on every tag push and pushes it to
 # `openzro/homebrew-tap`. Users then `brew install openzro/tap/openzro`
