@@ -19,6 +19,13 @@ import (
 // cache=shared because that leaks rows across tests; per-test temp
 // files are isolated by Go's test framework and cleaned up
 // automatically.
+//
+// We register a cleanup that closes the underlying *sql.DB before
+// the t.TempDir cleanup runs (cleanups fire LIFO, and t.TempDir
+// registered its cleanup before this function was called). Without
+// this, Windows holds the .db file handle until the process exits
+// and t.TempDir's RemoveAll fails with "the process cannot access
+// the file because it is being used by another process".
 func newTestStore(t *testing.T) *Store {
 	t.Helper()
 	dsn := "file:" + t.TempDir() + "/test.db"
@@ -26,6 +33,11 @@ func newTestStore(t *testing.T) *Store {
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		if sqlDB, err := db.DB(); err == nil {
+			_ = sqlDB.Close()
+		}
+	})
 	s, err := New(db)
 	require.NoError(t, err)
 	return s
