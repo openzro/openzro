@@ -16,7 +16,12 @@ jobs:
       fail-fast: false
       max-parallel: 2
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # macos-latest is intentionally omitted: the macOS PKG/tarball
+        # install path isn't reliably published per release yet (alpha.9
+        # shipped without a macOS bundle, which 404'd this job for the
+        # whole `install_binary=false` row). Re-add macos-latest once
+        # every release is guaranteed to publish darwin assets.
+        os: [ubuntu-latest]
         skip_ui_mode: [true, false]
         install_binary: [true, false]
     runs-on: ${{ matrix.os }}
