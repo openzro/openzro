@@ -33,14 +33,24 @@ func CreateMysqlTestContainer() (func(), string, error) {
 	}
 
 	var err error
+	// Use the official `mysql:8.0` image rather than the upstream's
+	// pre-warmed `mlsmaycon/warmed-mysql:8` (a private Docker Hub
+	// image gated on DOCKER_USER/DOCKER_TOKEN secrets we don't ship).
+	//
+	// The official image emits "ready for connections" twice during
+	// startup: once on the bootstrap socket while the entrypoint runs
+	// init scripts, then again on the real port:3306 after restarting.
+	// Wait for the second occurrence so the connection string we hand
+	// back is actually accepting traffic, and give it a generous budget
+	// because cold pulls + init-script replay can take 30-60s.
 	mysqlContainer, err = mysql.RunContainer(ctx,
-		testcontainers.WithImage("mlsmaycon/warmed-mysql:8"),
+		testcontainers.WithImage("mysql:8.0"),
 		mysql.WithDatabase("testing"),
 		mysql.WithUsername("root"),
 		mysql.WithPassword("testing"),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("/usr/sbin/mysqld: ready for connections").
-				WithOccurrence(1).WithStartupTimeout(15*time.Second).WithPollInterval(100*time.Millisecond),
+				WithOccurrence(2).WithStartupTimeout(120*time.Second).WithPollInterval(250*time.Millisecond),
 		),
 	)
 	if err != nil {

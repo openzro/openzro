@@ -318,15 +318,10 @@ jobs:
       fail-fast: false
       matrix:
         arch: [ 'amd64' ]
-        # mysql intentionally omitted: openZro doesn't ship MySQL as
-        # a deployment target — neither the helm chart nor the Ansible
-        # role wires it. The Go store-engine code path was carried
-        # over from NetBird and the test container (mlsmaycon/warmed-mysql)
-        # is a private Docker Hub image requiring DOCKER_USER/_TOKEN
-        # secrets we don't set. If MySQL ever becomes a supported
-        # backend, restore 'mysql' here and add the corresponding
-        # docker/login-action step.
-        store: [ 'sqlite', 'postgres' ]
+        # MySQL is supported as a BYO backend (helm chart's `mysql:`
+        # block, ansible BYO connection string). The test container
+        # uses the public `mysql:8.0` image — no Docker Hub auth.
+        store: [ 'sqlite', 'postgres', 'mysql' ]
     runs-on: ubuntu-22.04
     steps:
       - name: Install Go
