@@ -160,9 +160,25 @@ func (s *Store) Purge(ctx context.Context, olderThan time.Time) (int64, error) {
 	return res.RowsAffected, res.Error
 }
 
-// Close is a no-op — the GORM DB is owned by the caller. The factory
-// closes it when shutting down.
-func (s *Store) Close() error { return nil }
+// Close releases the underlying *sql.DB. Safe to call multiple times.
+//
+// The GORM DB is conceptually owned by the caller, but we still pull
+// its *sql.DB out and close it here so callers don't have to thread
+// the gorm handle separately. Closing is essential on Windows: the
+// SQLite file lock isn't released until the *sql.DB is closed, and
+// any subsequent t.TempDir / os.RemoveAll on the parent directory
+// will fail with "the process cannot access the file because it is
+// being used by another process".
+func (s *Store) Close() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	sqlDB, err := s.db.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.Close()
+}
 
 func toRow(e *store.Event) row {
 	return row{
