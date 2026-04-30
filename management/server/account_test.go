@@ -1464,7 +1464,7 @@ func getEvent(t *testing.T, accountID string, manager nbAccount.Manager, eventTy
 	t.Helper()
 	for {
 		select {
-		case <-time.After(time.Second):
+		case <-time.After(5*time.Second):
 			t.Fatal("no PeerAddedWithSetupKey event was generated")
 		default:
 			events, err := manager.GetEvents(context.Background(), accountID, userID)
@@ -2981,12 +2981,18 @@ func peerShouldNotReceiveUpdate(t *testing.T, updateMessage <-chan *UpdateMessag
 func peerShouldReceiveUpdate(t *testing.T, updateMessage <-chan *UpdateMessage) {
 	t.Helper()
 
+	// 500ms was the original budget; on CI runners (Azure shared CPUs)
+	// it routinely tipped over for tests that fan out many DB queries
+	// before publishing the update — TestNameServerAccountPeersUpdate
+	// is the recurring offender. 5s is generous enough that a real
+	// stuck channel still trips the timeout while normal slow runs
+	// pass cleanly.
 	select {
 	case msg := <-updateMessage:
 		if msg == nil {
 			t.Errorf("Received nil update message, expected valid message")
 		}
-	case <-time.After(500 * time.Millisecond):
+	case <-time.After(5 * time.Second):
 		t.Error("Timed out waiting for update message")
 	}
 }
