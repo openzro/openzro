@@ -89,15 +89,25 @@ func (p *Policy) EventMeta() map[string]any {
 	return map[string]any{"name": p.Name}
 }
 
-// UpgradeAndFix different version of policies to latest version
+// UpgradeAndFix migrates legacy policies imported from the
+// pre-SQLite filestore (`management.json`) to the current schema.
+// Only fires once at startup when an operator is upgrading from a
+// pre-v0.20 install — see store/file_store.go.
+//
+// Historic upstream behavior also force-set Bidirectional=true
+// when Protocol=ALL. openZro removed that coerce: a Protocol=ALL
+// rule with Bidirectional=false is a legitimate operator choice
+// (only forward direction is allowed; reply traffic relies on the
+// firewall's stateful conntrack the same way protocol-specific
+// rules already do). Coercing it on import would silently
+// re-grant the destination→source direction we explicitly didn't
+// want, which is a security regression in upstream and the
+// motivation for NetBird issue #3547. See ADR-0010.
 func (p *Policy) UpgradeAndFix() {
 	for _, r := range p.Rules {
 		// start migrate from version v0.20.3
 		if r.Protocol == "" {
 			r.Protocol = PolicyRuleProtocolALL
-		}
-		if r.Protocol == PolicyRuleProtocolALL && !r.Bidirectional {
-			r.Bidirectional = true
 		}
 		// -- v0.20.4
 	}
