@@ -1,0 +1,55 @@
+{
+    "_comment_about_this_file": [
+        "openZro management server config. Mirror of the inline JSON",
+        "the helm chart ships at management.configmap. Operators on",
+        "bare-metal copy this to /etc/openzro/management.json and",
+        "tailor for their deployment.",
+        "",
+        "REQUIRED OVERRIDES before first start:",
+        "  - DataStoreEncryptionKey: head -c 32 /dev/urandom | base64",
+        "  - HttpConfig.AuthIssuer / OIDCConfigEndpoint",
+        "  - Signal.URI",
+        "  - Relay.Addresses + Secret (must match the relay's OZ_AUTH_SECRET)",
+        "",
+        "STORAGE WARNING: Engine=sqlite is single-replica and not",
+        "appropriate for prod. Use postgres for any deployment with",
+        "more than one operator running it long-term."
+    ],
+    "Stuns": [],
+    "TURNConfig": {
+        "Turns": [],
+        "TimeBasedCredentials": false,
+        "CredentialsTTL": "12h",
+        "Secret": "not-used"
+    },
+    "Relay": {
+        "Addresses": ["rel://relay.openzro.example.com:33080"],
+        "CredentialsTTL": "24h",
+        "Secret": "REPLACE_WITH_RELAY_OZ_AUTH_SECRET"
+    },
+    "Signal": {
+        "Proto": "https",
+        "URI": "openzro.example.com:443"
+    },
+    "ReverseProxy": {
+        "TrustedHTTPProxies": [],
+        "TrustedHTTPProxiesCount": 0,
+        "TrustedPeers": ["0.0.0.0/0"]
+    },
+    "DisableDefaultPolicy": false,
+    "DataStoreEncryptionKey": "REPLACE_WITH_BASE64_32_BYTES",
+    "StoreConfig": {
+        "Engine": "sqlite"
+    },
+    "HttpConfig": {
+        "Address": "0.0.0.0:33071",
+        "AuthIssuer": "https://dex.openzro.example.com",
+        "AuthAudience": "openzro-dashboard",
+        "AuthUserIDClaim": "sub",
+        "OIDCConfigEndpoint": "https://dex.openzro.example.com/.well-known/openid-configuration",
+        "IdpSignKeyRefreshEnabled": true
+    },
+    "IdpManagerConfig": {
+        "ManagerType": "none"
+    }
+}

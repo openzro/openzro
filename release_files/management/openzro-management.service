@@ -1,0 +1,45 @@
+[Unit]
+Description=openZro management server (control plane)
+Documentation=https://docs.openzro.io/selfhosted
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=openzro
+Group=openzro
+
+# Read tunables from /etc/default/openzro-management — operators
+# override OPENZRO_DATADIR, OPENZRO_LOG_LEVEL, OPENZRO_STORE_ENGINE_POSTGRES_DSN,
+# etc here without touching the unit file.
+EnvironmentFile=-/etc/default/openzro-management
+
+ExecStart=/usr/bin/openzro-mgmt management \
+    --config /etc/openzro/management.json \
+    --datadir /var/lib/openzro/management \
+    --port 33073 \
+    --log-file console \
+    --log-level ${OPENZRO_LOG_LEVEL}
+
+# Auto-restart on crash with exponential-ish backoff. The default
+# (10s) is too aggressive for a service that lives behind nginx —
+# repeated tight restarts hammer Dex's discovery endpoint.
+Restart=on-failure
+RestartSec=15s
+
+# Hardening — management is internet-facing through nginx, so a
+# reasonable minimal sandbox is worth the friction.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ReadWritePaths=/var/lib/openzro/management /var/log/openzro
+
+# stdout / stderr go to journald.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openzro-management
+
+[Install]
+WantedBy=multi-user.target

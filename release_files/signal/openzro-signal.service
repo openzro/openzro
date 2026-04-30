@@ -1,0 +1,33 @@
+[Unit]
+Description=openZro signal server (peer rendezvous, stateless)
+Documentation=https://docs.openzro.io/selfhosted
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=openzro
+Group=openzro
+
+EnvironmentFile=-/etc/default/openzro-signal
+
+ExecStart=/usr/bin/openzro-signal run \
+    --port 10000 \
+    --log-file console \
+    --log-level ${OPENZRO_LOG_LEVEL}
+
+Restart=on-failure
+RestartSec=15s
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openzro-signal
+
+[Install]
+WantedBy=multi-user.target
