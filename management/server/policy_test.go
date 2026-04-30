@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/slices"
 
 	nbpeer "github.com/openzro/openzro/management/server/peer"
@@ -1268,4 +1269,55 @@ func TestPolicyAccountPeersUpdate(t *testing.T) {
 		}
 	})
 
+}
+
+// TestSavePolicy_UnidirectionalAllRoundtrip locks in support for
+// unidirectional ALL-protocol policies: a rule with Protocol=ALL and
+// Bidirectional=false must save, reload, and behave that way at the
+// firewall-rule layer. Upstream NetBird issue #3547 is open precisely
+// because their UI/migration coerces this to bidirectional; openZro's
+// handler layer (policies_handler.go) honors the flag as-sent and the
+// firewall-rule compiler in types/account.go:998-1013 already emits
+// only the forward direction when Bidirectional=false. This test is
+// the regression guard against future code (or a re-import of
+// upstream's coerce) silently flipping the flag.
+func TestSavePolicy_UnidirectionalAllRoundtrip(t *testing.T) {
+	manager, account, _, _, _ := setupNetworkMapTest(t)
+
+	err := manager.SaveGroups(context.Background(), account.Id, userID, []*types.Group{
+		{ID: "groupA", Name: "GroupA", Peers: []string{}},
+		{ID: "groupB", Name: "GroupB", Peers: []string{}},
+	}, true)
+	require.NoError(t, err)
+
+	// Save with Bidirectional=false on a Protocol=ALL rule.
+	saved, err := manager.SavePolicy(context.Background(), account.Id, userID, &types.Policy{
+		AccountID: account.Id,
+		Name:      "unidirectional-all",
+		Enabled:   true,
+		Rules: []*types.PolicyRule{
+			{
+				Enabled:       true,
+				Sources:       []string{"groupA"},
+				Destinations:  []string{"groupB"},
+				Protocol:      types.PolicyRuleProtocolALL,
+				Bidirectional: false,
+				Action:        types.PolicyTrafficActionAccept,
+			},
+		},
+	}, true)
+	require.NoError(t, err)
+	require.Len(t, saved.Rules, 1)
+	require.False(t, saved.Rules[0].Bidirectional,
+		"manager must not coerce Protocol=ALL to Bidirectional=true on save")
+
+	// Reload from the store to confirm persistence — proves there's
+	// no coerce on read either, which would mask the bug for users
+	// who restart the management server after creating the policy.
+	reloaded, err := manager.GetPolicy(context.Background(), account.Id, saved.ID, userID)
+	require.NoError(t, err)
+	require.Len(t, reloaded.Rules, 1)
+	require.Equal(t, types.PolicyRuleProtocolALL, reloaded.Rules[0].Protocol)
+	require.False(t, reloaded.Rules[0].Bidirectional,
+		"reloaded policy must keep Bidirectional=false after roundtrip through the store")
 }
