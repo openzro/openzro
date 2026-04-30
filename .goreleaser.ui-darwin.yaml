@@ -52,9 +52,23 @@ archives:
     # is also kept (it's the stub that exec's into the .app) so
     # users who tar -x to /usr/local/bin/ get the same behaviour as
     # before, while installer flows can reach for the .app subdir.
+    #
+    # Files listed explicitly (not via **/*) because goreleaser's
+    # glob handler strips the first parent directory — `**/*` against
+    # a `.../openZro UI.app/Contents/*` path drops the `Contents/`
+    # segment, which leaves an .app structure macOS doesn't recognize
+    # (Finder requires Contents/Info.plist, Contents/MacOS/<bin>, etc.).
+    # Empirically caught in alpha.10 — the bundled .app extracted to
+    # `openZro UI.app/Info.plist` instead of `openZro UI.app/Contents/Info.plist`.
     files:
-      - src: "dist/openzro-ui-darwin_darwin_all/openZro UI.app/**/*"
-        dst: "openZro UI.app"
+      - src: dist/openzro-ui-darwin_darwin_all/openZro UI.app/Contents/Info.plist
+        dst: openZro UI.app/Contents/Info.plist
+      - src: dist/openzro-ui-darwin_darwin_all/openZro UI.app/Contents/MacOS/openzro-ui
+        dst: openZro UI.app/Contents/MacOS/openzro-ui
+        info:
+          mode: 0755
+      - src: dist/openzro-ui-darwin_darwin_all/openZro UI.app/Contents/Resources/Icon.icns
+        dst: openZro UI.app/Contents/Resources/Icon.icns
 
 checksum:
   name_template: "openzro-ui_darwin_checksums.txt"
