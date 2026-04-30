@@ -93,6 +93,12 @@ nfpms:
     license: BSD-3-Clause
     builds: [openzro-ui]
     formats: [archlinux]
+    # Per .goreleaser.binaries.yaml — Arch's pkgver can't take '-',
+    # so route the prerelease into the explicit field. Without this,
+    # PKGINFO flattens every alpha tag to `pkgver=0.53.1-1` and
+    # `pacman -Syu` never sees an upgrade. Discovered by inspecting
+    # the alpha.13 archlinux .pkg.tar.zst against pacman's vercmp.
+    prerelease: "{{ .Prerelease }}"
     archlinux:
       pkgbase: openzro-ui
       packager: openZro <dev@openzro.io>

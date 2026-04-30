@@ -161,6 +161,15 @@ nfpms:
     bindir: /usr/bin
     builds: [openzro]
     formats: [archlinux]
+    # Arch's pkgver can't contain '-' (it's the separator before
+    # pkgrel). Without the explicit `prerelease` field, nfpm splits
+    # `0.53.1-alpha.13` into pkgver=0.53.1 + pkgrel=alpha.13, then
+    # alpha.13 is rejected as a non-numeric pkgrel and forced back
+    # to 1 — every alpha tag ships as PKGINFO `pkgver=0.53.1-1`,
+    # so `pacman -Syu` never sees an upgrade. Setting prerelease
+    # makes nfpm emit `pkgver=0.53.1.alpha.13` (`.` joiner per Arch
+    # convention) so vercmp distinguishes alpha.13 < alpha.14.
+    prerelease: "{{ .Prerelease }}"
     archlinux:
       pkgbase: openzro
       packager: openZro <dev@openzro.io>
@@ -234,6 +243,7 @@ nfpms:
     bindir: /usr/bin
     builds: [openzro-mgmt]
     formats: [archlinux]
+    prerelease: "{{ .Prerelease }}"   # see openzro-archlinux comment above
     archlinux:
       pkgbase: openzro-management
       packager: openZro <dev@openzro.io>
@@ -298,6 +308,7 @@ nfpms:
     bindir: /usr/bin
     builds: [openzro-signal]
     formats: [archlinux]
+    prerelease: "{{ .Prerelease }}"   # see openzro-archlinux comment above
     archlinux:
       pkgbase: openzro-signal
       packager: openZro <dev@openzro.io>
@@ -359,6 +370,7 @@ nfpms:
     bindir: /usr/bin
     builds: [openzro-relay]
     formats: [archlinux]
+    prerelease: "{{ .Prerelease }}"   # see openzro-archlinux comment above
     archlinux:
       pkgbase: openzro-relay
       packager: openZro <dev@openzro.io>

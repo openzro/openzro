@@ -614,11 +614,21 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
+          # Arch's pkgver can't carry '-' (it splits pkgver from
+          # pkgrel). For the archlinux build only, swap the dash
+          # for a dot so PKGINFO ends up with `pkgver=0.53.1.alpha.13`
+          # — vercmp distinguishes alpha.13 < alpha.14, `pacman -Syu`
+          # actually triggers an upgrade. deb and rpm keep the
+          # original version (their formats handle '-' natively
+          # via '~' / '_' substitution).
           for fmt in deb rpm archlinux; do
-            nfpm package \
-              -f nfpm-dashboard.yaml \
-              -p "$fmt" \
-              -t dist/
+            if [ "$fmt" = "archlinux" ]; then
+              OPENZRO_VERSION_FORMAT="${OPENZRO_VERSION//-/.}" \
+              nfpm package -f nfpm-dashboard.yaml -p "$fmt" -t dist/
+            else
+              OPENZRO_VERSION_FORMAT="$OPENZRO_VERSION" \
+              nfpm package -f nfpm-dashboard.yaml -p "$fmt" -t dist/
+            fi
           done
           ls -la dist/
 

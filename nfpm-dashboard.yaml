@@ -16,7 +16,7 @@
 name: openzro-dashboard
 arch: amd64       # noarch / all really, but nfpm requires a value
 platform: linux
-version: ${OPENZRO_VERSION}
+version: ${OPENZRO_VERSION_FORMAT}
 section: net
 priority: optional
 maintainer: openZro <dev@openzro.io>
