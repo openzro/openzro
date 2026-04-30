@@ -51,48 +51,36 @@ get_release() {
 download_release_binary() {
     VERSION=$(get_release "$OPENZRO_RELEASE")
     BASE_URL="https://github.com/${OWNER}/${REPO}/releases/download"
-    BINARY_BASE_NAME="${VERSION#v}_${OS_TYPE}_${ARCH}.tar.gz"
 
-    # for Darwin, download the signed Openzro-UI
+    # The desktop UI on macOS is a single universal artifact (built by
+    # .goreleaser.ui-darwin.yaml — fyne signtool would normally also
+    # produce a *_signed.zip, but we don't ship signed UI yet — that
+    # waits on SignPath/Apple Developer enrollment). Everywhere else
+    # (CLI on any OS, UI on Linux) follows the per-arch tar.gz pattern.
     if [ "$OS_TYPE" = "darwin" ] && [ "$1" = "$UI_APP" ]; then
-        BINARY_BASE_NAME="${VERSION#v}_${OS_TYPE}_${ARCH}_signed.zip"
-    fi
-
-    if [ "$1" = "$UI_APP" ]; then
-       BINARY_NAME="$1-${OS_TYPE}_${BINARY_BASE_NAME}"
-       if [ "$OS_TYPE" = "darwin" ]; then
-         BINARY_NAME="$1_${BINARY_BASE_NAME}"
-       fi
+        BINARY_BASE_NAME="${VERSION#v}_darwin_universal.tar.gz"
     else
-       BINARY_NAME="$1_${BINARY_BASE_NAME}"
+        BINARY_BASE_NAME="${VERSION#v}_${OS_TYPE}_${ARCH}.tar.gz"
     fi
 
+    BINARY_NAME="$1_${BINARY_BASE_NAME}"
     DOWNLOAD_URL="${BASE_URL}/${VERSION}/${BINARY_NAME}"
 
     echo "Installing $1 from $DOWNLOAD_URL"
     if [ -n "$GITHUB_TOKEN" ]; then
-      cd /tmp && curl -H  "Authorization: token ${GITHUB_TOKEN}" -LO "$DOWNLOAD_URL"
+      cd /tmp && curl -fLO -H "Authorization: token ${GITHUB_TOKEN}" "$DOWNLOAD_URL"
     else
-      cd /tmp && curl -LO "$DOWNLOAD_URL" || curl -LO --dns-servers 8.8.8.8 "$DOWNLOAD_URL"
+      cd /tmp && curl -fLO "$DOWNLOAD_URL"
     fi
 
-
-    if [ "$OS_TYPE" = "darwin" ] && [ "$1" = "$UI_APP" ]; then
-        INSTALL_DIR="/Applications/Openzro UI.app"
-
-        if test -d "$INSTALL_DIR" ; then
-          echo "removing $INSTALL_DIR"
-          rm -rfv "$INSTALL_DIR"
-        fi
-
-        # Unzip the app and move to INSTALL_DIR
-        unzip -q -o "$BINARY_NAME"
-        mv -v "openzro_ui_${OS_TYPE}/" "$INSTALL_DIR/" || mv -v "openzro_ui_${OS_TYPE}_${ARCH}/" "$INSTALL_DIR/"
-    else
-        ${SUDO} mkdir -p "$INSTALL_DIR"
-        tar -xzvf "$BINARY_NAME"
-        ${SUDO} mv "${1%_"${BINARY_BASE_NAME}"}" "$INSTALL_DIR/"
-    fi
+    # The darwin UI archive ships just the openzro-ui binary, not a
+    # .app bundle — fyne package + signing is gated on SignPath/Apple
+    # enrollment. Drop the binary in /usr/local/bin alongside the CLI;
+    # users invoke `openzro-ui` from a terminal until we ship the
+    # signed .app.
+    ${SUDO} mkdir -p "$INSTALL_DIR"
+    tar -xzvf "$BINARY_NAME"
+    ${SUDO} mv "${1%_"${BINARY_BASE_NAME}"}" "$INSTALL_DIR/"
 }
 
 add_apt_repo() {
