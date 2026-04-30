@@ -599,7 +599,8 @@ jobs:
       # for the README and example configs.
       - name: Install nfpm
         run: |
-          curl -sSL "https://github.com/goreleaser/nfpm/releases/download/v2.41.5/nfpm_2.41.5_Linux_x86_64.tar.gz" \
+          NFPM_VER=2.46.3
+          curl -fsSL "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VER}/nfpm_${NFPM_VER}_Linux_x86_64.tar.gz" \
             | tar -xz -C /tmp nfpm
           sudo mv /tmp/nfpm /usr/local/bin/nfpm
           nfpm --version
