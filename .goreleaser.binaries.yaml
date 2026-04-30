@@ -79,6 +79,16 @@ builds:
       - -s -w -X github.com/openzro/openzro/version.version={{.Version}}
     mod_timestamp: "{{ .CommitTimestamp }}"
 
+# Lipo the per-arch darwin CLI binaries into a universal one. The
+# release_pkg job (build_macos_pkg) needs a single universal binary
+# to embed in the .pkg installer — without this, it would have to
+# download both per-arch tarballs and lipo at install time.
+# replace: false keeps the per-arch tarballs around too — users on a
+# specific architecture can still grab a smaller download.
+universal_binaries:
+  - id: openzro
+    replace: false
+
 archives:
   - id: client
     builds: [openzro]
