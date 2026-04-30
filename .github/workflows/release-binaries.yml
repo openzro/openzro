@@ -599,13 +599,25 @@ jobs:
     # we want the GitHub Release to exist (with the .deb / .rpm
     # assets attached) before we try to download from it.
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    # Wait for BOTH the CLI release and the desktop UI builds — the
-    # apt/yum repos pull every *.deb/*.rpm/*.pkg.tar.zst attached to
-    # the GH Release, and the UI .deb/.rpm/.pkg.tar.zst land in the
-    # release_ui job (separate from `release`). Without release_ui in
-    # this list, publish_packages races the UI upload — which is what
-    # left openzro-ui out of pkg.openzro.io/apt for alpha.7 → .8.
-    needs: [release, release_ui]
+    # Wait for every job that uploads an asset publish-packages.sh
+    # republishes under a stable URL:
+    #   release            → CLI .deb/.rpm/.pkg.tar.zst → apt/yum/pacman
+    #   release_ui         → UI  .deb/.rpm/.pkg.tar.zst → apt/yum/pacman
+    #   release_msi        → openzro_*.msi              → /windows/openzro.msi
+    #   release_pkg        → openzro_*.pkg              → /macos/openzro.pkg
+    #   release_ui_macos   → openzro-ui_*_darwin_universal.tar.gz
+    #                                                   → /macos/openzro-ui.tar.gz
+    # Without each of these in `needs:`, publish_packages races the
+    # corresponding upload and silently skips it (publish-packages.sh
+    # only WARNs when an asset is missing). Empirical proof: alpha.7
+    # → .8 left openzro-ui out of pkg.openzro.io/apt because
+    # release_ui wasn't a needs.
+    needs:
+      - release
+      - release_ui
+      - release_ui_macos
+      - release_msi
+      - release_pkg
     # Environment-scoped so secrets only resolve for tag pushes from
     # main (matches the protection rule on the `production`
     # environment); also creates a deployment record in the GH UI.
