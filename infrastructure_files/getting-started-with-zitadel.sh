@@ -809,7 +809,7 @@ services:
         max-file: "2"
   # UI dashboard
   dashboard:
-    image: openzro/dashboard:latest
+    image: ghcr.io/openzro/dashboard:latest
     restart: unless-stopped
     networks: [openzro]
     env_file:
@@ -821,7 +821,7 @@ services:
         max-file: "2"
   # Signal
   signal:
-    image: openzro/signal:latest
+    image: ghcr.io/openzro/signal:latest
     restart: unless-stopped
     networks: [openzro]
     logging:
@@ -831,7 +831,7 @@ services:
         max-file: "2"
   # Relay
   relay:
-    image: openzro/relay:latest
+    image: ghcr.io/openzro/relay:latest
     restart: unless-stopped
     networks: [openzro]
     env_file:
@@ -843,7 +843,7 @@ services:
         max-file: "2"
   # Management
   management:
-    image: openzro/management:latest
+    image: ghcr.io/openzro/management:latest
     restart: unless-stopped
     networks: [openzro]
     volumes:
