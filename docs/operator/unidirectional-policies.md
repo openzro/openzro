@@ -57,14 +57,34 @@ Avoid for:
 
 ## How to enable
 
+There is **no global "feature flag" page** — unidirectional ALL is just
+a property of each individual policy rule. Operators choose it (or not)
+at the moment of creating or editing a policy. Nothing in the cluster
+or the per-tenant settings has to be toggled first.
+
+If you want to *prevent* operators from creating unidirectional ALL
+policies in your tenant, scope the `policies.create`/`policies.update`
+permissions to a smaller set of users — same access-control story as
+any other policy field.
+
 ### Dashboard
 
-1. **Access Control** → click an existing policy or **Create new**.
-2. Set **Protocol** to `All`.
-3. Click the direction toggle next to the source/destination groups.
-   The default is bidirectional (both arrows green); click once to
-   switch to source-only (top arrow blue, bottom gray).
-4. Save. The policy persists with `bidirectional=false`.
+1. **Access Control** in the left navigation → click an existing
+   policy or **Create new**.
+2. In the policy modal, set **Protocol** to `All`.
+3. Click the **direction toggle** between the Source and Destination
+   group selectors (the two arrow badges, top and bottom). The default
+   is bidirectional (both arrows green). Clicking once switches to
+   source-only direction (top arrow blue → bottom arrow gray = traffic
+   only flows top → bottom).
+4. As soon as you pick `All` + a non-bidirectional direction, a yellow
+   warning callout appears below the group selectors. Read it — it
+   spells out the conntrack/asymmetric-flow gotchas listed below.
+5. Save. The policy persists with `bidirectional: false`.
+
+A quick visual sanity check after saving: the Access Control table
+shows a single arrow icon (left or right) instead of the
+double-arrow bidirectional badge.
 
 ### REST API
 
