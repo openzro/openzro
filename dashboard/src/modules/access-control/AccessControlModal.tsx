@@ -346,6 +346,39 @@ export function AccessControlModalContent({
                 </Callout>
               )}
 
+            {protocol === "all" && direction !== "bi" && (
+              <Callout
+                variant={"warning"}
+                icon={
+                  <AlertCircleIcon
+                    size={14}
+                    className={"shrink-0 relative top-[3px] text-openzro"}
+                  />
+                }
+                className="mb-4"
+                data-cy={"unidirectional-all-warning"}
+              >
+                Unidirectional ALL is experimental. Reply traffic relies on
+                the firewall&apos;s stateful conntrack — fine for
+                request/response protocols (HTTP, SSH, DNS), but apps that
+                push unsolicited messages from the destination back to the
+                source (SNMP traps, syslog UDP outbound, server-initiated
+                heartbeats) will be dropped. Operationally-asymmetric ICMP
+                (destination-unreachable, fragmentation-needed) is dropped
+                too. Keep ALL bidirectional or split into per-protocol
+                rules if your apps depend on those.{" "}
+                <a
+                  className="underline"
+                  href="https://github.com/openzro/openzro/blob/main/docs/operator/unidirectional-policies.md"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >
+                  Operator guide
+                </a>
+                .
+              </Callout>
+            )}
+
             <div
               className={cn(
                 "mb-2",
