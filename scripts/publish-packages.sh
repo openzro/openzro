@@ -229,6 +229,52 @@ for f in "$WORK/downloads"/*.pkg.tar.zst; do
     cp "$f" "$WORK/repo/pacman/$matched/"
 done
 
+# Rewrite PKGINFO inside each .pkg.tar.zst to carry the prerelease
+# in pkgver (Arch convention `<base>.<prerelease>`). nfpm's
+# archlinux backend through goreleaser strips the prerelease
+# silently — alpha.14's CLI / mgmt / signal / relay / UI all
+# shipped PKGINFO `pkgver=0.53.1-1` (prerelease lost). Without
+# this fix, every alpha tag looks identical to pacman and
+# `pacman -Syu` never triggers an upgrade. Empirical: dashboard
+# was correct because it's built with standalone nfpm CLI plus a
+# workflow-side dash→dot substitution; goreleaser-built packages
+# need this rewrite. Done BEFORE signing so detached sigs match
+# the rewritten archive.
+VER_NOV="${VERSION#v}"
+if [[ "$VER_NOV" == *-* ]] && [ -n "$PACMAN_ANY_FOUND" ]; then
+    BASE="${VER_NOV%%-*}"
+    PRERELEASE="${VER_NOV#*-}"
+    TARGET_PKGVER="${BASE}.${PRERELEASE}"
+    echo "Rewriting archlinux pkgver to ${TARGET_PKGVER} (was: stripped to ${BASE})..."
+    for ARCH_DIR in "$WORK/repo/pacman"/*/; do
+        for pkg in "$ARCH_DIR"*.pkg.tar.zst; do
+            [ -e "$pkg" ] || continue
+            tmp=$(mktemp -d)
+            tar --zstd -xf "$pkg" -C "$tmp"
+            if [ -f "$tmp/.PKGINFO" ]; then
+                # Only rewrite the goreleaser-stripped ones. The
+                # dashboard already ships the right pkgver from
+                # its standalone nfpm CLI build.
+                if grep -q "^pkgver = ${BASE}-1$" "$tmp/.PKGINFO"; then
+                    sed -i -E "s|^pkgver = .*$|pkgver = ${TARGET_PKGVER}-1|" "$tmp/.PKGINFO"
+                    # Re-pack: PKGINFO first (Arch convention),
+                    # MTREE last (pacman computes it from contents).
+                    files_other=$(find "$tmp" -mindepth 1 -maxdepth 1 \
+                        ! -name .PKGINFO ! -name .MTREE ! -name .BUILDINFO \
+                        -printf '%P\n')
+                    (cd "$tmp" && \
+                     tar --zstd -cf "$pkg" --owner=0 --group=0 \
+                        .PKGINFO $(echo "$files_other") \
+                        $([ -f .BUILDINFO ] && echo .BUILDINFO) \
+                        $([ -f .MTREE ] && echo .MTREE))
+                    echo "  → ${pkg##*/}"
+                fi
+            fi
+            rm -rf "$tmp"
+        done
+    done
+fi
+
 if [ -n "$PACMAN_ANY_FOUND" ]; then
     # Detached-sign each .pkg.tar.zst on the host so pacman's
     # SigLevel = Required Verify checks pass.
