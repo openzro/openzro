@@ -592,6 +592,43 @@ jobs:
             org.opencontainers.image.source=https://github.com/openzro/openzro
             org.opencontainers.image.licenses=BSD-3-Clause
 
+      # Bare-metal flow: package the same dashboard/out/ static bundle
+      # as deb/rpm/archlinux. Operators on Ubuntu/Debian/RHEL/Fedora/
+      # Arch can `apt install openzro-dashboard` (or dnf/pacman) and
+      # front it with their own nginx — see release_files/dashboard/
+      # for the README and example configs.
+      - name: Install nfpm
+        run: |
+          curl -sSL "https://github.com/goreleaser/nfpm/releases/download/v2.41.5/nfpm_2.41.5_Linux_x86_64.tar.gz" \
+            | tar -xz -C /tmp nfpm
+          sudo mv /tmp/nfpm /usr/local/bin/nfpm
+          nfpm --version
+
+      - name: Build dashboard packages (deb + rpm + archlinux)
+        env:
+          OPENZRO_VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for fmt in deb rpm archlinux; do
+            nfpm package \
+              -f nfpm-dashboard.yaml \
+              -p "$fmt" \
+              -t dist/
+          done
+          ls -la dist/
+
+      - name: Upload dashboard packages to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          shopt -s nullglob
+          gh release upload "${{ steps.ver.outputs.tag }}" \
+            dist/openzro-dashboard*.deb \
+            dist/openzro-dashboard*.rpm \
+            dist/openzro-dashboard*.pkg.tar.zst \
+            --repo "${{ github.repository }}" --clobber
+
   publish_packages:
     name: Publish APT/YUM/DNF/zypper repos to pkg.openzro.io
     runs-on: ubuntu-22.04
@@ -618,6 +655,7 @@ jobs:
       - release_ui_macos
       - release_msi
       - release_pkg
+      - release_dashboard
     # Environment-scoped so secrets only resolve for tag pushes from
     # main (matches the protection rule on the `production`
     # environment); also creates a deployment record in the GH UI.
