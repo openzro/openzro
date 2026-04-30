@@ -69,12 +69,23 @@ gpg --export "$GPG_KEY_ID" > "$WORK/repo/openzro-archive-keyring.gpg"
 gpg --armor --export "$GPG_KEY_ID" > "$WORK/repo/openzro-archive-key.asc"
 
 # ----------------------------------------------------------------------
-# 2. Pull the .deb and .rpm assets from the GitHub Release for VERSION.
+# 2. Pull the release assets from the GitHub Release for VERSION.
+#    The .deb / .rpm / .pkg.tar.zst feed the apt/yum/pacman repos.
+#    The .msi / darwin .pkg / darwin .tar.gz feed the stable
+#    download URLs that the dashboard's "Setup" modal links to
+#    (so users follow https://pkg.openzro.io/<os>/openzro.<ext>
+#    instead of GitHub release-asset URLs that change with every
+#    tag — see step 7 below).
 # ----------------------------------------------------------------------
 echo "Downloading release assets for $VERSION..."
 gh release download "$VERSION" \
     --repo openzro/openzro \
-    --pattern '*.deb' --pattern '*.rpm' --pattern '*.pkg.tar.zst' \
+    --pattern '*.deb' \
+    --pattern '*.rpm' \
+    --pattern '*.pkg.tar.zst' \
+    --pattern '*_windows_amd64.msi' \
+    --pattern '*_darwin_universal.pkg' \
+    --pattern 'openzro-ui_*_darwin_universal.tar.gz' \
     --dir "$WORK/downloads"
 
 # ----------------------------------------------------------------------
@@ -299,7 +310,59 @@ else
 fi
 
 # ----------------------------------------------------------------------
-# 6. Static index + CNAME for GitHub Pages.
+# 7. Stable download paths for the dashboard's Setup modal.
+#    The dashboard's WindowsTab / MacOSTab link to these URLs instead
+#    of GitHub Release asset URLs (which change every tag). Users
+#    bookmark / paste these URLs and they keep working forever.
+#
+#    Layout:
+#      /windows/openzro.msi              ← one-click installer (CLI+UI+wintun)
+#      /macos/openzro.pkg                ← double-click installer (CLI+UI .app+launchd)
+#      /macos/openzro-ui.tar.gz          ← UI .app tarball alone
+#
+#    Linux users go through apt/dnf/pacman (versioned by repo) so we
+#    don't need a corresponding "stable .deb" path.
+# ----------------------------------------------------------------------
+mkdir -p "$WORK/repo/windows" "$WORK/repo/macos"
+
+# Strip the leading "v" so the asset filename matches what the
+# .goreleaser configs emit ("0.53.1-alpha.8_windows_amd64.msi", not
+# "v0.53.1-alpha.8_…").
+VER_NOV="${VERSION#v}"
+
+if [ -f "$WORK/downloads/openzro_${VER_NOV}_windows_amd64.msi" ]; then
+    cp "$WORK/downloads/openzro_${VER_NOV}_windows_amd64.msi" \
+        "$WORK/repo/windows/openzro.msi"
+    echo "Staged windows/openzro.msi → $VERSION"
+else
+    echo "WARN: windows MSI for $VERSION missing — skipping stable URL."
+fi
+
+if [ -f "$WORK/downloads/openzro_${VER_NOV}_darwin_universal.pkg" ]; then
+    cp "$WORK/downloads/openzro_${VER_NOV}_darwin_universal.pkg" \
+        "$WORK/repo/macos/openzro.pkg"
+    echo "Staged macos/openzro.pkg → $VERSION"
+else
+    echo "WARN: macOS PKG for $VERSION missing — skipping stable URL."
+fi
+
+if [ -f "$WORK/downloads/openzro-ui_${VER_NOV}_darwin_universal.tar.gz" ]; then
+    cp "$WORK/downloads/openzro-ui_${VER_NOV}_darwin_universal.tar.gz" \
+        "$WORK/repo/macos/openzro-ui.tar.gz"
+    echo "Staged macos/openzro-ui.tar.gz → $VERSION"
+fi
+
+# Also drop a tiny latest.json so the dashboard can show
+# "Download openZro v0.53.1-alpha.X" without round-tripping the
+# GitHub API. Cheap to fetch, hosted on the same origin as the
+# download — no rate limit, no extra DNS lookup.
+cat > "$WORK/repo/latest.json" <<JSON
+{"tag":"$VERSION","version":"$VER_NOV","updated":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
+JSON
+echo "Wrote latest.json → $VERSION"
+
+# ----------------------------------------------------------------------
+# 8. Static index + CNAME for GitHub Pages.
 # ----------------------------------------------------------------------
 echo "pkg.openzro.io" > "$WORK/repo/CNAME"
 

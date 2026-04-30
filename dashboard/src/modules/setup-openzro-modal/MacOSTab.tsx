@@ -19,11 +19,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import React from "react";
-import {
-  findAsset,
-  releaseFallbackURL,
-  useLatestRelease,
-} from "@/hooks/useLatestRelease";
+import { useLatestRelease } from "@/hooks/useLatestRelease";
 import { OperatingSystem } from "@/interfaces/OperatingSystem";
 import {
   HostnameParameter,
@@ -36,17 +32,12 @@ type Props = {
   showSetupKeyInfo?: boolean;
   hostname?: string;
 };
-// Asset preference for macOS, in order:
-//   1. .pkg (Stage 1 of ADR-0007 — `pkgbuild` from release_pkg
-//      CI job, double-click installer that drops binaries into
-//      /usr/local/bin and registers the launchd daemon)
-//   2. universal UI tarball (Fyne app, brew-friendly)
-//   3. universal CLI tarball (terminal users)
-// All assets are fat universal (amd64+arm64) — one download
-// works on both Intel and Apple Silicon, no chip detection needed.
-const MACOS_PKG = /^openzro_.*_darwin_universal\.pkg$/;
-const MACOS_UI_UNIVERSAL = /^openzro-ui_.*_darwin_universal\.tar\.gz$/;
-const MACOS_CLI_UNIVERSAL = /^openzro_.*_darwin_(universal|all)\.tar\.gz$/;
+
+// Stable download URL — version-independent, mirrored to
+// pkg.openzro.io by publish-packages.sh on every tag push. The .pkg
+// is universal (amd64 + arm64 in one fat binary) and bundles the
+// daemon + the openZro UI .app bundle that lands in /Applications/.
+const MACOS_PKG_URL = "https://pkg.openzro.io/macos/openzro.pkg";
 
 export default function MacOSTab({
   setupKey,
@@ -54,18 +45,9 @@ export default function MacOSTab({
   hostname,
 }: Readonly<Props>) {
   const { data: release, isLoading } = useLatestRelease();
-  const macAsset =
-    findAsset(release, MACOS_PKG) ??
-    findAsset(release, MACOS_UI_UNIVERSAL) ??
-    findAsset(release, MACOS_CLI_UNIVERSAL);
-  const downloadHref =
-    macAsset?.browser_download_url ?? releaseFallbackURL(release);
-  const isPkg = macAsset ? MACOS_PKG.test(macAsset.name) : false;
-  const downloadLabel = release?.tag_name
-    ? `${release.tag_name} (${isPkg ? "Installer" : "Universal"})`
-    : isPkg
-      ? "Installer"
-      : "Universal";
+  const downloadLabel = release?.tag_name && !isLoading
+    ? `${release.tag_name} (Installer)`
+    : "Installer";
 
   return (
     <TabsContent value={String(OperatingSystem.APPLE)}>
@@ -80,38 +62,26 @@ export default function MacOSTab({
               Download the latest macOS build
             </p>
             <div className={"flex gap-4 mt-1 flex-wrap"}>
-              <Link href={downloadHref} passHref target={"_blank"}>
-                <Button variant={"primary"} disabled={isLoading}>
+              <Link href={MACOS_PKG_URL} passHref target={"_blank"}>
+                <Button variant={"primary"}>
                   <DownloadIcon size={14} />
-                  {isLoading ? "Loading…" : `Download Openzro ${downloadLabel}`}
+                  Download openZro {downloadLabel}
                 </Button>
               </Link>
             </div>
-            {isPkg ? (
-              <p className={"text-xs text-nb-gray-300 mt-2"}>
-                Universal installer — works on both Intel and Apple
-                Silicon. Double-click the .pkg, follow the prompts, and
-                the daemon registers automatically. On first run macOS
-                may show a Gatekeeper warning (&quot;cannot be opened
-                because Apple cannot check it&quot;) — right-click →{" "}
-                <em>Open</em> to bypass once, or run{" "}
-                <code>xattr -d com.apple.quarantine ~/Downloads/openzro_*.pkg</code>.
-                Apple Developer ID notarization is coming soon and will
-                eliminate the warning.
-              </p>
-            ) : (
-              <p className={"text-xs text-nb-gray-300 mt-2"}>
-                Universal binary works on both Intel and Apple Silicon.
-                Extract the .tar.gz, then run{" "}
-                <code>sudo install -m 0755 openzro-ui /usr/local/bin/</code>{" "}
-                and launch from <code>/usr/local/bin/openzro-ui</code>. On
-                first launch macOS may show a Gatekeeper warning — open with
-                right-click → Open, or run{" "}
-                <code>xattr -d com.apple.quarantine</code> on the binary.
-                Signed .pkg installer + Apple Developer ID notarization are
-                tracked as part of the packaging epic.
-              </p>
-            )}
+            <p className={"text-xs text-nb-gray-300 mt-2"}>
+              Universal installer — works on both Intel and Apple
+              Silicon. Double-click the .pkg, follow the prompts, and
+              the daemon registers as a LaunchDaemon while the
+              openZro UI lands in <code>/Applications/openZro UI.app</code>.
+              On first run macOS may show a Gatekeeper warning
+              (&quot;cannot be opened because Apple cannot check
+              it&quot;) — right-click → <em>Open</em> to bypass once,
+              or run{" "}
+              <code>xattr -d com.apple.quarantine ~/Downloads/openzro.pkg</code>.
+              Apple Developer ID notarization is coming soon and will
+              eliminate the warning.
+            </p>
           </Steps.Step>
 
           {GRPC_API_ORIGIN && (
