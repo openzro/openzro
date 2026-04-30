@@ -37,7 +37,7 @@ services:
   # UI dashboard
   dashboard:
     <<: *default
-    image: openzro/dashboard:$OPENZRO_DASHBOARD_TAG
+    image: ghcr.io/openzro/dashboard:$OPENZRO_DASHBOARD_TAG
     ports:
       - 80:80
       - 443:443
@@ -66,7 +66,7 @@ services:
   # Signal
   signal:
     <<: *default
-    image: openzro/signal:$OPENZRO_SIGNAL_TAG
+    image: ghcr.io/openzro/signal:$OPENZRO_SIGNAL_TAG
     volumes:
       - $SIGNAL_VOLUMENAME:/var/lib/openzro
     ports:
@@ -78,7 +78,7 @@ services:
   # Relay
   relay:
     <<: *default
-    image: openzro/relay:$OPENZRO_RELAY_TAG
+    image: ghcr.io/openzro/relay:$OPENZRO_RELAY_TAG
     environment:
     - OZ_LOG_LEVEL=info
     - OZ_LISTEN_ADDRESS=:$OPENZRO_RELAY_PORT
@@ -91,7 +91,7 @@ services:
   # Management
   management:
     <<: *default
-    image: openzro/management:$OPENZRO_MANAGEMENT_TAG
+    image: ghcr.io/openzro/management:$OPENZRO_MANAGEMENT_TAG
     depends_on:
       - dashboard
       - dex
