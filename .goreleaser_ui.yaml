@@ -79,6 +79,32 @@ nfpms:
     dependencies:
       - openzro
 
+  # archlinux nfpm — produces openzro-ui_<v>_linux_amd64.pkg.tar.zst
+  # for the pacman repo at pkg.openzro.io/pacman/<arch>/. Sister of
+  # the deb + rpm entries above; same desktop entry + icon contents.
+  - maintainer: Openzro <dev@openzro.io>
+    description: openZro client UI (system tray).
+    homepage: https://openzro.io/
+    license: BSD-3-Clause
+    id: openzro-ui-archlinux
+    package_name: openzro-ui
+    builds:
+      - openzro-ui
+    formats:
+      - archlinux
+    archlinux:
+      pkgbase: openzro-ui
+      packager: openZro <dev@openzro.io>
+    scripts:
+      postinstall: "release_files/ui-post-install.sh"
+    contents:
+      - src: client/ui/build/openzro.desktop
+        dst: /usr/share/applications/openzro.desktop
+      - src: client/ui/assets/openzro.png
+        dst: /usr/share/pixmaps/openzro.png
+    dependencies:
+      - openzro
+
 uploads:
   - name: debian
     ids:

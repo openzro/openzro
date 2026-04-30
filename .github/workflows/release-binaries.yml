@@ -783,3 +783,91 @@ jobs:
           git -c user.name=openZro -c user.email=dev@openzro.io \
               commit -m "openzro-bin ${REF_NAME}"
           git push origin master
+
+  publish_aur_ui:
+    name: Publish openzro-ui-bin to AUR
+    runs-on: ubuntu-22.04
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [release_ui]
+    environment: production
+
+    steps:
+      - name: Checkout (for the PKGBUILD template under aur/)
+        uses: actions/checkout@v4
+
+      - name: Render PKGBUILD from template
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REALVER: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          REALVER="${REALVER#v}"
+          PKGVER="${REALVER//-/.}"
+
+          # UI today is amd64-only on Linux (.goreleaser_ui.yaml builds
+          # the GTK binary on a glibc x86_64 base; arm64 builds aren't
+          # wired). Arch-specific download + sha pattern reflects that.
+          mkdir -p /tmp/aur-ui
+          gh release download "v${REALVER}" \
+              --repo openzro/openzro \
+              --pattern "openzro-ui_${REALVER}_linux_amd64.tar.gz" \
+              --dir /tmp/aur-ui
+
+          SHA_AMD64=$(sha256sum "/tmp/aur-ui/openzro-ui_${REALVER}_linux_amd64.tar.gz" | awk '{print $1}')
+
+          mkdir -p .aur-build/openzro-ui-bin
+          sed \
+            -e "s/__PKGVER__/${PKGVER}/g" \
+            -e "s/__REALVER__/${REALVER}/g" \
+            -e "s/__SHA256_X86_64__/${SHA_AMD64}/g" \
+            aur/openzro-ui-bin/PKGBUILD.template \
+            > .aur-build/openzro-ui-bin/PKGBUILD
+
+          echo "--- rendered PKGBUILD ---"
+          cat .aur-build/openzro-ui-bin/PKGBUILD
+
+      - name: Push openzro-ui-bin to AUR
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # Same inline-shell pattern as publish_aur (above) — see that
+          # step's comment for why we don't use the third-party action.
+
+          mkdir -p ~/.ssh
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan -t rsa,ed25519 aur.archlinux.org >> ~/.ssh/known_hosts 2>/dev/null
+          cat > ~/.ssh/config <<EOF
+          Host aur.archlinux.org
+            IdentityFile ~/.ssh/aur
+            IdentitiesOnly yes
+            User aur
+          EOF
+          chmod 600 ~/.ssh/config
+
+          rm -rf .aur-clone-ui
+          git clone ssh://aur@aur.archlinux.org/openzro-ui-bin.git .aur-clone-ui
+
+          cp .aur-build/openzro-ui-bin/PKGBUILD .aur-clone-ui/PKGBUILD
+          docker run --rm -v "$(pwd)/.aur-clone-ui/PKGBUILD:/tmp/PKGBUILD:ro" \
+            archlinux:base bash -c '
+              set -e
+              pacman -Sy --noconfirm --needed pacman-contrib >/dev/null 2>&1
+              useradd -m b
+              mkdir -p /tmp/build && cp /tmp/PKGBUILD /tmp/build/
+              chown -R b /tmp/build
+              su b -c "cd /tmp/build && makepkg --printsrcinfo"
+            ' > .aur-clone-ui/.SRCINFO
+
+          cd .aur-clone-ui
+          git -c user.name=openZro -c user.email=dev@openzro.io \
+              add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+              echo "No changes to publish — PKGBUILD is identical to AUR"
+              exit 0
+          fi
+          git -c user.name=openZro -c user.email=dev@openzro.io \
+              commit -m "openzro-ui-bin ${REF_NAME}"
+          git push origin master
