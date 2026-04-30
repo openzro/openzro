@@ -529,7 +529,10 @@ jobs:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: [release]
     permissions:
-      contents: read
+      contents: write   # push to ghcr.io/openzro/dashboard AND upload
+                        # the openzro-dashboard deb/rpm/pkg.tar.zst to the
+                        # GitHub Release (gh release upload). The release
+                        # was created by the `release` job; we append.
       packages: write   # push to ghcr.io/openzro/dashboard
 
     steps:
