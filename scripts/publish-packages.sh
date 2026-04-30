@@ -239,31 +239,45 @@ if [ -n "$PACMAN_ANY_FOUND" ]; then
         [ -d "$ARCH_DIR" ] || continue
         compgen -G "$ARCH_DIR/*.pkg.tar.zst" >/dev/null || continue
 
-        # Pass the passphrase so gpg inside the container can sign
-        # the db. Mount the host's gnupg dir read-write since gpg
-        # needs to write trust db updates on first use.
+        # Two-phase signing because repo-add's --sign uses the
+        # container's plain `gpg` binary (it doesn't honor the $GPG
+        # env override we tried earlier). gpg with passphrase from
+        # an unrelated GNUPGHOME mounts ends up failing silently in
+        # CI — the "Signing database" log line prints, no .sig file
+        # appears, repo-add exits 0. Workaround: build the db
+        # UNSIGNED inside the container, then detached-sign the
+        # resulting db + files OUTSIDE the container with the same
+        # gpg flags we already use on the .pkg.tar.zst files.
         docker run --rm \
             -v "$ARCH_DIR:/repo" \
-            -v "$GNUPGHOME:/root/.gnupg" \
-            -e GPG_PASSPHRASE="$GPG_PASSPHRASE" \
-            -e GPG_KEY_ID="$GPG_KEY_ID" \
             -w /repo \
             archlinux:latest \
             bash -c '
                 set -eu
-                # repo-add invokes gpg directly; ensure loopback +
-                # passphrase via a wrapper so non-interactive sign works.
-                cat > /usr/local/bin/gpg-wrap <<EOF
-#!/bin/sh
-exec /usr/bin/gpg --batch --yes --pinentry-mode loopback \
-    ${GPG_PASSPHRASE:+--passphrase "$GPG_PASSPHRASE"} "\$@"
-EOF
-                chmod +x /usr/local/bin/gpg-wrap
-                # repo-add reads $GPG to override the gpg binary.
-                GPGKEY="$GPG_KEY_ID" GPG=/usr/local/bin/gpg-wrap \
-                    repo-add --sign --key "$GPG_KEY_ID" \
-                    /repo/openzro.db.tar.gz /repo/*.pkg.tar.zst
+                repo-add /repo/openzro.db.tar.gz /repo/*.pkg.tar.zst
             '
+
+        # Now detached-sign the freshly-built db + files on the host
+        # using the same loopback-passphrase pattern that worked for
+        # the .pkg.tar.zst signatures earlier in this script. pacman
+        # follows the symlinks (`openzro.db -> openzro.db.tar.gz`,
+        # `openzro.db.sig -> openzro.db.tar.gz.sig`), so we only
+        # sign the .tar.gz files and let the existing symlinks point
+        # at the resulting .sig files.
+        for db in openzro.db.tar.gz openzro.files.tar.gz; do
+            [ -f "$ARCH_DIR/$db" ] || continue
+            gpg --batch --yes --pinentry-mode loopback \
+                ${GPG_PASSPHRASE:+--passphrase "$GPG_PASSPHRASE"} \
+                --default-key "$GPG_KEY_ID" \
+                --detach-sign --no-armor \
+                --output "$ARCH_DIR/${db}.sig" "$ARCH_DIR/$db"
+            # repo-add creates the openzro.db / openzro.files
+            # symlinks pointing to the .tar.gz; pacman expects
+            # corresponding `.sig` symlinks for the unsuffixed
+            # form too. Recreate them here.
+            short="${db%.tar.gz}"
+            ln -sfn "${db}.sig" "$ARCH_DIR/${short}.sig"
+        done
     done
 fi
 
