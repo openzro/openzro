@@ -1,0 +1,185 @@
+# lab-values.yaml — minimal-but-realistic helm values for a clean
+# alpha.16 lab redeploy. Use as the input to:
+#
+#   helm install openzro openzro/openzro \
+#     --version 2.0.0-alpha.9 \
+#     --namespace openzro --create-namespace \
+#     -f lab-values.yaml
+#
+# Replace REPLACE_* placeholders before applying. The values here
+# assume the lab already has:
+#   - A Postgres reachable at lab-postgres.openzro.svc.cluster.local
+#     with empty `openzro` and `dex` databases.
+#   - An NGINX ingress controller listening on a public IP at
+#     openzro.lab.example.com (single-domain Dex single-ingress,
+#     per ADR-0006).
+#   - cert-manager issuing TLS via Let's Encrypt (annotations below).
+#
+# When in doubt, compare against the production-shaped examples
+# under helms/charts/openzro/examples/ in the openzro/helms repo.
+
+fullnameOverride: openzro
+
+global:
+  namespace: openzro
+
+# =================== Database ===================
+
+postgres:
+  enabled: true
+  host: "lab-postgres.openzro.svc.cluster.local"
+  port: 5432
+  sslMode: disable          # lab-only; prod uses verify-full
+  username: openzro
+  password: REPLACE_POSTGRES_PASSWORD
+  databases:
+    management: openzro
+    dex: dex
+
+# =================== Management ===================
+
+management:
+  enabled: true
+  replicas: 1               # bump to 2 in HA failover phase
+
+  podCommand:
+    args:
+      - --port=80
+      - --log-file=console
+      - --log-level=info
+      - --disable-anonymous-metrics=true
+      - --single-account-mode-domain=lab.openzro.io
+      - --dns-domain=lab.openzro.io
+
+  configmap: |
+    {
+      "Stuns": [
+        {
+          "Proto": "udp",
+          "URI": "stun:stun.openzro.io:3478",
+          "Username": "",
+          "Password": null
+        }
+      ],
+      "Relay": {
+        "Addresses": ["rels://relay.lab.example.com:443"],
+        "CredentialsTTL": "24h",
+        "Secret": "REPLACE_RELAY_OZ_AUTH_SECRET"
+      },
+      "TURNConfig": {
+        "Turns": [],
+        "CredentialsTTL": "12h",
+        "Secret": "not-used",
+        "TimeBasedCredentials": false
+      },
+      "Signal": {
+        "Proto": "https",
+        "URI": "openzro.lab.example.com:443"
+      },
+      "ReverseProxy": {
+        "TrustedHTTPProxies": [],
+        "TrustedHTTPProxiesCount": 0,
+        "TrustedPeers": ["0.0.0.0/0"]
+      },
+      "DataStoreEncryptionKey": "REPLACE_WITH_BASE64_32_BYTES",
+      "DisableDefaultPolicy": false,
+      "HttpConfig": {
+        "Address": "0.0.0.0:33071",
+        "AuthAudience": "openzro-dashboard",
+        "AuthIssuer": "https://openzro.lab.example.com/dex",
+        "AuthUserIDClaim": "sub",
+        "IdpSignKeyRefreshEnabled": true,
+        "OIDCConfigEndpoint": "https://openzro.lab.example.com/dex/.well-known/openid-configuration"
+      },
+      "IdpManagerConfig": {
+        "ManagerType": "none"
+      }
+    }
+
+# =================== Dex (embedded) ===================
+
+dex:
+  enabled: true
+  configSecret:
+    create: false           # we render it from the postgres block
+    name: openzro-dex-config
+
+  config:
+    issuer: https://openzro.lab.example.com/dex
+    web:
+      http: 0.0.0.0:5556
+      allowedOrigins:
+        - https://openzro.lab.example.com
+    grpc:
+      addr: 0.0.0.0:5557
+      tlsCert: /etc/dex/grpc-certs/server.crt
+      tlsKey: /etc/dex/grpc-certs/server.key
+      tlsClientCA: /etc/dex/grpc-certs/ca.crt
+    oauth2:
+      responseTypes: ["code"]
+      skipApprovalScreen: true
+    enablePasswordDB: true
+    staticPasswords:
+      # password is "lab" — DO NOT REUSE IN PROD.
+      # bcrypt of "lab" generated with `htpasswd -nbBC 10 ""  lab | tr -d ':'`
+      - email: "operator@lab.openzro.io"
+        hash: REPLACE_DEX_BCRYPT_HASH
+        username: "operator"
+        userID: "08a8684b-db88-4b73-90a9-3cd1661f5466"
+    staticClients:
+      - id: openzro-dashboard
+        name: "openZro Dashboard"
+        public: true
+        redirectURIs:
+          - https://openzro.lab.example.com/auth
+          - https://openzro.lab.example.com/silent-auth
+    frontend:
+      issuer: openZro
+      theme: openzro
+      dir: /srv/dex/web
+
+# =================== Signal ===================
+
+signal:
+  enabled: true
+
+# =================== Relay ===================
+
+relay:
+  enabled: true
+  env:
+    OZ_AUTH_SECRET: REPLACE_RELAY_OZ_AUTH_SECRET
+    OZ_LOG_LEVEL: info
+
+# =================== Dashboard ===================
+
+dashboard:
+  enabled: true
+  env:
+    NEXTAUTH_URL: https://openzro.lab.example.com
+
+# =================== Ingress (NGINX, single-domain Dex) ===================
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - openzro.lab.example.com
+  tls:
+    - secretName: openzro-lab-tls
+      hosts:
+        - openzro.lab.example.com
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+
+# =================== TLS for Dex gRPC ===================
+
+# Dex gRPC needs mutual TLS between management and Dex. Generate
+# self-signed lab certs and stash in a Secret before install:
+#
+#   ./docs/operator/lab/gen-dex-grpc-certs.sh
+#
+# The chart consumes the Secret named below.
+dexGrpcCerts:
+  secretName: openzro-dex-grpc-certs
