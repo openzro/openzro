@@ -1,10 +1,12 @@
 name: Mobile
 
+# Manual-only: this workflow validates that gomobile bindings (.aar /
+# .xcframework) still compile, but openZro doesn't ship mobile apps
+# today (the actual UI shells live in separate downstream repos that
+# we don't fork). Re-enable push/pull_request triggers when mobile
+# becomes part of the release pipeline.
 on:
-  push:
-    branches:
-      - main
-  pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || github.actor_id }}
