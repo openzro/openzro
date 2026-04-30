@@ -31,6 +31,16 @@ jobs:
         run: |
           echo "cache=$(go env GOCACHE)" >> $env:GITHUB_ENV
           echo "modcache=$(go env GOMODCACHE)" >> $env:GITHUB_ENV
+          # PsExec64 runs as SYSTEM and inherits a different PATH
+          # (no setup-go modifications), so the hardcoded
+          # `C:\hostedtoolcache\windows\go\<resolved>\x64\bin\go.exe`
+          # path was needed to call the right binary. setup-go@v5
+          # changed the layout — `windows\go` became just `go` —
+          # so the hardcoded path stopped resolving and PsExec64
+          # exited with "system cannot find the path specified".
+          # GOROOT is reliably set by setup-go on every version, so
+          # use that to compute the binary path at runtime.
+          echo "goexe=$(go env GOROOT)\bin\go.exe" >> $env:GITHUB_ENV
 
       - name: Cache Go modules
         uses: actions/cache@v4
@@ -60,13 +70,13 @@ jobs:
       - run: choco install -y sysinternals --ignore-checksums
       - run: choco install -y mingw
 
-      - run: PsExec64 -s -w ${{ github.workspace }} C:\hostedtoolcache\windows\go\${{ steps.go.outputs.go-version }}\x64\bin\go.exe env -w GOMODCACHE=${{ env.cache }}
-      - run: PsExec64 -s -w ${{ github.workspace }} C:\hostedtoolcache\windows\go\${{ steps.go.outputs.go-version }}\x64\bin\go.exe env -w GOCACHE=${{ env.modcache }}
-      - run: PsExec64 -s -w ${{ github.workspace }} C:\hostedtoolcache\windows\go\${{ steps.go.outputs.go-version }}\x64\bin\go.exe mod tidy
+      - run: PsExec64 -s -w ${{ github.workspace }} ${{ env.goexe }} env -w GOMODCACHE=${{ env.cache }}
+      - run: PsExec64 -s -w ${{ github.workspace }} ${{ env.goexe }} env -w GOCACHE=${{ env.modcache }}
+      - run: PsExec64 -s -w ${{ github.workspace }} ${{ env.goexe }} mod tidy
       - run: echo "files=$(go list ./... | ForEach-Object { $_ } | Where-Object { $_ -notmatch '/management' })" >> $env:GITHUB_ENV
 
       - name: test
-        run: PsExec64 -s -w ${{ github.workspace }} cmd.exe /c "C:\hostedtoolcache\windows\go\${{ steps.go.outputs.go-version }}\x64\bin\go.exe test -tags=devcert -timeout 10m -p 1 ${{ env.files }} > test-out.txt 2>&1"
+        run: PsExec64 -s -w ${{ github.workspace }} cmd.exe /c "${{ env.goexe }} test -tags=devcert -timeout 10m -p 1 ${{ env.files }} > test-out.txt 2>&1"
       - name: test output
         if: ${{ always() }}
         run: Get-Content test-out.txt

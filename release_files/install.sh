@@ -50,6 +50,14 @@ get_release() {
 
 download_release_binary() {
     VERSION=$(get_release "$OPENZRO_RELEASE")
+    if [ -z "$VERSION" ]; then
+        echo "Could not resolve openzro release tag from GitHub API." >&2
+        echo "Common causes:" >&2
+        echo "  - unauthenticated rate limit hit (60 req/hour); set GITHUB_TOKEN" >&2
+        echo "  - network blocks api.github.com" >&2
+        echo "  - OPENZRO_RELEASE='$OPENZRO_RELEASE' tag does not exist" >&2
+        exit 1
+    fi
     BASE_URL="https://github.com/${OWNER}/${REPO}/releases/download"
 
     # The desktop UI on macOS is a single universal artifact (built by
