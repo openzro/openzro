@@ -33,18 +33,31 @@ get_release() {
     local RELEASE=$1
     if [ "$RELEASE" = "latest" ]; then
         # /releases/latest excludes prereleases (everything pre-1.0 is
-        # tagged as prerelease), so use the list endpoint and pick the
-        # most recent tag — first item, sorted newest first by GitHub.
-        local URL="https://api.github.com/repos/${OWNER}/${REPO}/releases?per_page=1"
+        # tagged as prerelease), and /releases sorts by tag_name
+        # lexicographically — *not* by date — so v0.53.1-alpha.9
+        # ranks "newer" than v0.53.1-alpha.14. Pull a page of recent
+        # releases and pick the highest tag with `sort -V` (version
+        # sort), which handles pre-release suffixes correctly. Both
+        # GNU sort (Linux) and BSD sort (macOS 11+) support -V.
+        local URL="https://api.github.com/repos/${OWNER}/${REPO}/releases?per_page=100"
+        if [ -n "$GITHUB_TOKEN" ]; then
+              curl -H "Authorization: token ${GITHUB_TOKEN}" -s "${URL}" \
+                  | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' \
+                  | sort -V | tail -1
+        else
+              curl -s "${URL}" \
+                  | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' \
+                  | sort -V | tail -1
+        fi
     else
         local URL="https://api.github.com/repos/${OWNER}/${REPO}/releases/tags/${RELEASE}"
-    fi
-    if [ -n "$GITHUB_TOKEN" ]; then
-          curl -H  "Authorization: token ${GITHUB_TOKEN}" -s "${URL}" \
-              | grep -m1 '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'
-    else
-          curl -s "${URL}" \
-              | grep -m1 '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'
+        if [ -n "$GITHUB_TOKEN" ]; then
+              curl -H "Authorization: token ${GITHUB_TOKEN}" -s "${URL}" \
+                  | grep -m1 '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'
+        else
+              curl -s "${URL}" \
+                  | grep -m1 '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'
+        fi
     fi
 }
 
