@@ -28,7 +28,15 @@ jobs:
         env:
           SKIP_UI_APP: ${{ matrix.skip_ui_mode }}
           USE_BIN_INSTALL: ${{ matrix.install_binary }}
-          GITHUB_TOKEN: ${{ secrets.RO_API_CALLER_TOKEN }}
+          # secrets.GITHUB_TOKEN is the workflow-scoped token GitHub
+          # auto-injects — 1000 req/hour against the API, plenty for
+          # the matrix. The previous `RO_API_CALLER_TOKEN` secret
+          # was never actually set, so install.sh's get_release()
+          # hit unauthenticated rate limits (60/hour shared across
+          # the GH-hosted runner pool's IPs) and returned empty
+          # VERSION — `download//openzro__darwin_arm64.tar.gz` with
+          # the double slash was the giveaway in alpha.14's failure.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           [ "$SKIP_UI_APP" == "false" ] && export XDG_CURRENT_DESKTOP="none"
           cat release_files/install.sh | sh -x
