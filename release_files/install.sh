@@ -32,18 +32,19 @@ fi
 get_release() {
     local RELEASE=$1
     if [ "$RELEASE" = "latest" ]; then
-        local TAG="latest"
-        local URL="https://pkg.openzro.io/releases/latest"
+        # /releases/latest excludes prereleases (everything pre-1.0 is
+        # tagged as prerelease), so use the list endpoint and pick the
+        # most recent tag — first item, sorted newest first by GitHub.
+        local URL="https://api.github.com/repos/${OWNER}/${REPO}/releases?per_page=1"
     else
-        local TAG="tags/${RELEASE}"
-        local URL="https://api.github.com/repos/${OWNER}/${REPO}/releases/${TAG}"
+        local URL="https://api.github.com/repos/${OWNER}/${REPO}/releases/tags/${RELEASE}"
     fi
     if [ -n "$GITHUB_TOKEN" ]; then
           curl -H  "Authorization: token ${GITHUB_TOKEN}" -s "${URL}" \
-              | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'
+              | grep -m1 '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'
     else
           curl -s "${URL}" \
-              | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'
+              | grep -m1 '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'
     fi
 }
 
@@ -218,14 +219,18 @@ install_native_binaries() {
 
 # Handle macOS .pkg installer
 install_pkg() {
-  case "$(uname -m)" in
-    x86_64) ARCH="amd64" ;;
-    arm64|aarch64) ARCH="arm64" ;;
-    *) echo "Unsupported macOS arch: $(uname -m)" >&2; exit 1 ;;
-  esac
+  VERSION=$(get_release "$OPENZRO_RELEASE")
+  if [ -z "$VERSION" ]; then
+      echo "Could not resolve openzro release tag from GitHub API" >&2
+      exit 1
+  fi
 
-  PKG_URL=$(curl -sIL -o /dev/null -w '%{url_effective}' "https://pkg.openzro.io/macos/${ARCH}")
-  echo "Downloading Openzro macOS installer from https://pkg.openzro.io/macos/${ARCH}"
+  # goreleaser produces a single universal .pkg covering both
+  # x86_64 and arm64 macs.
+  PKG_NAME="openzro_${VERSION#v}_darwin_universal.pkg"
+  PKG_URL="https://github.com/${OWNER}/${REPO}/releases/download/${VERSION}/${PKG_NAME}"
+
+  echo "Downloading openZro macOS installer from ${PKG_URL}"
   curl -fsSL -o /tmp/openzro.pkg "${PKG_URL}"
   ${SUDO} installer -pkg /tmp/openzro.pkg -target /
   rm -f /tmp/openzro.pkg
