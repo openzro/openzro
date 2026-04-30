@@ -40,14 +40,20 @@ func Test_S3HandlerGetUploadURL(t *testing.T) {
 
 	ctx := context.Background()
 	containerRequest := testcontainers.ContainerRequest{
-		Image:        "minio/minio:latest",
+		// Pin to a specific release rather than `:latest` — MinIO ships
+		// behavior changes (notably the 2025 console-removal flap) on
+		// rolling tags, and we don't want a CI run to surprise us with
+		// a newer image that needs different env vars or endpoints.
+		Image:        "minio/minio:RELEASE.2025-04-22T22-12-26Z",
 		ExposedPorts: []string{"9000/tcp"},
 		Cmd:          []string{"server", "/data"},
 		Env: map[string]string{
 			"MINIO_ROOT_USER":     minioAccessKey,
 			"MINIO_ROOT_PASSWORD": minioSecretKey,
 		},
-		WaitingFor: wait.ForHTTP("/minio/health/live").WithPort("9000/tcp").WithStartupTimeout(60 * time.Second),
+		// `/ready` waits until the server is actually serving S3 ops;
+		// `/live` only confirms the process is up.
+		WaitingFor: wait.ForHTTP("/minio/health/ready").WithPort("9000/tcp").WithStartupTimeout(60 * time.Second),
 	}
 
 	c, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
