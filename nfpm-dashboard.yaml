@@ -1,0 +1,58 @@
+# nfpm config for the openzro-dashboard deb/rpm/archlinux packages.
+# The dashboard is a Next.js static export — not a Go binary —
+# which is why goreleaser's nfpms don't fit (they want a `builds`
+# block to anchor the package to). nfpm CLI directly is simpler:
+# build the dashboard with npm, then `nfpm package -f this.yaml`
+# emits one .deb per format.
+#
+# Package contents:
+#   /usr/share/openzro-dashboard/        — static export bundle
+#   /usr/share/doc/openzro-dashboard/    — examples + README
+#
+# No service, no daemon, no systemd unit. Operator wires up
+# whatever web server they already run (nginx, Caddy, etc.) using
+# the example configs.
+
+name: openzro-dashboard
+arch: amd64       # noarch / all really, but nfpm requires a value
+platform: linux
+version: ${OPENZRO_VERSION}
+section: net
+priority: optional
+maintainer: openZro <dev@openzro.io>
+description: |
+  openZro web dashboard (static SPA).
+
+  Ships the Next.js static export bundle plus example nginx /
+  Caddy configs. Doesn't install a web server — operator fronts
+  the static files with whatever they already run.
+vendor: openZro
+homepage: https://openzro.io
+license: BSD-3-Clause
+
+contents:
+  # Static bundle — the npm build dumps to dashboard/out/.
+  - src: dashboard/out/
+    dst: /usr/share/openzro-dashboard/
+    type: tree
+
+  # render-env.sh ships INSIDE the dashboard root for ergonomics
+  # (one well-known location to invoke).
+  - src: release_files/dashboard/render-env.sh
+    dst: /usr/share/openzro-dashboard/render-env.sh
+    file_info:
+      mode: 0755
+
+  # Docs + examples under /usr/share/doc/<pkg>/ — Linux convention.
+  - src: release_files/dashboard/openzro-dashboard.env.example
+    dst: /usr/share/doc/openzro-dashboard/openzro-dashboard.env.example
+  - src: release_files/dashboard/nginx.conf.example
+    dst: /usr/share/doc/openzro-dashboard/nginx.conf.example
+  - src: release_files/dashboard/Caddyfile.example
+    dst: /usr/share/doc/openzro-dashboard/Caddyfile.example
+  - src: release_files/dashboard/README.md
+    dst: /usr/share/doc/openzro-dashboard/README.md
+
+# No deb/rpm-specific scripts — operator runs render-env.sh
+# manually after editing /etc/openzro-dashboard.env. Auto-running
+# on install would fail because the env file doesn't exist yet.

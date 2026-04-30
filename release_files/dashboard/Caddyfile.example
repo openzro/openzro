@@ -1,0 +1,37 @@
+# /etc/caddy/Caddyfile — example serving the openZro dashboard
+# from a host Caddy. Caddy auto-provisions a Let's Encrypt cert
+# for the hostname (no certbot needed) and handles HTTP/2 and
+# gRPC out of the box.
+#
+# Adapt the hostname and upstream addresses to your environment.
+
+openzro.example.com {
+    # Management gRPC. The path is the protobuf service FQN.
+    handle /management.ManagementService* {
+        reverse_proxy h2c://127.0.0.1:33073
+    }
+
+    # Signal gRPC.
+    handle /signalexchange.SignalExchange* {
+        reverse_proxy h2c://127.0.0.1:10000
+    }
+
+    # Management REST API.
+    handle /api* {
+        reverse_proxy 127.0.0.1:33071
+    }
+
+    # Dashboard SPA — root + try_files-equivalent fallback.
+    handle {
+        root * /usr/share/openzro-dashboard
+        try_files {path} {path}/ /index.html
+        file_server
+    }
+
+    # Security headers.
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+    }
+}
