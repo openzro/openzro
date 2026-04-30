@@ -100,3 +100,66 @@ If the key is ever exposed:
 The old key signature does **not** invalidate the binaries themselves
 (those are checksummed independently). Only the repo metadata signing
 changes.
+
+## Cloudflare cache purge (optional)
+
+`pkg.openzro.io` is served from `gh-pages` through Cloudflare. By
+default GitHub Pages sets `Cache-Control: max-age=600`, so APT / YUM /
+pacman clients see a new release index within ~10 minutes of cutting a
+tag. To make new releases visible immediately, the `publish_packages`
+job purges the index files from the Cloudflare edge after a
+successful push.
+
+This is opt-in: the step only fires when both secrets below are
+present, and skips silently otherwise. Forks without a Cloudflare
+account are unaffected.
+
+### One-time setup
+
+1. **Cloudflare API token** —
+   `My Profile → API Tokens → Create Token → Custom token`:
+   * Permission: `Zone → Cache Purge → Purge`.
+   * Zone Resources: `Include → Specific zone → openzro.io` (or your
+     vanity domain).
+   * Save the token (Cloudflare shows it once).
+
+2. **Zone ID** — `Cloudflare Dashboard → openzro.io → Overview` (right
+   sidebar).
+
+3. **GitHub secrets** — repo `openzro/openzro → Settings → Secrets and
+   variables → Actions → New repository secret`:
+   * `CF_API_TOKEN` — value from step 1.
+   * `CF_ZONE_ID` — value from step 2.
+
+### What the step purges
+
+The job calls `POST /zones/$CF_ZONE_ID/purge_cache` with a `files`
+list of just the **index** files (apt's
+`Packages` / `InRelease` / `Release`, yum's `repomd.xml`, pacman's
+`openzro.db` / `openzro.files`, and `/latest.json`). Package binaries
+(`.deb`, `.rpm`, `.pkg.tar.zst`, `.msi`, `.pkg`) are **not** purged —
+they're immutable per filename (every alpha.N has a unique URL), so
+cached copies stay valid and the long-TTL CDN window keeps origin
+load low.
+
+### TTL recommendations (Cloudflare Cache Rules, free tier)
+
+Pair the purge with two Cache Rules under
+`Caching → Cache Rules → Create rule`:
+
+```
+Rule 1 — Index files (short TTL, freshness)
+  When: hostname=pkg.openzro.io AND URI Path matches regex
+        (Packages\.gz$|InRelease$|^/.*Release$|repomd\.xml$|\.db$|\.files$|/latest\.json$)
+  Then: Edge TTL = 60s, Browser TTL = 60s
+
+Rule 2 — Package files (long TTL, immutable per filename)
+  When: hostname=pkg.openzro.io AND URI Path matches regex
+        (\.deb$|\.rpm$|\.pkg\.tar\.zst$|\.tar\.gz$|\.msi$|\.pkg$)
+  Then: Edge TTL = 30 days, Browser TTL = 7 days
+```
+
+With both pieces in place: operator runs `apt update` (or `pacman -Sy`,
+or `dnf check-update`) immediately after a release and sees the new
+version. Existing clients with cached package files keep their fast
+downloads.
