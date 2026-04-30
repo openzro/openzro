@@ -739,6 +739,44 @@ jobs:
               commit -m "publish: ${GITHUB_REF_NAME} packages"
           git push origin gh-pages
 
+      - name: Purge Cloudflare cache for pkg.openzro.io indexes
+        # Targeted purge of the index files only — package files are
+        # immutable per filename (we never overwrite alpha.X bits) so
+        # their cached copies stay valid for the long-TTL window.
+        # Skips silently when secrets are not set, so forks without a
+        # Cloudflare account don't break the workflow.
+        if: env.CF_API_TOKEN != '' && env.CF_ZONE_ID != ''
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+        run: |
+          curl -fsSL -X POST \
+              -H "Authorization: Bearer $CF_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "files": [
+                  "https://pkg.openzro.io/apt/dists/stable/InRelease",
+                  "https://pkg.openzro.io/apt/dists/stable/Release",
+                  "https://pkg.openzro.io/apt/dists/stable/Release.gpg",
+                  "https://pkg.openzro.io/apt/dists/stable/main/binary-amd64/Packages",
+                  "https://pkg.openzro.io/apt/dists/stable/main/binary-amd64/Packages.gz",
+                  "https://pkg.openzro.io/apt/dists/stable/main/binary-arm64/Packages",
+                  "https://pkg.openzro.io/apt/dists/stable/main/binary-arm64/Packages.gz",
+                  "https://pkg.openzro.io/yum/x86_64/repodata/repomd.xml",
+                  "https://pkg.openzro.io/yum/aarch64/repodata/repomd.xml",
+                  "https://pkg.openzro.io/pacman/x86_64/openzro.db",
+                  "https://pkg.openzro.io/pacman/x86_64/openzro.db.tar.gz",
+                  "https://pkg.openzro.io/pacman/x86_64/openzro.files",
+                  "https://pkg.openzro.io/pacman/x86_64/openzro.files.tar.gz",
+                  "https://pkg.openzro.io/pacman/aarch64/openzro.db",
+                  "https://pkg.openzro.io/pacman/aarch64/openzro.db.tar.gz",
+                  "https://pkg.openzro.io/pacman/aarch64/openzro.files",
+                  "https://pkg.openzro.io/pacman/aarch64/openzro.files.tar.gz",
+                  "https://pkg.openzro.io/latest.json"
+                ]
+              }' \
+              "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache"
+
   publish_aur:
     name: Publish openzro-bin to AUR
     runs-on: ubuntu-22.04
