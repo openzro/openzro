@@ -3,10 +3,12 @@ package server
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -33,6 +35,18 @@ func TestUpload(t *testing.T) {
 			t.Errorf("Failed to stop server: %v", err)
 		}
 	})
+
+	// Wait for the server to bind :8080 before issuing the upload — the
+	// goroutine above calls Start() asynchronously and the test was
+	// hitting "connection refused" on slow CI runners.
+	require.Eventually(t, func() bool {
+		c, err := net.DialTimeout("tcp", "127.0.0.1:8080", 50*time.Millisecond)
+		if err != nil {
+			return false
+		}
+		_ = c.Close()
+		return true
+	}, 5*time.Second, 25*time.Millisecond, "upload server did not start listening on :8080")
 
 	file := filepath.Join(t.TempDir(), "tmpfile")
 	fileContent := []byte("test file content")

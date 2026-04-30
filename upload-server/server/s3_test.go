@@ -8,6 +8,7 @@ import (
 	"os"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -27,14 +28,26 @@ func Test_S3HandlerGetUploadURL(t *testing.T) {
 		t.Skip("Skipping test on Windows due to potential docker dependency")
 	}
 
-	awsEndpoint := "http://127.0.0.1:4566"
+	// We use MinIO instead of LocalStack here. The previous test ran
+	// localstack/localstack:s3-latest, but LocalStack discontinued
+	// the community s3-only image in v2026.03 (March 23, 2026) and
+	// gates the equivalent behind their paid `localstack-pro` SKU.
+	// MinIO is S3-compatible, pure-Go, and the official `minio/minio`
+	// image is freely usable.
 	awsRegion := "us-east-1"
+	const minioAccessKey = "minioadmin"
+	const minioSecretKey = "minioadmin"
 
 	ctx := context.Background()
 	containerRequest := testcontainers.ContainerRequest{
-		Image:        "localstack/localstack:s3-latest",
-		ExposedPorts: []string{"4566:4566/tcp"},
-		WaitingFor:   wait.ForLog("Ready"),
+		Image:        "minio/minio:latest",
+		ExposedPorts: []string{"9000/tcp"},
+		Cmd:          []string{"server", "/data"},
+		Env: map[string]string{
+			"MINIO_ROOT_USER":     minioAccessKey,
+			"MINIO_ROOT_PASSWORD": minioSecretKey,
+		},
+		WaitingFor: wait.ForHTTP("/minio/health/live").WithPort("9000/tcp").WithStartupTimeout(60 * time.Second),
 	}
 
 	c, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
@@ -42,7 +55,7 @@ func Test_S3HandlerGetUploadURL(t *testing.T) {
 		Started:          true,
 	})
 	if err != nil {
-		t.Error(err)
+		t.Fatalf("failed to start MinIO container: %v", err)
 	}
 	defer func(c testcontainers.Container, ctx context.Context) {
 		if err := c.Terminate(ctx); err != nil {
@@ -50,10 +63,20 @@ func Test_S3HandlerGetUploadURL(t *testing.T) {
 		}
 	}(c, ctx)
 
+	mappedPort, err := c.MappedPort(ctx, "9000/tcp")
+	if err != nil {
+		t.Fatalf("failed to read MinIO mapped port: %v", err)
+	}
+	host, err := c.Host(ctx)
+	if err != nil {
+		t.Fatalf("failed to read MinIO container host: %v", err)
+	}
+	awsEndpoint := "http://" + host + ":" + mappedPort.Port()
+
 	t.Setenv("AWS_REGION", awsRegion)
 	t.Setenv("AWS_ENDPOINT_URL", awsEndpoint)
-	t.Setenv("AWS_ACCESS_KEY_ID", "test")
-	t.Setenv("AWS_SECRET_ACCESS_KEY", "test")
+	t.Setenv("AWS_ACCESS_KEY_ID", minioAccessKey)
+	t.Setenv("AWS_SECRET_ACCESS_KEY", minioSecretKey)
 
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(awsRegion), config.WithBaseEndpoint(awsEndpoint))
 	if err != nil {
