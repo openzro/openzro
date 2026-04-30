@@ -437,32 +437,33 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p pkg-stage/usr/local/bin
+          mkdir -p pkg-stage/Applications
           mkdir -p downloads
 
-          # Both archives are universal (fat amd64+arm64) — the CLI
-          # via goreleaser's universal_binaries feature, the UI via
-          # `name_template: …_darwin_universal` in
-          # .goreleaser.ui-darwin.yaml.
+          # CLI tarball: universal binary at the archive root.
+          # UI tarball: ships an "openZro UI.app/" directory plus a
+          # stub binary at the root (wrap-darwin-app.sh produces
+          # both — see scripts/wrap-darwin-app.sh).
           gh release download "${{ steps.ver.outputs.tag }}" \
             --repo "${{ github.repository }}" \
             --pattern 'openzro_*_darwin_all.tar.gz' \
             --pattern 'openzro-ui_*_darwin_universal.tar.gz' \
             --dir downloads
 
-          for f in downloads/*.tar.gz; do
-            echo "Extracting $f"
-            tar -xzf "$f" -C pkg-stage/usr/local/bin/ \
-              --strip-components=0
-          done
+          # CLI: extract the binary into /usr/local/bin/.
+          tar -xzf downloads/openzro_*_darwin_all.tar.gz \
+            -C pkg-stage/usr/local/bin/ openzro
+          chmod 0755 pkg-stage/usr/local/bin/openzro
 
-          # tar may have created a CHANGELOG/README sibling; we only
-          # want the executables in /usr/local/bin/. Goreleaser
-          # archives ship just the binary at the archive root, so
-          # this is normally a no-op.
-          find pkg-stage/usr/local/bin -type f ! -name 'openzro*' -delete
+          # UI: extract the .app bundle into /Applications/.
+          # Skip the stub binary at the archive root — the .app
+          # is the canonical thing macOS users interact with.
+          tar -xzf downloads/openzro-ui_*_darwin_universal.tar.gz \
+            -C pkg-stage/Applications/ "openZro UI.app"
+          chmod 0755 "pkg-stage/Applications/openZro UI.app/Contents/MacOS/openzro-ui"
 
-          chmod 0755 pkg-stage/usr/local/bin/*
           ls -la pkg-stage/usr/local/bin/
+          ls -la "pkg-stage/Applications/openZro UI.app/Contents/"
 
       - name: Author postinstall script
         run: |
