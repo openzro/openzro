@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ issuer }} · openZro</title>
+  <link rel="icon" href="{{ url .ReqPath "theme/favicon.png" }}">
+  <!--
+    No Dex `static/main.css` link — the openZro theme owns the
+    full visual surface (scene + card + form), so loading the
+    stock stylesheet would just inject duplicate, conflicting
+    rules. Our forked HTML uses class names from the openZro
+    Login design handoff (.scene / .frame / .top / .seal / .card
+    / .auth-btn / etc.) which are styled exclusively by
+    `theme/styles.css`.
+  -->
+  <link rel="stylesheet" href="{{ url .ReqPath "theme/styles.css" }}">
+</head>
+<body class="oz-body">
+  <!-- Backdrop scene: violet gradient orbs + grid mask. Deacmetive;
+       all positioning happens in CSS so the markup is layout-flat. -->
+  <div class="scene">
+    <div class="orb o1"></div>
+    <div class="orb o2"></div>
+  </div>
+
+  <!-- Floating ambient peer chips. Static copy — they're brand
+       atmosphere, not real telemetry. The chips live here in the
+       header so every Dex page (login, password, error, ...) gets
+       them without re-stamping per template. -->
+  <div class="chip-far left">
+    <span class="dot ok"></span>
+    <span class="key">peer</span><span class="val">edge-sa</span>
+    <span class="green">12ms</span>
+  </div>
+  <div class="chip-far right">
+    <span class="dot v"></span>
+    <span class="key">posture</span><span class="val">verified</span>
+  </div>
+  <div class="chip-far right2">
+    <span class="dot ok"></span>
+    <span class="key">mesh</span><span class="val">12 peers · ha-active</span>
+  </div>
+  <div class="chip-far left2">
+    <span class="dot v"></span>
+    <span class="key">cosign</span><span class="val">sha256:e1c…</span>
+  </div>
+
+  <main class="frame">
+    <header class="top">
+      <a href="/" class="brand">
+        <img src="{{ url .ReqPath "theme/icon.svg" }}" width="32" height="32" alt="">
+        <span class="brand-wm">open<em>Z</em>ro</span>
+      </a>
+    </header>
+
+    <section class="center">
+      <div class="card-wrap">

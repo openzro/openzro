@@ -34,6 +34,15 @@ services:
       # the rest of /srv/dex/web (static, templates, other
       # themes) intact so we override colour + logo only.
       - ./dev-idp/web/themes/openzro:/srv/dex/web/themes/openzro:ro
+      # Forked templates (header/footer/login/password) replace
+      # Dex's stock chooser + password pages with the openZro
+      # Claude Design layout. Mount one-by-one so other templates
+      # (approval.html, oob.html, error.html, device.html) keep
+      # using upstream defaults until we fork them too.
+      - ./dev-idp/web/templates/header.html:/srv/dex/web/templates/header.html:ro
+      - ./dev-idp/web/templates/footer.html:/srv/dex/web/templates/footer.html:ro
+      - ./dev-idp/web/templates/login.html:/srv/dex/web/templates/login.html:ro
+      - ./dev-idp/web/templates/password.html:/srv/dex/web/templates/password.html:ro
     ports:
       - "5556:5556"
       # gRPC API for runtime connector management. The
