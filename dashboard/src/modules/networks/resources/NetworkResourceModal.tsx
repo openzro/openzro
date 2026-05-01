@@ -83,6 +83,7 @@ export function ResourceModalContent({
   const [name, setName] = useState(resource?.name || "");
   const [description, setDescription] = useState(resource?.description || "");
   const [address, setAddress] = useState(resource?.address || "");
+  const [addressError, setAddressError] = useState("");
   const [groups, setGroups, { save: saveGroups }] = useGroupHelper({
     initial: resource?.groups || [],
   });
@@ -126,10 +127,14 @@ export function ResourceModalContent({
     });
   };
 
-  // TODO:  Address validation is missing for proper handling of submit button
   const canCreate = useMemo(() => {
-    return name.length > 0 && address.length > 0 && groups.length > 0;
-  }, [name, address, groups]);
+    return (
+      name.length > 0 &&
+      address.length > 0 &&
+      addressError === "" &&
+      groups.length > 0
+    );
+  }, [name, address, addressError, groups]);
 
   return (
     <ModalContent maxWidthClass={"max-w-xl"}>
@@ -170,7 +175,11 @@ export function ResourceModalContent({
           />
         </div>
 
-        <ResourceSingleAddressInput value={address} onChange={setAddress} />
+        <ResourceSingleAddressInput
+          value={address}
+          onChange={setAddress}
+          onError={setAddressError}
+        />
 
         <div>
           <Label>Destination Groups</Label>

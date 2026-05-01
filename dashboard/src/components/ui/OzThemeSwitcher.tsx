@@ -49,7 +49,7 @@ export default function OzThemeSwitcher() {
           "h-10 w-10 flex items-center justify-center rounded-md",
           "text-nb-gray-300 hover:text-white",
           "hover:bg-nb-gray-900/40 transition-colors",
-          "focus:outline-none focus-visible:ring-2 focus-visible:ring-netbird-200",
+          "focus:outline-none focus-visible:ring-2 focus-visible:ring-openzro-200",
         )}
       >
         <TriggerIcon size={18} />
@@ -70,14 +70,14 @@ export default function OzThemeSwitcher() {
                   className={cn(
                     "text-[10px] uppercase tracking-wide font-medium",
                     "px-1.5 py-0.5 rounded",
-                    "bg-netbird-900/40 text-netbird-200",
+                    "bg-openzro-900/40 text-openzro-200",
                   )}
                 >
                   Beta
                 </span>
               )}
               {active && (
-                <Check size={14} className="text-netbird-200" />
+                <Check size={14} className="text-openzro-200" />
               )}
             </DropdownMenuItem>
           );
