@@ -412,3 +412,78 @@ body.theme-body::before {
     margin-bottom: 24px;
   }
 }
+
+/* ---------------------------------------------------------------
+ * Email-first ordering with OR divider.
+ *
+ * Dex's stock /login renders connectors in the order they were
+ * configured in dex.config.connectors, with the local password DB
+ * (if `enablePasswordDB: true`) typically last. The brand-aligned
+ * ergonomics — email on top, "OR", then SSO providers — is just
+ * a CSS-level reorder. We avoid forking Dex's HTML templates
+ * (every Dex bump would risk a merge conflict) and instead use
+ * flex `order:` on each `.theme-form-row` plus a pseudo-element
+ * "OR" divider stamped after the local row.
+ *
+ * Caveat: on accounts where `enablePasswordDB: false` the local
+ * row is absent and the divider does not render — `:has()` only
+ * matches when the local row exists.
+ *
+ * Browser support: `:has()` is available in Chrome 105+, Safari
+ * 15.4+, Firefox 121+ — universal in 2026 desktop / mobile.
+ */
+
+/* Treat the connector list as a flex column so `order:` applies. */
+.theme-form-row {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Local (email/password) connector goes first. */
+.theme-form-row:has(.dex-btn-icon--local) {
+  order: 1;
+}
+
+/* Generic OIDC + named providers (google, github, oauth, etc.)
+ * fall below the divider. We can't enumerate every connector type
+ * Dex supports, so use the inverse: anything NOT local. */
+.theme-form-row:not(:has(.dex-btn-icon--local)) {
+  order: 3;
+}
+
+/* OR divider — stamped once, immediately after the local row.
+ * Sits at order:2 between local (1) and providers (3). */
+.theme-form-row:has(.dex-btn-icon--local)::after {
+  order: 2;
+  content: "OR";
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 18px 0 12px;
+  padding: 0;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.45);
+  position: relative;
+}
+
+/* Lines flanking the OR text. Linear gradient so they fade out at
+ * the edges instead of hard-stopping. */
+.theme-form-row:has(.dex-btn-icon--local)::after {
+  background:
+    linear-gradient(90deg,
+      transparent,
+      rgba(167, 139, 250, 0.22) 12%,
+      rgba(167, 139, 250, 0.22) 38%,
+      transparent 44%,
+      transparent 56%,
+      rgba(167, 139, 250, 0.22) 62%,
+      rgba(167, 139, 250, 0.22) 88%,
+      transparent
+    );
+  background-size: 100% 1px;
+  background-position: center;
+  background-repeat: no-repeat;
+}

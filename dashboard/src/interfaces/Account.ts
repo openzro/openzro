@@ -7,6 +7,8 @@ export interface Account {
   settings: {
     extra: {
       peer_approval_enabled: boolean;
+      network_traffic_logs_enabled?: boolean;
+      network_traffic_packet_counter_enabled?: boolean;
     };
     peer_login_expiration_enabled: boolean;
     peer_login_expiration: number;

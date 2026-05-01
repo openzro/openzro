@@ -11,7 +11,7 @@ import * as Tabs from "@radix-ui/react-tabs";
 import { useApiCall } from "@utils/api";
 import { validator } from "@utils/helpers";
 import { isOpenzroHosted } from "@utils/openzro";
-import { ExternalLinkIcon, GlobeIcon, NetworkIcon } from "lucide-react";
+import { ActivityIcon, ExternalLinkIcon, GlobeIcon, NetworkIcon } from "lucide-react";
 import React, { useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
 import SettingsIcon from "@/assets/icons/SettingsIcon";
@@ -34,6 +34,34 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
   const [customDNSDomain, setCustomDNSDomain] = useState(
     account.settings.dns_domain || "",
   );
+  const [flowEnabled, setFlowEnabled] = useState(
+    account.settings.extra?.network_traffic_logs_enabled ?? false,
+  );
+
+  const toggleFlowSetting = async (toggle: boolean) => {
+    notify({
+      title: "Network Traffic Events",
+      description: `Network Traffic Events successfully ${
+        toggle ? "enabled" : "disabled"
+      }.`,
+      promise: saveRequest
+        .put({
+          id: account.id,
+          settings: {
+            ...account.settings,
+            extra: {
+              ...account.settings.extra,
+              network_traffic_logs_enabled: toggle,
+            },
+          },
+        })
+        .then(() => {
+          setFlowEnabled(toggle);
+          mutate("/accounts");
+        }),
+      loadingMessage: "Updating Network Traffic Events...",
+    });
+  };
 
   const toggleNetworkDNSSetting = async (toggle: boolean) => {
     notify({
@@ -173,6 +201,32 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
                   Learn more
                   <ExternalLinkIcon size={12} />
                 </InlineLink>
+              </>
+            }
+            disabled={!permission.settings.update}
+          />
+
+          <FancyToggleSwitch
+            value={flowEnabled}
+            onChange={toggleFlowSetting}
+            label={
+              <>
+                <ActivityIcon size={15} />
+                Enable Network Traffic Events
+              </>
+            }
+            helpText={
+              <>
+                Capture per-flow events from peers (start / drop / end of every
+                TCP / UDP / ICMP connection) and persist them on the management
+                server for the Network Traffic page and any configured
+                exporters. Disabled by default — enable when you need
+                connection-level audit visibility. Persistence requires
+                management to be configured with a flow store engine
+                (postgres/mysql/sqlite via{" "}
+                <code>OPENZRO_FLOW_STORE_ENGINE</code> + DSN); without those
+                env vars events are accepted on the gRPC stream and dropped
+                after acking.
               </>
             }
             disabled={!permission.settings.update}
