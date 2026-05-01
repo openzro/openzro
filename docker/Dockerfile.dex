@@ -1,0 +1,36 @@
+# openZro-themed Dex image.
+#
+# Same Dex binary as upstream `dexidp/dex` — we just COPY in the
+# brand theme files at the path the helm chart and the Ansible role
+# expect (/srv/dex/web/themes/openzro/). One image, used identically
+# in K8s and bare-metal Ansible deployments.
+#
+# Why bake instead of side-mount: the configmap-mount pattern only
+# works on Kubernetes. Bare-metal operators on VMs / Hetzner / on-prem
+# would need a separate distribution channel for the theme files,
+# diverging two paths. Baking is the cheapest way to keep K8s and
+# VM in sync (the dashboard ships its branded HTML already; this
+# does the same for the IdP).
+#
+# Theme files live under deploy/dev-idp/web/themes/openzro/ in the
+# openzro/openzro repo and are mirrored here on every release.
+#
+# Build context expectation: repository root (so deploy/... paths
+# resolve). The release-binaries.yml workflow runs:
+#   docker buildx build -f docker/Dockerfile.dex \
+#     -t ghcr.io/openzro/dex:${VERSION} .
+
+ARG DEX_VERSION=v2.45.0-distroless
+FROM ghcr.io/dexidp/dex:${DEX_VERSION}
+
+# Distroless — no shell, no useradd. COPY auto-creates the dir as
+# the running user (dex), readable globally.
+COPY deploy/dev-idp/web/themes/openzro/styles.css     /srv/dex/web/themes/openzro/styles.css
+COPY deploy/dev-idp/web/themes/openzro/favicon.png    /srv/dex/web/themes/openzro/favicon.png
+COPY deploy/dev-idp/web/themes/openzro/logo.svg       /srv/dex/web/themes/openzro/logo.svg
+COPY deploy/dev-idp/web/themes/openzro/logo-dark.svg  /srv/dex/web/themes/openzro/logo-dark.svg
+COPY deploy/dev-idp/web/themes/openzro/logo.png       /srv/dex/web/themes/openzro/logo.png
+COPY deploy/dev-idp/web/themes/openzro/logo-dark.png  /srv/dex/web/themes/openzro/logo-dark.png
+
+# Inherits ENTRYPOINT/CMD from the upstream image — this is purely
+# additive (no behavior change beyond the bundled theme).

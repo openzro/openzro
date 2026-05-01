@@ -15,11 +15,12 @@
 #   1. release            (ubuntu-22.04) — CLI + 4 daemons + Docker, .deb/.rpm/.pkg.tar.zst
 #   2. release_ui         (ubuntu-22.04) — desktop UI for Linux + Windows
 #   3. release_ui_macos   (macos-14)     — desktop UI universal binary for macOS
-#   4. build_dashboard    (ubuntu-22.04) — ghcr.io/openzro/dashboard image
-#   5. build_macos_pkg    (macos-14)     — unsigned macOS PKG installer
-#   6. build_windows_msi  (windows-2022) — unsigned Windows MSI installer
-#   7. publish_packages   (ubuntu-22.04) — APT/YUM/DNF/zypper/pacman repos to gh-pages
-#   8. publish_aur        (ubuntu-22.04) — push openzro-bin PKGBUILD to AUR
+#   4. release_dex        (ubuntu-22.04) — ghcr.io/openzro/dex image (theme baked in)
+#   5. release_dashboard  (ubuntu-22.04) — ghcr.io/openzro/dashboard image
+#   6. build_macos_pkg    (macos-14)     — unsigned macOS PKG installer
+#   7. build_windows_msi  (windows-2022) — unsigned Windows MSI installer
+#   8. publish_packages   (ubuntu-22.04) — APT/YUM/DNF/zypper/pacman repos to gh-pages
+#   9. publish_aur        (ubuntu-22.04) — push openzro-bin PKGBUILD to AUR
 # Everything `mode: append`s to the same GitHub Release on tag push.
 
 name: Release binaries
@@ -515,6 +516,61 @@ jobs:
           gh release upload "${{ steps.ver.outputs.tag }}" \
             "dist/openzro_${{ steps.ver.outputs.version }}_darwin_universal.pkg" \
             --repo "${{ github.repository }}" --clobber
+
+  release_dex:
+    name: Build + push themed Dex container image
+    runs-on: ubuntu-22.04
+    # Same gating as release_dashboard — tag-only, after `release`.
+    # Image carries the upstream Dex binary plus the openZro brand
+    # theme baked into /srv/dex/web/themes/openzro/. K8s helm chart
+    # AND bare-metal Ansible role both consume this; bundling means
+    # we ship the theme on a single distribution channel instead of
+    # divergent configmap-mount (k8s) + filesystem-stage (Ansible)
+    # paths. See docker/Dockerfile.dex for the rationale.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [release]
+    permissions:
+      contents: read
+      packages: write   # push to ghcr.io/openzro/dex
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build + push themed Dex image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.dex
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ghcr.io/openzro/dex:${{ steps.ver.outputs.version }}
+            ghcr.io/openzro/dex:latest
+          labels: |
+            org.opencontainers.image.title=openzro-dex
+            org.opencontainers.image.version=${{ steps.ver.outputs.version }}
+            org.opencontainers.image.source=https://github.com/openzro/openzro
+            org.opencontainers.image.licenses=BSD-3-Clause
 
   release_dashboard:
     name: Build + push dashboard container image
