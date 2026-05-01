@@ -95,6 +95,15 @@ func New(ctx context.Context, cfg Config) (*Coordinator, error) {
 		Bucket:      LocksBucket,
 		Description: "openzro distributed locks",
 		TTL:         ttl,
+		// Locks are TTL-bound and inherently ephemeral — they expire
+		// in seconds and re-acquire on restart. Memory storage is the
+		// right semantic match (and avoids needing JetStream file
+		// store + PVCs in HA deployments). The KV API requests file
+		// storage by default, which fails on NATS deployments that
+		// only allow memory streams (e.g. our chart's nats subchart
+		// with fileStore.enabled=false). Pinning Storage here makes
+		// the coordinator portable across both layouts.
+		Storage: jetstream.MemoryStorage,
 	})
 	if err != nil {
 		cancel()
