@@ -251,6 +251,8 @@ func (u *User) Copy() *User {
 		IsServiceUser:        u.IsServiceUser,
 		NonDeletable:         u.NonDeletable,
 		ServiceUserName:      u.ServiceUserName,
+		Email:                u.Email,
+		Name:                 u.Name,
 		PATs:                 pats,
 		Blocked:              u.Blocked,
 		LastLogin:            u.LastLogin,

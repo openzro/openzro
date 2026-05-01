@@ -340,6 +340,8 @@ func TestUser_Copy(t *testing.T) {
 		Role:            "role",
 		IsServiceUser:   true,
 		ServiceUserName: "servicename",
+		Email:           "user@example.com",
+		Name:            "Test User",
 		AutoGroups:      []string{"group1", "group2"},
 		PATs: map[string]*types.PersonalAccessToken{
 			"pat1": {
