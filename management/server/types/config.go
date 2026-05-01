@@ -53,9 +53,34 @@ type Config struct {
 	StoreConfig StoreConfig
 
 	ReverseProxy ReverseProxy
-	
+
 	// disable default all-to-all policy
 	DisableDefaultPolicy bool
+
+	// WgPrivateKey is the management daemon's WireGuard identity used to
+	// decrypt the encrypted gRPC envelope every peer sends with its Login
+	// and Sync requests (encryption.DecryptMessage in grpcserver.go). It
+	// is base64-encoded `wgtypes.Key` material (32 random bytes).
+	//
+	// Single-instance deployments may leave this empty — NewServer
+	// generates a fresh key at startup and the daemon persists it back
+	// here on its first boot so subsequent restarts keep the same
+	// identity (peers don't have to re-encrypt).
+	//
+	// HA deployments (>1 management replica) MUST share one key across
+	// every pod. The K8s service round-robins requests across pods; a
+	// peer that encrypted with pod A's public key would otherwise see
+	// half its requests fail with `InvalidArgument: invalid request
+	// message` when they land on pod B. The chart wires this via a
+	// shared Secret + the `OPENZRO_MGMT_WG_PRIVATE_KEY` env var override
+	// (see helms/charts/openzro/templates/management-identity-secret.yaml).
+	//
+	// Background: upstream NetBird hardcodes `wgtypes.GeneratePrivateKey()`
+	// on every NewServer() call with no persistence and no config knob.
+	// They run their managed cloud either single-replica or with an
+	// internal patch that has never been upstreamed (issue #3547 stays
+	// open). openZro's BSD-3 fix is to make the key explicit + injectable.
+	WgPrivateKey string
 }
 
 // GetAuthAudiences returns the audience from the http config and device authorization flow config
