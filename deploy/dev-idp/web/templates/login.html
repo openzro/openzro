@@ -1,0 +1,99 @@
+{{ template "header.html" . }}
+
+<div class="card">
+  <div class="card-head">
+    <span class="card-eyebrow">Authenticate</span>
+    <h1>Log in to <em>openZro</em></h1>
+    <p class="lead">Choose a method to register this device with your mesh.</p>
+  </div>
+
+  {{- /*
+    Two passes over .Connectors so we can split the chooser into
+    primary (password DB / local) above the OR divider and SSO
+    (Google, OIDC, SAML, LDAP) below it. Email-first matches the
+    self-hosted mental model — most users on a fresh deployment
+    don't have an IdP wired yet, so showing them the password form
+    as the headline action and SSO as the secondary path is the
+    expected order. When the operator has only one of the two,
+    we suppress the OR entirely.
+  */ -}}
+  {{- $hasLocal := false -}}
+  {{- $hasSso := false -}}
+  {{- range $c := .Connectors -}}
+    {{- if eq $c.Type "local" -}}{{- $hasLocal = true -}}
+    {{- else -}}{{- $hasSso = true -}}{{- end -}}
+  {{- end -}}
+
+  {{ if $hasLocal }}
+  <div class="auth-list">
+    {{ range $c := .Connectors }}
+      {{ if eq $c.Type "local" }}
+      <a class="auth-btn auth-btn--local" href="{{ $c.URL }}" target="_self">
+        <span class="ico">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h13A2.5 2.5 0 0 1 21 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5v-11Z" stroke="#fff" stroke-width="1.6"/>
+            <path d="m4 7 8 6 8-6" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="label">
+          Continue with Email
+          <span class="sub">password · no magic link</span>
+        </span>
+        <svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <path d="m9 6 6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </a>
+      {{ end }}
+    {{ end }}
+  </div>
+  {{ end }}
+
+  {{ if and $hasLocal $hasSso }}
+  <div class="divider">OR</div>
+  {{ end }}
+
+  {{ if $hasSso }}
+  <div class="auth-list">
+    {{ range $c := .Connectors }}
+      {{ if ne $c.Type "local" }}
+      <a class="auth-btn auth-btn--{{ $c.Type }}" href="{{ $c.URL }}" target="_self">
+        <span class="ico">
+          {{- if eq $c.Type "google" -}}
+            <svg width="20" height="20" viewBox="0 0 48 48">
+              <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/>
+              <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.4 6.3 14.7z"/>
+              <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.6 39.6 16.3 44 24 44z"/>
+              <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.1 5.6l6.2 5.2C40.6 35.5 44 30.2 44 24c0-1.3-.1-2.4-.4-3.5z"/>
+            </svg>
+          {{- else -}}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>
+              <circle cx="16.5" cy="7.5" r=".5" fill="#fff"/>
+            </svg>
+          {{- end }}
+        </span>
+        <span class="label">
+          {{- if eq $c.Type "google" -}}
+            Continue with Google
+            <span class="sub">workspace · sso</span>
+          {{- else -}}
+            Continue with {{ $c.Name }}
+            <span class="sub">{{ $c.Type }} · sso</span>
+          {{- end }}
+        </span>
+        <svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <path d="m9 6 6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </a>
+      {{ end }}
+    {{ end }}
+  </div>
+  {{ end }}
+
+  <div class="card-foot">
+    <span class="hint">Pick a method to continue</span>
+    <span>Self-hosted · BSD-3</span>
+  </div>
+</div>
+
+{{ template "footer.html" . }}

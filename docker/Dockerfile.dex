@@ -27,10 +27,21 @@ FROM ghcr.io/dexidp/dex:${DEX_VERSION}
 # the running user (dex), readable globally.
 COPY deploy/dev-idp/web/themes/openzro/styles.css     /srv/dex/web/themes/openzro/styles.css
 COPY deploy/dev-idp/web/themes/openzro/favicon.png    /srv/dex/web/themes/openzro/favicon.png
+COPY deploy/dev-idp/web/themes/openzro/icon.svg       /srv/dex/web/themes/openzro/icon.svg
 COPY deploy/dev-idp/web/themes/openzro/logo.svg       /srv/dex/web/themes/openzro/logo.svg
 COPY deploy/dev-idp/web/themes/openzro/logo-dark.svg  /srv/dex/web/themes/openzro/logo-dark.svg
 COPY deploy/dev-idp/web/themes/openzro/logo.png       /srv/dex/web/themes/openzro/logo.png
 COPY deploy/dev-idp/web/themes/openzro/logo-dark.png  /srv/dex/web/themes/openzro/logo-dark.png
+
+# Forked Dex templates (Apache-2.0, derived from dexidp/dex v2.45.0).
+# These replace the upstream chooser / password / approval pages with
+# the openZro Claude Design layout — scene/orbs, branded card, trust
+# strip, footer. The Go template directives ({{ .Connectors }}, etc.)
+# stay byte-identical so Dex's renderer keeps working.
+COPY deploy/dev-idp/web/templates/header.html    /srv/dex/web/templates/header.html
+COPY deploy/dev-idp/web/templates/footer.html    /srv/dex/web/templates/footer.html
+COPY deploy/dev-idp/web/templates/login.html     /srv/dex/web/templates/login.html
+COPY deploy/dev-idp/web/templates/password.html  /srv/dex/web/templates/password.html
 
 # Inherits ENTRYPOINT/CMD from the upstream image — this is purely
 # additive (no behavior change beyond the bundled theme).

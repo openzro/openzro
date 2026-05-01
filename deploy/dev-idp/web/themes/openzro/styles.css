@@ -1,613 +1,475 @@
 /* openZro brand theme for Dex.
  *
- * Forces a single dark, branded look (matches the dashboard's dark
- * mode tokens — see dashboard/src/app/globals.css and the brand
- * rules in /CLAUDE.md). The login screen is opinionated: one polished
- * dark surface regardless of prefers-color-scheme, like Linear / Vercel.
+ * Pairs with the forked templates under
+ * `deploy/dev-idp/web/templates/` (header.html / footer.html /
+ * login.html / password.html). Class names follow the design
+ * handoff (Openzro Login.html), NOT Dex's stock CSS — our
+ * forked templates skip the upstream `static/main.css` link, so
+ * this file is the single source of truth for the visual surface.
  *
- * Class names come from Dex's stock templates (web/templates/*.html)
- * — we override the visual without forking HTML. The navbar/logo
- * block is hidden; the logo is re-injected above the panel via
- * .dex-container::before so the layout reads as a single centered
- * lockup + form.
+ * Tokens come from the brand palette in /CLAUDE.md (violet 50-900
+ * scale + ink neutrals). Geist + JetBrains Mono are loaded in the
+ * forked header.html; if they fail to fetch (offline lab), the
+ * font-family fallback chain (system sans / mono) takes over.
  */
 
 :root {
-  --oz-violet-50:  #f5f3ff;
-  --oz-violet-100: #ede9fe;
-  --oz-violet-200: #ddd6fe;
-  --oz-violet-300: #c4b5fd;
-  --oz-violet-400: #a78bfa;
-  --oz-violet-500: #8b5cf6;
-  --oz-violet-600: #7c3aed;
-  --oz-violet-700: #6d28d9;
-  --oz-violet-800: #5b21b6;
-  --oz-violet-900: #4c1d95;
+  --v50:  #f5f3ff; --v100: #ede9fe; --v200: #ddd6fe; --v300: #c4b5fd;
+  --v400: #a78bfa; --v500: #8b5cf6; --v600: #7c3aed; --v700: #6d28d9;
+  --v800: #5b21b6; --v900: #4c1d95;
 
-  --oz-ink:    #0a0614;
-  --oz-ink-2:  #13091f;
-  --oz-ink-3:  #1a1330;
+  --ink:   #0a0614;
+  --ink-2: #13091f;
+  --ink-3: #1a1330;
 
-  --oz-bg:            var(--oz-ink);
-  --oz-bg-panel:      var(--oz-ink-2);
-  --oz-bg-input:      var(--oz-ink-3);
-  --oz-text:          #ffffff;
-  --oz-text-muted:    #9ca3af;
-  --oz-text-subtle:   #6b7280;
-  --oz-border:        rgba(167, 139, 250, 0.18);
-  --oz-border-strong: rgba(167, 139, 250, 0.32);
-  --oz-primary:       var(--oz-violet-500);
-  --oz-primary-hover: var(--oz-violet-400);
+  --green: #34d399;
 
-  --oz-sans: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --sans: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 }
 
-html, body {
-  background-color: var(--oz-bg);
-}
-
-.theme-body {
-  background-color: var(--oz-bg);
-  color: var(--oz-text);
-  font-family: var(--oz-sans);
-  letter-spacing: -0.01em;
-  /* Vertical-center the dex-container by turning the body into a flex
-   * column. min-height fills the viewport so short forms still center. */
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; height: 100%; }
+body.oz-body {
+  font-family: var(--sans);
+  background: var(--ink);
+  color: #fff;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
   min-height: 100vh;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
 }
+a { color: inherit; text-decoration: none; }
+button { font: inherit; cursor: pointer; border: 0; background: transparent; color: inherit; }
 
-/* Layered scene — rich violet gradient backdrop + grid mask + drifting
- * orbs. Mirrors the Login design handoff (Openzro Login.html). All
- * GPU-cheap (radial-gradients + transforms), no images. */
-body.theme-body::before {
-  content: '';
+/* Backdrop scene — three radial-gradient orbs + a 64×64 grid masked
+ * to a centered ellipse. Fixed positioning so it tiles the viewport
+ * regardless of card height. Pointer-events disabled because it's
+ * pure decoration. */
+.scene {
   position: fixed;
   inset: 0;
+  overflow: hidden;
   pointer-events: none;
   background:
     radial-gradient(900px 500px at 50% -10%, rgba(124, 58, 237, 0.32), transparent 60%),
     radial-gradient(700px 400px at 85% 100%, rgba(91, 33, 182, 0.25), transparent 60%),
-    radial-gradient(600px 400px at 10% 90%, rgba(139, 92, 246, 0.18), transparent 60%);
+    radial-gradient(600px 400px at 10% 90%, rgba(139, 92, 246, 0.18), transparent 60%),
+    var(--ink);
   z-index: 0;
 }
-
-/* Subtle 64×64 grid masked to a centered ellipse so the page reads as
- * "engineered" without crowding the content. */
-body.theme-body::after {
-  content: '';
-  position: fixed;
+.scene::before {
+  content: "";
+  position: absolute;
   inset: 0;
-  pointer-events: none;
   background-image:
     linear-gradient(rgba(167, 139, 250, 0.06) 1px, transparent 1px),
     linear-gradient(90deg, rgba(167, 139, 250, 0.06) 1px, transparent 1px);
   background-size: 64px 64px;
   -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 50%, black 30%, transparent 80%);
-  mask-image: radial-gradient(ellipse 70% 60% at 50% 50%, black 30%, transparent 80%);
-  z-index: 0;
+          mask-image: radial-gradient(ellipse 70% 60% at 50% 50%, black 30%, transparent 80%);
 }
 
-/* The default Dex navbar is hidden — we re-render the logo above the
- * panel inside .dex-container so the lockup + form reads as one unit. */
-.theme-navbar {
-  display: none;
+/* Drifting blur orbs for ambient motion. Two only, kept cheap. */
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.5;
+  pointer-events: none;
 }
+.orb.o1 {
+  width: 400px; height: 400px;
+  background: var(--v600);
+  top: -120px; left: -120px;
+  animation: drift1 18s ease-in-out infinite;
+}
+.orb.o2 {
+  width: 520px; height: 520px;
+  background: var(--v800);
+  bottom: -180px; right: -160px;
+  animation: drift2 22s ease-in-out infinite;
+}
+@keyframes drift1 { 0%,100% { transform: translate(0,0); } 50% { transform: translate(60px,40px); } }
+@keyframes drift2 { 0%,100% { transform: translate(0,0); } 50% { transform: translate(-50px,-30px); } }
 
-.dex-container {
+/* ---------- frame ---------- */
+.frame {
   position: relative;
-  z-index: 1;
-  flex: 1 0 auto;
+  z-index: 2;
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding: 32px;
+}
+
+/* Header — brand + top-meta pills. */
+.top {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+}
+.brand { display: inline-flex; align-items: center; gap: 10px; }
+.brand-wm {
+  font-family: var(--sans);
+  font-size: 18px; font-weight: 600;
+  letter-spacing: -0.025em;
+  color: #fff;
+}
+.brand-wm em { font-style: normal; color: var(--v400); font-weight: 700; }
+.top-meta {
+  display: flex; align-items: center; gap: 14px;
+  font-family: var(--mono); font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 0.06em;
+}
+.top-meta .pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 12px; border-radius: 999px;
+  background: rgba(139, 92, 246, 0.10);
+  border: 1px solid rgba(139, 92, 246, 0.22);
+  color: var(--v200);
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.top-meta .pill .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--green); box-shadow: 0 0 10px var(--green);
+  animation: pulse-live 1.6s ease-in-out infinite;
+}
+@keyframes pulse-live { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(1.4)} }
+
+/* Center the card column. */
+.center {
+  display: flex; align-items: center; justify-content: center;
+  padding: 40px 0;
+}
+.card-wrap {
   width: 100%;
-  max-width: 100%;
-  margin: 0;
-  padding: 48px 20px;
-  text-align: center;
+  max-width: 440px;
+  display: flex; flex-direction: column;
+  gap: 32px;
 }
 
-/* Brand "seal" above the panel — pill-shaped pillbox with the disc
- * mark + wordmark, matching the .seal block in the Login design
- * handoff. Pseudo-element keeps Dex's HTML untouched. The PNG used
- * here is the dark-mode lockup that already ships in the theme
- * configmap; using it lets us avoid inlining a second copy of the
- * brand SVG (which would diverge from brand/openzro-icon.svg over
- * time). */
-.dex-container::before {
-  content: '';
-  display: block;
-  width: 200px;
-  height: 56px;
-  margin-bottom: 32px;
-  padding: 0 18px 0 10px;
-  background-image: url('logo-dark.png');
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: contain;
-  background-color: rgba(15, 10, 31, 0.65);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(167, 139, 250, 0.2);
-  border-radius: 999px;
-  box-shadow: 0 12px 40px -8px rgba(124, 58, 237, 0.4);
-}
-
-/* Card / panel — the centered surface holding the form. Per the
- * Login design handoff: glassmorphic gradient surface, faint violet
- * corner glow leaking into the bottom-right, deep drop shadow, and
- * 14px violet "ticks" hugging the top corners (the engineered-frame
- * detail from the design's `.card::after` pattern). */
-.theme-panel {
+/* ---------- card ---------- */
+.card {
+  width: 100%;
   position: relative;
   background: linear-gradient(180deg, rgba(36, 25, 66, 0.7), rgba(15, 10, 31, 0.85));
   -webkit-backdrop-filter: blur(20px) saturate(160%);
-  backdrop-filter: blur(20px) saturate(160%);
+          backdrop-filter: blur(20px) saturate(160%);
   border: 1px solid rgba(167, 139, 250, 0.18);
   border-radius: 20px;
+  padding: 36px 32px 32px;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.06) inset,
     0 30px 80px -20px rgba(0, 0, 0, 0.6),
     0 0 0 1px rgba(124, 58, 237, 0.08);
-  padding: 36px 32px 32px;
-  width: 100%;
-  max-width: 440px;
-  text-align: left;
   overflow: hidden;
 }
-
-/* Corner glow — soft violet bloom leaking from the top-right of the
- * card. Lives on .theme-panel::before so it doesn't collide with the
- * heading's ::before (eyebrow) or form-row pseudo-elements (OR
- * divider). The ::after slot on .theme-panel is reserved for the
- * corner ticks below. */
-.theme-panel::before {
-  content: '';
+/* corner glow */
+.card::before {
+  content: "";
   position: absolute;
-  top: -40%;
-  right: -30%;
-  width: 300px;
-  height: 300px;
+  top: -40%; right: -30%;
+  width: 300px; height: 300px;
   border-radius: 50%;
   background: radial-gradient(circle, rgba(139, 92, 246, 0.4), transparent 60%);
   filter: blur(40px);
   pointer-events: none;
-  z-index: 0;
 }
-
-/* Top-corner "ticks" — short violet brackets that frame the card. */
-.theme-panel::after {
-  content: '';
-  position: absolute;
-  inset: 0;
+/* corner ticks (top-left + top-right) */
+.card::after {
+  content: "";
+  position: absolute; inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(90deg,  var(--oz-violet-500) 0 14px, transparent 14px) top left  /14px 1px no-repeat,
-    linear-gradient(180deg, var(--oz-violet-500) 0 14px, transparent 14px) top left  /1px  14px no-repeat,
-    linear-gradient(270deg, var(--oz-violet-500) 0 14px, transparent 14px) top right /14px 1px no-repeat,
-    linear-gradient(180deg, var(--oz-violet-500) 0 14px, transparent 14px) top right /1px  14px no-repeat;
+    linear-gradient(90deg,  var(--v500) 0 14px, transparent 14px) top left  /14px 1px no-repeat,
+    linear-gradient(180deg, var(--v500) 0 14px, transparent 14px) top left  /1px  14px no-repeat,
+    linear-gradient(270deg, var(--v500) 0 14px, transparent 14px) top right /14px 1px no-repeat,
+    linear-gradient(180deg, var(--v500) 0 14px, transparent 14px) top right /1px  14px no-repeat;
   opacity: 0.5;
 }
+/* Make sure the form contents sit above corner glow + ticks. */
+.card > * { position: relative; z-index: 1; }
 
-/* Make sure the form contents sit above the corner glow + ticks. */
-.theme-panel > * {
+.card-head {
   position: relative;
-  z-index: 1;
+  display: flex; flex-direction: column; gap: 8px;
+  margin-bottom: 28px;
 }
-
-/* Heading area — eyebrow ("AUTHENTICATE") above the title for the
- * editorial-card feel from the design handoff. The eyebrow lives on
- * .theme-heading::before because Dex's stock template only renders
- * the <h2> — no surrounding <span> for the eyebrow. */
-.theme-heading {
-  color: var(--oz-text);
-  font-family: var(--oz-sans);
-  font-size: 26px;
-  font-weight: 600;
+.card-eyebrow {
+  font-family: var(--mono);
+  font-size: 11px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.18em;
+  color: var(--v300);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.card-eyebrow::before {
+  content: "";
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--v400);
+  box-shadow: 0 0 10px var(--v500);
+}
+.card h1 {
+  margin: 0;
+  font-size: 26px; font-weight: 600;
   letter-spacing: -0.025em;
   line-height: 1.15;
-  margin: 0 0 6px;
-  text-align: left;
+  color: #fff;
+}
+.card h1 em { font-style: normal; color: var(--v300); }
+.card .lead {
+  margin: 6px 0 0;
+  font-size: 14px; line-height: 1.55;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* ---------- auth list (chooser) ---------- */
+.auth-list {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: flex; flex-direction: column; gap: 10px;
 }
-
-.theme-heading::before {
-  content: 'AUTHENTICATE';
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.18em;
-  color: var(--oz-violet-300);
-  /* Live dot before the word, matching the design's eyebrow pattern. */
-  background-image: radial-gradient(circle, var(--oz-violet-400) 0 3px, transparent 3px);
-  background-size: 6px 6px;
-  background-position: 0 50%;
-  background-repeat: no-repeat;
-  padding-left: 14px;
-}
-
-/* Subtle helper line under the heading — Dex's templates don't render
- * one, but if we ever add a `<p class="dex-subtle-text">` it will
- * inherit this. Keeps the rule cheap. */
-.dex-subtle-text {
-  color: var(--oz-text-muted);
-  font-size: 13px;
-}
-
-/* "Log in with X" connector buttons (Google / GitHub / OIDC / …).
- *
- * Layout: icon tile on the left, text in the middle, a chevron on the
- * right that slides on hover to reinforce "this navigates somewhere".
- * Dex's HTML stamps `<span class="dex-btn-icon dex-btn-icon--{type}">`
- * with a background-image — we keep that mechanism but normalize the
- * tile so a Google / GitHub / Email / OIDC button all look uniform.
- *
- * The wrapping anchor adds extra DOM around the button; we make it
- * full-width-block so the row hit area matches what the user sees.
- */
-.theme-form-row > a {
-  display: block;
-  text-decoration: none;
-}
-
-.theme-btn-provider {
-  /* Borderless — relies on the faint surface tint + hover state for
-   * affordance, like Linear/Vercel. Slightly stronger bg than the
-   * panel so the row still reads as a target without an outline. */
-  background-color: rgba(255, 255, 255, 0.04);
-  border: none;
+.auth-btn {
+  width: 100%;
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 16px;
   border-radius: 12px;
-  color: var(--oz-text);
-  font-family: var(--oz-sans);
-  font-weight: 500;
-  font-size: 14.5px;
-  width: 100%;
-  min-width: 0;
-  padding: 11px 16px 11px 11px;
-  /* Flex layout: icon | text (flex-1, left-aligned) | chevron */
-  display: flex;
-  align-items: center;
-  gap: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(167, 139, 250, 0.18);
+  color: #fff;
+  transition: all 0.18s ease;
   text-align: left;
   position: relative;
-  transition: background-color 0.15s, transform 0.05s, box-shadow 0.15s;
+  overflow: hidden;
   cursor: pointer;
 }
-
-.theme-btn-provider:hover {
-  background-color: rgba(124, 58, 237, 0.12);
-  color: var(--oz-text);
-  box-shadow: 0 4px 16px -6px rgba(124, 58, 237, 0.3);
+.auth-btn:hover {
+  background: rgba(167, 139, 250, 0.08);
+  border-color: rgba(167, 139, 250, 0.4);
+  transform: translateY(-1px);
+}
+.auth-btn .ico {
+  width: 36px; height: 36px;
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.auth-btn--local .ico {
+  background: linear-gradient(135deg, var(--v500), var(--v700));
+  box-shadow: 0 8px 20px -6px rgba(124, 58, 237, 0.5);
+}
+.auth-btn--google .ico { background: #fff; }
+.auth-btn--oidc .ico,
+.auth-btn--ldap .ico,
+.auth-btn--saml .ico {
+  background: linear-gradient(135deg, var(--v500), var(--v700));
+  box-shadow: 0 8px 20px -6px rgba(124, 58, 237, 0.5);
+}
+.auth-btn .label {
+  flex: 1;
+  font-size: 15px; font-weight: 500;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.auth-btn .sub {
+  font-family: var(--mono); font-size: 11px;
+  font-weight: 400; color: rgba(255, 255, 255, 0.5);
+  letter-spacing: 0.04em;
+}
+.auth-btn .arrow {
+  color: rgba(167, 139, 250, 0.6);
+  transition: transform 0.18s, color 0.18s;
+}
+.auth-btn:hover .arrow {
+  color: var(--v300);
+  transform: translateX(4px);
 }
 
-.theme-btn-provider:active {
-  transform: translateY(1px);
+/* ---------- divider ---------- */
+.divider {
+  margin: 18px 0;
+  display: flex; align-items: center; gap: 12px;
+  font-family: var(--mono); font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  letter-spacing: 0.14em;
+}
+.divider::before, .divider::after {
+  content: ""; flex: 1; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(167, 139, 250, 0.2), transparent);
 }
 
-.theme-btn-provider:focus-visible {
-  outline: 2px solid var(--oz-violet-400);
-  outline-offset: 2px;
-}
-
-/* Icon tile — fixed-size square with a faint background so every
- * provider's bundled glyph (Dex sets the SVG via background-image
- * on .dex-btn-icon--{type}) sits in the same visual frame regardless
- * of whether it's Google's white wordmark or Keycloak's OIDC default. */
-.theme-btn-provider .dex-btn-icon,
-.dex-btn-icon {
-  width: 36px;
-  height: 36px;
-  flex: 0 0 36px;
-  border-radius: 8px;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: 22px;
-  /* Override Dex's float-left + half-pill border-radius. */
-  float: none;
-  margin: 0;
-  /* Provider-specific colors come from main.css via .dex-btn-icon--*;
-   * we keep them so the Google/GitHub buttons retain their brand
-   * coloring. The fallback below covers `local` (email) and other
-   * neutral types. */
-}
-
-/* Email / local / unknown connector — neutral violet tile so it
- * picks up the brand instead of Dex's stock light blue. The
- * specificity has to beat .dex-btn-icon--local in main.css. */
-.theme-btn-provider .dex-btn-icon--local,
-.dex-btn-icon--local {
-  background-color: rgba(167, 139, 250, 0.18);
-  /* Inline SVG envelope (currentColor-friendly violet). */
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a78bfa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='5' width='18' height='14' rx='2'/><path d='m3 7 9 6 9-6'/></svg>");
-}
-
-/* OIDC default (covers Keycloak / Auth0 / Authentik / Zitadel and
- * any generic OIDC connector that doesn't have a dedicated brand
- * icon in Dex's bundle). Dex ships a colorful pinwheel SVG that
- * clashes with our violet palette — replace with a Lucide key-round
- * (same icon used in the dashboard's Authentication Providers tab,
- * settings/page.tsx) so the brand surface stays consistent. */
-.theme-btn-provider .dex-btn-icon--oidc,
-.dex-btn-icon--oidc {
-  background-color: rgba(167, 139, 250, 0.18);
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a78bfa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z'/><circle cx='16.5' cy='7.5' r='.5' fill='%23a78bfa'/></svg>");
-}
-
-/* Text block fills the remaining space and keeps left-aligned, so
- * "Log in with Keycloak" doesn't drift towards the middle when the
- * label is short. */
-.theme-btn-provider .dex-btn-text {
-  flex: 1 1 auto;
-  text-align: left;
-  /* Dex applies `display: inline-block` upstream — flex children with
-   * implicit baseline alignment can shift; explicit centering below. */
-  line-height: 1.2;
-}
-
-/* Chevron on the right — slides on hover to reinforce "navigates
- * somewhere". Inline Lucide chevron-right (matches the line/stroke
- * style of the connector icons). 20px keeps it readable next to the
- * 36px icon tile without crowding it; the 6px hover slide is large
- * enough to read as motion at this size. Pure CSS, no extra DOM. */
-.theme-btn-provider::after {
-  content: "";
-  flex: 0 0 20px;
-  width: 20px;
-  height: 20px;
-  margin-left: 4px;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a78bfa' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='m9 18 6-6-6-6'/></svg>");
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: 18px;
-  opacity: 0.45;
-  transition: transform 0.18s ease, opacity 0.18s ease;
-}
-
-.theme-btn-provider:hover::after {
-  transform: translateX(6px);
-  opacity: 1;
-}
-
-/* Primary action ("Login" submit). */
-.theme-btn--primary {
-  background-color: var(--oz-primary);
-  border: none;
+/* ---------- SSO fallback ---------- */
+.sso {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px;
   border-radius: 10px;
-  color: #ffffff;
-  font-family: var(--oz-sans);
-  font-weight: 600;
-  font-size: 14.5px;
-  width: 100%;
-  min-width: 0;
-  padding: 12px 22px;
-  margin-top: 8px;
-  transition: background-color 0.15s, transform 0.05s, box-shadow 0.15s;
-  cursor: pointer;
-  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.08) inset,
-              0 8px 24px -8px rgba(124, 58, 237, 0.6);
-}
-
-.theme-btn--primary:hover {
-  background-color: var(--oz-primary-hover);
-  color: #ffffff;
-}
-
-.theme-btn--primary:active {
-  transform: translateY(1px);
-}
-
-.theme-btn--primary:focus-visible {
-  outline: 2px solid var(--oz-violet-400);
-  outline-offset: 2px;
-}
-
-.theme-btn--success {
-  background-color: var(--oz-primary);
-  color: #ffffff;
-  border-radius: 10px;
-}
-
-.theme-btn--success:hover {
-  background-color: var(--oz-primary-hover);
-}
-
-/* Form layout. Dex's row wraps label + input pairs. */
-.theme-form-row {
-  margin: 14px 0;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(167, 139, 250, 0.12);
+  font-family: var(--mono); font-size: 12px;
+  color: rgba(255, 255, 255, 0.65);
+  transition: all 0.18s;
   width: 100%;
 }
+.sso:hover { border-color: rgba(167, 139, 250, 0.3); color: #fff; }
+.sso .key { color: var(--v300); }
 
-.theme-form-input {
-  background-color: var(--oz-bg-input);
-  border: 1px solid var(--oz-border);
-  border-radius: 10px;
-  color: var(--oz-text);
-  display: block;
-  font-family: var(--oz-sans);
-  font-size: 14px;
-  height: 42px;
-  margin: 0;
-  padding: 8px 14px;
-  width: 100%;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.theme-form-input::placeholder {
-  color: var(--oz-text-subtle);
-}
-
-.theme-form-input:focus,
-.theme-form-input:active {
-  border-color: var(--oz-primary);
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
-  outline: none;
-}
-
-.theme-form-label {
-  color: var(--oz-text-muted);
-  display: block;
-  font-family: var(--oz-sans);
-  font-size: 12.5px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  margin: 0 0 6px;
-  text-align: left;
-  text-transform: uppercase;
-  width: 100%;
-}
-
-.theme-link-back {
-  color: var(--oz-primary);
-  font-family: var(--oz-sans);
-  font-size: 13px;
+/* ---------- trust strip ---------- */
+.trust {
   margin-top: 18px;
-  text-align: center;
-}
-
-.theme-link-back a {
-  color: var(--oz-primary);
-  text-decoration: none;
-}
-.theme-link-back a:hover {
-  color: var(--oz-primary-hover);
-  text-decoration: underline;
-}
-
-.theme-remember-me {
-  color: var(--oz-text-muted);
-  font-family: var(--oz-sans);
-  font-size: 13px;
   width: 100%;
-  margin: 6px 0 4px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(167, 139, 250, 0.12);
+  font-family: var(--mono); font-size: 11.5px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.55);
 }
+.trust .ln { display: flex; gap: 10px; }
+.trust .ok { color: var(--green); }
+.trust .key { color: var(--v300); }
+.trust .v { color: #fff; }
 
-/* Validation / error box (Dex renders this when login fails). */
-.dex-error-box {
-  background-color: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.35);
-  border-radius: 10px;
-  color: #fca5a5;
-  font-family: var(--oz-sans);
-  font-size: 13px;
-  margin: 12px 0;
-  padding: 10px 14px;
-  text-align: left;
-}
-
-/* Mobile: tighter padding so the panel doesn't crop on narrow screens. */
-@media (max-width: 480px) {
-  .dex-container {
-    padding: 32px 16px;
-  }
-  .theme-panel {
-    padding: 28px 22px;
-    border-radius: 14px;
-  }
-  .dex-container::before {
-    width: 180px;
-    height: 48px;
-    margin-bottom: 24px;
-  }
-}
-
-/* ---------------------------------------------------------------
- * Email-first ordering with OR divider.
- *
- * Dex's stock /login renders connectors in the order they were
- * configured in dex.config.connectors, with the local password DB
- * (if `enablePasswordDB: true`) typically last. The brand-aligned
- * ergonomics — email on top, "OR", then SSO providers — is just
- * a CSS-level reorder. We avoid forking Dex's HTML templates
- * (every Dex bump would risk a merge conflict) and instead use
- * flex `order:` on each `.theme-form-row` plus a pseudo-element
- * "OR" divider stamped after the local row.
- *
- * Caveat: on accounts where `enablePasswordDB: false` the local
- * row is absent and the divider does not render — `:has()` only
- * matches when the local row exists.
- *
- * Browser support: `:has()` is available in Chrome 105+, Safari
- * 15.4+, Firefox 121+ — universal in 2026 desktop / mobile.
- */
-
-/* Make .theme-panel (the parent of .theme-form-row siblings) a flex
- * column so `order:` on its children takes effect. The heading and
- * subtle text default to `order: 0` and stay at the top; the rules
- * below give the local row order: 1, the OR pseudo-element order: 2,
- * and other connectors order: 3. */
-.theme-panel {
-  display: flex;
-  flex-direction: column;
-}
-
-/* Local (email/password) connector goes first. */
-.theme-form-row:has(.dex-btn-icon--local) {
-  order: 1;
-}
-
-/* Generic OIDC + named providers (google, github, oauth, etc.)
- * fall below the divider. We can't enumerate every connector type
- * Dex supports, so use the inverse: anything NOT local. */
-.theme-form-row:not(:has(.dex-btn-icon--local)) {
-  order: 3;
-}
-
-/* OR divider rendered as a pair of pseudo-elements on the local row.
- * Pseudo-elements are children of their host element, not siblings of
- * its parent — so they can't participate in `.theme-panel`'s flex
- * `order:` layout. Instead, give the local row a bottom margin that
- * carves out space, then position the line + "OR" pill absolutely
- * inside that margin band. Visually this places the divider between
- * the local row and whatever comes after it (the providers, which
- * sit at order: 3 below).
- */
-.theme-form-row:has(.dex-btn-icon--local) {
+/* ---------- card foot ---------- */
+.card-foot {
   position: relative;
-  margin-bottom: 36px;
+  margin-top: 24px; padding-top: 20px;
+  border-top: 1px solid rgba(167, 139, 250, 0.1);
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: var(--mono); font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  letter-spacing: 0.04em;
+}
+.card-foot .hint { display: inline-flex; align-items: center; gap: 6px; }
+.card-foot .kbd {
+  padding: 2px 6px; border-radius: 4px;
+  background: rgba(167, 139, 250, 0.12);
+  border: 1px solid rgba(167, 139, 250, 0.2);
+  color: var(--v200);
+  font-size: 10px;
 }
 
-/* Horizontal line in the margin band. */
-.theme-form-row:has(.dex-btn-icon--local)::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -22px;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(167, 139, 250, 0.22) 20%,
-    rgba(167, 139, 250, 0.22) 80%,
-    transparent
-  );
+/* ---------- bottom bar ---------- */
+.bottom {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 12px;
+}
+.bottom .links { display: flex; gap: 20px; }
+.bottom a:hover { color: #fff; }
+.bottom .mono { font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; }
+
+/* ---------- ambient chips ---------- */
+.chip-far {
+  position: fixed;
+  z-index: 1;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-radius: 8px;
+  background: rgba(15, 10, 31, 0.7);
+  -webkit-backdrop-filter: blur(8px);
+          backdrop-filter: blur(8px);
+  border: 1px solid rgba(139, 92, 246, 0.22);
+  font-family: var(--mono); font-size: 11px;
+  color: rgba(255, 255, 255, 0.65);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  animation: floaty 6s ease-in-out infinite;
   pointer-events: none;
 }
+.chip-far .dot { width: 6px; height: 6px; border-radius: 50%; }
+.chip-far .dot.ok { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.chip-far .dot.v  { background: var(--v400);  box-shadow: 0 0 8px var(--v400); }
+.chip-far .key { color: rgba(255, 255, 255, 0.45); }
+.chip-far .val { color: var(--v300); }
+.chip-far .green { color: var(--green); }
+.chip-far.left   { left: 6%;  top: 38%;    animation-delay: 0s; }
+.chip-far.right  { right: 6%; top: 30%;    animation-delay: 1.5s; }
+.chip-far.right2 { right: 9%; bottom: 24%; animation-delay: 3s; }
+.chip-far.left2  { left: 9%;  bottom: 18%; animation-delay: 2s; }
+@keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@media (max-width: 980px) { .chip-far { display: none; } }
 
-/* "OR" pill, centered over the line. The matching panel-color
- * background hides the line behind the pill. */
-.theme-form-row:has(.dex-btn-icon--local)::after {
-  content: "OR";
-  position: absolute;
-  left: 50%;
-  bottom: -29px;
-  transform: translateX(-50%);
-  padding: 2px 10px;
-  background-color: var(--oz-bg-panel);
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.18em;
-  color: rgba(255, 255, 255, 0.45);
-  pointer-events: none;
+/* ---------- password form (oz-form) ---------- */
+.oz-form {
+  display: flex; flex-direction: column; gap: 16px;
+}
+.oz-field { display: flex; flex-direction: column; gap: 6px; }
+.oz-field label {
+  font-family: var(--mono); font-size: 10px;
+  text-transform: uppercase; letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.5);
+}
+.oz-field input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(167, 139, 250, 0.18);
+  color: #fff;
+  font-family: var(--sans);
+  font-size: 14.5px;
+  transition: all 0.18s ease;
+}
+.oz-field input:focus {
+  outline: none;
+  border-color: var(--v400);
+  box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.15);
+}
+.oz-field input::placeholder { color: rgba(255, 255, 255, 0.3); }
+
+.oz-error {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+  font-size: 13px;
+  font-family: var(--mono);
+}
+
+.oz-btn-primary {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%;
+  padding: 13px 22px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--v500), var(--v700));
+  color: #fff;
+  font-family: var(--sans); font-size: 14px; font-weight: 500;
+  transition: all 0.18s ease;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.15) inset,
+    0 8px 24px -6px rgba(124, 58, 237, 0.5);
+  margin-top: 4px;
+}
+.oz-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.2) inset,
+    0 14px 32px -6px rgba(124, 58, 237, 0.7);
+}
+.oz-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: progress;
+  transform: none;
+}
+
+.oz-back {
+  margin-top: 12px;
+  text-align: center;
+  font-family: var(--mono); font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}
+.oz-back a {
+  color: var(--v300);
+  transition: color 0.18s;
+}
+.oz-back a:hover { color: #fff; }
+
+/* ---------- mobile ---------- */
+@media (max-width: 520px) {
+  .frame { padding: 20px; }
+  .card { padding: 28px 22px 22px; border-radius: 16px; }
+  .card h1 { font-size: 22px; }
+  .top-meta .pill:nth-child(n+2) { display: none; }
 }
