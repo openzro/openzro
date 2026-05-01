@@ -22,6 +22,7 @@ import { cn } from "@utils/helpers";
 import {
   CalendarClock,
   ExternalLinkIcon,
+  ShieldCheckIcon,
   ShieldIcon,
   TimerResetIcon,
 } from "lucide-react";
@@ -181,6 +182,33 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
         </div>
 
         <div className={"flex flex-col gap-6 w-full mt-8 mb-3"}>
+          <FancyToggleSwitch
+            value={peerApproval}
+            onChange={setPeerApproval}
+            label={
+              <>
+                <ShieldCheckIcon size={15} />
+                Require Peer Approval
+              </>
+            }
+            helpText={
+              <>
+                When enabled, every new peer that registers must be approved
+                by an administrator from the Peers list before it can join
+                the mesh. Existing peers are unaffected. Use this for
+                regulated environments where the admission audit trail
+                matters; combine with{" "}
+                <InlineLink href="/settings?tab=device-admission">
+                  Device Admission
+                </InlineLink>{" "}
+                to gate by posture (MDM/EDR) instead of/in addition to
+                manual review.
+              </>
+            }
+            disabled={!permission.settings.update}
+            data-cy={"peer-approval-toggle"}
+          />
+
           <div className={"flex flex-col"}>
             <FancyToggleSwitch
               value={loginExpiration}

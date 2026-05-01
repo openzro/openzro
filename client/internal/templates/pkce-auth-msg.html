@@ -1,106 +1,204 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta content="width=device-width, initial-scale=1" name="viewport"/>
-    <style>
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            background: #f7f8f9;
-            font-family: sans-serif, Arial, Tahoma;
-        }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>{{ if .Error }}Login failed{{ else }}You're in the mesh{{ end }} · openZro</title>
+<style>
+:root{
+  --v200:#ddd6fe; --v300:#c4b5fd; --v400:#a78bfa; --v500:#8b5cf6;
+  --v600:#7c3aed; --v700:#6d28d9; --v800:#5b21b6;
+  --ink:#0a0614;
+  --green:#34d399;
+  --red:#ef4444;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --mono:ui-monospace,'SF Mono',Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{
+  font-family:var(--sans);
+  background:var(--ink); color:#fff;
+  -webkit-font-smoothing:antialiased;
+  overflow:hidden; min-height:100vh;
+}
+.scene{
+  position:fixed; inset:0; overflow:hidden;
+  background:
+    radial-gradient(900px 500px at 50% -10%, rgba(52,211,153,0.18), transparent 60%),
+    radial-gradient(800px 500px at 50% 110%, rgba(124,58,237,0.28), transparent 60%),
+    radial-gradient(600px 400px at 12% 50%, rgba(139,92,246,0.18), transparent 60%),
+    var(--ink);
+}
+.scene::before{
+  content:""; position:absolute; inset:0;
+  background-image:
+    linear-gradient(rgba(167,139,250,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(167,139,250,0.06) 1px, transparent 1px);
+  background-size:64px 64px;
+  mask-image:radial-gradient(ellipse 70% 60% at 50% 50%, black 30%, transparent 80%);
+  -webkit-mask-image:radial-gradient(ellipse 70% 60% at 50% 50%, black 30%, transparent 80%);
+}
+.orb{position:absolute;border-radius:50%;filter:blur(70px);opacity:0.5;pointer-events:none}
+.orb.o1{width:420px;height:420px;background:#7c3aed;top:-140px;left:-140px;animation:drift1 18s ease-in-out infinite}
+.orb.o2{width:520px;height:520px;background:#0d6e4a;bottom:-200px;right:-180px;animation:drift2 22s ease-in-out infinite;opacity:0.4}
+@keyframes drift1{0%,100%{transform:translate(0,0)}50%{transform:translate(60px,40px)}}
+@keyframes drift2{0%,100%{transform:translate(0,0)}50%{transform:translate(-40px,-30px)}}
 
-        .container {
-            width: 100%;
-            background: white;
-            border: 1px solid #e8e9ea;
-            text-align: center;
-            padding: 20px;
-            padding-bottom: 50px;
-            max-width: 550px;
-            margin: 0 10px;
-        }
+.rings{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:1}
+.ring{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:50%}
+.ring.r1{width:220px;height:220px;border:1px solid rgba(52,211,153,0.18)}
+.ring.r2{width:380px;height:380px;border:1px solid rgba(52,211,153,0.12)}
+.ring.r3{width:560px;height:560px;border:1px solid rgba(167,139,250,0.10)}
+.ring.r4{width:760px;height:760px;border:1px solid rgba(167,139,250,0.06)}
+.pulse{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:200px;height:200px;border-radius:50%;border:1.5px solid var(--green);opacity:0;animation:pulse-ring 3s ease-out infinite}
+.pulse.delay{animation-delay:1.5s}
+@keyframes pulse-ring{0%{opacity:0.7;transform:translate(-50%,-50%) scale(0.6)}100%{opacity:0;transform:translate(-50%,-50%) scale(2.4)}}
 
-        .logo {
-            height: 80px;
-            border-bottom: 1px solid #e8e9ea;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
+.frame{
+  position:relative; z-index:2;
+  min-height:100vh;
+  display:grid; grid-template-rows:auto 1fr auto;
+  padding:32px;
+}
 
-        .logo img {
-            width: 130px;
-        }
+.top{display:flex;align-items:center;gap:10px}
+.brand-mark{width:28px;height:28px}
+.brand-wm{font-size:18px;font-weight:600;letter-spacing:-0.025em;color:#fff}
+.brand-wm em{font-style:normal;color:var(--v400);font-weight:700}
 
-        .content {
-            font-size: 13px;
-            color: #525252;
-            line-height: 18px;
-            padding: 10px 0;
-        }
+.center{display:flex;align-items:center;justify-content:center;padding:40px 0}
+.card-wrap{
+  width:100%;max-width:520px;
+  display:flex;flex-direction:column;align-items:center;gap:28px;
+  text-align:center;
+}
 
-        .content div {
-            font-size: 18px;
-            line-height: normal;
-            margin-bottom: 5px;
-            color: black;
-        }
-    </style>
-    <title>openZro Login Successful</title>
+.medallion{position:relative;width:140px;height:140px;display:flex;align-items:center;justify-content:center}
+.medallion .halo{
+  position:absolute;inset:-20px;border-radius:50%;
+  background:radial-gradient(circle, rgba(52,211,153,0.4), transparent 65%);
+  filter:blur(20px);
+  animation:halo-pulse 2.4s ease-in-out infinite;
+}
+.medallion.err .halo{background:radial-gradient(circle, rgba(239,68,68,0.4), transparent 65%)}
+@keyframes halo-pulse{0%,100%{opacity:0.7;transform:scale(1)}50%{opacity:1;transform:scale(1.05)}}
+.medallion svg{position:relative;z-index:2;width:100%;height:100%}
+.check-bg{fill:rgba(52,211,153,0.08);stroke:rgba(52,211,153,0.4);stroke-width:1}
+.check-ring{fill:none;stroke:var(--green);stroke-width:2;stroke-dasharray:440;stroke-dashoffset:440;animation:draw-ring 1s ease-out 0.2s forwards}
+.check-path{fill:none;stroke:var(--green);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:60;stroke-dashoffset:60;animation:draw-check 0.6s cubic-bezier(.65,0,.35,1) 1s forwards;filter:drop-shadow(0 0 8px rgba(52,211,153,0.6))}
+.medallion.err .check-bg{fill:rgba(239,68,68,0.08);stroke:rgba(239,68,68,0.4)}
+.medallion.err .check-ring{stroke:var(--red)}
+.medallion.err .x-path{fill:none;stroke:var(--red);stroke-width:3;stroke-linecap:round;stroke-dasharray:80;stroke-dashoffset:80;animation:draw-check 0.6s cubic-bezier(.65,0,.35,1) 1s forwards;filter:drop-shadow(0 0 8px rgba(239,68,68,0.6))}
+@keyframes draw-ring{to{stroke-dashoffset:0}}
+@keyframes draw-check{to{stroke-dashoffset:0}}
+
+.hero-title{margin:0;font-size:clamp(30px,4vw,42px);font-weight:600;letter-spacing:-0.03em;line-height:1.05}
+.hero-title em{font-style:normal;color:var(--green)}
+.hero-title em.err{color:var(--red)}
+.hero-sub{margin:0;font-size:15px;line-height:1.6;color:rgba(255,255,255,0.6);max-width:440px}
+.hero-detail{margin-top:8px;font-family:var(--mono);font-size:12px;color:rgba(239,68,68,0.85);background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.18);border-radius:8px;padding:10px 14px;max-width:440px;word-break:break-word}
+
+.actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;width:100%}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 20px;border-radius:10px;font-family:var(--sans);font-size:14px;font-weight:500;transition:all .18s ease;border:0;cursor:pointer}
+.btn-ghost{background:rgba(255,255,255,0.04);border:1px solid rgba(167,139,250,0.18);color:#fff}
+.btn-ghost:hover{background:rgba(167,139,250,0.10);border-color:rgba(167,139,250,0.4)}
+
+.hint{display:inline-flex;align-items:center;gap:10px;font-family:var(--mono);font-size:11.5px;color:rgba(255,255,255,0.4);letter-spacing:0.04em;margin-top:4px}
+.hint .countdown{color:var(--v300);padding:3px 8px;border-radius:5px;background:rgba(167,139,250,0.10);border:1px solid rgba(167,139,250,0.2)}
+
+.bottom{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;color:rgba(255,255,255,0.4);font-size:12px}
+.bottom .mono{font-family:var(--mono);font-size:11px;letter-spacing:0.04em}
+
+@media(max-width:520px){
+  .frame{padding:20px}
+  .medallion{width:120px;height:120px}
+}
+</style>
 </head>
 <body>
-<div class="container">
-    <div class="logo">
-        <!-- Inline brand mark + wordmark. Inline so the success page
-             works offline (no third-party CDN ping after auth) and
-             the brand renders even when the runner has no internet
-             outbound left after the callback. Mirror of
-             brand/openzro-icon.svg + the .oz-wordmark CSS pattern. -->
-        <svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 64 64" fill="none" aria-label="openZro">
-            <defs>
-                <linearGradient id="oz-bg-light" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0" stop-color="#8b5cf6"/>
-                    <stop offset="1" stop-color="#5b21b6"/>
-                </linearGradient>
-            </defs>
-            <circle cx="32" cy="32" r="28" fill="url(#oz-bg-light)"/>
-            <path fill="#f9f9f9" d="m 42.69949,50.729586 c -5.246771,-1.783072 -10.782457,-1.832655 -16.63185,0 -0.668227,0.02122 -0.999265,-0.317022 -0.478323,-0.97503 L 47.71668,18.700815 c 0,0 0.157573,-0.196687 0.354413,-0.298049 0.147255,-0.07583 0.295663,-0.0759 0.450161,0.0028 0.163897,0.08346 0.281363,0.233899 0.343513,0.325372 5.118536,7.533388 8.852414,20.216321 -4.595268,31.484113 -0.587268,0.492072 -0.882773,0.514556 -1.57001,0.514557 z"/>
-            <g transform="rotate(180 32 32)">
-                <path fill="#f9f9f9" d="m 42.69949,50.729586 c -5.246771,-1.783072 -10.782457,-1.832655 -16.63185,0 -0.668227,0.02122 -0.999265,-0.317022 -0.478323,-0.97503 L 47.71668,18.700815 c 0,0 0.157573,-0.196687 0.354413,-0.298049 0.147255,-0.07583 0.295663,-0.0759 0.450161,0.0028 0.163897,0.08346 0.281363,0.233899 0.343513,0.325372 5.118536,7.533388 8.852414,20.216321 -4.595268,31.484113 -0.587268,0.492072 -0.882773,0.514556 -1.57001,0.514557 z"/>
-            </g>
-        </svg>
-        <span style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-weight:600;font-size:30px;letter-spacing:-0.025em;color:#0f0a1f;margin-left:14px;">open<span style="font-weight:700;color:#7c3aed;">Z</span>ro</span>
-    </div>
-    <br>
-    {{ if .Error }}
-    <svg height="50" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="50" cy="50" fill="none" r="45" stroke="red" stroke-width="3"/>
-        <path d="M30 30 L70 70 M30 70 L70 30" fill="none" stroke="red" stroke-width="3"/>
-    </svg>
-    <div class="content">
-        <div>
-            Login failed
-        </div>
-        {{ .Error }}.
-    </div>
-    {{ else }}
-    <svg height="50" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="50" cy="50" fill="none" r="45" stroke="#5cb85c" stroke-width="3"/>
-        <path d="M30 50 L45 65 L70 35" fill="none" stroke="#5cb85c" stroke-width="5"/>
-    </svg>
-    <div class="content">
-        <div>
-            Login successful
-        </div>
-        Your device is now registered and logged in to openZro.
-        <br>
-        You can now close this window.
-    </div>
-    {{ end }}
+<div class="scene">
+  <div class="orb o1"></div>
+  <div class="orb o2"></div>
+  {{ if not .Error }}
+  <div class="rings">
+    <div class="ring r4"></div>
+    <div class="ring r3"></div>
+    <div class="ring r2"></div>
+    <div class="ring r1"></div>
+    <div class="pulse"></div>
+    <div class="pulse delay"></div>
+  </div>
+  {{ end }}
 </div>
+
+<main class="frame">
+  <header class="top">
+    <svg class="brand-mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" aria-label="openZro">
+      <defs><linearGradient id="oz" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#5b21b6"/></linearGradient></defs>
+      <circle cx="32" cy="32" r="28" fill="url(#oz)"/>
+      <path fill="#f9f9f9" d="m 42.69949,50.729586 c -5.246771,-1.783072 -10.782457,-1.832655 -16.63185,0 -0.668227,0.02122 -0.999265,-0.317022 -0.478323,-0.97503 L 47.71668,18.700815 c 0,0 0.157573,-0.196687 0.354413,-0.298049 0.147255,-0.07583 0.295663,-0.0759 0.450161,0.0028 0.163897,0.08346 0.281363,0.233899 0.343513,0.325372 5.118536,7.533388 8.852414,20.216321 -4.595268,31.484113 -0.587268,0.492072 -0.882773,0.514556 -1.57001,0.514557 z"/>
+      <g transform="rotate(180 32 32)"><path fill="#f9f9f9" d="m 42.69949,50.729586 c -5.246771,-1.783072 -10.782457,-1.832655 -16.63185,0 -0.668227,0.02122 -0.999265,-0.317022 -0.478323,-0.97503 L 47.71668,18.700815 c 0,0 0.157573,-0.196687 0.354413,-0.298049 0.147255,-0.07583 0.295663,-0.0759 0.450161,0.0028 0.163897,0.08346 0.281363,0.233899 0.343513,0.325372 5.118536,7.533388 8.852414,20.216321 -4.595268,31.484113 -0.587268,0.492072 -0.882773,0.514556 -1.57001,0.514557 z"/></g>
+    </svg>
+    <span class="brand-wm">open<em>Z</em>ro</span>
+  </header>
+
+  <section class="center">
+    <div class="card-wrap">
+      {{ if .Error }}
+      <div class="medallion err">
+        <div class="halo"></div>
+        <svg viewBox="0 0 160 160">
+          <circle class="check-bg" cx="80" cy="80" r="70"/>
+          <circle class="check-ring" cx="80" cy="80" r="70"/>
+          <path class="x-path" d="M55 55 L105 105 M105 55 L55 105"/>
+        </svg>
+      </div>
+      <div>
+        <h1 class="hero-title">Login <em class="err">failed.</em></h1>
+        <p class="hero-sub">The authentication did not complete. You can close this window and try again from the openZro client.</p>
+        <p class="hero-detail">{{ .Error }}</p>
+      </div>
+      {{ else }}
+      <div class="medallion">
+        <div class="halo"></div>
+        <svg viewBox="0 0 160 160">
+          <circle class="check-bg" cx="80" cy="80" r="70"/>
+          <circle class="check-ring" cx="80" cy="80" r="70"/>
+          <path class="check-path" d="M52 82 l20 20 l38 -42"/>
+        </svg>
+      </div>
+      <div>
+        <h1 class="hero-title">You're <em>in the mesh.</em></h1>
+        <p class="hero-sub">Device registered, posture verified, keys exchanged. Your peer is now routable across the openZro network.</p>
+      </div>
+      {{ end }}
+
+      <div class="actions">
+        <button class="btn btn-ghost" type="button" onclick="window.close()">Close window</button>
+      </div>
+
+      <div class="hint">
+        <span>Auto-closing in</span>
+        <span class="countdown" id="cd">10s</span>
+      </div>
+    </div>
+  </section>
+
+  <footer class="bottom">
+    <span class="mono">openZro</span>
+    <span class="mono">Self-hosted · BSD-3</span>
+  </footer>
+</main>
+
+<script>
+let s = 10;
+const el = document.getElementById('cd');
+const t = setInterval(function () {
+  s -= 1;
+  if (el) el.textContent = s + 's';
+  if (s <= 0) { clearInterval(t); window.close(); }
+}, 1000);
+</script>
 </body>
 </html>
