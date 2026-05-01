@@ -433,8 +433,12 @@ body.theme-body::before {
  * 15.4+, Firefox 121+ — universal in 2026 desktop / mobile.
  */
 
-/* Treat the connector list as a flex column so `order:` applies. */
-.theme-form-row {
+/* Make .theme-panel (the parent of .theme-form-row siblings) a flex
+ * column so `order:` on its children takes effect. The heading and
+ * subtle text default to `order: 0` and stay at the top; the rules
+ * below give the local row order: 1, the OR pseudo-element order: 2,
+ * and other connectors order: 3. */
+.theme-panel {
   display: flex;
   flex-direction: column;
 }
@@ -451,39 +455,52 @@ body.theme-body::before {
   order: 3;
 }
 
-/* OR divider — stamped once, immediately after the local row.
- * Sits at order:2 between local (1) and providers (3). */
+/* OR divider rendered as a pair of pseudo-elements on the local row.
+ * Pseudo-elements are children of their host element, not siblings of
+ * its parent — so they can't participate in `.theme-panel`'s flex
+ * `order:` layout. Instead, give the local row a bottom margin that
+ * carves out space, then position the line + "OR" pill absolutely
+ * inside that margin band. Visually this places the divider between
+ * the local row and whatever comes after it (the providers, which
+ * sit at order: 3 below).
+ */
+.theme-form-row:has(.dex-btn-icon--local) {
+  position: relative;
+  margin-bottom: 36px;
+}
+
+/* Horizontal line in the margin band. */
+.theme-form-row:has(.dex-btn-icon--local)::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -22px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(167, 139, 250, 0.22) 20%,
+    rgba(167, 139, 250, 0.22) 80%,
+    transparent
+  );
+  pointer-events: none;
+}
+
+/* "OR" pill, centered over the line. The matching panel-color
+ * background hides the line behind the pill. */
 .theme-form-row:has(.dex-btn-icon--local)::after {
-  order: 2;
   content: "OR";
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 18px 0 12px;
-  padding: 0;
+  position: absolute;
+  left: 50%;
+  bottom: -29px;
+  transform: translateX(-50%);
+  padding: 2px 10px;
+  background-color: var(--oz-bg-panel);
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.18em;
   color: rgba(255, 255, 255, 0.45);
-  position: relative;
-}
-
-/* Lines flanking the OR text. Linear gradient so they fade out at
- * the edges instead of hard-stopping. */
-.theme-form-row:has(.dex-btn-icon--local)::after {
-  background:
-    linear-gradient(90deg,
-      transparent,
-      rgba(167, 139, 250, 0.22) 12%,
-      rgba(167, 139, 250, 0.22) 38%,
-      transparent 44%,
-      transparent 56%,
-      rgba(167, 139, 250, 0.22) 62%,
-      rgba(167, 139, 250, 0.22) 88%,
-      transparent
-    );
-  background-size: 100% 1px;
-  background-position: center;
-  background-repeat: no-repeat;
+  pointer-events: none;
 }
