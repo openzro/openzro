@@ -78,6 +78,14 @@ type User struct {
 	NonDeletable bool
 	// ServiceUserName is only set if IsServiceUser is true
 	ServiceUserName string
+	// Email and Name are sourced from the JWT (`email` and `name`
+	// claims, set by the IdP on every login). Cached locally so the
+	// dashboard can render user lists without requiring a working
+	// IdpManager (relevant for Dex / OIDC-direct setups where there's
+	// no API to query "give me user X's email" — the JWT is the
+	// authoritative source).
+	Email string
+	Name  string
 	// AutoGroups is a list of Group IDs to auto-assign to peers registered by this user
 	AutoGroups []string                        `gorm:"serializer:json"`
 	PATs       map[string]*PersonalAccessToken `gorm:"-"`
@@ -156,15 +164,24 @@ func (u *User) ToUserInfo(userData *idp.UserData) (*UserInfo, error) {
 	}
 
 	if userData == nil {
-		// SCIM-provisioned users carry their identity locally; fall
-		// back to those fields before the (empty) service-user-style
-		// branch so the dashboard renders email/name correctly.
+		// Three local sources for email/name when no IdpManager is
+		// configured: SCIM provisioning fields, JWT-cached fields
+		// (User.Email/Name from auth.GetUserFromUserAuth), and the
+		// service-user fallback. Order: SCIM (if present, it's the
+		// authoritative provisioning source) → JWT cache → service
+		// user fallback.
 		email := ""
 		name := u.ServiceUserName
-		if u.SCIMUserName != "" {
+		switch {
+		case u.SCIMUserName != "":
 			email = u.SCIMUserName
 			if u.SCIMDisplayName != "" {
 				name = u.SCIMDisplayName
+			}
+		case u.Email != "" || u.Name != "":
+			email = u.Email
+			if u.Name != "" {
+				name = u.Name
 			}
 		}
 		return &UserInfo{
@@ -189,10 +206,25 @@ func (u *User) ToUserInfo(userData *idp.UserData) (*UserInfo, error) {
 		userStatus = UserStatusInvited
 	}
 
+	// Prefer the IdP-provided values when they're populated (the
+	// upstream NetBird path with auth0 / okta / etc.), but fall back
+	// to the locally-cached User.Email / User.Name when the IdP
+	// returned blanks. This is the load-bearing branch for Dex /
+	// generic OIDC deployments where there's no IdP API to look
+	// users up after the fact and the JWT cache is the only source.
+	email := userData.Email
+	if email == "" {
+		email = u.Email
+	}
+	name := userData.Name
+	if name == "" {
+		name = u.Name
+	}
+
 	return &UserInfo{
 		ID:            u.Id,
-		Email:         userData.Email,
-		Name:          userData.Name,
+		Email:         email,
+		Name:          name,
 		Role:          string(u.Role),
 		AutoGroups:    autoGroups,
 		Status:        string(userStatus),

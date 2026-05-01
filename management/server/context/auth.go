@@ -27,6 +27,16 @@ type UserAuth struct {
 
 	// The user id
 	UserId string
+	// Email from the JWT `email` claim. Populated on every JWT
+	// validation. Used to back-fill User.Email when the deployment
+	// doesn't run a queryable IdpManager (e.g. Dex with passwordDB
+	// or generic OIDC where there's no directory API to look up
+	// user metadata after the fact).
+	Email string
+	// Name from the JWT `name` claim, falling back to
+	// `preferred_username` when `name` is absent. Same back-fill
+	// rationale as Email.
+	Name string
 	// Last login time for this user
 	LastLogin time.Time
 	// The Groups the user belongs to on this account

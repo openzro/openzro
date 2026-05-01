@@ -97,6 +97,18 @@ func (c *ClaimsExtractor) ToUserAuth(token *jwt.Token) (nbcontext.UserAuth, erro
 	}
 	userAuth.UserId = userID
 
+	// Standard OIDC claims. Source-of-truth for self-hosted Dex / OIDC-
+	// direct deployments where there's no IdpManager API to back-fill
+	// user metadata after the fact (see types.User.{Email,Name}).
+	if email, ok := claims["email"].(string); ok {
+		userAuth.Email = email
+	}
+	if name, ok := claims["name"].(string); ok {
+		userAuth.Name = name
+	} else if pu, ok := claims["preferred_username"].(string); ok {
+		userAuth.Name = pu
+	}
+
 	if accountIDClaim, ok := claims[c.audienceClaim(AccountIDSuffix)]; ok {
 		userAuth.AccountId = accountIDClaim.(string)
 	}
