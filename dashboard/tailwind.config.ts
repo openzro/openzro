@@ -1,4 +1,10 @@
 import type { Config } from "tailwindcss";
+// Tailwind plugins ship as CommonJS. Default-imports + esModuleInterop
+// (set in tsconfig.json) lets us pull them in without a `require()`,
+// which broke at runtime once Next.js started loading this file as
+// ESM.
+import flowbitePlugin from "flowbite/plugin";
+import tailwindcssAnimate from "tailwindcss-animate";
 
 const config: Config = {
   content: [
@@ -111,6 +117,6 @@ const config: Config = {
       },
     },
   },
-  plugins: [require("flowbite/plugin"), require("tailwindcss-animate")],
+  plugins: [flowbitePlugin, tailwindcssAnimate],
 };
 export default config;
