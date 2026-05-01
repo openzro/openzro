@@ -85,11 +85,15 @@ body{
 @keyframes halo-pulse{0%,100%{opacity:0.7;transform:scale(1)}50%{opacity:1;transform:scale(1.05)}}
 .medallion svg{position:relative;z-index:2;width:100%;height:100%}
 .check-bg{fill:rgba(52,211,153,0.08);stroke:rgba(52,211,153,0.4);stroke-width:1}
-.check-ring{fill:none;stroke:var(--green);stroke-width:2;stroke-dasharray:440;stroke-dashoffset:440;animation:draw-ring 1s ease-out 0.2s forwards}
-.check-path{fill:none;stroke:var(--green);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:60;stroke-dashoffset:60;animation:draw-check 0.6s cubic-bezier(.65,0,.35,1) 1s forwards;filter:drop-shadow(0 0 8px rgba(52,211,153,0.6))}
+/* check-ring + check-path both use pathLength="100" on the SVG element so
+   the dasharray math is independent of the actual path length. The
+   pre-pathLength version dasharray=60 truncated the check at ~70% of its
+   length — the top diagonal "ate" half of itself. */
+.check-ring{fill:none;stroke:var(--green);stroke-width:2;stroke-dasharray:100;stroke-dashoffset:100;animation:draw-ring 1s ease-out 0.2s forwards}
+.check-path{fill:none;stroke:var(--green);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:100;stroke-dashoffset:100;animation:draw-check 0.6s cubic-bezier(.65,0,.35,1) 1s forwards;filter:drop-shadow(0 0 8px rgba(52,211,153,0.6))}
 .medallion.err .check-bg{fill:rgba(239,68,68,0.08);stroke:rgba(239,68,68,0.4)}
 .medallion.err .check-ring{stroke:var(--red)}
-.medallion.err .x-path{fill:none;stroke:var(--red);stroke-width:3;stroke-linecap:round;stroke-dasharray:80;stroke-dashoffset:80;animation:draw-check 0.6s cubic-bezier(.65,0,.35,1) 1s forwards;filter:drop-shadow(0 0 8px rgba(239,68,68,0.6))}
+.medallion.err .x-path{fill:none;stroke:var(--red);stroke-width:3;stroke-linecap:round;stroke-dasharray:100;stroke-dashoffset:100;animation:draw-check 0.6s cubic-bezier(.65,0,.35,1) 1s forwards;filter:drop-shadow(0 0 8px rgba(239,68,68,0.6))}
 @keyframes draw-ring{to{stroke-dashoffset:0}}
 @keyframes draw-check{to{stroke-dashoffset:0}}
 
@@ -150,8 +154,8 @@ body{
         <div class="halo"></div>
         <svg viewBox="0 0 160 160">
           <circle class="check-bg" cx="80" cy="80" r="70"/>
-          <circle class="check-ring" cx="80" cy="80" r="70"/>
-          <path class="x-path" d="M55 55 L105 105 M105 55 L55 105"/>
+          <circle class="check-ring" cx="80" cy="80" r="70" pathLength="100"/>
+          <path class="x-path" pathLength="100" d="M55 55 L105 105 M105 55 L55 105"/>
         </svg>
       </div>
       <div>
@@ -164,8 +168,8 @@ body{
         <div class="halo"></div>
         <svg viewBox="0 0 160 160">
           <circle class="check-bg" cx="80" cy="80" r="70"/>
-          <circle class="check-ring" cx="80" cy="80" r="70"/>
-          <path class="check-path" d="M52 82 l20 20 l38 -42"/>
+          <circle class="check-ring" cx="80" cy="80" r="70" pathLength="100"/>
+          <path class="check-path" pathLength="100" d="M52 82 l20 20 l38 -42"/>
         </svg>
       </div>
       <div>
@@ -175,10 +179,10 @@ body{
       {{ end }}
 
       <div class="actions">
-        <button class="btn btn-ghost" type="button" onclick="window.close()">Close window</button>
+        <button class="btn btn-ghost" type="button" id="closeBtn">Close window</button>
       </div>
 
-      <div class="hint">
+      <div class="hint" id="hint">
         <span>Auto-closing in</span>
         <span class="countdown" id="cd">10s</span>
       </div>
@@ -192,12 +196,36 @@ body{
 </main>
 
 <script>
+/* `window.close()` is restricted in modern browsers to windows that
+   were opened by JavaScript (window.open). The desktop client launches
+   the browser via xdg-open / open / Start-Process, which leaves the
+   tab non-scriptable for close, so the call is silently ignored.
+   We try anyway (works on browsers/scenarios where it is allowed) and
+   fall back to telling the user to close the window manually after a
+   short timeout, instead of leaving them staring at a dead countdown. */
+function tryClose() {
+  try { window.close(); } catch (_) {}
+  // Detect whether we are still around 200 ms later — if so the close
+  // was blocked. Replace the auto-close hint with a "safe to close"
+  // message so the UX matches reality.
+  setTimeout(function () {
+    if (!document.hidden && document.visibilityState !== 'hidden') {
+      var hint = document.getElementById('hint');
+      if (hint) {
+        hint.innerHTML = '<span>You can safely close this window.</span>';
+      }
+    }
+  }, 200);
+}
+
+document.getElementById('closeBtn').addEventListener('click', tryClose);
+
 let s = 10;
 const el = document.getElementById('cd');
 const t = setInterval(function () {
   s -= 1;
   if (el) el.textContent = s + 's';
-  if (s <= 0) { clearInterval(t); window.close(); }
+  if (s <= 0) { clearInterval(t); tryClose(); }
 }, 1000);
 </script>
 </body>
