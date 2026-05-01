@@ -24,8 +24,8 @@
   --oz-violet-800: #5b21b6;
   --oz-violet-900: #4c1d95;
 
-  --oz-ink:    #0f0a1f;
-  --oz-ink-2:  #15102a;
+  --oz-ink:    #0a0614;
+  --oz-ink-2:  #13091f;
   --oz-ink-3:  #1a1330;
 
   --oz-bg:            var(--oz-ink);
@@ -59,15 +59,34 @@ html, body {
   flex-direction: column;
 }
 
-/* Subtle violet glow at the top so the page doesn't feel flat-black. */
+/* Layered scene — rich violet gradient backdrop + grid mask + drifting
+ * orbs. Mirrors the Login design handoff (Openzro Login.html). All
+ * GPU-cheap (radial-gradients + transforms), no images. */
 body.theme-body::before {
   content: '';
   position: fixed;
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(800px 400px at 50% -10%, rgba(124, 58, 237, 0.18), transparent 60%),
-    radial-gradient(600px 400px at 100% 100%, rgba(91, 33, 182, 0.10), transparent 70%);
+    radial-gradient(900px 500px at 50% -10%, rgba(124, 58, 237, 0.32), transparent 60%),
+    radial-gradient(700px 400px at 85% 100%, rgba(91, 33, 182, 0.25), transparent 60%),
+    radial-gradient(600px 400px at 10% 90%, rgba(139, 92, 246, 0.18), transparent 60%);
+  z-index: 0;
+}
+
+/* Subtle 64×64 grid masked to a centered ellipse so the page reads as
+ * "engineered" without crowding the content. */
+body.theme-body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(167, 139, 250, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(167, 139, 250, 0.06) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 50%, black 30%, transparent 80%);
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 50%, black 30%, transparent 80%);
   z-index: 0;
 }
 
@@ -92,41 +111,129 @@ body.theme-body::before {
   text-align: center;
 }
 
-/* Logo above the panel — pseudo-element keeps Dex's HTML untouched. */
+/* Brand "seal" above the panel — pill-shaped pillbox with the disc
+ * mark + wordmark, matching the .seal block in the Login design
+ * handoff. Pseudo-element keeps Dex's HTML untouched. The PNG used
+ * here is the dark-mode lockup that already ships in the theme
+ * configmap; using it lets us avoid inlining a second copy of the
+ * brand SVG (which would diverge from brand/openzro-icon.svg over
+ * time). */
 .dex-container::before {
   content: '';
   display: block;
-  width: 220px;
+  width: 200px;
   height: 56px;
   margin-bottom: 32px;
+  padding: 0 18px 0 10px;
   background-image: url('logo-dark.png');
   background-position: center;
   background-repeat: no-repeat;
   background-size: contain;
+  background-color: rgba(15, 10, 31, 0.65);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(167, 139, 250, 0.2);
+  border-radius: 999px;
+  box-shadow: 0 12px 40px -8px rgba(124, 58, 237, 0.4);
 }
 
-/* Card / panel — the centered surface holding the form. */
+/* Card / panel — the centered surface holding the form. Per the
+ * Login design handoff: glassmorphic gradient surface, faint violet
+ * corner glow leaking into the bottom-right, deep drop shadow, and
+ * 14px violet "ticks" hugging the top corners (the engineered-frame
+ * detail from the design's `.card::after` pattern). */
 .theme-panel {
-  background-color: var(--oz-bg-panel);
-  border: 1px solid var(--oz-border);
-  border-radius: 16px;
+  position: relative;
+  background: linear-gradient(180deg, rgba(36, 25, 66, 0.7), rgba(15, 10, 31, 0.85));
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(167, 139, 250, 0.18);
+  border-radius: 20px;
   box-shadow:
-    0 24px 64px -16px rgba(0, 0, 0, 0.5),
-    0 1px 0 0 rgba(255, 255, 255, 0.04) inset;
-  padding: 40px 44px;
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 30px 80px -20px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(124, 58, 237, 0.08);
+  padding: 36px 32px 32px;
   width: 100%;
-  max-width: 420px;
+  max-width: 440px;
   text-align: left;
+  overflow: hidden;
 }
 
+/* Corner glow — soft violet bloom leaking from the top-right of the
+ * card. Lives on .theme-panel::before so it doesn't collide with the
+ * heading's ::before (eyebrow) or form-row pseudo-elements (OR
+ * divider). The ::after slot on .theme-panel is reserved for the
+ * corner ticks below. */
+.theme-panel::before {
+  content: '';
+  position: absolute;
+  top: -40%;
+  right: -30%;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.4), transparent 60%);
+  filter: blur(40px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Top-corner "ticks" — short violet brackets that frame the card. */
+.theme-panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg,  var(--oz-violet-500) 0 14px, transparent 14px) top left  /14px 1px no-repeat,
+    linear-gradient(180deg, var(--oz-violet-500) 0 14px, transparent 14px) top left  /1px  14px no-repeat,
+    linear-gradient(270deg, var(--oz-violet-500) 0 14px, transparent 14px) top right /14px 1px no-repeat,
+    linear-gradient(180deg, var(--oz-violet-500) 0 14px, transparent 14px) top right /1px  14px no-repeat;
+  opacity: 0.5;
+}
+
+/* Make sure the form contents sit above the corner glow + ticks. */
+.theme-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Heading area — eyebrow ("AUTHENTICATE") above the title for the
+ * editorial-card feel from the design handoff. The eyebrow lives on
+ * .theme-heading::before because Dex's stock template only renders
+ * the <h2> — no surrounding <span> for the eyebrow. */
 .theme-heading {
   color: var(--oz-text);
   font-family: var(--oz-sans);
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 600;
-  letter-spacing: -0.02em;
-  margin: 0 0 8px;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  margin: 0 0 6px;
   text-align: left;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.theme-heading::before {
+  content: 'AUTHENTICATE';
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  color: var(--oz-violet-300);
+  /* Live dot before the word, matching the design's eyebrow pattern. */
+  background-image: radial-gradient(circle, var(--oz-violet-400) 0 3px, transparent 3px);
+  background-size: 6px 6px;
+  background-position: 0 50%;
+  background-repeat: no-repeat;
+  padding-left: 14px;
 }
 
 /* Subtle helper line under the heading — Dex's templates don't render
