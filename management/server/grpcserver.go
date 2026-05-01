@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -64,7 +65,7 @@ func NewServer(
 	authManager auth.Manager,
 	integratedPeerValidator integrated_validator.IntegratedValidator,
 ) (*GRPCServer, error) {
-	key, err := wgtypes.GeneratePrivateKey()
+	key, err := resolveManagementWgKey(ctx, config)
 	if err != nil {
 		return nil, err
 	}
@@ -92,6 +93,58 @@ func NewServer(
 		ephemeralManager:        ephemeralManager,
 		integratedPeerValidator: integratedPeerValidator,
 	}, nil
+}
+
+// envManagementWgPrivateKey lets operators inject the management daemon's
+// WireGuard identity at runtime, overriding any value baked into
+// management.json. The chart wires this from a Kubernetes Secret so every
+// management replica in an HA deployment gets the same key — without it,
+// each pod would generate a fresh key on boot and decrypt would fail on
+// every request that round-robins to a sibling pod.
+const envManagementWgPrivateKey = "OPENZRO_MGMT_WG_PRIVATE_KEY"
+
+// resolveManagementWgKey returns the WireGuard identity for this management
+// instance. Resolution order:
+//
+//  1. OPENZRO_MGMT_WG_PRIVATE_KEY env var (operator override; required for HA)
+//  2. config.WgPrivateKey persisted in management.json
+//  3. fresh wgtypes.GeneratePrivateKey() — back-compat for single-instance
+//     deployments. The generated key is written back to config.WgPrivateKey
+//     so subsequent restarts of the same pod keep the same identity (peers
+//     don't have to re-encrypt with a fresh public key on every reboot).
+//
+// HA deployments MUST end up at step 1 — if every pod falls through to step
+// 3 the cluster never converges on a single identity and ~50 % of peer
+// requests land on the wrong key with `InvalidArgument: invalid request
+// message`. The chart's pre-install hook generates the shared Secret so
+// this happens automatically; bare-metal operators set the env var
+// themselves or share the management.json across nodes.
+func resolveManagementWgKey(ctx context.Context, config *types.Config) (wgtypes.Key, error) {
+	if v := strings.TrimSpace(os.Getenv(envManagementWgPrivateKey)); v != "" {
+		key, err := wgtypes.ParseKey(v)
+		if err != nil {
+			return wgtypes.Key{}, fmt.Errorf("parse %s: %w", envManagementWgPrivateKey, err)
+		}
+		log.WithContext(ctx).Infof("management WireGuard identity loaded from %s (HA-shared)", envManagementWgPrivateKey)
+		return key, nil
+	}
+
+	if v := strings.TrimSpace(config.WgPrivateKey); v != "" {
+		key, err := wgtypes.ParseKey(v)
+		if err != nil {
+			return wgtypes.Key{}, fmt.Errorf("parse config.WgPrivateKey: %w", err)
+		}
+		log.WithContext(ctx).Infof("management WireGuard identity loaded from management.json")
+		return key, nil
+	}
+
+	key, err := wgtypes.GeneratePrivateKey()
+	if err != nil {
+		return wgtypes.Key{}, fmt.Errorf("generate WireGuard key: %w", err)
+	}
+	log.WithContext(ctx).Warnf("management WireGuard identity generated fresh; persist by setting %s or config.WgPrivateKey before scaling beyond 1 replica", envManagementWgPrivateKey)
+	config.WgPrivateKey = key.String()
+	return key, nil
 }
 
 func (s *GRPCServer) GetServerKey(ctx context.Context, req *proto.Empty) (*proto.ServerKeyResponse, error) {
