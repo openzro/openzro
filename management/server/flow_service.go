@@ -137,10 +137,17 @@ func (s *FlowService) Close() error {
 	return nil
 }
 
-// SetSinks atomically replaces the destination set. The old set's
-// Close() is called AFTER the new one is in place, so the worker
-// never observes a moment with no sinks (other than the original
-// nil set when len(active)==0).
+// SetSinks atomically replaces the destination set. Sinks that exist
+// only in the old set (not carried over to next) are Close()d AFTER
+// the swap so the worker never observes a moment with no sinks.
+//
+// Sinks that appear in BOTH old and next are intentionally kept
+// open — Manager.merged() always re-includes the hot flow store and
+// any env-baseline sinks alongside the changing dynamic set, so a
+// naive "close everything in old" would shut down the hot store on
+// every Refresh and leave subsequent reads against /api/network-
+// traffic-events failing with `sql: database is closed` (caught in
+// the v0.53.1-alpha.26 lab smoke when flow store was wired).
 //
 // Used by the runtime config Manager to apply changes operators
 // make through the dashboard without restarting the process. The
@@ -148,9 +155,11 @@ func (s *FlowService) Close() error {
 // two services — Close on a Sink is idempotent but Save is not.
 func (s *FlowService) SetSinks(next []store.Sink) {
 	active := make([]store.Sink, 0, len(next))
+	keep := make(map[store.Sink]struct{}, len(next))
 	for _, sink := range next {
 		if sink != nil {
 			active = append(active, sink)
+			keep[sink] = struct{}{}
 		}
 	}
 
@@ -167,6 +176,9 @@ func (s *FlowService) SetSinks(next []store.Sink) {
 	s.sinksMu.Unlock()
 
 	for _, sink := range old {
+		if _, stillActive := keep[sink]; stillActive {
+			continue
+		}
 		_ = sink.Close()
 	}
 }

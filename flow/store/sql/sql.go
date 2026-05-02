@@ -2,18 +2,23 @@
 // PostgreSQL, MySQL, and SQLite via the same code path. The driver is
 // chosen by the DSN scheme; see flow/store/factory.
 //
-// Schema is intentionally simple: one wide table indexed for the
-// query patterns the dashboard exposes. There is no native
-// partitioning at this layer — Purge runs a DELETE WHERE
-// received_at < ?. For deployments where that DELETE becomes a
-// problem, ADR-0002 plans a Postgres-specific partitioning
-// migration; until then the simple model is fast enough for the
-// small/medium tier and identical across drivers.
+// Postgres uses native declarative partitioning by month on the
+// received_at column — flow_events is the parent, monthly children
+// (flow_events_2026_05, ...) cover [first-of-month, first-of-next).
+// Schema management lives in partition_postgres.go; retention is
+// DROP PARTITION instead of row-level DELETE.
+//
+// MySQL and SQLite keep the single-table model — partitioning in
+// MySQL is non-declarative and adds operational burden, SQLite has
+// no native partitioning at all. For those engines Purge still does
+// DELETE WHERE received_at < cutoff, which is fast enough at the
+// small/medium tier.
 package sql
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -70,15 +75,38 @@ type Store struct {
 
 // New wires a Store on top of an existing GORM DB. The caller owns
 // the connection — this lets operators choose to share the management
-// DB or use a separate one. AutoMigrate runs on construction.
+// DB or use a separate one.
+//
+// Schema management dispatches on the dialect:
+//   - postgres: native declarative partitioning by month on
+//     received_at (see partition_postgres.go). Retention drops old
+//     partitions in O(1) instead of DELETE-ing rows.
+//   - mysql / sqlite / others: AutoMigrate the single flow_events
+//     table; retention is row-level DELETE.
 func New(db *gorm.DB) (*Store, error) {
 	if db == nil {
 		return nil, errors.New("flow/store/sql: db is required")
 	}
-	if err := db.AutoMigrate(&row{}); err != nil {
-		return nil, err
+	if isPostgres(db) {
+		if err := setupPostgresSchema(db); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := db.AutoMigrate(&row{}); err != nil {
+			return nil, err
+		}
 	}
 	return &Store{db: db}, nil
+}
+
+// isPostgres returns true when the GORM dialector is Postgres-compatible.
+// Used to gate the partitioning code paths so MySQL/SQLite stay on the
+// vanilla single-table model.
+func isPostgres(db *gorm.DB) bool {
+	if db == nil {
+		return false
+	}
+	return db.Dialector.Name() == "postgres"
 }
 
 // Save inserts a batch using GORM's CreateInBatches, which uses a
@@ -152,10 +180,33 @@ func (s *Store) Query(ctx context.Context, f store.Filter) ([]*store.Event, erro
 	return out, nil
 }
 
-// Purge removes events older than the cutoff. Returns the row count
-// deleted. Implementations with declarative partitioning may
-// override this with a DROP PARTITION; for now it is a single DELETE.
+// Purge removes events older than the cutoff and on Postgres also
+// extends the partition coverage forward so writes never hit a
+// missing partition.
+//
+//   - Postgres: drops every monthly partition whose upper bound is
+//     at or before the cutoff (constant time per partition; frees
+//     disk immediately) and creates the next 3 months of partitions
+//     ahead of `now`. Returns the partition drop count, NOT a row
+//     count — DROP PARTITION does not surface row counts.
+//   - Other dialects: row-level DELETE WHERE received_at < cutoff,
+//     returns the affected rows.
+//
+// Callers (the retention loop in flow/store/factory) treat the
+// return as a "did something happen" signal, not as a precise
+// volume metric — keeping this asymmetry contained in the engine.
 func (s *Store) Purge(ctx context.Context, olderThan time.Time) (int64, error) {
+	if isPostgres(s.db) {
+		// Keep the partition lookahead fresh on every retention
+		// pass — cheap if-not-exists DDL, ensures the cron-style
+		// loop also handles month-boundary creation without a
+		// dedicated scheduler.
+		if err := ensureFuturePartitions(s.db, time.Now().UTC(), 3); err != nil {
+			return 0, fmt.Errorf("ensure future partitions: %w", err)
+		}
+		dropped, err := dropOldPartitions(s.db, olderThan)
+		return int64(dropped), err
+	}
 	res := s.db.WithContext(ctx).Where("received_at < ?", olderThan).Delete(&row{})
 	return res.RowsAffected, res.Error
 }
