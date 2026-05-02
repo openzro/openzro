@@ -6,9 +6,13 @@ import DataTableRefreshButton from "@components/table/DataTableRefreshButton";
 import { DataTableRowsPerPage } from "@components/table/DataTableRowsPerPage";
 import { ColumnDef } from "@tanstack/react-table";
 import dayjs from "dayjs";
-import { ArrowDown, ArrowUp, Ban, Play, Square } from "lucide-react";
-import React from "react";
+import { isEmpty } from "lodash";
+import { ArrowDown, ArrowUp, Ban, GlobeIcon, Play, Square } from "lucide-react";
+import React, { useMemo } from "react";
+import RoundedFlag from "@/assets/countries/RoundedFlag";
+import { usePeers } from "@/contexts/PeersProvider";
 import { NetworkTrafficEvent } from "@/interfaces/NetworkTrafficEvent";
+import { Peer } from "@/interfaces/Peer";
 
 type Props = {
   events?: NetworkTrafficEvent[];
@@ -16,10 +20,17 @@ type Props = {
   headingTarget?: HTMLHeadingElement | null;
 };
 
-// Columns are intentionally minimal — the API exposes 8 filters but
-// the dashboard MVP only renders the most-asked columns. Filters and
-// the full column set arrive in a follow-up.
-const columns: ColumnDef<NetworkTrafficEvent>[] = [
+// Enriched row carries the resolved Peer objects so cell renderers
+// don't repeat the ID/IP lookup. The lookup itself happens once
+// per render in the parent component (peers list is cached at the
+// PeersProvider level so the cost is two Map probes per row).
+type EnrichedEvent = NetworkTrafficEvent & {
+  reportingPeer?: Peer;
+  sourcePeer?: Peer;
+  destPeer?: Peer;
+};
+
+const columns: ColumnDef<EnrichedEvent>[] = [
   {
     accessorKey: "received_at",
     header: ({ column }) => (
@@ -47,29 +58,39 @@ const columns: ColumnDef<NetworkTrafficEvent>[] = [
     cell: ({ row }) => <DirectionBadge direction={row.original.direction} />,
   },
   {
-    accessorKey: "peer_id",
+    id: "reporting_peer",
     header: ({ column }) => (
-      <DataTableHeader column={column}>Peer</DataTableHeader>
+      <DataTableHeader column={column}>Reporting peer</DataTableHeader>
     ),
     cell: ({ row }) => (
-      <span className="font-mono text-xs">{row.original.peer_id}</span>
+      <PeerCell peer={row.original.reportingPeer} fallbackId={row.original.peer_id} />
     ),
   },
   {
-    id: "src_dst",
+    id: "source",
     header: ({ column }) => (
-      <DataTableHeader column={column}>Source → Destination</DataTableHeader>
+      <DataTableHeader column={column}>Source</DataTableHeader>
     ),
-    cell: ({ row }) => {
-      const e = row.original;
-      const src = formatEndpoint(e.source_ip, e.source_port);
-      const dst = formatEndpoint(e.dest_ip, e.dest_port);
-      return (
-        <span className="font-mono text-xs">
-          {src} <span className="text-nb-gray-400">→</span> {dst}
-        </span>
-      );
-    },
+    cell: ({ row }) => (
+      <EndpointCell
+        peer={row.original.sourcePeer}
+        ip={row.original.source_ip}
+        port={row.original.source_port}
+      />
+    ),
+  },
+  {
+    id: "destination",
+    header: ({ column }) => (
+      <DataTableHeader column={column}>Destination</DataTableHeader>
+    ),
+    cell: ({ row }) => (
+      <EndpointCell
+        peer={row.original.destPeer}
+        ip={row.original.dest_ip}
+        port={row.original.dest_port}
+      />
+    ),
   },
   {
     accessorKey: "protocol",
@@ -102,12 +123,35 @@ export default function NetworkTrafficTable({
   isLoading,
   headingTarget,
 }: Props) {
+  const { peers } = usePeers();
+
+  // Two parallel indexes so cell renderers resolve the reporting peer
+  // (by gRPC peer ID) AND the source/dest peers (by mesh IP) in O(1).
+  // The mesh IP index trades a slightly larger footprint for the
+  // human-readable Source / Destination columns operators expect.
+  const enriched: EnrichedEvent[] = useMemo(() => {
+    const byID = new Map<string, Peer>();
+    const byIP = new Map<string, Peer>();
+    if (peers) {
+      for (const p of peers) {
+        if (p.id) byID.set(p.id, p);
+        if (p.ip) byIP.set(p.ip, p);
+      }
+    }
+    return (events ?? []).map((e) => ({
+      ...e,
+      reportingPeer: byID.get(e.peer_id),
+      sourcePeer: byIP.get(e.source_ip),
+      destPeer: byIP.get(e.dest_ip),
+    }));
+  }, [events, peers]);
+
   return (
     <DataTable
       isLoading={isLoading}
       text={"network traffic events"}
       columns={columns}
-      data={events ?? []}
+      data={enriched}
       searchPlaceholder={"Search by peer or IP…"}
       headingTarget={headingTarget}
       paginationPaddingClassName={"px-default"}
@@ -121,6 +165,69 @@ export default function NetworkTrafficTable({
         </>
       )}
     />
+  );
+}
+
+// PeerCell renders the resolved Peer with name + flag, or falls back
+// to the truncated peer_id when the peer was deleted between the
+// event being captured and this view loading. Hostname is shown
+// underneath in muted mono so operators can disambiguate two peers
+// that share a friendly name.
+function PeerCell({
+  peer,
+  fallbackId,
+}: {
+  peer?: Peer;
+  fallbackId: string;
+}) {
+  if (!peer) {
+    return (
+      <span className="font-mono text-xs text-nb-gray-400" title={fallbackId}>
+        {truncateID(fallbackId)}
+      </span>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2">
+      {!isEmpty(peer.country_code) ? (
+        <RoundedFlag country={peer.country_code} size={18} />
+      ) : (
+        <GlobeIcon size={14} className="text-nb-gray-400" />
+      )}
+      <div className="flex flex-col">
+        <span className="text-xs text-white">{peer.name}</span>
+        {peer.hostname && peer.hostname !== peer.name && (
+          <span className="font-mono text-[10px] text-nb-gray-400">
+            {peer.hostname}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// EndpointCell renders the IP:port pair, with a peer name ribbon
+// when the IP belongs to a known mesh peer. Off-mesh IPs (egress
+// to the internet, scanners, etc.) just show the address — that's
+// useful audit signal on its own.
+function EndpointCell({
+  peer,
+  ip,
+  port,
+}: {
+  peer?: Peer;
+  ip: string;
+  port?: number;
+}) {
+  return (
+    <div className="flex flex-col">
+      {peer ? (
+        <span className="text-xs text-white">{peer.name}</span>
+      ) : null}
+      <span className="font-mono text-[11px] text-nb-gray-300">
+        {port ? `${ip}:${port}` : ip}
+      </span>
+    </div>
   );
 }
 
@@ -161,11 +268,12 @@ function DirectionBadge({
   return <span className="text-xs text-nb-gray-400">—</span>;
 }
 
-function formatEndpoint(ip: string, port?: number): string {
-  if (port) {
-    return `${ip}:${port}`;
-  }
-  return ip;
+// truncateID keeps the leading prefix of a peer ID so operators can
+// recognise it from `openzro status` output without flooding the
+// column. The full ID stays in the title attribute for hover.
+function truncateID(id: string): string {
+  if (id.length <= 12) return id;
+  return id.slice(0, 8) + "…";
 }
 
 // protocolName resolves IANA-assigned protocol numbers to a friendly
