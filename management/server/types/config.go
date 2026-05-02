@@ -39,6 +39,18 @@ type Config struct {
 	Relay      *Relay
 	Signal     *Host
 
+	// Flow is the URL peers connect to in order to stream flow events
+	// to the management's `FlowService` gRPC endpoint. The flow service
+	// is registered on the management's gRPC port, so for typical
+	// self-hosted deployments this is the same host as Signal — when
+	// Flow is nil at boot, the management.config integration seam
+	// falls back to Signal.URI to populate the per-peer FlowConfig.
+	//
+	// Set Flow explicitly when the management is reachable from peers
+	// at a different host than Signal (split deployment, separate LB,
+	// dedicated flow ingestion endpoint, etc.).
+	Flow *Host
+
 	Datadir                string
 	DataStoreEncryptionKey string
 

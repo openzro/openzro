@@ -9,9 +9,21 @@ import (
 )
 
 // ExtendOpenzroConfig is the seam the management server uses when sending
-// the config blob to a peer; richer integrations may inject extra fields
-// based on the peer or its account-level extra settings. The stub passes
-// the input through unchanged.
-func ExtendOpenzroConfig(_ string, config *proto.OpenzroConfig, _ *types.ExtraSettings) *proto.OpenzroConfig {
+// the config blob to a peer. Richer integrations may inject extra fields
+// based on the peer or its account-level extra settings; we use it here
+// to pass the operator's traffic-event group filter through to the peer
+// so it can self-gate capture without round-tripping every event for
+// management to drop.
+//
+// The peer compares FlowConfig.groups against its own group memberships
+// and only enables the netflow Manager when the intersection is non-empty
+// (or the list is empty, the "all peers report" default).
+func ExtendOpenzroConfig(_ string, config *proto.OpenzroConfig, extra *types.ExtraSettings) *proto.OpenzroConfig {
+	if extra == nil || config == nil {
+		return config
+	}
+	if config.Flow != nil && len(extra.FlowEventsGroups) > 0 {
+		config.Flow.Groups = append([]string(nil), extra.FlowEventsGroups...)
+	}
 	return config
 }

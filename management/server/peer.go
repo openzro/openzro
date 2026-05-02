@@ -1364,7 +1364,15 @@ func (am *DefaultAccountManager) UpdateAccountPeers(ctx context.Context, account
 			am.metrics.UpdateChannelMetrics().CountMergeNetworkMapDuration(time.Since(start))
 
 			start = time.Now()
-			update := toSyncResponse(ctx, nil, p, nil, nil, remotePeerNetworkMap, dnsDomain, postureChecks, dnsCache, account.Settings, extraSetting)
+			// Resolve this peer's groups only when the operator scoped
+			// flow capture; account snapshot is in-memory so the call
+			// is cheap, but skipping the loop entirely on the unscoped
+			// default keeps the hot broadcast path tight.
+			var peerGroupIDs []string
+			if extraSetting != nil && extraSetting.FlowEnabled && len(extraSetting.FlowEventsGroups) > 0 {
+				peerGroupIDs = account.GetPeerGroupsList(p.ID)
+			}
+			update := toSyncResponse(ctx, nil, p, nil, nil, remotePeerNetworkMap, dnsDomain, postureChecks, dnsCache, account.Settings, extraSetting, peerGroupIDs)
 			am.metrics.UpdateChannelMetrics().CountToSyncResponseDuration(time.Since(start))
 
 			am.peersUpdateManager.SendUpdate(ctx, p.ID, &UpdateMessage{Update: update, NetworkMap: remotePeerNetworkMap})
@@ -1474,7 +1482,11 @@ func (am *DefaultAccountManager) UpdateAccountPeer(ctx context.Context, accountI
 		return
 	}
 
-	update := toSyncResponse(ctx, nil, peer, nil, nil, remotePeerNetworkMap, dnsDomain, postureChecks, dnsCache, account.Settings, extraSettings)
+	var peerGroupIDs []string
+	if extraSettings != nil && extraSettings.FlowEnabled && len(extraSettings.FlowEventsGroups) > 0 {
+		peerGroupIDs = account.GetPeerGroupsList(peer.ID)
+	}
+	update := toSyncResponse(ctx, nil, peer, nil, nil, remotePeerNetworkMap, dnsDomain, postureChecks, dnsCache, account.Settings, extraSettings, peerGroupIDs)
 	am.peersUpdateManager.SendUpdate(ctx, peer.ID, &UpdateMessage{Update: update, NetworkMap: remotePeerNetworkMap})
 }
 

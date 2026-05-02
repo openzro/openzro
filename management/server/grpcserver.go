@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/durationpb"
 
 	integrationsConfig "github.com/openzro/openzro/management/integrations/integrations/config"
 	"github.com/openzro/openzro/management/server/integrations/integrated_validator"
@@ -696,9 +697,130 @@ func toOpenzroConfig(config *types.Config, turnCredentials *Token, relayToken *T
 		Turns:  turns,
 		Signal: signalCfg,
 		Relay:  relayCfg,
+		Flow:   buildFlowConfig(config, extraSettings),
 	}
 
 	return nbConfig
+}
+
+// defaultFlowReportInterval is how often peers flush their queued flow
+// events to the management's FlowService gRPC stream. 10s matches the
+// upstream NetBird default and the volume estimates in ADR-0002
+// §"Volume estimate" (10 events/sec/peer at 100 active connections).
+const defaultFlowReportInterval = 10 * time.Second
+
+// defaultFlowIntervalProto is the proto-encoded form of
+// defaultFlowReportInterval, pre-built once at package init and shared
+// across every Sync response. durationpb.Duration is read-only after
+// construction, and we never mutate Url/Interval per-peer — only the
+// Enabled bit gets toggled when the group filter excludes a peer
+// (see applyFlowGroupFilter), which goes through a fresh FlowConfig
+// shallow copy per peer. So sharing this value is race-free.
+var defaultFlowIntervalProto = durationpb.New(defaultFlowReportInterval)
+
+// buildFlowConfig assembles the per-peer FlowConfig the management
+// includes in every Sync response. Stock NetBird OSS leaves this empty
+// (the commercial integration fills it in at runtime), so peers under
+// a vanilla upstream management never started capture. openZro
+// populates it directly here as part of the BSD-3 stub
+// (management/integrations/integrations/config).
+//
+// URL resolution: explicit `Flow` host in management.json wins; absent
+// that, Signal's URI is reused (typical self-hosted deployments run
+// signal + management on the same host). Empty URL means flow capture
+// stays off regardless of the operator's toggle — defensive against
+// misconfigured deployments where peers would otherwise dial a void.
+//
+// Enabled / Counters / DnsCollection / ExitNodeCollection / Groups
+// come from ExtraSettings (the dashboard's NetworkSettingsTab
+// toggles), so flipping any of them in the UI takes effect on the
+// next Sync without a binary restart.
+//
+// Hot path: this runs on every Sync stream message for every peer;
+// the FlowConfig allocation is unavoidable (it's part of the response
+// shape) but we avoid copying the groups slice when empty and reuse
+// the package-level defaultFlowIntervalProto so a steady-state Sync
+// produces exactly one allocation here.
+func buildFlowConfig(config *types.Config, extra *types.ExtraSettings) *proto.FlowConfig {
+	if config == nil || extra == nil {
+		return nil
+	}
+	url := flowReceiverURL(config)
+	if url == "" {
+		return nil
+	}
+	fc := &proto.FlowConfig{
+		Url:                url,
+		Interval:           defaultFlowIntervalProto,
+		Enabled:            extra.FlowEnabled,
+		Counters:           extra.FlowPacketCounterEnabled,
+		DnsCollection:      extra.FlowDnsCollectionEnabled,
+		ExitNodeCollection: extra.FlowENCollectionEnabled,
+	}
+	// The Groups slice is treated as immutable on the read path
+	// (peer + applyFlowGroupFilter both read, never mutate). Reusing
+	// extra.FlowEventsGroups directly avoids an allocation per Sync;
+	// peer-side Groups comparison only reads, and the proto serializer
+	// also reads. If a future code path mutates this slice, it MUST
+	// copy first.
+	if len(extra.FlowEventsGroups) > 0 {
+		fc.Groups = extra.FlowEventsGroups
+	}
+	return fc
+}
+
+// flowReceiverURL picks the host:port peers connect to for flow
+// reporting. Falls through Flow → Signal in that order.
+func flowReceiverURL(config *types.Config) string {
+	if config.Flow != nil && config.Flow.URI != "" {
+		return config.Flow.URI
+	}
+	if config.Signal != nil && config.Signal.URI != "" {
+		return config.Signal.URI
+	}
+	return ""
+}
+
+// applyFlowGroupFilter is the server-side group gate for traffic event
+// capture. When the operator scoped FlowEventsGroups to a non-empty
+// list AND the peer's group memberships do NOT intersect that list,
+// we flip Enabled=false on the FlowConfig so the peer's flowManager
+// stays idle — no CPU on conntrack, no events published, no bandwidth
+// to management.
+//
+// We mutate the FlowConfig in place because nbConfig is freshly built
+// per Sync call and never shared across peers (verified at the only
+// call site — toOpenzroConfig returns a new struct each invocation,
+// and ExtendOpenzroConfig is invoked once per peer afterwards).
+//
+// Complexity: O(p + s) where p = len(peerGroups), s = len(scope).
+// We build a small map from the smaller of the two and probe with the
+// larger to keep the constant down on the typical case (peers in 1-3
+// groups, scope a small handful).
+func applyFlowGroupFilter(fc *proto.FlowConfig, peerGroups []string) {
+	if fc == nil || !fc.Enabled || len(fc.Groups) == 0 {
+		return
+	}
+	if len(peerGroups) == 0 {
+		fc.Enabled = false
+		return
+	}
+	var smaller, larger []string
+	if len(peerGroups) < len(fc.Groups) {
+		smaller, larger = peerGroups, fc.Groups
+	} else {
+		smaller, larger = fc.Groups, peerGroups
+	}
+	idx := make(map[string]struct{}, len(smaller))
+	for _, g := range smaller {
+		idx[g] = struct{}{}
+	}
+	for _, g := range larger {
+		if _, ok := idx[g]; ok {
+			return
+		}
+	}
+	fc.Enabled = false
 }
 
 func toPeerConfig(peer *nbpeer.Peer, network *types.Network, dnsName string, settings *types.Settings) *proto.PeerConfig {
@@ -713,7 +835,12 @@ func toPeerConfig(peer *nbpeer.Peer, network *types.Network, dnsName string, set
 	}
 }
 
-func toSyncResponse(ctx context.Context, config *types.Config, peer *nbpeer.Peer, turnCredentials *Token, relayCredentials *Token, networkMap *types.NetworkMap, dnsName string, checks []*posture.Checks, dnsCache *DNSConfigCache, settings *types.Settings, extraSettings *types.ExtraSettings) *proto.SyncResponse {
+// toSyncResponse builds the per-peer SyncResponse the management
+// streams back on every state change. peerGroups is the requesting
+// peer's group memberships, supplied by the caller — only consulted
+// when the operator scoped flow capture to a non-empty group list,
+// so callers can pass nil when not needed.
+func toSyncResponse(ctx context.Context, config *types.Config, peer *nbpeer.Peer, turnCredentials *Token, relayCredentials *Token, networkMap *types.NetworkMap, dnsName string, checks []*posture.Checks, dnsCache *DNSConfigCache, settings *types.Settings, extraSettings *types.ExtraSettings, peerGroups []string) *proto.SyncResponse {
 	response := &proto.SyncResponse{
 		PeerConfig: toPeerConfig(peer, networkMap.Network, dnsName, settings),
 		NetworkMap: &proto.NetworkMap{
@@ -726,6 +853,9 @@ func toSyncResponse(ctx context.Context, config *types.Config, peer *nbpeer.Peer
 
 	nbConfig := toOpenzroConfig(config, turnCredentials, relayCredentials, extraSettings)
 	extendedConfig := integrationsConfig.ExtendOpenzroConfig(peer.ID, nbConfig, extraSettings)
+	if extendedConfig != nil {
+		applyFlowGroupFilter(extendedConfig.Flow, peerGroups)
+	}
 	response.OpenzroConfig = extendedConfig
 
 	response.NetworkMap.PeerConfig = response.PeerConfig
@@ -801,7 +931,29 @@ func (s *GRPCServer) sendInitialSync(ctx context.Context, peerKey wgtypes.Key, p
 		return status.Errorf(codes.Internal, "error handling request")
 	}
 
-	plainResp := toSyncResponse(ctx, s.config, peer, turnToken, relayToken, networkMap, s.accountManager.GetDNSDomain(settings), postureChecks, nil, settings, settings.Extra)
+	// Lazy-resolve peer groups only when the operator actually scoped
+	// flow capture to a subset; otherwise we skip the lookup entirely.
+	// This keeps the hot path one cheap settings.Extra read away from
+	// returning, which matters because this runs on every Sync.
+	var peerGroupIDs []string
+	if extra := settings.Extra; extra != nil && extra.FlowEnabled && len(extra.FlowEventsGroups) > 0 {
+		groups, gErr := s.accountManager.GetPeerGroups(ctx, peer.AccountID, peer.ID)
+		if gErr != nil {
+			// Fail-closed: if we cannot determine peer groups while a
+			// scoped filter is active, we cannot safely include the
+			// peer — pass an empty slice and let applyFlowGroupFilter
+			// disable capture for this peer until the next Sync.
+			log.WithContext(ctx).Warnf("flow group filter: failed resolving groups for peer %s: %v (capture disabled this sync)", peer.ID, gErr)
+			peerGroupIDs = []string{}
+		} else {
+			peerGroupIDs = make([]string, 0, len(groups))
+			for _, g := range groups {
+				peerGroupIDs = append(peerGroupIDs, g.ID)
+			}
+		}
+	}
+
+	plainResp := toSyncResponse(ctx, s.config, peer, turnToken, relayToken, networkMap, s.accountManager.GetDNSDomain(settings), postureChecks, nil, settings, settings.Extra, peerGroupIDs)
 
 	encryptedResp, err := encryption.EncryptMessage(peerKey, s.wgKey, plainResp)
 	if err != nil {

@@ -9,6 +9,11 @@ export interface Account {
       peer_approval_enabled: boolean;
       network_traffic_logs_enabled?: boolean;
       network_traffic_packet_counter_enabled?: boolean;
+      // Optional list of group IDs that scope traffic event capture.
+      // When non-empty AND network_traffic_logs_enabled is true, only
+      // peers whose groups intersect this list will capture and report
+      // flow events. Empty / undefined = every peer reports.
+      network_traffic_logs_groups?: string[];
     };
     peer_login_expiration_enabled: boolean;
     peer_login_expiration: number;

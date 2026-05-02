@@ -761,6 +761,7 @@ func toFlowLoggerConfig(config *mgmProto.FlowConfig) (*nftypes.FlowConfig, error
 		Interval:           config.GetInterval().AsDuration(),
 		DNSCollection:      config.GetDnsCollection(),
 		ExitNodeCollection: config.GetExitNodeCollection(),
+		Groups:             append([]string(nil), config.GetGroups()...),
 	}, nil
 }
 

@@ -235,6 +235,13 @@ message FlowConfig {
   bool exitNodeCollection = 7;
   // dnsCollection determines if DNS event collection should be enabled
   bool dnsCollection = 8;
+  // groups optionally restricts capture to peers whose own groups
+  // intersect this list. Empty list means "all peers report" (the
+  // default). Set by management from the account's
+  // ExtraSettings.FlowEventsGroups; the peer enforces the filter
+  // locally so excluded peers never spend CPU on capture or push
+  // events to management.
+  repeated string groups = 9;
 }
 
 // ProtectedHostConfig is similar to HostConfig but has additional user and password
