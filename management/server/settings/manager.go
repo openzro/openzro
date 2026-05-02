@@ -55,45 +55,36 @@ func (m *managerImpl) GetSettings(ctx context.Context, accountID, userID string)
 		}
 	}
 
-	extraSettings, err := m.extraSettingsManager.GetExtraSettings(ctx, accountID)
-	if err != nil {
-		return nil, fmt.Errorf("get extra settings: %w", err)
-	}
-
 	settings, err := m.store.GetAccountSettings(ctx, store.LockingStrengthShare, accountID)
 	if err != nil {
 		return nil, fmt.Errorf("get account settings: %w", err)
 	}
 
-	// Once we migrate the peer approval to settings manager this merging is obsolete
-	if settings.Extra != nil {
-		settings.Extra.FlowEnabled = extraSettings.FlowEnabled
-		settings.Extra.FlowPacketCounterEnabled = extraSettings.FlowPacketCounterEnabled
-		settings.Extra.FlowENCollectionEnabled = extraSettings.FlowENCollectionEnabled
-		settings.Extra.FlowDnsCollectionEnabled = extraSettings.FlowDnsCollectionEnabled
+	// Trust the GORM-backed columns under accounts.settings_extra_*
+	// (see types.Settings.Extra and types.ExtraSettings). Upstream
+	// NetBird is mid-refactor moving Flow* into a side `extra_settings.Manager`
+	// store, but their open-source build ships only a no-op stub
+	// (management/integrations/integrations/extra_settings.go) — a stub
+	// that, prior to alpha.25, silently overwrote freshly-loaded GORM
+	// values with zeros on every read, breaking the dashboard's flow
+	// toggle UX entirely (toast says "enabled", refresh shows disabled).
+	// Until upstream actually ships a real backend for this manager
+	// (and we choose to consume it under our BSD-3 posture), GORM is
+	// the source of truth for ExtraSettings.
+	if settings.Extra == nil {
+		settings.Extra = &types.ExtraSettings{}
 	}
-
 	return settings, nil
 }
 
 func (m *managerImpl) GetExtraSettings(ctx context.Context, accountID string) (*types.ExtraSettings, error) {
-	extraSettings, err := m.extraSettingsManager.GetExtraSettings(ctx, accountID)
-	if err != nil {
-		return nil, fmt.Errorf("get extra settings: %w", err)
-	}
-
 	settings, err := m.store.GetAccountSettings(ctx, store.LockingStrengthShare, accountID)
 	if err != nil {
 		return nil, fmt.Errorf("get account settings: %w", err)
 	}
-
-	// Once we migrate the peer approval to settings manager this merging is obsolete
 	if settings.Extra == nil {
-		settings.Extra = &types.ExtraSettings{}
+		return &types.ExtraSettings{}, nil
 	}
-
-	settings.Extra.FlowEnabled = extraSettings.FlowEnabled
-
 	return settings.Extra, nil
 }
 
