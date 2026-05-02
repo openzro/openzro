@@ -769,16 +769,45 @@ func buildFlowConfig(config *types.Config, extra *types.ExtraSettings) *proto.Fl
 	return fc
 }
 
-// flowReceiverURL picks the host:port peers connect to for flow
-// reporting. Falls through Flow → Signal in that order.
+// flowReceiverURL picks the URL peers connect to for flow reporting.
+// Falls through Flow → Signal in that order, then normalises the
+// result to a scheme-qualified URL — flow/client/client.go uses
+// `url.Parse` and falls back to plaintext (no TLS) when the parsed
+// scheme is not "https". Signal config in management.json is
+// historically stored as bare host:port (`openzro.fuseone.io:443`),
+// which url.Parse misreads as scheme="openzro.fuseone.io" and the
+// resulting Hostname()/Port() come out empty — silently breaking
+// the flow client's dial. We derive the scheme from the Host's
+// Proto field (defaults to https for unknown / empty values, since
+// any sane self-hosted deployment terminates TLS at the ingress
+// for the management gRPC port).
 func flowReceiverURL(config *types.Config) string {
-	if config.Flow != nil && config.Flow.URI != "" {
-		return config.Flow.URI
+	if h := config.Flow; h != nil && h.URI != "" {
+		return ensureURLScheme(h.URI, h.Proto)
 	}
-	if config.Signal != nil && config.Signal.URI != "" {
-		return config.Signal.URI
+	if h := config.Signal; h != nil && h.URI != "" {
+		return ensureURLScheme(h.URI, h.Proto)
 	}
 	return ""
+}
+
+// ensureURLScheme returns uri with an https:// or http:// prefix
+// derived from proto. If uri already has a scheme separator we leave
+// it untouched; otherwise we prepend the canonical scheme so the
+// flow client's url.Parse + scheme-based TLS branch behave correctly.
+func ensureURLScheme(uri string, proto types.Protocol) string {
+	if strings.Contains(uri, "://") {
+		return uri
+	}
+	switch strings.ToLower(string(proto)) {
+	case "http":
+		return "http://" + uri
+	default:
+		// Empty / unknown / "https" → assume TLS. Self-hosted
+		// deployments terminate TLS at the ingress on 443; bare
+		// :443 host:port pairs are unambiguously HTTPS in practice.
+		return "https://" + uri
+	}
 }
 
 // applyFlowGroupFilter is the server-side group gate for traffic event
