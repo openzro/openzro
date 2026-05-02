@@ -112,10 +112,20 @@ type ExtraSettings struct {
 	// IntegratedValidatorGroups list of group IDs to be used with integrated approval configurations
 	IntegratedValidatorGroups []string `gorm:"serializer:json"`
 
-	FlowEnabled              bool `gorm:"-"`
-	FlowPacketCounterEnabled bool `gorm:"-"`
-	FlowENCollectionEnabled  bool `gorm:"-"`
-	FlowDnsCollectionEnabled bool `gorm:"-"`
+	// Flow* fields ride on `extra_settings.*` columns now (one bool per
+	// flag). Upstream marked them `gorm:"-"` (transient, never persisted)
+	// because the open-source NetBird build had no Flow store and the
+	// fields existed only to seed the in-memory dispatcher at boot. Our
+	// dashboard surfaces them as toggles in NetworkSettingsTab, so they
+	// have to round-trip the DB — without persistence the user-flow was
+	// "toggle on → notify success → refresh page → toggle reverts to off"
+	// (no save button activation either, since the dirty-tracker doesn't
+	// see a server-side change). Removing the `gorm:"-"` lets GORM
+	// auto-migrate a column per flag and stash the bool there.
+	FlowEnabled              bool
+	FlowPacketCounterEnabled bool
+	FlowENCollectionEnabled  bool
+	FlowDnsCollectionEnabled bool
 }
 
 // Copy copies the ExtraSettings struct
