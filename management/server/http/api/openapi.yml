@@ -181,6 +181,19 @@ components:
           description: Enables or disables network traffic packet counter. If enabled, network packets and their size will be counted and reported. (This can have an slight impact on performance)
           type: boolean
           example: true
+        network_traffic_logs_groups:
+          description: |
+            Optional list of group IDs that scope network traffic event capture.
+            When non-empty AND network_traffic_logs_enabled is true, only peers
+            whose own groups intersect this list will capture and report flow
+            events. Empty list (default) means every peer reports while logging
+            is enabled. Filtering happens peer-side: excluded peers never spend
+            CPU on capture or report bandwidth, so the cost is bounded by the
+            scoped subset.
+          type: array
+          items:
+            type: string
+            example: cs1tnh0hhcjnngb73loa
       required:
         - peer_approval_enabled
         - network_traffic_logs_enabled

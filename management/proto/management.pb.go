@@ -1477,6 +1477,9 @@ type FlowConfig struct {
 	ExitNodeCollection bool `protobuf:"varint,7,opt,name=exitNodeCollection,proto3" json:"exitNodeCollection,omitempty"`
 	// dnsCollection determines if DNS event collection should be enabled
 	DnsCollection bool `protobuf:"varint,8,opt,name=dnsCollection,proto3" json:"dnsCollection,omitempty"`
+	// groups optionally restricts capture to peers whose own groups
+	// intersect this list. Empty list = all peers report.
+	Groups []string `protobuf:"bytes,9,rep,name=groups,proto3" json:"groups,omitempty"`
 }
 
 func (x *FlowConfig) Reset() {
@@ -1565,6 +1568,13 @@ func (x *FlowConfig) GetDnsCollection() bool {
 		return x.DnsCollection
 	}
 	return false
+}
+
+func (x *FlowConfig) GetGroups() []string {
+	if x != nil {
+		return x.Groups
+	}
+	return nil
 }
 
 // ProtectedHostConfig is similar to HostConfig but has additional user and password

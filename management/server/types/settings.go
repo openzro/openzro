@@ -126,19 +126,30 @@ type ExtraSettings struct {
 	FlowPacketCounterEnabled bool
 	FlowENCollectionEnabled  bool
 	FlowDnsCollectionEnabled bool
+
+	// FlowEventsGroups optionally restricts traffic event capture to peers
+	// whose own groups intersect this list. Empty list (default) means
+	// every peer reports flow events while FlowEnabled is true. The
+	// filter is enforced peer-side via FlowConfig.groups in the Sync
+	// response (see management.proto), so excluded peers never spend
+	// CPU on capture, never queue events, and never push them to
+	// management — bandwidth saved end-to-end. Slice is JSON-encoded
+	// in the extra_settings column rather than a join table because
+	// the cardinality is small (operators typically pick 1–5 groups
+	// when they care to scope at all).
+	FlowEventsGroups []string `gorm:"serializer:json"`
 }
 
 // Copy copies the ExtraSettings struct
 func (e *ExtraSettings) Copy() *ExtraSettings {
-	var cpGroup []string
-
 	return &ExtraSettings{
 		PeerApprovalEnabled:       e.PeerApprovalEnabled,
-		IntegratedValidatorGroups: append(cpGroup, e.IntegratedValidatorGroups...),
+		IntegratedValidatorGroups: append([]string(nil), e.IntegratedValidatorGroups...),
 		IntegratedValidator:       e.IntegratedValidator,
 		FlowEnabled:               e.FlowEnabled,
 		FlowPacketCounterEnabled:  e.FlowPacketCounterEnabled,
 		FlowENCollectionEnabled:   e.FlowENCollectionEnabled,
 		FlowDnsCollectionEnabled:  e.FlowDnsCollectionEnabled,
+		FlowEventsGroups:          append([]string(nil), e.FlowEventsGroups...),
 	}
 }

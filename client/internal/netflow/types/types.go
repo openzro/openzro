@@ -100,6 +100,14 @@ type FlowConfig struct {
 	TokenSignature     string
 	DNSCollection      bool
 	ExitNodeCollection bool
+
+	// Groups is the operator-supplied list of group IDs that scope
+	// flow capture. When non-empty, the peer only enables capture if
+	// its own group memberships intersect this list. Empty (default)
+	// means every peer captures while Enabled=true. Set by management
+	// from ExtraSettings.FlowEventsGroups (proto field
+	// management.FlowConfig.groups).
+	Groups []string
 }
 
 type FlowManager interface {

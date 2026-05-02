@@ -260,6 +260,13 @@ type AccountExtraSettings struct {
 	// NetworkTrafficLogsEnabled Enables or disables network traffic logging. If enabled, all network traffic events from peers will be stored.
 	NetworkTrafficLogsEnabled bool `json:"network_traffic_logs_enabled"`
 
+	// NetworkTrafficLogsGroups Optional list of group IDs that scope network
+	// traffic event capture. When non-empty AND
+	// network_traffic_logs_enabled is true, only peers whose own groups
+	// intersect this list will capture and report flow events. Empty list
+	// (default) means every peer reports while logging is enabled.
+	NetworkTrafficLogsGroups *[]string `json:"network_traffic_logs_groups,omitempty"`
+
 	// NetworkTrafficPacketCounterEnabled Enables or disables network traffic packet counter. If enabled, network packets and their size will be counted and reported. (This can have an slight impact on performance)
 	NetworkTrafficPacketCounterEnabled bool `json:"network_traffic_packet_counter_enabled"`
 

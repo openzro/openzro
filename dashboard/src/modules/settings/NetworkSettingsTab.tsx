@@ -6,17 +6,21 @@ import InlineLink from "@components/InlineLink";
 import { Input } from "@components/Input";
 import { Label } from "@components/Label";
 import { notify } from "@components/Notification";
+import { PeerGroupSelector } from "@components/PeerGroupSelector";
+import Paragraph from "@components/Paragraph";
 import { useHasChanges } from "@hooks/useHasChanges";
 import * as Tabs from "@radix-ui/react-tabs";
 import { useApiCall } from "@utils/api";
 import { validator } from "@utils/helpers";
 import { isOpenzroHosted } from "@utils/openzro";
-import { ActivityIcon, ExternalLinkIcon, GlobeIcon, NetworkIcon } from "lucide-react";
+import { ActivityIcon, ExternalLinkIcon, FilterIcon, GlobeIcon, NetworkIcon } from "lucide-react";
 import React, { useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
 import SettingsIcon from "@/assets/icons/SettingsIcon";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { Account } from "@/interfaces/Account";
+import { Group } from "@/interfaces/Group";
+import useGroupHelper from "@/modules/groups/useGroupHelper";
 
 type Props = {
   account: Account;
@@ -38,12 +42,46 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
     account.settings.extra?.network_traffic_logs_enabled ?? false,
   );
 
-  const toggleFlowSetting = async (toggle: boolean) => {
+  // Group filter for traffic events. The dashboard owns Group[] (with name
+  // + meta) for display, but the API only round-trips group IDs — we
+  // initialize from the IDs present in account.settings.extra and the
+  // useGroupHelper hook resolves them to full Group objects against the
+  // GroupsProvider cache. On save we extract IDs back out.
+  const [flowGroups, setFlowGroups, { save: saveFlowGroups }] = useGroupHelper(
+    {
+      initial: account.settings.extra?.network_traffic_logs_groups ?? [],
+    },
+  );
+
+  const initialFlowGroupIDs = useMemo(
+    () =>
+      [...(account.settings.extra?.network_traffic_logs_groups ?? [])].sort(),
+    [account.settings.extra?.network_traffic_logs_groups],
+  );
+  const flowGroupsDirty = useMemo(() => {
+    const current = [...flowGroups.map((g) => g.id)].sort();
+    if (current.length !== initialFlowGroupIDs.length) return true;
+    for (let i = 0; i < current.length; i++) {
+      if (current[i] !== initialFlowGroupIDs[i]) return true;
+    }
+    return false;
+  }, [flowGroups, initialFlowGroupIDs]);
+
+  // persistFlowExtra round-trips the toggle + the (saved) group set in a
+  // single PUT. Group rows that did not exist server-side are created
+  // first via saveFlowGroups so the /accounts endpoint receives only
+  // canonical IDs. Used by both the toggle handler and the explicit
+  // Save Filter button.
+  const persistFlowExtra = async (
+    enabled: boolean,
+    successMessage: string,
+    loadingMessage: string,
+  ) => {
+    const persistedGroups = await saveFlowGroups();
+    const groupIDs = persistedGroups.map((g) => g.id);
     notify({
       title: "Network Traffic Events",
-      description: `Network Traffic Events successfully ${
-        toggle ? "enabled" : "disabled"
-      }.`,
+      description: successMessage,
       promise: saveRequest
         .put({
           id: account.id,
@@ -51,17 +89,37 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
             ...account.settings,
             extra: {
               ...account.settings.extra,
-              network_traffic_logs_enabled: toggle,
+              network_traffic_logs_enabled: enabled,
+              network_traffic_logs_groups: groupIDs,
             },
           },
         })
         .then(() => {
-          setFlowEnabled(toggle);
+          setFlowEnabled(enabled);
+          setFlowGroups(persistedGroups);
           mutate("/accounts");
         }),
-      loadingMessage: "Updating Network Traffic Events...",
+      loadingMessage,
     });
   };
+
+  const toggleFlowSetting = (toggle: boolean) =>
+    persistFlowExtra(
+      toggle,
+      `Network Traffic Events successfully ${toggle ? "enabled" : "disabled"}.`,
+      "Updating Network Traffic Events...",
+    );
+
+  const saveFlowGroupsFilter = () =>
+    persistFlowExtra(
+      flowEnabled,
+      flowGroups.length > 0
+        ? `Traffic events scoped to ${flowGroups.length} ${
+            flowGroups.length === 1 ? "group" : "groups"
+          }.`
+        : "Traffic events now apply to all peers.",
+      "Updating traffic events scope...",
+    );
 
   const toggleNetworkDNSSetting = async (toggle: boolean) => {
     notify({
@@ -231,6 +289,41 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
             }
             disabled={!permission.settings.update}
           />
+
+          {flowEnabled && (
+            <div
+              className={
+                "flex flex-col gap-2 ml-12 mt-2 border-l border-nb-gray-900 pl-6 py-2"
+              }
+            >
+              <Label className={"flex items-center gap-2"}>
+                <FilterIcon size={14} />
+                Limit to specific groups
+              </Label>
+              <Paragraph className={"text-xs text-nb-gray-300 max-w-lg"}>
+                Optional. When set, only peers in these groups capture and
+                report traffic events — excluded peers never spend CPU on
+                conntrack and never push events to management. Leave empty
+                to apply to all peers.
+              </Paragraph>
+              <PeerGroupSelector
+                values={flowGroups}
+                onChange={setFlowGroups}
+                disabled={!permission.settings.update}
+                hideAllGroup
+              />
+              <div className={"flex"}>
+                <Button
+                  size={"sm"}
+                  variant={"primary"}
+                  disabled={!flowGroupsDirty || !permission.settings.update}
+                  onClick={saveFlowGroupsFilter}
+                >
+                  Save filter
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </Tabs.Content>
