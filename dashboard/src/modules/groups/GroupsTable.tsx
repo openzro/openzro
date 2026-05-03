@@ -1,10 +1,11 @@
+import Button from "@components/Button";
 import ButtonGroup from "@components/ButtonGroup";
 import { DataTable } from "@components/table/DataTable";
 import DataTableHeader from "@components/table/DataTableHeader";
 import { DataTableRowsPerPage } from "@components/table/DataTableRowsPerPage";
 import NoResults from "@components/ui/NoResults";
 import { ColumnDef, SortingState } from "@tanstack/react-table";
-import { FolderGit2Icon, Layers3Icon } from "lucide-react";
+import { FolderGit2Icon, Layers3Icon, PlusCircle } from "lucide-react";
 import { usePathname } from "next/navigation";
 import React from "react";
 import AccessControlIcon from "@/assets/icons/AccessControlIcon";
@@ -13,6 +14,7 @@ import NetworkRoutesIcon from "@/assets/icons/NetworkRoutesIcon";
 import PeerIcon from "@/assets/icons/PeerIcon";
 import SetupKeysIcon from "@/assets/icons/SetupKeysIcon";
 import TeamIcon from "@/assets/icons/TeamIcon";
+import { usePermissions } from "@/contexts/PermissionsProvider";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import GroupsActionCell from "@/modules/groups/GroupsActionCell";
 import GroupsCountCell from "@/modules/groups/GroupsCountCell";
@@ -220,11 +222,16 @@ export const GroupsTableColumns: ColumnDef<GroupUsage>[] = [
 
 type Props = {
   headingTarget?: HTMLHeadingElement | null;
+  onCreate?: () => void;
 };
 
-export default function GroupsTable({ headingTarget }: Readonly<Props>) {
+export default function GroupsTable({
+  headingTarget,
+  onCreate,
+}: Readonly<Props>) {
   const groups = useGroupsUsage();
   const path = usePathname();
+  const { permission } = usePermissions();
 
   // Default sorting state of the table
   const [sorting, setSorting] = useLocalStorage<SortingState>(
@@ -252,6 +259,20 @@ export default function GroupsTable({ headingTarget }: Readonly<Props>) {
           columnVisibility={{
             in_use: false,
           }}
+          rightSide={() =>
+            onCreate ? (
+              <Button
+                variant={"primary"}
+                className={"ml-auto"}
+                onClick={onCreate}
+                disabled={!permission.groups.create}
+                data-cy={"create-group"}
+              >
+                <PlusCircle size={16} />
+                New Group
+              </Button>
+            ) : null
+          }
         >
           {(table) => (
             <>
