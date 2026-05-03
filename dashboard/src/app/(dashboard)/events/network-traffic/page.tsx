@@ -4,24 +4,16 @@ import Breadcrumbs from "@components/Breadcrumbs";
 import InlineLink from "@components/InlineLink";
 import Paragraph from "@components/Paragraph";
 import { RestrictedAccess } from "@components/ui/RestrictedAccess";
-import useFetchApi from "@utils/api";
 import { ExternalLinkIcon, NetworkIcon } from "lucide-react";
 import React from "react";
 import ActivityIcon from "@/assets/icons/ActivityIcon";
+import PeersProvider from "@/contexts/PeersProvider";
 import { usePermissions } from "@/contexts/PermissionsProvider";
-import { NetworkTrafficEventsResponse } from "@/interfaces/NetworkTrafficEvent";
 import PageContainer from "@/layouts/PageContainer";
 import NetworkTrafficTimeline from "@/modules/network-traffic/NetworkTrafficTimeline";
 
 export default function NetworkTraffic() {
   const { permission } = usePermissions();
-
-  // The endpoint is GET /api/network-traffic-events. Server responds
-  // with an empty list when the hot store is not configured
-  // (engine=none) — we surface the same empty-state UI either way,
-  // so the page never hangs on a config mismatch.
-  const { data, isLoading } =
-    useFetchApi<NetworkTrafficEventsResponse>("/network-traffic-events");
 
   return (
     <PageContainer>
@@ -62,7 +54,13 @@ export default function NetworkTraffic() {
         page={"Network Traffic"}
         hasAccess={permission.events.read}
       >
-        <NetworkTrafficTimeline events={data?.events} isLoading={isLoading} />
+        {/* PeersProvider is required so the timeline can resolve
+            source_ip / dest_ip / peer_id back to friendly peer names
+            and country flags. Without it, every row falls through to
+            the bare IP fallback. */}
+        <PeersProvider>
+          <NetworkTrafficTimeline />
+        </PeersProvider>
       </RestrictedAccess>
     </PageContainer>
   );
