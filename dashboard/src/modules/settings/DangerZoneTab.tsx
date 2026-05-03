@@ -5,6 +5,7 @@ import { notify } from "@components/Notification";
 import * as Tabs from "@radix-ui/react-tabs";
 import { useApiCall } from "@utils/api";
 import loadConfig from "@utils/config";
+import { cn } from "@utils/helpers";
 import { AlertOctagonIcon } from "lucide-react";
 import React from "react";
 import SettingsIcon from "@/assets/icons/SettingsIcon";
@@ -80,15 +81,26 @@ export default function DangerZoneTab({ account }: Props) {
         <h1>Danger Zone</h1>
         <div className={"gap-6 mt-6 max-w-lg"}>
           <Card
-            className={
-              "w-full flex flex-col gap-2 border-red-600 bg-red-950/50"
-            }
+            className={cn(
+              "w-full flex flex-col gap-2 border",
+              // Light: a soft pinkish-white surface with a red border —
+              // the red is the warning signal, the surface stays
+              // legible. Saturated red bg works in dark because the
+              // page itself is near-black; on a white page the same
+              // saturation overpowers the text.
+              "border-red-300 bg-red-50",
+              "dark:border-red-600 dark:bg-red-950/50",
+            )}
           >
             <div className={"px-8 py-6"}>
-              <p className={"text-xl font-medium mb-2 !text-red-50"}>
+              <p
+                className={
+                  "text-xl font-medium mb-2 !text-red-700 dark:!text-red-50"
+                }
+              >
                 Delete Openzro account
               </p>
-              <p className={"!text-red-50/80"}>
+              <p className={"!text-red-700/80 dark:!text-red-50/80"}>
                 Before proceeding to delete your Openzro account, please be
                 aware that this action is irreversible. Once your account is
                 deleted, you will permanently lose access to all associated

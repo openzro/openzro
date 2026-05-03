@@ -12,7 +12,7 @@ import { useHasChanges } from "@hooks/useHasChanges";
 import * as Tabs from "@radix-ui/react-tabs";
 import { useApiCall } from "@utils/api";
 import loadConfig from "@utils/config";
-import { validator } from "@utils/helpers";
+import { cn, validator } from "@utils/helpers";
 import { API_ORIGIN, isOpenzroHosted } from "@utils/openzro";
 import { ActivityIcon, ExternalLinkIcon, FilterIcon, GlobeIcon, NetworkIcon } from "lucide-react";
 import React, { useMemo, useState } from "react";
@@ -333,20 +333,26 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
 
           {flowEnabled && (
             <div
-              className={
-                "flex flex-col gap-2 ml-12 mt-2 border-l border-neutral-200 dark:border-nb-gray-900 pl-6 py-2"
-              }
+              className={cn(
+                "border border-t-0 rounded-b-md px-[1.28rem] pt-3 pb-5 flex flex-col gap-3 mx-[0.25rem]",
+                "border-neutral-200 bg-neutral-50",
+                "dark:border-nb-gray-900 dark:bg-nb-gray-940",
+                !permission.settings.update &&
+                  "opacity-50 pointer-events-none",
+              )}
             >
-              <Label className={"flex items-center gap-2"}>
-                <FilterIcon size={14} />
-                Limit to specific groups
-              </Label>
-              <Paragraph className={"text-xs text-neutral-600 dark:text-nb-gray-300 max-w-lg"}>
-                Optional. When set, only peers in these groups capture and
-                report traffic events — excluded peers never spend CPU on
-                conntrack and never push events to management. Leave empty
-                to apply to all peers.
-              </Paragraph>
+              <div>
+                <Label className={"flex items-center gap-2"}>
+                  <FilterIcon size={14} />
+                  Limit to specific groups
+                </Label>
+                <HelpText>
+                  Optional. When set, only peers in these groups capture and
+                  report traffic events — excluded peers never spend CPU on
+                  conntrack and never push events to management. Leave empty
+                  to apply to all peers.
+                </HelpText>
+              </div>
               <PeerGroupSelector
                 values={flowGroups}
                 onChange={setFlowGroups}
