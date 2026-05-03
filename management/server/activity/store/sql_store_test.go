@@ -55,3 +55,44 @@ func TestNewSqlStore(t *testing.T) {
 	assert.Len(t, result, 5)
 	assert.True(t, result[0].Timestamp.After(result[len(result)-1].Timestamp))
 }
+
+// TestEngineDispatch_MissingDSN locks in the dispatch behavior so a
+// future refactor can't silently drop the postgres or mysql branches.
+// We don't stand up real DB containers here (the rest of the SQL store
+// suite stays sqlite-only), but we do prove that asking for an engine
+// without the matching DSN returns a clear error naming the env var.
+// That has caught two regressions on the flow store side already.
+func TestEngineDispatch_MissingDSN(t *testing.T) {
+	cases := []struct {
+		engine     string
+		wantEnvVar string
+	}{
+		{engine: "postgres", wantEnvVar: postgresDsnEnv},
+		{engine: "mysql", wantEnvVar: mysqlDsnEnv},
+	}
+	for _, tc := range cases {
+		t.Run(tc.engine, func(t *testing.T) {
+			t.Setenv(storeEngineEnv, tc.engine)
+			key, _ := GenerateKey()
+			_, err := NewSqlStore(context.Background(), t.TempDir(), key)
+			if err == nil {
+				t.Fatalf("expected error when %s is unset, got nil", tc.wantEnvVar)
+			}
+			assert.Contains(t, err.Error(), tc.wantEnvVar)
+		})
+	}
+}
+
+// TestEngineDispatch_UnsupportedEngine documents that misspelled or
+// future-but-not-implemented engines fail-loud at NewSqlStore time
+// rather than silently falling back to sqlite — operators get a clear
+// configuration error in the management pod's first log line.
+func TestEngineDispatch_UnsupportedEngine(t *testing.T) {
+	t.Setenv(storeEngineEnv, "clickhouse")
+	key, _ := GenerateKey()
+	_, err := NewSqlStore(context.Background(), t.TempDir(), key)
+	if err == nil {
+		t.Fatal("expected error for unsupported engine, got nil")
+	}
+	assert.Contains(t, err.Error(), "unsupported store engine")
+}
