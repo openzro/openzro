@@ -30,7 +30,10 @@ import (
 )
 
 const (
-	defaultQueryTimeout = 60 * time.Second
+	defaultQueryTimeout         = 60 * time.Second
+	defaultMemoryLimit          = "256MB"
+	defaultThreads              = 2
+	defaultMaxConcurrentQueries = 4
 	// readParquetURL is the read_parquet glob template DuckDB
 	// resolves at query time. The Hive-style partition layout
 	// matches what flow/sinks/{s3,gcs}.go writes today.
@@ -44,6 +47,11 @@ const (
 // object lifecycle). Query is the real work.
 type duckdbStore struct {
 	cfg Config
+	// sem caps concurrent archive queries so a burst of dashboard
+	// loads cannot multiply DuckDB's per-query memory footprint into
+	// the pod's resources.limits.memory ceiling. See ADR-0012's
+	// "Memory bounds" subsection of the consequences table.
+	sem chan struct{}
 }
 
 // New returns a DuckDB-backed Store ready to serve archive queries.
@@ -65,7 +73,19 @@ func New(cfg Config) (store.Store, error) {
 	if cfg.QueryTimeout <= 0 {
 		cfg.QueryTimeout = defaultQueryTimeout
 	}
-	return &duckdbStore{cfg: cfg}, nil
+	if cfg.MemoryLimit == "" {
+		cfg.MemoryLimit = defaultMemoryLimit
+	}
+	if cfg.Threads <= 0 {
+		cfg.Threads = defaultThreads
+	}
+	if cfg.MaxConcurrentQueries <= 0 {
+		cfg.MaxConcurrentQueries = defaultMaxConcurrentQueries
+	}
+	return &duckdbStore{
+		cfg: cfg,
+		sem: make(chan struct{}, cfg.MaxConcurrentQueries),
+	}, nil
 }
 
 // Save is a no-op: the archive is populated by the FlowService fan-out
@@ -100,6 +120,18 @@ func (d *duckdbStore) Query(ctx context.Context, f store.Filter) ([]*store.Event
 
 	ctx, cancel := context.WithTimeout(ctx, d.cfg.QueryTimeout)
 	defer cancel()
+
+	// Gate concurrent archive queries so a Network Traffic
+	// page-load burst cannot multiply DuckDB's per-query footprint
+	// into the pod's memory ceiling. The select honours the
+	// caller's context so a cancelled request doesn't block forever
+	// behind a slow archive query.
+	select {
+	case d.sem <- struct{}{}:
+		defer func() { <-d.sem }()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 
 	conn, err := sql.Open("duckdb", "")
 	if err != nil {
@@ -136,12 +168,28 @@ func (d *duckdbStore) Query(ctx context.Context, f store.Filter) ([]*store.Event
 	return out, nil
 }
 
-// bootstrapConn loads the httpfs extension and registers the
-// credentials secret so subsequent SELECTs can open the bucket. We
-// run it on every Query because the connection is fresh per call.
-// Cost: ~1ms on warm DuckDB shared library, dwarfed by the network
-// round-trip to the object store on the SELECT itself.
+// bootstrapConn loads the httpfs extension, pins the resource
+// budget, and registers the credentials secret so subsequent
+// SELECTs can open the bucket. We run it on every Query because
+// the connection is fresh per call. Cost: ~1ms on warm DuckDB
+// shared library, dwarfed by the network round-trip to the object
+// store on the SELECT itself.
+//
+// The memory_limit + threads SETs are critical: DuckDB defaults
+// auto-detect from the host's /proc/meminfo and CPU count, which in
+// a Kubernetes pod overcounts both. Explicit caps prevent the OOM
+// path documented in ADR-0012's consequences table.
 func (d *duckdbStore) bootstrapConn(ctx context.Context, conn *sql.DB) error {
+	if _, err := conn.ExecContext(ctx,
+		fmt.Sprintf("SET memory_limit = %s", quoteString(d.cfg.MemoryLimit)),
+	); err != nil {
+		return fmt.Errorf("flow archive store: set memory_limit: %w", err)
+	}
+	if _, err := conn.ExecContext(ctx,
+		fmt.Sprintf("SET threads = %d", d.cfg.Threads),
+	); err != nil {
+		return fmt.Errorf("flow archive store: set threads: %w", err)
+	}
 	if _, err := conn.ExecContext(ctx, "INSTALL httpfs"); err != nil {
 		return fmt.Errorf("flow archive store: install httpfs: %w", err)
 	}

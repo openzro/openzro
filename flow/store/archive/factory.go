@@ -2,6 +2,7 @@ package archive
 
 import (
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/openzro/openzro/flow/store"
@@ -29,6 +30,15 @@ const (
 
 	envFormat       = "OPENZRO_FLOW_ARCHIVE_FORMAT"
 	envQueryTimeout = "OPENZRO_FLOW_ARCHIVE_QUERY_TIMEOUT"
+
+	// Memory bounds — tuned to fit the management's typical 1Gi pod
+	// limit. Operators on bigger pods can lift these without code
+	// changes; on smaller pods they should LOWER memory_limit and
+	// max_concurrent so the archive footprint stays well below the
+	// cgroup ceiling.
+	envMemoryLimit          = "OPENZRO_FLOW_ARCHIVE_MEMORY_LIMIT"
+	envThreads              = "OPENZRO_FLOW_ARCHIVE_THREADS"
+	envMaxConcurrentQueries = "OPENZRO_FLOW_ARCHIVE_MAX_CONCURRENT_QUERIES"
 )
 
 // NewFromEnv constructs the archive Store from the operator's env
@@ -66,7 +76,25 @@ func NewFromEnv() (store.Store, error) {
 	}
 
 	cfg.QueryTimeout = parseTimeout(os.Getenv(envQueryTimeout))
+	cfg.MemoryLimit = os.Getenv(envMemoryLimit)
+	cfg.Threads = parseInt(os.Getenv(envThreads))
+	cfg.MaxConcurrentQueries = parseInt(os.Getenv(envMaxConcurrentQueries))
 	return New(cfg)
+}
+
+// parseInt parses an env-supplied integer, returning 0 on empty or
+// malformed input. The constructor substitutes its default when the
+// caller's value is non-positive, so a malformed env yields the
+// safe default rather than a startup failure.
+func parseInt(s string) int {
+	if s == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return 0
+	}
+	return n
 }
 
 // configFromEnv inspects the env once and returns the populated

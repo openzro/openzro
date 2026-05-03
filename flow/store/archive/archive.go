@@ -79,6 +79,29 @@ type Config struct {
 	// the underlying httpfs reads when the context fires. Default
 	// 60s; bump it for large-window forensics if 60s is not enough.
 	QueryTimeout time.Duration
+
+	// MemoryLimit caps the DuckDB engine's per-connection memory
+	// footprint. DuckDB's auto-detect reads /proc/meminfo, which in a
+	// Kubernetes pod reports the host's RAM rather than the cgroup
+	// limit — so without an explicit cap a query against a long
+	// archive window can blow the pod's resources.limits.memory and
+	// trigger an OOMKill. Default "256MB", expressed as a DuckDB
+	// memory string ("128MB", "1GB", etc).
+	MemoryLimit string
+
+	// Threads bounds the DuckDB worker pool per query. DuckDB
+	// defaults to N=CPUs which amplifies memory per query under
+	// concurrency. Default 2 keeps a single archive query
+	// well-bounded; bump for single-tenant clusters that prioritise
+	// query latency over predictable footprint.
+	Threads int
+
+	// MaxConcurrentQueries gates how many DuckDB queries can run at
+	// once on this Store. Beyond this, callers block on a semaphore.
+	// Default 4: at MemoryLimit=256MB that's a 1GB worst-case
+	// archive footprint, sized for a 1Gi pod with headroom for the
+	// rest of the management process.
+	MaxConcurrentQueries int
 }
 
 // MaxRowsPerQuery caps how many archive rows a single Query() may
