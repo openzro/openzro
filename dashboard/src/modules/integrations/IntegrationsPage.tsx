@@ -138,7 +138,7 @@ export default function IntegrationsPage() {
           */}
           <nav
             className={cn(
-              "shrink-0 lg:w-56 lg:border-r lg:border-nb-gray-930",
+              "shrink-0 lg:w-56 lg:border-r border-neutral-200 dark:border-nb-gray-930",
               "lg:pr-4 lg:py-2",
             )}
           >
@@ -152,8 +152,11 @@ export default function IntegrationsPage() {
                       "w-full flex items-center gap-2 px-4 py-2 text-sm rounded-md transition-all whitespace-nowrap",
                       "lg:text-left",
                       active === t.value
-                        ? "bg-nb-gray-920 text-white"
-                        : "text-nb-gray-300 hover:bg-nb-gray-900/50",
+                        // Mirror the VerticalTabs active state from
+                        // the Settings sidebar so the two sidebars
+                        // share visual language across the dashboard.
+                        ? "bg-neutral-100 text-neutral-900 dark:bg-nb-gray-920 dark:text-white"
+                        : "text-neutral-600 hover:bg-neutral-100 dark:text-nb-gray-300 dark:hover:bg-nb-gray-900/50",
                     )}
                   >
                     {t.icon}
@@ -217,7 +220,9 @@ function FlowExportsSection() {
 
       <div className="mt-4">
         {isLoading && (
-          <Paragraph className="text-nb-gray-300">Loading…</Paragraph>
+          <Paragraph className="text-neutral-600 dark:text-nb-gray-300">
+            Loading…
+          </Paragraph>
         )}
         {!isLoading && (!data || data.length === 0) && (
           <EmptyState message="No destinations configured. Click Add destination to start streaming traffic events." />
@@ -364,7 +369,9 @@ function MDMProvidersSection() {
 
       <div className="mt-4">
         {isLoading && (
-          <Paragraph className="text-nb-gray-300">Loading…</Paragraph>
+          <Paragraph className="text-neutral-600 dark:text-nb-gray-300">
+            Loading…
+          </Paragraph>
         )}
         {!isLoading && (!data || data.length === 0) && (
           <EmptyState message="No MDM/EDR providers configured. Click Add provider to connect Intune, SentinelOne, Huntress, or CrowdStrike Falcon." />
@@ -511,7 +518,9 @@ function ActivityExportersSection() {
 
       <div className="mt-4">
         {isLoading && (
-          <Paragraph className="text-nb-gray-300">Loading…</Paragraph>
+          <Paragraph className="text-neutral-600 dark:text-nb-gray-300">
+            Loading…
+          </Paragraph>
         )}
         {!isLoading && (!data || data.length === 0) && (
           <EmptyState message="No activity exporters configured. Click Add exporter to start streaming the audit log to Datadog, Elastic, or any HTTP receiver." />

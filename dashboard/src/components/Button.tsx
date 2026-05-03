@@ -78,7 +78,12 @@ export const buttonVariants = cva(
           "dark:bg-transparent dark:text-nb-gray-400 dark:border-transparent dark:hover:text-white dark:hover:bg-nb-gray-900/30 dark:hover:border-nb-gray-800/50",
         ],
         danger: [
-          "", // TODO - add danger button styles for light mode
+          // Light: solid red surface with white text — same visual
+          // weight as the primary openZro CTA so the destructive
+          // intent reads at a glance against any background. The
+          // ring matches the surface so focus is visible without
+          // changing the colour family.
+          "bg-red-600 text-white border-red-600 hover:bg-red-700 hover:border-red-700 focus:ring-red-400/50",
           "dark:focus:ring-red-700/20 dark:focus:bg-red-700 hover:dark:bg-red-700 dark:hover:border-red-800/50 dark:bg-red-600 dark:text-red-100",
         ],
       },
