@@ -82,6 +82,20 @@ func NewFromEnv(ctx context.Context) (*Built, error) {
 	log.WithContext(ctx).Infof(
 		"flow store: %s engine, retention=%s", engine, retention)
 
+	// MySQL and SQLite do not get the native PARTITION BY RANGE schema
+	// that the Postgres path uses (see ADR-0002). Retention falls back
+	// to row-level DELETE, which scales with row count and does NOT
+	// reclaim disk on its own — autovacuum / OPTIMIZE TABLE chase the
+	// bloat after the fact. At >1M flow events/day this is operationally
+	// painful; Postgres is strongly recommended for production.
+	if engine == "mysql" || engine == "sqlite" {
+		log.WithContext(ctx).Warnf(
+			"flow store engine=%s lacks native partitioning — retention "+
+				"will use row-level DELETE which scales poorly past ~1M "+
+				"events/day. Postgres is recommended for production "+
+				"(see ADR-0002).", engine)
+	}
+
 	return &Built{
 		Store:     s,
 		Retention: retention,
