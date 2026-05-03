@@ -36,11 +36,41 @@ export default function SidebarItem({
   labelClassName,
   visible,
 }: Readonly<SidebarItemProps>) {
-  const [open, setOpen] = React.useState(false);
   const path = usePathname();
   const router = useRouter();
   const { mobileNavOpen, toggleMobileNav, isNavigationCollapsed } =
     useApplicationContext();
+
+  // For collapsible parents, walk the children and see if any of
+  // their `href` props matches the current path. Used to auto-open
+  // the section on first render (so deep-linking to /team/users
+  // shows the Team submenu open with Users highlighted) and to keep
+  // it open when navigation flips between sibling submenus.
+  const hasActiveChild = useMemo(() => {
+    if (!collapsible || !children) return false;
+    let found = false;
+    React.Children.forEach(children, (child) => {
+      if (!React.isValidElement(child)) return;
+      const childHref = (child.props as { href?: string })?.href;
+      const childExact = (child.props as { exactPathMatch?: boolean })
+        ?.exactPathMatch;
+      if (!childHref) return;
+      const matches = childExact
+        ? path === childHref
+        : path.includes(childHref);
+      if (matches) found = true;
+    });
+    return found;
+  }, [collapsible, children, path]);
+
+  const [open, setOpen] = React.useState<boolean>(hasActiveChild);
+
+  // Force-open when navigation activates a child (the user can still
+  // close manually afterwards — only the rising edge of
+  // hasActiveChild reopens).
+  React.useEffect(() => {
+    if (hasActiveChild) setOpen(true);
+  }, [hasActiveChild]);
 
   const handleClick = () => {
     const preventRedirect = href
@@ -75,8 +105,13 @@ export default function SidebarItem({
                 ? "pl-7 pr-2 py-[.45rem] mt-1 mb-0.5"
                 : "py-[.45rem] px-3",
               isActive
-                ? "text-gray-900 bg-gray-200 dark:text-white dark:bg-nb-gray-900"
-                : "text-gray-600 hover:bg-gray-200 dark:text-nb-gray-400 dark:hover:bg-nb-gray-900/50",
+                ? // Active: brand-tinted chip in light so the
+                  // selected page is unmistakably distinct from a
+                  // mere hover (upstream used `bg-gray-200` for
+                  // both, so the highlight got lost in light).
+                  // Dark keeps its existing nb-gray-900 surface.
+                  "text-openzro-700 bg-openzro-50 dark:text-white dark:bg-nb-gray-900"
+                : "text-gray-600 hover:bg-neutral-100 hover:text-gray-900 dark:text-nb-gray-400 dark:hover:bg-nb-gray-900/50",
             )}
             onClick={handleClick}
           >

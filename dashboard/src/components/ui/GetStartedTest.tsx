@@ -24,7 +24,15 @@ export default function GetStartedTest({
       <Card className={"w-full relative overflow-hidden"}>
         <div
           className={
-            "absolute z-20 bg-gradient-to-b  dark:to-nb-gray-950 dark:from-nb-gray-950/40 w-full h-full"
+            // Veil over the decorative skeleton bars. Light mode
+            // had no overlay, so the bars showed at full strength
+            // and competed with the CTA. Fade from semi-transparent
+            // card surface at top to opaque at bottom in both
+            // themes so the skeleton reads as subtle texture, not
+            // a foreground element.
+            "absolute z-20 w-full h-full bg-gradient-to-b " +
+            "from-neutral-50/40 to-neutral-50 " +
+            "dark:from-nb-gray-950/40 dark:to-nb-gray-950"
           }
         ></div>
         <div
