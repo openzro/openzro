@@ -56,6 +56,13 @@ type S3Config struct {
 	// BufferSize is the in-memory queue capacity. Default 50000.
 	BufferSize int
 
+	// Format selects the on-disk encoding. Empty defaults to "ndjson"
+	// for back-compat with operators who set up the archive before
+	// ADR-0012 landed. New deployments should set "parquet" so the
+	// dashboard's federated read path (flow/store/archive) can query
+	// historical events without leaving the UI.
+	Format string
+
 	// HTTPClient lets tests inject a stub. Empty means default.
 	HTTPClient *http.Client
 }
@@ -74,6 +81,7 @@ type S3Config struct {
 //   <prefix>/year=2026/month=04/day=26/account=<id>/<unix-nano>-<rand>.ndjson.gz
 type S3 struct {
 	cfg    S3Config
+	format archiveFormat
 	client *s3.Client
 
 	queue  chan *store.Event
@@ -126,6 +134,7 @@ func NewS3(ctx context.Context, cfg S3Config) (*S3, error) {
 
 	s := &S3{
 		cfg:    cfg,
+		format: resolveFormat(cfg.Format),
 		client: s3.NewFromConfig(awsCfg, clientOpts...),
 		queue:  make(chan *store.Event, cfg.BufferSize),
 		stopCh: make(chan struct{}),
@@ -192,28 +201,47 @@ func (s *S3) loop() {
 	}
 }
 
-// upload writes the batch as gzipped NDJSON and PUTs it. Errors are
-// logged loud and dropped — the cold archive is best-effort, mirrored
-// by the streaming exporter for durability needs.
+// upload encodes the batch in the configured format and PUTs it.
+// Errors are logged loud and dropped — the cold archive is
+// best-effort, mirrored by the streaming exporter for durability
+// needs.
 func (s *S3) upload(ctx context.Context, batch []*store.Event) {
-	body, err := encodeBatch(batch)
+	body, contentType, contentEncoding, err := s.encodeForFormat(batch)
 	if err != nil {
 		log.Errorf("flow sink S3: encode batch (%d events): %v", len(batch), err)
 		return
 	}
 	key := s.objectKey(batch[0])
 
-	_, err = s.client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:          aws.String(s.cfg.Bucket),
-		Key:             aws.String(key),
-		Body:            bytes.NewReader(body),
-		ContentType:     aws.String("application/x-ndjson"),
-		ContentEncoding: aws.String("gzip"),
-	})
-	if err != nil {
+	input := &s3.PutObjectInput{
+		Bucket:      aws.String(s.cfg.Bucket),
+		Key:         aws.String(key),
+		Body:        bytes.NewReader(body),
+		ContentType: aws.String(contentType),
+	}
+	if contentEncoding != "" {
+		input.ContentEncoding = aws.String(contentEncoding)
+	}
+	if _, err := s.client.PutObject(ctx, input); err != nil {
 		log.Errorf("flow sink S3: put %s/%s (%d events): %v",
 			s.cfg.Bucket, key, len(batch), err)
 		return
+	}
+}
+
+// encodeForFormat produces the wire bytes plus the right HTTP
+// content metadata for the configured archive format. NDJSON keeps
+// the gzip Content-Encoding so the on-disk extension reflects the
+// transport encoding; Parquet ships uncompressed at the HTTP layer
+// (the file itself uses Snappy column compression).
+func (s *S3) encodeForFormat(batch []*store.Event) (body []byte, contentType, contentEncoding string, err error) {
+	switch s.format {
+	case formatParquet:
+		body, err = encodeBatchParquet(batch)
+		return body, "application/vnd.apache.parquet", "", err
+	default:
+		body, err = encodeBatch(batch)
+		return body, "application/x-ndjson", "gzip", err
 	}
 }
 
@@ -221,20 +249,26 @@ func (s *S3) upload(ctx context.Context, batch []*store.Event) {
 // the first event's ReceivedAt — within a single batch they are
 // nanoseconds apart, so partitioning by the head is fine and avoids
 // fragmenting batches across day boundaries (which would produce many
-// tiny files).
+// tiny files). Extension reflects the archive format so DuckDB / S3
+// listing can filter by suffix without sniffing magic bytes.
 func (s *S3) objectKey(first *store.Event) string {
 	t := first.ReceivedAt.UTC()
 	prefix := s.cfg.Prefix
 	if prefix != "" && prefix[len(prefix)-1] != '/' {
 		prefix += "/"
 	}
+	ext := "ndjson.gz"
+	if s.format == formatParquet {
+		ext = "parquet"
+	}
 	return fmt.Sprintf(
-		"%syear=%04d/month=%02d/day=%02d/account=%s/%d-%s.ndjson.gz",
+		"%syear=%04d/month=%02d/day=%02d/account=%s/%d-%s.%s",
 		prefix,
 		t.Year(), t.Month(), t.Day(),
 		first.AccountID,
 		t.UnixNano(),
 		hex.EncodeToString(first.EventID[:min(4, len(first.EventID))]),
+		ext,
 	)
 }
 

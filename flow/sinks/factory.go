@@ -56,6 +56,13 @@ const (
 	envGCSFlushInterval    = "OPENZRO_FLOW_ARCHIVE_GCS_FLUSH_INTERVAL"
 	envGCSMaxEventsPerFile = "OPENZRO_FLOW_ARCHIVE_GCS_MAX_EVENTS_PER_FILE"
 	envGCSBufferSize       = "OPENZRO_FLOW_ARCHIVE_GCS_BUFFER_SIZE"
+
+	// Archive on-disk format. Per ADR-0012: shared between S3 and GCS
+	// so an operator running both backends doesn't have to duplicate
+	// the knob. Empty / unrecognized values default to "ndjson"
+	// (back-compat with deployments pre-Parquet); set "parquet" to
+	// opt into the federated read path served by flow/store/archive.
+	envArchiveFormat = "OPENZRO_FLOW_ARCHIVE_FORMAT"
 )
 
 // NewFromEnv reads OPENZRO_FLOW_EXPORT_* variables and returns the
@@ -127,6 +134,7 @@ func newGCSFromEnv(ctx context.Context) (store.Sink, error) {
 	if bucket == "" {
 		return nil, nil
 	}
+	format := os.Getenv(envArchiveFormat)
 	cfg := GCSConfig{
 		Bucket:           bucket,
 		Prefix:           os.Getenv(envGCSPrefix),
@@ -136,6 +144,7 @@ func newGCSFromEnv(ctx context.Context) (store.Sink, error) {
 		FlushInterval:    envDuration(envGCSFlushInterval),
 		MaxEventsPerFile: envInt(envGCSMaxEventsPerFile),
 		BufferSize:       envInt(envGCSBufferSize),
+		Format:           format,
 	}
 	if v := os.Getenv(envGCSCredentialsJSON); v != "" {
 		cfg.CredentialsJSON = []byte(v)
@@ -151,7 +160,9 @@ func newGCSFromEnv(ctx context.Context) (store.Sink, error) {
 	case cfg.CredentialsFile != "":
 		authMode = "file"
 	}
-	log.WithContext(ctx).Infof("flow archive enabled: GCS bucket %q (auth=%s)", bucket, authMode)
+	log.WithContext(ctx).Infof(
+		"flow archive enabled: GCS bucket %q (auth=%s, format=%s)",
+		bucket, authMode, displayFormat(format))
 	return exp, nil
 }
 
@@ -160,6 +171,7 @@ func newS3FromEnv(ctx context.Context) (store.Sink, error) {
 	if bucket == "" {
 		return nil, nil
 	}
+	format := os.Getenv(envArchiveFormat)
 	exp, err := NewS3(ctx, S3Config{
 		Bucket:           bucket,
 		Region:           os.Getenv(envS3Region),
@@ -170,14 +182,27 @@ func newS3FromEnv(ctx context.Context) (store.Sink, error) {
 		FlushInterval:    envDuration(envS3FlushInterval),
 		MaxEventsPerFile: envInt(envS3MaxEventsPerFile),
 		BufferSize:       envInt(envS3BufferSize),
+		Format:           format,
 	})
 	if err != nil {
 		return nil, err
 	}
 	log.WithContext(ctx).Infof(
-		"flow archive enabled: S3-compatible bucket %q (endpoint=%s)",
-		bucket, displayEndpoint(os.Getenv(envS3Endpoint)))
+		"flow archive enabled: S3-compatible bucket %q (endpoint=%s, format=%s)",
+		bucket, displayEndpoint(os.Getenv(envS3Endpoint)), displayFormat(format))
 	return exp, nil
+}
+
+// displayFormat normalizes the format string for log lines so the
+// startup message reflects the actual format the sink will use,
+// including the "ndjson" fallback for empty / unrecognised values.
+func displayFormat(s string) string {
+	switch s {
+	case string(formatParquet):
+		return string(formatParquet)
+	default:
+		return string(formatNDJSON)
+	}
 }
 
 func displayEndpoint(s string) string {
