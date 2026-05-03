@@ -45,7 +45,7 @@ export default function RouteActionCell({ route }: Props) {
   };
 
   return (
-    <div className={"flex justify-end pr-4"}>
+    <div className={"flex justify-end gap-2 pr-4"}>
       {editModal && (
         <RouteUpdateModal
           route={route}
