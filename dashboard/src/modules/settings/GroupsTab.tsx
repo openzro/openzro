@@ -2,13 +2,11 @@ import Breadcrumbs from "@components/Breadcrumbs";
 import Button from "@components/Button";
 import FancyToggleSwitch from "@components/FancyToggleSwitch";
 import HelpText from "@components/HelpText";
+import InlineLink from "@components/InlineLink";
 import { Input } from "@components/Input";
 import { Label } from "@components/Label";
 import { notify } from "@components/Notification";
 import Paragraph from "@components/Paragraph";
-import Separator from "@components/Separator";
-import SkeletonTable from "@components/skeletons/SkeletonTable";
-import { usePortalElement } from "@hooks/usePortalElement";
 import * as Tabs from "@radix-ui/react-tabs";
 import { useApiCall } from "@utils/api";
 import { cn } from "@utils/helpers";
@@ -23,15 +21,13 @@ import {
   FolderSync,
   ShieldCheck,
 } from "lucide-react";
-import React, { lazy, Suspense, useState } from "react";
+import React, { useState } from "react";
 import { useSWRConfig } from "swr";
 import SettingsIcon from "@/assets/icons/SettingsIcon";
 import { useDialog } from "@/contexts/DialogProvider";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { useHasChanges } from "@/hooks/useHasChanges";
 import { Account } from "@/interfaces/Account";
-
-const GroupsTable = lazy(() => import("@/modules/settings/GroupsTable"));
 
 type Props = {
   account: Account;
@@ -274,37 +270,13 @@ export default function GroupsTab({ account }: Props) {
             )}
           </AnimatePresence>
         )}
+        <Paragraph className={"text-sm mt-6 max-w-xl"}>
+          Looking for the groups list? Manage groups (rename, delete,
+          create) on the dedicated{" "}
+          <InlineLink href={"/team/groups"}>Team → Groups</InlineLink>{" "}
+          page.
+        </Paragraph>
       </div>
-      <GroupsSection />
     </Tabs.Content>
   );
 }
-
-const GroupsSection = () => {
-  const { ref: headingRef, portalTarget } =
-    usePortalElement<HTMLHeadingElement>();
-
-  return (
-    <>
-      <Separator />
-      <div className={"px-8 py-6"}>
-        <div className={"max-w-6xl"}>
-          <div className={"flex justify-between items-center"}>
-            <div>
-              <h2 ref={headingRef}>Groups</h2>
-              <Paragraph>
-                Here is the overview of the groups of your account. You can
-                delete the unused ones.
-              </Paragraph>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className={"pb-10"}>
-        <Suspense fallback={<SkeletonTable />}>
-          <GroupsTable headingTarget={portalTarget} />
-        </Suspense>
-      </div>
-    </>
-  );
-};

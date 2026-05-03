@@ -14,10 +14,10 @@ import PeerIcon from "@/assets/icons/PeerIcon";
 import SetupKeysIcon from "@/assets/icons/SetupKeysIcon";
 import TeamIcon from "@/assets/icons/TeamIcon";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
-import GroupsActionCell from "@/modules/settings/GroupsActionCell";
-import GroupsCountCell from "@/modules/settings/GroupsCountCell";
-import GroupsNameCell from "@/modules/settings/GroupsNameCell";
-import useGroupsUsage, { GroupUsage } from "@/modules/settings/useGroupsUsage";
+import GroupsActionCell from "@/modules/groups/GroupsActionCell";
+import GroupsCountCell from "@/modules/groups/GroupsCountCell";
+import GroupsNameCell from "@/modules/groups/GroupsNameCell";
+import useGroupsUsage, { GroupUsage } from "@/modules/groups/useGroupsUsage";
 
 // Peers, Access Controls, DNS, Routes, Setup Keys, Users
 export const GroupsTableColumns: ColumnDef<GroupUsage>[] = [

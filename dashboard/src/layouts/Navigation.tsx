@@ -143,6 +143,12 @@ export default function Navigation({
                     href={"/team/service-users"}
                     visible={permission.users.read}
                   />
+                  <SidebarItem
+                    label="Groups"
+                    isChild
+                    href={"/team/groups"}
+                    visible={permission.groups.read}
+                  />
                 </SidebarItem>
                 <SidebarItem
                   icon={<ActivityIcon />}
