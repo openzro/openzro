@@ -255,13 +255,60 @@ can land out of order based on user demand.
   complicates failure modes. Operators who want it run their own
   archival job against the hot DB.
 
-## References
+## Implementation notes (added 2026-05-02 — v0.53.1-alpha.27)
 
-- [ADR-0001 §3.3](0001-openzro-foundation.md#33-clean-room-reimplementation-policy) — clean-room policy under which this ADR was researched
-- [`flow/proto/flow.proto`](../../flow/proto/flow.proto) — the BSD-3 protocol definition
-- [`management/server/activity/exporter/`](../../management/server/activity/exporter/) — the SIEM exporter pattern reused for flow events
-- [`management/server/flow_service.go`](../../management/server/flow_service.go) — current ack-only handler that PR-B extends
-- NetBird traffic-events public docs: <https://docs.netbird.io/manage/activity/traffic-events-logging>
-- NetBird streaming export public docs: <https://docs.netbird.io/manage/activity/event-streaming>
-- ClickHouse license + sizing: <https://clickhouse.com/docs/en/about-us/distinctive-features>
-- Apache Parquet format: <https://parquet.apache.org/docs/file-format/>
+### HOT tier engine support matrix
+
+The original ADR named PostgreSQL, MySQL, and SQLite as supported HOT
+drivers behind one GORM code path. Native `PARTITION BY RANGE` only
+exists in Postgres, so the partitioning + `DROP PARTITION`-based
+retention strategy is **Postgres-only**:
+
+| Engine | Schema | Retention | Recommended scale |
+|---|---|---|---|
+| **postgres** | `flow_events` parent + monthly children `flow_events_YYYY_MM`, declarative `PARTITION BY RANGE (received_at)`. Schema is built by `flow/store/sql/partition_postgres.go` at `sql.New` time, **without** the `pg_partman` extension — we issue plain DDL and call `ensureFuturePartitions` from the retention loop to keep the next 3 months covered. | `DROP TABLE flow_events_YYYY_MM` for every partition whose upper bound is `<= cutoff`. O(1) per partition; frees disk immediately; no autovacuum chase, no bloat. | Small team → Medium tier. Large needs ClickHouse (PR-G). |
+| **mysql** | Single `flow_events` table managed by GORM `AutoMigrate`. MySQL native partitioning is non-declarative (`ALTER TABLE … PARTITION BY RANGE`) and adds operational burden the GORM migration path cannot express, so we keep the simple single-table model and accept the row-level retention cost. | Row-level `DELETE WHERE received_at < cutoff`. | Tiny → Small. Operators projecting Medium volume should run Postgres. |
+| **sqlite** | Single `flow_events` table managed by GORM `AutoMigrate`. SQLite has **no native partitioning** — there is no language to express it. | Row-level `DELETE WHERE received_at < cutoff`. | Dev / lab only. SQLite serializes writers, which throttles flow ingestion in any deployment that stores the events. |
+
+The dispatch lives in [`flow/store/sql/sql.go::New`](../../flow/store/sql/sql.go); Postgres takes the partitioned path, every other dialect falls through to `db.AutoMigrate(&row{})`.
+
+### Alpha-stage migration policy
+
+Existing pre-partitioning tables are dropped on first boot of the
+partitioned-aware code (alpha.27+), not migrated. Justification:
+
+- Default retention is 30 days (`OPENZRO_FLOW_RETENTION=720h` in the
+  chart), so the maximum data loss is bounded by that window.
+- Flow events are **not** the source of truth for any client behaviour
+  — peers continue streaming new events the moment they reconnect, so
+  the dashboard's view rebuilds from the live stream within minutes.
+- A copy-then-swap migration (rename → create partitioned → INSERT
+  SELECT → drop) doubles peak disk footprint and adds an
+  alpha-quality tool that GA users will never run anyway.
+
+After the chart hits a GA release we'll revisit and ship a proper
+migration path. Until then the chart docs flag this loud.
+
+### What does NOT use partitioning
+
+- **`flow_exports` table** (operator-configured destinations, lives in
+  the management's primary DB) — small, slowly-changing config rows.
+  Stays single-table.
+- **`flow_events_*` partitions in MySQL / SQLite** — see matrix above.
+- **In-memory queue inside `FlowService`** — separate concern; sized
+  by `OPENZRO_FLOW_BUFFER_SIZE`. Backpressure is per-pod, not
+  per-partition.
+
+### Bug caught wiring this up
+
+`FlowService.SetSinks` was closing every sink in the previous active
+list, including ones still present in the new list (the hot store +
+env-baseline sinks always carry over across `Manager.Refresh()`).
+Result: `flow_exports.NewManager` → `ApplyAll` → `SetSinks(merged)`
+fired once at startup and immediately closed the postgres pool of the
+hot store. The dashboard's `/api/network-traffic-events` then 500'd
+with `sql: database is closed` from the next read onward. Fixed in
+`management/server/flow_service.go` by tracking a `keep` set built
+from the new list and only `Close()`-ing sinks that left.
+
+## References
