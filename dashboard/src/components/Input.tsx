@@ -86,7 +86,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
 
           <div
             className={cn(
-              "absolute left-0 top-0 h-full flex items-center text-xs dark:text-nb-gray-300 pl-3 leading-[0]",
+              "absolute left-0 top-0 h-full flex items-center text-xs text-neutral-600 dark:text-nb-gray-300 pl-3 leading-[0]",
               props.disabled && "opacity-40",
             )}
           >
@@ -112,7 +112,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
 
           <div
             className={cn(
-              "absolute right-0 top-0 h-full flex items-center text-xs dark:text-nb-gray-300 pr-4 leading-[0] select-none",
+              "absolute right-0 top-0 h-full flex items-center text-xs text-neutral-600 dark:text-nb-gray-300 pr-4 leading-[0] select-none",
               props.disabled && "opacity-30",
             )}
           >

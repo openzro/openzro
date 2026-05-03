@@ -10,11 +10,11 @@ export const AbsoluteDateTimeInput = ({ value, onChange }: Props) => {
   return (
     <div
       className={
-        "px-4 py-4 flex flex-wrap gap-2 sm:max-w-none border-t border-nb-gray-800"
+        "px-4 py-4 flex flex-wrap gap-2 sm:max-w-none border-t border-neutral-200 dark:border-nb-gray-800"
       }
     >
       <div className={"flex items-center gap-2 w-full justify-between"}>
-        <div className={"text-sm flex flex-col gap-1 text-nb-gray-300"}>
+        <div className={"text-sm flex flex-col gap-1 text-neutral-600 dark:text-nb-gray-300"}>
           <Time
             value={value?.from}
             onChange={(e) => {
@@ -23,8 +23,8 @@ export const AbsoluteDateTimeInput = ({ value, onChange }: Props) => {
             }}
           />
         </div>
-        <span className={"text-nb-gray-300"}>-</span>
-        <div className={"text-sm flex flex-col gap-1 text-nb-gray-300"}>
+        <span className={"text-neutral-600 dark:text-nb-gray-300"}>-</span>
+        <div className={"text-sm flex flex-col gap-1 text-neutral-600 dark:text-nb-gray-300"}>
           <Time
             value={value?.to}
             onChange={(e) => {

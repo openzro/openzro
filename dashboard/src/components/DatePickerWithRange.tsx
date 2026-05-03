@@ -135,7 +135,7 @@ export function DatePickerWithRange({
         >
           <div
             className={
-              "px-3 py-2 flex flex-wrap gap-2 max-w-[280px] sm:max-w-none border-b border-nb-gray-800 items-center justify-between w-full"
+              "px-3 py-2 flex flex-wrap gap-2 max-w-[280px] sm:max-w-none border-b border-neutral-200 dark:border-nb-gray-800 items-center justify-between w-full"
             }
           >
             <div>
@@ -204,8 +204,8 @@ function CalendarButton({
       className={cn(
         "py-1.5 leading-none px-2.5 rounded-md text-center text-xs transition-all flex gap-2",
         active
-          ? "bg-nb-gray-800 text-white"
-          : "bg-transparent text-nb-gray-300 hover:bg-nb-gray-900 hover:text-nb-gray-100",
+          ? "bg-neutral-200 text-neutral-900 dark:bg-nb-gray-800 dark:text-white"
+          : "bg-transparent text-neutral-600 dark:text-nb-gray-300 hover:bg-neutral-100 dark:hover:bg-nb-gray-900 hover:text-neutral-900 dark:hover:text-nb-gray-100",
       )}
       onClick={onClick}
     >

@@ -117,7 +117,12 @@ const CommandItem = React.forwardRef<
     ref={ref}
     className={cn(
       "text-xs flex justify-between py-2 px-3 cursor-pointer items-center rounded-md",
-      "bg-transparent dark:aria-selected:bg-nb-gray-910 group/command-item",
+      // The aria-selected state is what cmdk applies on keyboard
+      // navigation / hover. Without a light-mode pair the highlight
+      // disappears on a white surface — the user can't tell which
+      // option is focused. neutral-100 mirrors the body's hover
+      // tone in the rest of the dashboard.
+      "bg-transparent aria-selected:bg-neutral-100 dark:aria-selected:bg-nb-gray-910 group/command-item",
       className,
     )}
     {...props}
