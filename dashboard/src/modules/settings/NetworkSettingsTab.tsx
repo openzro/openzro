@@ -6,13 +6,14 @@ import InlineLink from "@components/InlineLink";
 import { Input } from "@components/Input";
 import { Label } from "@components/Label";
 import { notify } from "@components/Notification";
-import { PeerGroupSelector } from "@components/PeerGroupSelector";
 import Paragraph from "@components/Paragraph";
+import { PeerGroupSelector } from "@components/PeerGroupSelector";
 import { useHasChanges } from "@hooks/useHasChanges";
 import * as Tabs from "@radix-ui/react-tabs";
 import { useApiCall } from "@utils/api";
+import loadConfig from "@utils/config";
 import { validator } from "@utils/helpers";
-import { isOpenzroHosted } from "@utils/openzro";
+import { API_ORIGIN, isOpenzroHosted } from "@utils/openzro";
 import { ActivityIcon, ExternalLinkIcon, FilterIcon, GlobeIcon, NetworkIcon } from "lucide-react";
 import React, { useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
@@ -25,6 +26,34 @@ import useGroupHelper from "@/modules/groups/useGroupHelper";
 type Props = {
   account: Account;
 };
+
+// collidesWithControlPlane returns the conflicting host when `input`
+// would make the mesh DNS proxy claim authority over the management
+// or gRPC API hostname. Two collision shapes count:
+// 1. exact match (input === mgmt host) — proxy owns the bare zone, so
+//    the bare hostname returns NXDOMAIN.
+// 2. mgmt host is a subdomain of input — proxy owns the parent zone
+//    AND every child, including the mgmt host.
+// Returns the offending host so the error message can name it.
+function collidesWithControlPlane(input: string): string | null {
+  const cfg = loadConfig();
+  const candidates: string[] = [];
+  for (const origin of [API_ORIGIN, cfg.grpcApiOrigin, cfg.authority]) {
+    if (!origin) continue;
+    try {
+      const host = new URL(origin).hostname.toLowerCase();
+      if (host) candidates.push(host);
+    } catch {
+      // origin not a parseable URL (dev fallback) — skip
+    }
+  }
+  const zone = input.toLowerCase();
+  for (const host of candidates) {
+    if (host === zone) return host;
+    if (host.endsWith("." + zone)) return host;
+  }
+  return null;
+}
 
 export default function NetworkSettingsTab({ account }: Readonly<Props>) {
   const { permission } = usePermissions();
@@ -174,6 +203,16 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
     if (!valid) {
       return "Please enter a valid domain, e.g. example.com or intra.example.com";
     }
+    // Reject zones that the management server's own hostname lives in.
+    // The local DNS proxy on each peer claims authority over this zone,
+    // so if it overlaps with management's FQDN, peers will resolve the
+    // management URL to NXDOMAIN and lose connection on every reconnect.
+    // We learned this the hard way (see ADR-0002 footnote / fix in
+    // helm chart 2.1.0-alpha.6).
+    const collision = collidesWithControlPlane(customDNSDomain);
+    if (collision) {
+      return `Cannot use "${collision}" — peers would no longer resolve the openZro control plane (this zone covers it).`;
+    }
   }, [customDNSDomain]);
 
   return (
@@ -198,7 +237,9 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
           </div>
           <Button
             variant={"primary"}
-            disabled={!hasChanges || !permission.settings.update}
+            disabled={
+              !hasChanges || !!domainError || !permission.settings.update
+            }
             onClick={saveChanges}
           >
             Save Changes
