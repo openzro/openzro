@@ -1,12 +1,14 @@
 import Button from "@components/Button";
 import { notify } from "@components/Notification";
 import { useApiCall } from "@utils/api";
-import { Trash2 } from "lucide-react";
+import { PenSquare, Trash2 } from "lucide-react";
 import * as React from "react";
+import { useState } from "react";
 import { useSWRConfig } from "swr";
 import { useDialog } from "@/contexts/DialogProvider";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { GroupedRoute, Route } from "@/interfaces/Route";
+import GroupedRouteUpdateModal from "@/modules/route-group/GroupedRouteUpdateModal";
 
 type Props = {
   groupedRoute: GroupedRoute;
@@ -17,6 +19,7 @@ export default function GroupedRouteActionCell({ groupedRoute }: Props) {
   const { confirm } = useDialog();
   const routeRequest = useApiCall<Route>("/routes");
   const { mutate } = useSWRConfig();
+  const [editModal, setEditModal] = useState(false);
 
   const handleRevoke = async () => {
     if (!groupedRoute.routes) return Promise.resolve();
@@ -49,7 +52,26 @@ export default function GroupedRouteActionCell({ groupedRoute }: Props) {
   };
 
   return (
-    <div className={"flex justify-end pr-4"}>
+    <div className={"flex justify-end gap-2 pr-4"}>
+      {editModal && (
+        <GroupedRouteUpdateModal
+          groupedRoute={groupedRoute}
+          open={editModal}
+          onOpenChange={setEditModal}
+        />
+      )}
+      <Button
+        variant={"default-outline"}
+        size={"sm"}
+        onClick={(e) => {
+          e.stopPropagation();
+          setEditModal(true);
+        }}
+        disabled={!permission.routes.update}
+      >
+        <PenSquare size={16} />
+        Edit
+      </Button>
       <Button
         variant={"danger-outline"}
         size={"sm"}
