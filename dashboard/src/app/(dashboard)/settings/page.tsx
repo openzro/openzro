@@ -90,7 +90,7 @@ export default function OpenzroSettings() {
           page={"Settings"}
           hasAccess={permission.settings.read}
         >
-          <div className={"border-l border-nb-gray-930 w-full"}>
+          <div className={"border-l border-neutral-200 dark:border-nb-gray-930 w-full"}>
             {account && <AuthenticationTab account={account} />}
             <AuthenticationProvidersTab />
             {account && <PermissionsTab account={account} />}

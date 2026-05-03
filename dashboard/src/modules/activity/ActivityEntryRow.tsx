@@ -60,17 +60,21 @@ export const ActivityEntryRow = ({ event }: { event: ActivityEvent }) => {
 
       <div
         className={cn(
-          "w-10 h-10 shrink-0 relative rounded-full border-0 bg-nb-gray-900 border-nb-gray-800 flex items-center justify-center uppercase text-sm font-medium text-nb-gray-300",
+          "w-10 h-10 shrink-0 relative rounded-full border-0 flex items-center justify-center uppercase text-sm font-medium",
+          "bg-neutral-200 text-neutral-700",
+          "dark:bg-nb-gray-900 dark:border-nb-gray-800 dark:text-nb-gray-300",
         )}
       >
         <ActivityTypeIcon code={event.activity_code} />
         <div
           className={cn(
-            "w-6 h-6 absolute -right-1 -bottom-1 bg-nb-gray-930 rounded-full flex items-center justify-center border-4 border-nb-gray-950",
-            color == "red" && "bg-red-950 text-red-500 ",
-            color == "green" && "bg-green-950 text-green-400 ",
-            color == "blue-darker" && "bg-sky-950 text-sky-500 ",
-            color == "openzro" && "bg-openzro-950 text-openzro-500",
+            "w-6 h-6 absolute -right-1 -bottom-1 rounded-full flex items-center justify-center border-4",
+            "bg-neutral-100 border-white",
+            "dark:bg-nb-gray-930 dark:border-nb-gray-950",
+            color == "red" && "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-500",
+            color == "green" && "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400",
+            color == "blue-darker" && "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-500",
+            color == "openzro" && "bg-openzro-100 text-openzro-700 dark:bg-openzro-950 dark:text-openzro-500",
           )}
         >
           {color && ActionIcons[color as ActionColor]}
@@ -83,7 +87,7 @@ export const ActivityEntryRow = ({ event }: { event: ActivityEvent }) => {
             <div className={"flex items-center gap-2"}>
               <div
                 className={
-                  "w-4 h-4 rounded-full flex items-center justify-center text-white uppercase text-[9px] font-medium bg-nb-gray-900"
+                  "w-4 h-4 rounded-full flex items-center justify-center text-white uppercase text-[9px] font-medium bg-neutral-300 dark:bg-nb-gray-900"
                 }
                 style={{
                   color: generateColorFromUser(user),
@@ -93,13 +97,13 @@ export const ActivityEntryRow = ({ event }: { event: ActivityEvent }) => {
                 {user?.name?.charAt(0) || user?.id?.charAt(0)}
               </div>
 
-              <span className={"text-sm text-nb-gray-200"}>
+              <span className={"text-sm text-neutral-700 dark:text-nb-gray-200"}>
                 <TextWithTooltip
                   text={user?.name || user?.id || "System"}
                   maxChars={20}
                 />
               </span>
-              <span className={"text-sm text-nb-gray-400 font-light"}>
+              <span className={"text-sm text-neutral-500 dark:text-nb-gray-400 font-light"}>
                 <TextWithTooltip text={user?.email || ""} maxChars={20} />
               </span>
               {isExternal && (
@@ -117,22 +121,22 @@ export const ActivityEntryRow = ({ event }: { event: ActivityEvent }) => {
           </div>
 
           <span
-            className={"flex gap-2 items-center text-nb-gray-400 text-xs mr-1"}
+            className={"flex gap-2 items-center text-neutral-500 dark:text-nb-gray-400 text-xs mr-1"}
           >
-            <div className={"h-1 w-1 bg-nb-gray-700 rounded-full"}></div>
+            <div className={"h-1 w-1 bg-neutral-400 dark:bg-nb-gray-700 rounded-full"}></div>
             {dayjs(event?.timestamp).format("MMM D, YYYY [at] h:mm:s A")}
           </span>
         </div>
 
         <Card
           className={
-            "w-full relative bg-nb-gray-925 text-sm text-nb-gray-300 flex flex-col px-4 pt-3 pb-3"
+            "w-full relative bg-neutral-100 text-neutral-700 dark:bg-nb-gray-925 dark:text-nb-gray-300 text-sm flex flex-col px-4 pt-3 pb-3 border border-neutral-200 dark:border-transparent"
           }
         >
           <div className={"flex gap-4"}>
             <div
               className={
-                "flex items-center text-nb-gray-300 text-sm leading-[2]"
+                "flex items-center text-neutral-700 dark:text-nb-gray-300 text-sm leading-[2]"
               }
             >
               <ActivityDescription event={event} />
@@ -148,7 +152,7 @@ function VerticalLine() {
   return (
     <div
       className={
-        "absolute left-0 top-0 translate-y-12 h-[56%] bg-nb-gray-900/50 w-[2px] ml-[20px] z-0"
+        "absolute left-0 top-0 translate-y-12 h-[56%] bg-neutral-200 dark:bg-nb-gray-900/50 w-[2px] ml-[20px] z-0"
       }
     ></div>
   );

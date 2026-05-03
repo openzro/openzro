@@ -114,14 +114,18 @@ export function OSLogo({ os }: { os: string }) {
     );
   if (icon === OperatingSystem.ANDROID)
     return (
+      // brightness:200 brightens the multi-coloured FcAndroidOs SVG so
+      // it pops on a dark surface; on light the same filter washes it
+      // out into near-white. Apply it only when the html.dark class is
+      // active.
       <FcAndroidOs
-        className={"text-neutral-700 dark:text-white text-2xl brightness-200"}
+        className={"text-neutral-700 dark:text-white text-2xl dark:brightness-200"}
       />
     );
 
   return (
     <FcLinux
-      className={"text-neutral-700 dark:text-white text-2xl brightness-150"}
+      className={"text-neutral-700 dark:text-white text-2xl dark:brightness-150"}
     />
   );
 }

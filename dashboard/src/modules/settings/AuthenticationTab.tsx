@@ -234,10 +234,12 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
 
             <div
               className={cn(
-                "border border-nb-gray-900 border-t-0 rounded-b-md bg-nb-gray-940 px-[1.28rem] pt-3 pb-5 flex flex-col gap-4 mx-[0.25rem]",
+                "border border-t-0 rounded-b-md px-[1.28rem] pt-3 pb-5 flex flex-col gap-4 mx-[0.25rem]",
+                "border-neutral-200 bg-neutral-50",
+                "dark:border-nb-gray-900 dark:bg-nb-gray-940",
                 !loginExpiration || !permission.settings.update
                   ? "opacity-50 pointer-events-none"
-                  : "bg-nb-gray-930/80",
+                  : "bg-neutral-100 dark:bg-nb-gray-930/80",
               )}
             >
               <div className={cn("flex justify-between gap-10 mt-2")}>
@@ -273,7 +275,7 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
                       <div className={"flex items-center gap-3"}>
                         <CalendarClock
                           size={15}
-                          className={"text-nb-gray-300"}
+                          className={"text-neutral-600 dark:text-nb-gray-300"}
                         />
                         <SelectValue
                           placeholder="Select interval..."
