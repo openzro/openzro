@@ -11,9 +11,11 @@ export default function ServiceUserNameCell({ user }: Readonly<Props>) {
   return (
     <div className={cn("flex gap-4 px-2 py-1 items-center")}>
       <div
-        className={
-          "w-8 h-8 rounded-full relative flex items-center justify-center text-white uppercase text-md font-medium bg-nb-gray-900"
-        }
+        className={cn(
+          "w-8 h-8 rounded-full relative flex items-center justify-center uppercase text-md font-medium",
+          "bg-neutral-200 text-neutral-700",
+          "dark:bg-nb-gray-900 dark:text-white",
+        )}
       >
         <IconSettings2 size={14} />
       </div>
