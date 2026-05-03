@@ -38,7 +38,13 @@ const variants = cva("", {
         "border dark:border-nb-gray-800/50",
       ],
       green: ["bg-green-950 border-green-500 border text-green-400"],
-      openzro: ["bg-openzro-950 border-openzro-500 border text-openzro-500"],
+      openzro: [
+        // Light: soft brand-coloured chip mirroring how Tailwind's
+        // accent-100/700 pair builds light-mode badges. Dark theme
+        // keeps its existing deep-ink + accent-500 palette.
+        "bg-openzro-100 border-openzro-300 text-openzro-700 border",
+        "dark:bg-openzro-950 dark:border-openzro-500 dark:text-openzro-500",
+      ],
     },
     hover: {
       none: [],
