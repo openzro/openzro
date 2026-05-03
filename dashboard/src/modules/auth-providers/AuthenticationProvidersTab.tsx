@@ -4,8 +4,17 @@ import Button from "@components/Button";
 import HelpText from "@components/HelpText";
 import { notify } from "@components/Notification";
 import Paragraph from "@components/Paragraph";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@components/table/Table";
 import * as Tabs from "@radix-ui/react-tabs";
 import useFetchApi, { useApiCall } from "@utils/api";
+import { cn } from "@utils/helpers";
 import {
   PencilIcon,
   PlusCircleIcon,
@@ -77,7 +86,9 @@ export default function AuthenticationProvidersTab() {
 
       <div className="mt-4">
         {isLoading && (
-          <Paragraph className="text-nb-gray-300">Loading…</Paragraph>
+          <Paragraph className="text-neutral-600 dark:text-nb-gray-300">
+            Loading…
+          </Paragraph>
         )}
         {!isLoading && (!data || data.length === 0) && (
           <EmptyState
@@ -87,14 +98,29 @@ export default function AuthenticationProvidersTab() {
           />
         )}
         {data && data.length > 0 && (
-          <table className="w-full text-sm">
-            <TableHead cols={["Type", "ID", "Name", ""]} />
-            <tbody>
+          // Use the shared Table primitives so this list shares the
+          // same h-12 header bg, border-y, hover treatment, etc as the
+          // Users / Peers / Audit pages. Earlier this rendered as a
+          // bare HTML table which stood out from the rest of the app.
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Type</TableHead>
+                <TableHead>ID</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {data.map((row) => (
-                <ProviderRow key={row.id} row={row} onEdit={() => openEdit(row)} />
+                <ProviderRow
+                  key={row.id}
+                  row={row}
+                  onEdit={() => openEdit(row)}
+                />
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
       </div>
 
@@ -139,16 +165,18 @@ function ProviderRow({
   const visualType = inferConnectorType(row.type, row.config);
 
   return (
-    <tr className="border-t border-nb-gray-900">
-      <td className="py-3">
+    <TableRow>
+      <TableCell>
         <ProviderTypeBadge type={visualType as ConnectorType | string} />
-      </td>
-      <td className="py-3 font-mono text-xs text-nb-gray-300">{row.id}</td>
-      <td className="py-3">{row.name}</td>
-      <td className="py-3 text-right">
+      </TableCell>
+      <TableCell className="font-mono text-xs text-neutral-600 dark:text-nb-gray-300">
+        {row.id}
+      </TableCell>
+      <TableCell>{row.name}</TableCell>
+      <TableCell className="text-right">
         <RowActions onEdit={onEdit} onDelete={onDelete} />
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -157,30 +185,33 @@ function ProviderTypeBadge({
 }: Readonly<{ type: ConnectorType | string }>) {
   const meta = CONNECTOR_TYPES.find((c) => c.value === type);
   return (
-    <span className="inline-flex items-center gap-1 rounded bg-nb-gray-900 px-2 py-1 text-xs text-violet-300">
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded px-2 py-1 text-xs",
+        // Match the Badge "openzro" variant so the type pill reads as
+        // a brand-coloured tag in both themes instead of the muddy
+        // violet on white we had before.
+        "bg-openzro-100 text-openzro-700 border border-openzro-200",
+        "dark:bg-nb-gray-900 dark:text-violet-300 dark:border-transparent",
+      )}
+    >
       <ShieldIcon size={12} /> {meta?.label ?? type}
     </span>
   );
 }
 
-function TableHead({ cols }: Readonly<{ cols: string[] }>) {
-  return (
-    <thead>
-      <tr className="text-left text-xs text-nb-gray-300 uppercase tracking-wider">
-        {cols.map((c, i) => (
-          <th key={i} className="pb-2 font-medium">
-            {c}
-          </th>
-        ))}
-      </tr>
-    </thead>
-  );
-}
-
 function EmptyState({ message }: Readonly<{ message: string }>) {
   return (
-    <div className="rounded-md border border-dashed border-nb-gray-800 bg-nb-gray-940 p-8 text-center">
-      <Paragraph className="text-nb-gray-300">{message}</Paragraph>
+    <div
+      className={cn(
+        "rounded-md border border-dashed p-8 text-center",
+        "border-neutral-300 bg-neutral-50",
+        "dark:border-nb-gray-800 dark:bg-nb-gray-940",
+      )}
+    >
+      <Paragraph className="text-neutral-600 dark:text-nb-gray-300">
+        {message}
+      </Paragraph>
     </div>
   );
 }
