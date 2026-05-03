@@ -21,7 +21,11 @@ export const PostureCheckPolicyUsageCell = ({ check }: Props) => {
         disabled={!(check.policies && check.policies?.length > 0)}
         content={
           <div className={"text-xs max-w-lg"}>
-            <span className={"font-medium text-nb-gray-100 text-sm"}>
+            <span
+              className={
+                "font-medium text-sm text-neutral-900 dark:text-nb-gray-100"
+              }
+            >
               Assigned
               {check.policies && check.policies?.length > 1
                 ? " Policies"

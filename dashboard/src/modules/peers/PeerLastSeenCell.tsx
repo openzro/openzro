@@ -12,7 +12,9 @@ export default function PeerLastSeenCell({ peer }: Props) {
   ) : (
     <div
       className={
-        "flex items-center whitespace-nowrap gap-2 dark:text-neutral-300 text-neutral-500 hover:text-neutral-100 transition-all py-2 px-3 rounded-md"
+        "flex items-center whitespace-nowrap gap-2 transition-all py-2 px-3 rounded-md " +
+        "text-neutral-500 dark:text-neutral-300 " +
+        "hover:text-neutral-900 dark:hover:text-neutral-100"
       }
     >
       <>

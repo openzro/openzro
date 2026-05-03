@@ -57,7 +57,13 @@ export const buttonVariants = cva(
           "dark:bg-nb-gray-900/30 dark:text-gray-400 dark:border-gray-500/40 dark:hover:text-white dark:hover:bg-zinc-800/50",
         ],
         tertiary: [
-          "bg-white hover:text-black focus:ring-zinc-200/50  hover:bg-neutral-200 border-neutral-300 text-gray-900",
+          // Tertiary is the "selected" state for ButtonGroup-style
+          // segmented toggles (filter pills, route type, etc). In
+          // dark it's white-on-ink so it pops; in light the previous
+          // bg-white border-neutral-300 was visually identical to
+          // `secondary`, so the active state was invisible. Bump
+          // light to a soft pressed chip.
+          "bg-neutral-200 hover:bg-neutral-300 focus:ring-zinc-200/50 border-neutral-400 text-neutral-900",
           "dark:focus:ring-zinc-800/50 dark:bg-white dark:text-gray-800 dark:border-gray-700/40 dark:hover:bg-neutral-200 disabled:dark:bg-nb-gray-920 disabled:dark:text-nb-gray-300",
         ],
         white: [

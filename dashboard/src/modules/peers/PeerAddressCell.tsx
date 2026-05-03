@@ -23,7 +23,8 @@ export default function PeerAddressCell({ peer }: Props) {
     >
       <div
         className={
-          "flex gap-4 items-center min-w-[320px] max-w-[320px] group/cell transition-all hover:bg-nb-gray-800/10 py-2 px-3 rounded-md cursor-default"
+          "flex gap-4 items-center min-w-[320px] max-w-[320px] group/cell transition-all py-2 px-3 rounded-md cursor-default " +
+          "hover:bg-neutral-100 dark:hover:bg-nb-gray-800/10"
         }
         onClick={(e) => {
           e.stopPropagation();
@@ -32,11 +33,20 @@ export default function PeerAddressCell({ peer }: Props) {
       >
         <div
           className={cn(
-            "flex items-center justify-center rounded-full h-8 w-8 shrink-0 bg-nb-gray-920/80 transition-all",
+            "flex items-center justify-center rounded-full h-8 w-8 shrink-0 transition-all",
+            // Flag halo: neutral-200 on light + the existing
+            // nb-gray-920/80 on dark. The dark token resolves to a
+            // saturated mid-violet on light pages, which is what
+            // produced the "circle around the flag" the user
+            // flagged.
+            "bg-neutral-200 dark:bg-nb-gray-920/80",
           )}
         >
           {isEmpty(peer.country_code) ? (
-            <GlobeIcon size={16} className={"text-nb-gray-300"} />
+            <GlobeIcon
+              size={16}
+              className={"text-neutral-600 dark:text-nb-gray-300"}
+            />
           ) : (
             <RoundedFlag country={peer.country_code} size={20} />
           )}

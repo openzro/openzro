@@ -13,7 +13,12 @@ function Card({ children, className, ...props }: Props) {
     <div
       {...props}
       className={cn(
-        "bg-nb-gray-940 rounded-md border border-nb-gray-900 w-1/2 overflow-hidden",
+        "rounded-md border w-1/2 overflow-hidden",
+        // Card surface + frame: neutral on light, the dark-mode
+        // ink/violet on dark. The previous nb-gray-940 + nb-gray-900
+        // pair only worked on the ink page bg.
+        "bg-neutral-50 border-neutral-200",
+        "dark:bg-nb-gray-940 dark:border-nb-gray-900",
         className,
       )}
     >
@@ -48,7 +53,8 @@ function CardListItem({
   return (
     <li
       className={cn(
-        "flex justify-between px-4 border-b border-nb-gray-900 py-4 last:border-b-0 items-center h-full",
+        "flex justify-between px-4 py-4 last:border-b-0 items-center h-full border-b",
+        "border-neutral-200 dark:border-nb-gray-900",
         className,
       )}
     >
@@ -95,8 +101,10 @@ const CardTextItem = ({
   return (
     <div
       className={cn(
-        "text-right text-nb-gray-400 text-sm flex items-center gap-2",
-        copy && "cursor-pointer hover:text-nb-gray-300 transition-all",
+        "text-right text-sm flex items-center gap-2",
+        "text-neutral-700 dark:text-nb-gray-400",
+        copy &&
+          "cursor-pointer transition-all hover:text-neutral-900 dark:hover:text-nb-gray-300",
       )}
       onClick={() =>
         copy &&

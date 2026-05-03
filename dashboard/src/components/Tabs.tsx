@@ -60,7 +60,7 @@ const TabsList = React.forwardRef<
   >
     <span
       className={
-        "absolute left-0 dark:bg-nb-gray-900 bg-nb-gray-100 w-full h-[1px] bottom-0 z-0"
+        "absolute left-0 bg-neutral-200 dark:bg-nb-gray-900 w-full h-[1px] bottom-0 z-0"
       }
     />
     <ScrollArea>
@@ -95,7 +95,7 @@ const TabsTrigger = React.forwardRef<
             "absolute w-full h-[1px] left-0 right-0 bottom-[0px] transition-all",
             currentValue === props.value
               ? "bg-openzro text-openzro"
-              : "dark:bg-nb-gray-900 bg-nb-gray-100 group-hover/trigger:dark:bg-nb-gray-700 group-hover/trigger:bg-nb-gray-200",
+              : "bg-neutral-200 dark:bg-nb-gray-900 group-hover/trigger:bg-neutral-300 group-hover/trigger:dark:bg-nb-gray-700",
           )}
         ></motion.div>
 

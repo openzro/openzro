@@ -26,7 +26,10 @@ export default function LastTimeRow({
         <TooltipTrigger>
           <div
             className={
-              "flex items-center whitespace-nowrap gap-2 dark:text-neutral-300 text-neutral-500 hover:text-neutral-100 transition-all hover:bg-nb-gray-800/60 py-2 px-3 rounded-md cursor-default"
+              "flex items-center whitespace-nowrap gap-2 transition-all py-2 px-3 rounded-md cursor-default " +
+              "text-neutral-500 dark:text-neutral-300 " +
+              "hover:text-neutral-900 dark:hover:text-neutral-100 " +
+              "hover:bg-neutral-100 dark:hover:bg-nb-gray-800/60"
             }
           >
             <>
@@ -37,9 +40,13 @@ export default function LastTimeRow({
           </div>
         </TooltipTrigger>
         <TooltipContent>
-          <div className={"text-neutral-300 flex flex-col gap-1"}>
+          <div
+            className={
+              "flex flex-col gap-1 text-neutral-700 dark:text-neutral-300"
+            }
+          >
             <span className={"text-xs"}>{text}</span>
-            <span className={"text-neutral-200"}>
+            <span className={"text-neutral-900 dark:text-neutral-200"}>
               {dayjs(date).format("D MMMM, YYYY [at] h:mm A")}
             </span>
           </div>

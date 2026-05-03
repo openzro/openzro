@@ -22,31 +22,40 @@ export const NetworkInformationSquare = ({
       className={cn(
         "flex w-full items-center max-w-[300px] gap-4 dark:text-neutral-300 text-neutral-500 transition-all group/network rounded-md",
         onClick
-          ? "hover:text-neutral-100 hover:bg-nb-gray-910 cursor-pointer py-2 pl-3 pr-5 relative"
+          ? "hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-nb-gray-910 cursor-pointer py-2 pl-3 pr-5 relative"
           : "cursor-default",
       )}
       onClick={onClick}
     >
       <div
         className={cn(
-          "bg-nb-gray-800 text-nb-gray-100 rounded-md flex items-center justify-center font-medium relative",
-          "uppercase",
+          "rounded-md flex items-center justify-center font-medium relative uppercase shrink-0",
+          // Avatar tile: soft neutral chip on light, the existing
+          // ink/violet on dark. The nb-gray mirror collapsed both
+          // surface and text into one mid-tone in light, producing
+          // the "dark-mode block" the user flagged.
+          "bg-neutral-200 text-neutral-700",
+          "dark:bg-nb-gray-800 dark:text-nb-gray-100",
           size === "md" ? "h-10 w-10 text-md" : "h-12 w-12 text-lg",
-          "shrink-0",
         )}
       >
         {name.substring(0, 2)}
         <div
           className={cn(
             "h-2 w-2 rounded-full absolute bottom-0 right-0 z-10",
-            active ? "bg-green-500" : "bg-nb-gray-700",
+            active
+              ? "bg-green-500"
+              : "bg-neutral-400 dark:bg-nb-gray-700",
           )}
         ></div>
         <div
           className={cn(
-            "h-3 w-3 bg-nb-gray-950 rounded-tl-[8px] rounded-br absolute bottom-0 right-0 transition-all",
-            onClick && "group-hover/table-row:bg-nb-gray-940",
-            onClick && "group-hover/network:!bg-nb-gray-910",
+            "h-3 w-3 rounded-tl-[8px] rounded-br absolute bottom-0 right-0 transition-all",
+            "bg-white dark:bg-nb-gray-950",
+            onClick &&
+              "group-hover/table-row:bg-neutral-50 group-hover/table-row:dark:bg-nb-gray-940",
+            onClick &&
+              "group-hover/network:!bg-neutral-100 group-hover/network:dark:!bg-nb-gray-910",
           )}
         ></div>
       </div>

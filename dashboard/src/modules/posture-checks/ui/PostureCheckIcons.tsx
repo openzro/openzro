@@ -49,7 +49,9 @@ const Circle = ({ children, className }: Props) => {
   return (
     <div
       className={cn(
-        "h-10 w-10 rounded-full bg-nb-gray-900 flex items-center justify-center relative border-2 border-nb-gray",
+        "h-10 w-10 rounded-full flex items-center justify-center relative border-2",
+        "bg-neutral-100 border-white",
+        "dark:bg-nb-gray-900 dark:border-nb-gray",
         className,
       )}
     >
