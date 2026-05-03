@@ -24,7 +24,7 @@ export const buttonVariants = cva(
     variants: {
       variant: {
         default: [
-          "bg-white hover:text-black focus:ring-zinc-200/50  hover:bg-gray-100 border-gray-200 text-gray-900",
+          "bg-white hover:text-black focus:ring-zinc-200/50  hover:bg-neutral-200 border-neutral-300 text-gray-900",
           "dark:focus:ring-zinc-800/50 dark:bg-nb-gray dark:text-gray-400 dark:border-gray-700/30 dark:hover:text-white dark:hover:bg-zinc-800/50",
         ],
         primary: [
@@ -32,32 +32,32 @@ export const buttonVariants = cva(
           "enabled:bg-openzro enabled:text-white enabled:focus:ring-openzro-400/50 enabled:hover:bg-openzro-500",
         ],
         secondary: [
-          "bg-white hover:text-black focus:ring-zinc-200/50 hover:bg-gray-100 border-gray-200 text-gray-900",
+          "bg-white hover:text-black focus:ring-zinc-200/50 hover:bg-neutral-200 border-neutral-300 text-gray-900",
           "dark:ring-offset-neutral-950/50 dark:focus:ring-neutral-500/20  ",
           "dark:bg-nb-gray-900/30 dark:text-gray-400 dark:border-gray-700/40 dark:hover:text-white dark:hover:bg-zinc-800/50",
         ],
         secondaryLighter: [
-          "bg-white hover:text-black focus:ring-zinc-200/50 hover:bg-gray-100 border-gray-200 text-gray-900",
+          "bg-white hover:text-black focus:ring-zinc-200/50 hover:bg-neutral-200 border-neutral-300 text-gray-900",
           "dark:ring-offset-neutral-950/50 dark:focus:ring-neutral-500/20  ",
           "dark:bg-nb-gray-900/70 dark:text-gray-400 dark:border-gray-700/70 dark:hover:text-white dark:hover:bg-nb-gray-800/60",
         ],
         input: [
-          "bg-white hover:text-black focus:ring-zinc-200/50 hover:bg-gray-100 border-neutral-200 text-gray-900",
+          "bg-white hover:text-black focus:ring-zinc-200/50 hover:bg-neutral-200 border-neutral-300 text-gray-900",
           "dark:ring-offset-neutral-950/50 dark:focus:ring-neutral-500/20  ",
           "dark:bg-nb-gray-900  dark:text-gray-400  dark:border-nb-gray-700 dark:hover:bg-nb-gray-900/80",
         ],
         dropdown: [
-          "bg-white hover:text-black focus:ring-zinc-200/50 hover:bg-gray-100 border-neutral-200 text-gray-900",
+          "bg-white hover:text-black focus:ring-zinc-200/50 hover:bg-neutral-200 border-neutral-300 text-gray-900",
           "dark:ring-offset-neutral-950/50 dark:focus:ring-neutral-500/20  ",
           "dark:bg-nb-gray-900/40 dark:text-gray-400 dark:border-nb-gray-900 dark:hover:bg-nb-gray-900/50",
         ],
         dotted: [
-          "bg-white hover:text-black focus:ring-zinc-200/50 hover:bg-gray-100 border-gray-200 text-gray-900 border-dashed",
+          "bg-white hover:text-black focus:ring-zinc-200/50 hover:bg-neutral-200 border-neutral-300 text-gray-900 border-dashed",
           "dark:ring-offset-neutral-950/50 dark:focus:ring-neutral-500/20  ",
           "dark:bg-nb-gray-900/30 dark:text-gray-400 dark:border-gray-500/40 dark:hover:text-white dark:hover:bg-zinc-800/50",
         ],
         tertiary: [
-          "bg-white hover:text-black focus:ring-zinc-200/50  hover:bg-gray-100 border-gray-200 text-gray-900",
+          "bg-white hover:text-black focus:ring-zinc-200/50  hover:bg-neutral-200 border-neutral-300 text-gray-900",
           "dark:focus:ring-zinc-800/50 dark:bg-white dark:text-gray-800 dark:border-gray-700/40 dark:hover:bg-neutral-200 disabled:dark:bg-nb-gray-920 disabled:dark:text-nb-gray-300",
         ],
         white: [
@@ -111,7 +111,15 @@ export const buttonVariants = cva(
       },
       border: {
         0: "border",
-        1: "border border-transparent",
+        // The previous "border border-transparent" baked an explicit
+        // transparent colour into every button, which Tailwind then
+        // resolved against the variant's `border-X` because this
+        // `border` slot is declared LAST in the variants object — so
+        // the variant's colour was always overridden in light mode.
+        // Dark theme escaped because `dark:border-X` has higher CSS
+        // specificity than the bare `border-transparent`. Drop the
+        // colour reset; let the variants own the border colour.
+        1: "border",
         2: "border border-t-0 border-b-0",
       },
     },
