@@ -74,7 +74,12 @@ export const buttonVariants = cva(
           // Brand-outlined button: transparent surface, openZro
           // accent text + border in both themes so the brand
           // identity reads. Hover lifts to the soft brand-50 chip.
-          "bg-transparent text-openzro-700 border-openzro-300 hover:bg-openzro-50 focus:ring-openzro-300/50",
+          // `!shadow-none` cancels the base `shadow-sm` — outline
+          // buttons should sit flat on the page; the 5%-black
+          // shadow was invisible against the dark surface but
+          // showed up under the transparent button on the light
+          // page bg.
+          "!shadow-none bg-transparent text-openzro-700 border-openzro-300 hover:bg-openzro-50 focus:ring-openzro-300/50",
           "dark:focus:ring-zinc-800/50 dark:bg-transparent dark:text-openzro dark:border-openzro dark:hover:bg-nb-gray-900/30",
         ],
         "danger-outline": [
@@ -82,7 +87,7 @@ export const buttonVariants = cva(
           // Same visual weight as `outline` but with a destructive
           // signal — used for irreversible actions where solid red
           // is too aggressive for the surrounding context.
-          "bg-transparent text-red-700 border-red-300 enabled:hover:bg-red-50 enabled:hover:border-red-400 focus:ring-red-400/30",
+          "!shadow-none bg-transparent text-red-700 border-red-300 enabled:hover:bg-red-50 enabled:hover:border-red-400 focus:ring-red-400/30",
           "enabled:dark:focus:ring-red-800/20 enabled:dark:focus:bg-red-950/40 enabled:hover:dark:bg-red-950/50 enabled:dark:hover:border-red-800/50 dark:bg-transparent dark:text-red-500",
         ],
         "default-outline": [
@@ -90,7 +95,7 @@ export const buttonVariants = cva(
           // soft surface on hover so it reads as interactive without
           // competing with adjacent solid buttons. Border stays
           // transparent until hover.
-          "bg-transparent text-neutral-600 border-transparent hover:text-neutral-900 hover:bg-neutral-100 hover:border-neutral-200 focus:ring-neutral-300/40",
+          "!shadow-none bg-transparent text-neutral-600 border-transparent hover:text-neutral-900 hover:bg-neutral-100 hover:border-neutral-200 focus:ring-neutral-300/40",
           "dark:ring-offset-nb-gray-950/50 dark:focus:ring-nb-gray-500/20",
           "dark:bg-transparent dark:text-nb-gray-400 dark:border-transparent dark:hover:text-white dark:hover:bg-nb-gray-900/30 dark:hover:border-nb-gray-800/50",
         ],
