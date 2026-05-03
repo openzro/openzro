@@ -84,16 +84,44 @@ export function OSLogo({ os }: { os: string }) {
     return getOperatingSystem(os);
   }, [os]);
 
+  // The Apple + iOS marks ship as solid-color SVGs that read as white
+  // on a dark surface but vanish on the light theme. We invert the
+  // glyph in light mode so it renders as black against light surfaces
+  // and stays untouched in dark mode. Windows + Linux + Android use
+  // explicit text colors with the same dark/light pair so they remain
+  // legible regardless of the active theme.
   if (icon === OperatingSystem.WINDOWS)
-    return <FaWindows className={"text-white text-lg"} />;
+    return (
+      <FaWindows className={"text-neutral-700 dark:text-white text-lg"} />
+    );
   if (icon === OperatingSystem.APPLE)
-    return <Image src={AppleLogo} alt={""} width={14} />;
+    return (
+      <Image
+        src={AppleLogo}
+        alt={""}
+        width={14}
+        className={"invert dark:invert-0"}
+      />
+    );
   if (icon === OperatingSystem.FREEBSD)
     return <Image src={FreeBSDLogo} alt={""} width={18} />;
   if (icon === OperatingSystem.IOS)
-    return <IOSIcon className={"fill-white"} size={20} />;
+    return (
+      <IOSIcon
+        className={"fill-neutral-700 dark:fill-white"}
+        size={20}
+      />
+    );
   if (icon === OperatingSystem.ANDROID)
-    return <FcAndroidOs className={"text-white text-2xl brightness-200"} />;
+    return (
+      <FcAndroidOs
+        className={"text-neutral-700 dark:text-white text-2xl brightness-200"}
+      />
+    );
 
-  return <FcLinux className={"text-white text-2xl brightness-150"} />;
+  return (
+    <FcLinux
+      className={"text-neutral-700 dark:text-white text-2xl brightness-150"}
+    />
+  );
 }
