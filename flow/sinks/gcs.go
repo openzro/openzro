@@ -71,6 +71,12 @@ type GCSConfig struct {
 	// BufferSize is the in-memory queue capacity. Default 50000.
 	BufferSize int
 
+	// Format selects the on-disk encoding. Empty defaults to "ndjson"
+	// for back-compat with operators who set up the archive before
+	// ADR-0012 landed. Set to "parquet" so the dashboard's federated
+	// read path (flow/store/archive) can query historical events.
+	Format string
+
 	// Endpoint overrides the default GCS endpoint. Empty for the real
 	// service; set to `http://localhost:4443` (or wherever) for
 	// fake-gcs-server in CI / dev.
@@ -87,6 +93,7 @@ type GCSConfig struct {
 //   <prefix>/year=2026/month=04/day=26/account=<id>/<unix-nano>-<rand>.ndjson.gz
 type GCS struct {
 	cfg    GCSConfig
+	format archiveFormat
 	client *storage.Client
 	bucket *storage.BucketHandle
 
@@ -134,6 +141,7 @@ func NewGCS(ctx context.Context, cfg GCSConfig) (*GCS, error) {
 
 	g := &GCS{
 		cfg:    cfg,
+		format: resolveFormat(cfg.Format),
 		client: client,
 		bucket: client.Bucket(cfg.Bucket),
 		queue:  make(chan *store.Event, cfg.BufferSize),
@@ -203,12 +211,12 @@ func (g *GCS) loop() {
 	}
 }
 
-// upload writes the batch as gzipped NDJSON and PUTs it via the GCS
-// SDK. Errors are logged loud and dropped — same posture as the S3
-// sink: durability comes from the streaming pipeline (Datadog /
-// Elastic), not from a single archive.
+// upload encodes the batch in the configured format and PUTs it via
+// the GCS SDK. Errors are logged loud and dropped — same posture as
+// the S3 sink: durability comes from the streaming pipeline
+// (Datadog / Elastic), not from a single archive.
 func (g *GCS) upload(ctx context.Context, batch []*store.Event) {
-	body, err := encodeBatch(batch)
+	body, contentType, contentEncoding, err := g.encodeForFormat(batch)
 	if err != nil {
 		log.Errorf("flow sink GCS: encode batch (%d events): %v", len(batch), err)
 		return
@@ -216,8 +224,8 @@ func (g *GCS) upload(ctx context.Context, batch []*store.Event) {
 	key := g.objectKey(batch[0])
 
 	w := g.bucket.Object(key).NewWriter(ctx)
-	w.ContentType = "application/x-ndjson"
-	w.ContentEncoding = "gzip"
+	w.ContentType = contentType
+	w.ContentEncoding = contentEncoding
 	if _, err := w.Write(body); err != nil {
 		_ = w.Close()
 		log.Errorf("flow sink GCS: write %s/%s (%d events): %v",
@@ -231,6 +239,19 @@ func (g *GCS) upload(ctx context.Context, batch []*store.Event) {
 	}
 }
 
+// encodeForFormat mirrors the S3 sink helper so the dispatch shape
+// stays identical between backends.
+func (g *GCS) encodeForFormat(batch []*store.Event) (body []byte, contentType, contentEncoding string, err error) {
+	switch g.format {
+	case formatParquet:
+		body, err = encodeBatchParquet(batch)
+		return body, "application/vnd.apache.parquet", "", err
+	default:
+		body, err = encodeBatch(batch)
+		return body, "application/x-ndjson", "gzip", err
+	}
+}
+
 // objectKey mirrors the S3 sink's path layout so an operator can run
 // both archives in parallel and have a stable schema in either tool.
 func (g *GCS) objectKey(first *store.Event) string {
@@ -239,13 +260,18 @@ func (g *GCS) objectKey(first *store.Event) string {
 	if prefix != "" && prefix[len(prefix)-1] != '/' {
 		prefix += "/"
 	}
+	ext := "ndjson.gz"
+	if g.format == formatParquet {
+		ext = "parquet"
+	}
 	return fmt.Sprintf(
-		"%syear=%04d/month=%02d/day=%02d/account=%s/%d-%s.ndjson.gz",
+		"%syear=%04d/month=%02d/day=%02d/account=%s/%d-%s.%s",
 		prefix,
 		t.Year(), t.Month(), t.Day(),
 		first.AccountID,
 		t.UnixNano(),
 		hex.EncodeToString(first.EventID[:min(4, len(first.EventID))]),
+		ext,
 	)
 }
 

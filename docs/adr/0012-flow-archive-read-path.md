@@ -62,10 +62,11 @@ Two concrete pieces:
    `OPENZRO_FLOW_ARCHIVE_FORMAT` env knob (`ndjson` | `parquet`) defaulting
    to **`parquet` for new installs** and **`ndjson` for existing operators
    who set neither** (back-compat — see Migration below). Same partition
-   layout the sinks already write today:
+   layout the sinks already write today (Hive-style for Athena / Glue
+   / DuckDB-friendly):
 
    ```text
-   accounts/<account_id>/dt=YYYY-MM-DD/<batch_uuid>.parquet
+   <prefix>/year=YYYY/month=MM/day=DD/account=<id>/<unix-nano>-<rand>.parquet
    ```
 
    Parquet earns this slot over alternatives because of:
@@ -87,12 +88,19 @@ Two concrete pieces:
    DuckDB SQL against the bucket:
 
    ```sql
-   SELECT * FROM read_parquet('s3://bucket/accounts/<id>/dt=Y-M-*/...')
+   SELECT * FROM read_parquet(
+     's3://bucket/<prefix>/year=*/month=*/day=*/account=<id>/*.parquet',
+     hive_partitioning = true
+   )
    WHERE received_at BETWEEN $since AND $until
      AND peer_id = $peer_id  -- when set
    ORDER BY received_at DESC
    LIMIT $limit OFFSET $offset
    ```
+
+   `hive_partitioning = true` lets DuckDB prune entire `year=/month=/day=`
+   directories before opening any object — important for the long-window
+   queries forensics ends up issuing.
 
    DuckDB lives **in-process**: it is a Go-importable library
    ([`github.com/marcboeker/go-duckdb`][go-duckdb]), not a separate
