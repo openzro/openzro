@@ -272,6 +272,32 @@ retention strategy is **Postgres-only**:
 
 The dispatch lives in [`flow/store/sql/sql.go::New`](../../flow/store/sql/sql.go); Postgres takes the partitioned path, every other dialect falls through to `db.AutoMigrate(&row{})`.
 
+A `log.Warn` fires at boot for `engine=mysql` and `engine=sqlite`
+naming the partitioning gap and pointing at this ADR — operators who
+flip the engine via env var see the trade-off in their first
+management pod log line, not just in the chart docs.
+
+### Activity events store — same Postgres / MySQL choice, different stakes
+
+The activity events log (`management/server/activity/store/sql_store.go`)
+is a separate sink from the flow store but uses the same dialect
+selection. The partitioning gap exists there too, but the operational
+consequence is much smaller because activity events are **a few orders
+of magnitude lower volume** than flow events:
+
+| Store | Typical row rate | Partitioning matters? |
+|---|---|---|
+| `flow_events` | 10⁶ – 10⁸ rows / day per active cluster | yes — `DELETE`-based retention runs into table-scan + binlog cost |
+| activity log | 10³ – 10⁴ rows / day, even on big clusters | not really — `DELETE WHERE timestamp < cutoff` is cheap at this scale |
+
+The activity store added MySQL support in alpha.32 (it was Postgres /
+SQLite only at the v0.53.0 fork point, mirroring NetBird upstream).
+Operators picking MySQL get full control-plane parity now: data store,
+flow store, **and** activity events all sit on the same engine.
+`OZ_ACTIVITY_EVENT_STORE_ENGINE=mysql` + `OZ_ACTIVITY_EVENT_MYSQL_DSN`
+selects it. No partitioning for the same GORM-AutoMigrate reason as
+flow's MySQL path, but at activity-event scale that's fine.
+
 ### Alpha-stage migration policy
 
 Existing pre-partitioning tables are dropped on first boot of the
