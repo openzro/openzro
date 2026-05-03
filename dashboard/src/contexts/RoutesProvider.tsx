@@ -2,10 +2,22 @@ import { notify } from "@components/Notification";
 import { useApiCall } from "@utils/api";
 import React from "react";
 import { useSWRConfig } from "swr";
-import { Route } from "@/interfaces/Route";
+import { GroupedRoute, Route } from "@/interfaces/Route";
 
 type Props = {
   children: React.ReactNode;
+};
+
+// Fields the Edit-Group UI is allowed to mass-apply to every child
+// route in a GroupedRoute. Peer assignment, masquerade, and groups
+// stay per-peer (edited via the inner row's RouteUpdateModal).
+export type GroupedRouteUpdateFields = {
+  network_id?: string;
+  description?: string;
+  enabled?: boolean;
+  metric?: number;
+  network?: string;
+  domains?: string[];
 };
 
 const RoutesContext = React.createContext(
@@ -21,6 +33,11 @@ const RoutesContext = React.createContext(
       onSuccess?: (route: Route) => void,
       message?: string,
       options?: { remove_access_control_groups?: boolean },
+    ) => void;
+    updateGroupedRoute: (
+      grouped: GroupedRoute,
+      toUpdate: GroupedRouteUpdateFields,
+      onSuccess?: () => void,
     ) => void;
   },
 );
@@ -104,8 +121,72 @@ export default function RoutesProvider({ children }: Readonly<Props>) {
     });
   };
 
+  // Group-level edit: fans out N PUTs (one per child route) so a
+  // single user action ("change this network's CIDR / description /
+  // enabled / metric") propagates to every peer attached to the
+  // grouped route. Each PUT preserves the child's per-peer fields
+  // (peer / peer_groups / masquerade / groups / access_control_groups)
+  // and applies the shared fields from `toUpdate`. We use Promise.all
+  // — fail-fast — because partial success would split the group on
+  // the listing and is harder to reason about than a clean retry.
+  const updateGroupedRoute = async (
+    grouped: GroupedRoute,
+    toUpdate: GroupedRouteUpdateFields,
+    onSuccess?: () => void,
+  ) => {
+    if (!grouped.routes || grouped.routes.length === 0) return;
+
+    const groupHasDomains =
+      toUpdate.domains !== undefined
+        ? toUpdate.domains.length > 0
+        : grouped.domains
+        ? grouped.domains.length > 0
+        : false;
+
+    const batch = grouped.routes
+      .filter((r) => r.id)
+      .map((r) => {
+        const childHasDomains = r.domains ? r.domains.length > 0 : false;
+        const isDomain = groupHasDomains || childHasDomains;
+        return routeRequest.put(
+          {
+            network_id: toUpdate.network_id ?? r.network_id,
+            description: toUpdate.description ?? r.description ?? "",
+            enabled: toUpdate.enabled ?? r.enabled,
+            peer: r.peer || undefined,
+            peer_groups: r.peer_groups || undefined,
+            network: !isDomain
+              ? toUpdate.network ?? r.network
+              : undefined,
+            domains: isDomain
+              ? toUpdate.domains ?? r.domains
+              : undefined,
+            keep_route: r.keep_route,
+            metric: toUpdate.metric ?? r.metric ?? 9999,
+            masquerade: r.masquerade ?? true,
+            groups: r.groups ?? [],
+            access_control_groups: r.access_control_groups ?? undefined,
+          },
+          `/${r.id}`,
+        );
+      });
+
+    notify({
+      title: "Network " + grouped.network_id,
+      description: "The network was successfully updated",
+      promise: Promise.all(batch).then(() => {
+        mutate("/routes");
+        mutate("/groups");
+        onSuccess && onSuccess();
+      }),
+      loadingMessage: "Updating the network...",
+    });
+  };
+
   return (
-    <RoutesContext.Provider value={{ createRoute, updateRoute }}>
+    <RoutesContext.Provider
+      value={{ createRoute, updateRoute, updateGroupedRoute }}
+    >
       {children}
     </RoutesContext.Provider>
   );
