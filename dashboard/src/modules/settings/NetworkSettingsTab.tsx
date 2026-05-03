@@ -329,6 +329,11 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
               </>
             }
             disabled={!permission.settings.update}
+            // When the expansion below is shown, square the toggle's
+            // bottom corners so the two surfaces visually join into a
+            // single capsule. Without this the rounded-md bottom +
+            // border-t-0 panel produced a white sliver at the corners.
+            className={flowEnabled ? "!rounded-b-none" : undefined}
           />
 
           {flowEnabled && (
