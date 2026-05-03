@@ -337,4 +337,17 @@ with `sql: database is closed` from the next read onward. Fixed in
 `management/server/flow_service.go` by tracking a `keep` set built
 from the new list and only `Close()`-ing sinks that left.
 
+### Cold-archive read path (added 2026-05-03 — alpha.34)
+
+The "PR-F" placeholder at the top of this ADR reserved cold archive
+write-side; the dashboard's read-side over the same data landed in
+[ADR-0012](0012-flow-archive-read-path.md). Brief recap: archive
+sinks now emit Parquet (gated by `OPENZRO_FLOW_ARCHIVE_FORMAT=parquet`)
+and a federated wrapper in `flow/store/federated/` queries either
+the hot store, the archive (via DuckDB embedded — `flow/store/archive/`
+behind the `archive_duckdb` build tag), or both per the requested
+date window. Operators on the legacy NDJSON archive keep their
+write side intact; the federated read engages only when the format
+flips to Parquet.
+
 ## References

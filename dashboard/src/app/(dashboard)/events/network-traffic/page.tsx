@@ -38,8 +38,11 @@ export default function NetworkTraffic() {
           wild.
         </Paragraph>
         <Paragraph>
-          Older events live in your configured streaming target (SIEM)
-          or cold archive. Read more about{" "}
+          Streaming exporters (Datadog / Elastic / HTTP) ship every
+          event to your SIEM in real time for alerting. Configured
+          cold archives (S3 / GCS Parquet) back this view past the
+          hot retention window — older queries are served from the
+          archive automatically. Read more about{" "}
           <InlineLink
             href={"https://docs.openzro.io/how-to/network-traffic-events"}
             target={"_blank"}
