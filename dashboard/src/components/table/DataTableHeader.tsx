@@ -25,7 +25,14 @@ export default function DataTableHeader({
       <div
         onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
         className={cn(
-          "flex items-center whitespace-nowrap cursor-pointer gap-2 dark:text-gray-400 dark:hover:text-gray-300 transition-all select-none hover:text-nb-gray text-xs tracking-wide",
+          "flex items-center whitespace-nowrap cursor-pointer gap-2 transition-all select-none text-xs tracking-wide",
+          // Light: neutral chip text, deeper on hover. Dark: keep
+          // the original gray-400 / gray-300 pair. The previous
+          // `hover:text-nb-gray` resolved to the light-mode page bg
+          // token (near-white) on white surfaces — hovering made
+          // the header label vanish.
+          "text-neutral-500 hover:text-neutral-900",
+          "dark:text-gray-400 dark:hover:text-gray-300",
           center && "justify-center w-full",
           className,
         )}
