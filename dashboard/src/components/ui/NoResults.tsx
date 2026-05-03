@@ -51,7 +51,12 @@ export default function NoResults({
     <div className={cn("relative overflow-hidden", className)}>
       <div
         className={
-          "absolute z-20 bg-gradient-to-b dark:to-nb-gray-950 dark:from-nb-gray-950/70 w-full h-full overflow-hidden top-0"
+          // Veil over the deacmetive skeleton bars. Light mode had
+          // no overlay so the bars showed at full strength against
+          // the white card.
+          "absolute z-20 w-full h-full overflow-hidden top-0 bg-gradient-to-b " +
+          "from-neutral-50/40 to-neutral-50 " +
+          "dark:from-nb-gray-950/70 dark:to-nb-gray-950"
         }
       ></div>
       <div
@@ -68,7 +73,8 @@ export default function NoResults({
       <div className={cn("max-w-md mx-auto relative z-20 py-6")}>
         <div
           className={
-            "mx-auto w-14 h-14 bg-nb-gray-930 flex items-center justify-center mb-3 rounded-md"
+            "mx-auto w-14 h-14 flex items-center justify-center mb-3 rounded-md " +
+            "bg-neutral-200 dark:bg-nb-gray-930"
           }
         >
           {icon ? icon : <FilterX size={24} />}

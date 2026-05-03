@@ -73,7 +73,7 @@ export default function SetupKeyActionCell({ setupKey }: Readonly<Props>) {
   };
 
   return (
-    <div className={"flex justify-end pr-4"}>
+    <div className={"flex justify-end gap-2 pr-4"}>
       <Button
         variant={"danger-outline"}
         size={"sm"}
