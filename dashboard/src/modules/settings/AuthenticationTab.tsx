@@ -230,6 +230,11 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
                 </>
               }
               disabled={!permission.settings.update}
+              // Square the toggle's bottom corners so it merges with
+              // the Session Expiration expansion panel below — same
+              // pattern NetworkSettings uses for its flow-groups
+              // expansion. Toggle off → standalone rounded card.
+              className={loginExpiration ? "!rounded-b-none" : undefined}
             />
 
             <div
