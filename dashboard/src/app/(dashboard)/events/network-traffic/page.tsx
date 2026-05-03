@@ -4,7 +4,6 @@ import Breadcrumbs from "@components/Breadcrumbs";
 import InlineLink from "@components/InlineLink";
 import Paragraph from "@components/Paragraph";
 import { RestrictedAccess } from "@components/ui/RestrictedAccess";
-import { usePortalElement } from "@hooks/usePortalElement";
 import useFetchApi from "@utils/api";
 import { ExternalLinkIcon, NetworkIcon } from "lucide-react";
 import React from "react";
@@ -12,7 +11,7 @@ import ActivityIcon from "@/assets/icons/ActivityIcon";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { NetworkTrafficEventsResponse } from "@/interfaces/NetworkTrafficEvent";
 import PageContainer from "@/layouts/PageContainer";
-import NetworkTrafficTable from "@/modules/network-traffic/NetworkTrafficTable";
+import NetworkTrafficTimeline from "@/modules/network-traffic/NetworkTrafficTimeline";
 
 export default function NetworkTraffic() {
   const { permission } = usePermissions();
@@ -23,9 +22,6 @@ export default function NetworkTraffic() {
   // so the page never hangs on a config mismatch.
   const { data, isLoading } =
     useFetchApi<NetworkTrafficEventsResponse>("/network-traffic-events");
-
-  const { ref: headingRef, portalTarget } =
-    usePortalElement<HTMLHeadingElement>();
 
   return (
     <PageContainer>
@@ -42,7 +38,7 @@ export default function NetworkTraffic() {
             icon={<NetworkIcon size={18} />}
           />
         </Breadcrumbs>
-        <h1 ref={headingRef}>Network Traffic Events</h1>
+        <h1>Network Traffic Events</h1>
         <Paragraph>
           Per-flow records reported by your peers — connection starts,
           ends, and drops. Useful for forensics, capacity planning, and
@@ -66,11 +62,7 @@ export default function NetworkTraffic() {
         page={"Network Traffic"}
         hasAccess={permission.events.read}
       >
-        <NetworkTrafficTable
-          events={data?.events}
-          isLoading={isLoading}
-          headingTarget={portalTarget}
-        />
+        <NetworkTrafficTimeline events={data?.events} isLoading={isLoading} />
       </RestrictedAccess>
     </PageContainer>
   );
