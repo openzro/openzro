@@ -334,14 +334,14 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
           {flowEnabled && (
             <div
               className={
-                "flex flex-col gap-2 ml-12 mt-2 border-l border-nb-gray-900 pl-6 py-2"
+                "flex flex-col gap-2 ml-12 mt-2 border-l border-neutral-200 dark:border-nb-gray-900 pl-6 py-2"
               }
             >
               <Label className={"flex items-center gap-2"}>
                 <FilterIcon size={14} />
                 Limit to specific groups
               </Label>
-              <Paragraph className={"text-xs text-nb-gray-300 max-w-lg"}>
+              <Paragraph className={"text-xs text-neutral-600 dark:text-nb-gray-300 max-w-lg"}>
                 Optional. When set, only peers in these groups capture and
                 report traffic events — excluded peers never spend CPU on
                 conntrack and never push events to management. Leave empty

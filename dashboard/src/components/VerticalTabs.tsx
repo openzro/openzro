@@ -34,7 +34,7 @@ function VerticalTabs({ value, onChange, children }: Props) {
       >
         <Tabs.Root
           orientation={"vertical"}
-          className={"block lg:flex bg-nb-gray"}
+          className={"block lg:flex bg-white dark:bg-nb-gray"}
           value={value}
           onValueChange={(value) => onChange(value)}
         >
@@ -51,7 +51,7 @@ function List({ children }: { children: React.ReactNode }) {
     <Tabs.List
       className={cn(
         "px-4 py-4 whitespace-nowrap overflow-y-hidden shrink-0 no-scrollbar",
-        "lg:h-full items-start bg-nb-gray border-b-0 border-nb-gray-930",
+        "lg:h-full items-start bg-white dark:bg-nb-gray border-b-0 border-neutral-200 dark:border-nb-gray-930",
         "flex lg:flex-col lg:gap-1",
       )}
       style={{
@@ -82,10 +82,10 @@ function Trigger({
         "py-2 text-base rounded-md w-full transition-all data-[disabled]:opacity-10",
         "lg:pl-6 lg:pr-8 pl-4 pr-4 text-center lg:text-left",
         value == currentValue
-          ? "bg-nb-gray-920"
+          ? "bg-neutral-100 text-neutral-900 dark:bg-nb-gray-920 dark:text-white"
           : disabled
           ? ""
-          : "text-nb-gray-500 hover:bg-nb-gray-900/50",
+          : "text-neutral-600 hover:bg-neutral-100 dark:text-nb-gray-500 dark:hover:bg-nb-gray-900/50",
       )}
       value={value}
       onClick={() => {

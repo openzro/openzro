@@ -20,13 +20,17 @@ export const fancyToggleSwitchVariants = cva([], {
     {
       variant: "default",
       state: true,
-      className: ["border-nb-gray-800 bg-nb-gray-900/70"],
+      className: [
+        "border-neutral-300 bg-neutral-100",
+        "dark:border-nb-gray-800 dark:bg-nb-gray-900/70",
+      ],
     },
     {
       variant: "default",
       state: false,
       className: [
-        "border-nb-gray-910 bg-nb-gray-900/30 hover:bg-nb-gray-900/40",
+        "border-neutral-200 bg-neutral-50 hover:bg-neutral-100",
+        "dark:border-nb-gray-910 dark:bg-nb-gray-900/30 dark:hover:bg-nb-gray-900/40",
       ],
     },
   ],

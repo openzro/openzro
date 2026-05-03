@@ -208,7 +208,7 @@ export default function DeviceAdmissionTab({ account }: Readonly<Props>) {
             </HelpText>
 
             {noChecksConfigured ? (
-              <Paragraph className={"text-xs text-nb-gray-300 mt-2"}>
+              <Paragraph className={"text-xs text-neutral-600 dark:text-nb-gray-300 mt-2"}>
                 No posture checks defined yet. Create one under{" "}
                 <InlineLink href={"/posture-checks"}>Posture Checks</InlineLink>{" "}
                 first — for example, an Endpoint Security check pointed at your
@@ -217,7 +217,7 @@ export default function DeviceAdmissionTab({ account }: Readonly<Props>) {
             ) : (
               <div
                 className={
-                  "mt-3 flex flex-col gap-2 border border-nb-gray-900 rounded-md p-4"
+                  "mt-3 flex flex-col gap-2 border border-neutral-200 dark:border-nb-gray-900 rounded-md p-4"
                 }
               >
                 {(postureChecks ?? []).map((pc) => (
@@ -235,7 +235,7 @@ export default function DeviceAdmissionTab({ account }: Readonly<Props>) {
                     <div className={"flex flex-col"}>
                       <span className={"text-sm font-medium"}>{pc.name}</span>
                       {pc.description && (
-                        <span className={"text-xs text-nb-gray-300"}>
+                        <span className={"text-xs text-neutral-600 dark:text-nb-gray-300"}>
                           {pc.description}
                         </span>
                       )}
@@ -257,7 +257,7 @@ export default function DeviceAdmissionTab({ account }: Readonly<Props>) {
             </HelpText>
 
             {(groups ?? []).length === 0 ? (
-              <Paragraph className={"text-xs text-nb-gray-300 mt-2"}>
+              <Paragraph className={"text-xs text-neutral-600 dark:text-nb-gray-300 mt-2"}>
                 No groups defined yet. Create a group (e.g.{" "}
                 <code className={"font-mono text-xs"}>
                   infrastructure-peers
@@ -270,7 +270,7 @@ export default function DeviceAdmissionTab({ account }: Readonly<Props>) {
             ) : (
               <div
                 className={
-                  "mt-3 flex flex-col gap-2 border border-nb-gray-900 rounded-md p-4"
+                  "mt-3 flex flex-col gap-2 border border-neutral-200 dark:border-nb-gray-900 rounded-md p-4"
                 }
               >
                 {(groups ?? [])
@@ -291,7 +291,7 @@ export default function DeviceAdmissionTab({ account }: Readonly<Props>) {
                       />
                       <div className={"flex flex-col"}>
                         <span className={"text-sm font-medium"}>{g.name}</span>
-                        <span className={"text-xs text-nb-gray-300"}>
+                        <span className={"text-xs text-neutral-600 dark:text-nb-gray-300"}>
                           {g.peers_count ?? 0} peer
                           {(g.peers_count ?? 0) === 1 ? "" : "s"}
                         </span>
