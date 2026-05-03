@@ -44,7 +44,9 @@ import (
 	flowProto "github.com/openzro/openzro/flow/proto"
 	flowSinks "github.com/openzro/openzro/flow/sinks"
 	flowstore "github.com/openzro/openzro/flow/store"
+	flowArchive "github.com/openzro/openzro/flow/store/archive"
 	flowFactory "github.com/openzro/openzro/flow/store/factory"
+	flowFederated "github.com/openzro/openzro/flow/store/federated"
 	"github.com/openzro/openzro/formatter/hook"
 	mgmtProto "github.com/openzro/openzro/management/proto"
 	"github.com/openzro/openzro/management/server"
@@ -323,6 +325,32 @@ var (
 			if flowBuilt != nil {
 				flowStore = flowBuilt.Store
 				defer func() { _ = flowBuilt.Close() }()
+
+				// Cold-archive read path (ADR-0012). When the operator has
+				// configured a Parquet archive (S3 or GCS) AND this binary
+				// was built with `-tags=archive_duckdb`, wrap the hot store
+				// in a federated layer that routes queries by date window.
+				// Otherwise — no archive configured, NDJSON-only archive,
+				// or non-DuckDB build — federated falls through to hot-only
+				// behaviour.
+				archiveStore, archErr := flowArchive.NewFromEnv()
+				switch {
+				case errors.Is(archErr, flowArchive.ErrUnavailable):
+					log.WithContext(ctx).Warn(
+						"flow archive: configured but binary built without archive_duckdb — " +
+							"rebuild with `-tags=archive_duckdb` to enable federated reads")
+				case archErr != nil:
+					return fmt.Errorf("flow archive store: %w", archErr)
+				}
+				if archiveStore != nil {
+					fed, err := flowFederated.New(flowStore, archiveStore, flowBuilt.Retention)
+					if err != nil {
+						return fmt.Errorf("flow federated store: %w", err)
+					}
+					flowStore = fed
+					log.WithContext(ctx).Infof(
+						"flow archive: federated read enabled (hot retention=%s)", flowBuilt.Retention)
+				}
 			}
 
 			// flow_exports: runtime-configurable destinations. The store
