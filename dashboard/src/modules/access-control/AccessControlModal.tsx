@@ -246,8 +246,9 @@ export function AccessControlModalContent({
                 <HelpText className={"max-w-sm"}>
                   Allow only specified network protocols. To change traffic
                   direction and ports, select{" "}
-                  <b className={"text-white"}>TCP</b> or{" "}
-                  <b className={"text-white"}>UDP</b> protocol.
+                  <b className={"text-neutral-900 dark:text-white"}>TCP</b> or{" "}
+                  <b className={"text-neutral-900 dark:text-white"}>UDP</b>{" "}
+                  protocol.
                 </HelpText>
               </div>
               <Select

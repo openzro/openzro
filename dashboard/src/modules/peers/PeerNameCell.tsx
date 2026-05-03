@@ -27,9 +27,12 @@ export default function PeerNameCell({ peer, linkToPeer = true }: Props) {
     <div>
       <div
         className={cn(
-          "flex items-center max-w-[300px] gap-2 dark:text-neutral-300 text-neutral-500 transition-all py-2 px-3 rounded-md ",
+          "flex items-center max-w-[300px] gap-2 transition-all py-2 px-3 rounded-md",
+          "text-neutral-500 dark:text-neutral-300",
           linkToPeer &&
-            "hover:text-neutral-100 hover:bg-nb-gray-800/60 cursor-pointer",
+            "cursor-pointer " +
+              "hover:text-neutral-900 dark:hover:text-neutral-100 " +
+              "hover:bg-neutral-100 dark:hover:bg-nb-gray-800/60",
         )}
         data-testid="peer-name-cell"
         aria-label={`View details of peer ${peer.name}`}
@@ -42,7 +45,11 @@ export default function PeerNameCell({ peer, linkToPeer = true }: Props) {
             isOwnerOrAdmin && <ExitNodePeerIndicator peer={peer} />
           }
         >
-          <div className={"text-nb-gray-400 font-light truncate"}>
+          <div
+            className={
+              "text-neutral-500 dark:text-nb-gray-400 font-light truncate"
+            }
+          >
             {displayUserEmailOrName ||
               (displayUserId && `user: ${displayUserId}`)}
           </div>

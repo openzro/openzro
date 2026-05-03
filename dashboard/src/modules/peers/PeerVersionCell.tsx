@@ -39,7 +39,7 @@ export default function PeerVersionCell({ version, os }: Props) {
     <TooltipProvider>
       <Tooltip delayDuration={10}>
         <TooltipTrigger>
-          <div className="flex gap-2 dark:text-neutral-300 text-neutral-500 hover:text-neutral-100 transition-all hover:bg-nb-gray-800/60 py-2 px-3 rounded-md items-center">
+          <div className="flex gap-2 dark:text-neutral-300 text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 transition-all hover:bg-neutral-100 dark:hover:bg-nb-gray-800/60 py-2 px-3 rounded-md items-center">
             <MemoizedOpenzroIcon />
             {version == "development" ? "dev" : version}
             <div className={"relative"}>

@@ -62,9 +62,11 @@ export const PostureCheckCard = ({
     <div className={"w-full"}>
       <div
         onClick={() => setOpen(true)}
-        className={
-          "hover:bg-nb-gray-920/80 border border-transparent hover:border-nb-gray-900 rounded-md flex flex-col items-center transition-all cursor-pointer w-full"
-        }
+        className={cn(
+          "border border-transparent rounded-md flex flex-col items-center transition-all cursor-pointer w-full",
+          "hover:bg-neutral-100 hover:border-neutral-200",
+          "dark:hover:bg-nb-gray-920/80 dark:hover:border-nb-gray-900",
+        )}
       >
         <div className={"flex gap-4 items-center w-full px-4 py-3"}>
           <div
@@ -95,8 +97,15 @@ export const PostureCheckCard = ({
               className={cn(
                 "text-[10px] rounded-full px-1 py-1 flex items-center gap-1 w-[50px] justify-center uppercase font-medium",
                 active
-                  ? "text-green-400 bg-green-900 hover:bg-green-800 transition-all hover:text-green-200"
-                  : "text-nb-gray-400 bg-nb-gray-900",
+                  ? [
+                      "text-green-700 bg-green-100 hover:bg-green-200 hover:text-green-800",
+                      "dark:text-green-400 dark:bg-green-900 dark:hover:bg-green-800 dark:hover:text-green-200",
+                      "transition-all",
+                    ].join(" ")
+                  : [
+                      "text-neutral-600 bg-neutral-200",
+                      "dark:text-nb-gray-400 dark:bg-nb-gray-900",
+                    ].join(" "),
               )}
               onClick={(e) => {
                 e.preventDefault();

@@ -27,8 +27,11 @@ export const PostureCheckChecksCell = ({
     <div className={"flex"} onClick={onClick}>
       <div
         className={cn(
-          "flex items-center gap-3 bg-nb-gray-900/80  border border-nb-gray-800/50 py-1 rounded-full px-1 transition-all",
-          !disableHover && "hover:bg-nb-gray-800",
+          "flex items-center gap-3 py-1 rounded-full px-1 transition-all border",
+          "bg-neutral-100 border-neutral-200",
+          "dark:bg-nb-gray-900/80 dark:border-nb-gray-800/50",
+          !disableHover &&
+            "hover:bg-neutral-200 dark:hover:bg-nb-gray-800",
           className,
         )}
       >
@@ -63,7 +66,7 @@ export const PostureCheckChecksCell = ({
             <OperatingSystemTooltip check={check.checks.os_version_check}>
               <div
                 className={cn(
-                  "bg-gradient-to-tr from-nb-gray-500 to-nb-gray-300 h-8 w-8 rounded-full flex items-center justify-center relative z-[8] hover:scale-[1.1] transition-all",
+                  "bg-gradient-to-tr from-neutral-500 to-neutral-400 dark:from-nb-gray-500 dark:to-nb-gray-300 h-8 w-8 rounded-full flex items-center justify-center relative z-[8] hover:scale-[1.1] transition-all",
                 )}
               >
                 <Disc3Icon size={14} />
@@ -89,7 +92,7 @@ export const PostureCheckChecksCell = ({
             <ProcessTooltip check={check.checks.process_check}>
               <div
                 className={cn(
-                  "bg-gradient-to-tr from-nb-gray-500 to-nb-gray-300 h-8 w-8 rounded-full flex items-center justify-center relative z-[8] hover:scale-[1.1] transition-all",
+                  "bg-gradient-to-tr from-neutral-500 to-neutral-400 dark:from-nb-gray-500 dark:to-nb-gray-300 h-8 w-8 rounded-full flex items-center justify-center relative z-[8] hover:scale-[1.1] transition-all",
                 )}
               >
                 <ServerCogIcon size={14} />

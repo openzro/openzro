@@ -305,77 +305,83 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
             disabled={!permission.settings.update}
           />
 
-          <FancyToggleSwitch
-            value={flowEnabled}
-            onChange={toggleFlowSetting}
-            label={
-              <>
-                <ActivityIcon size={15} />
-                Enable Network Traffic Events
-              </>
-            }
-            helpText={
-              <>
-                Capture per-flow events from peers (start / drop / end of every
-                TCP / UDP / ICMP connection) and persist them on the management
-                server for the Network Traffic page and any configured
-                exporters. Disabled by default — enable when you need
-                connection-level audit visibility. Persistence requires
-                management to be configured with a flow store engine
-                (postgres/mysql/sqlite via{" "}
-                <code>OPENZRO_FLOW_STORE_ENGINE</code> + DSN); without those
-                env vars events are accepted on the gRPC stream and dropped
-                after acking.
-              </>
-            }
-            disabled={!permission.settings.update}
-            // When the expansion below is shown, square the toggle's
-            // bottom corners so the two surfaces visually join into a
-            // single capsule. Without this the rounded-md bottom +
-            // border-t-0 panel produced a white sliver at the corners.
-            className={flowEnabled ? "!rounded-b-none" : undefined}
-          />
+          {/* Toggle + its expansion live in their own gap-less
+              wrapper so the parent's `gap-6` between settings cards
+              does not push the two surfaces apart — same trick the
+              AuthenticationTab uses for its Session Expiration block. */}
+          <div className={"flex flex-col"}>
+            <FancyToggleSwitch
+              value={flowEnabled}
+              onChange={toggleFlowSetting}
+              label={
+                <>
+                  <ActivityIcon size={15} />
+                  Enable Network Traffic Events
+                </>
+              }
+              helpText={
+                <>
+                  Capture per-flow events from peers (start / drop / end of
+                  every TCP / UDP / ICMP connection) and persist them on the
+                  management server for the Network Traffic page and any
+                  configured exporters. Disabled by default — enable when you
+                  need connection-level audit visibility. Persistence requires
+                  management to be configured with a flow store engine
+                  (postgres/mysql/sqlite via{" "}
+                  <code>OPENZRO_FLOW_STORE_ENGINE</code> + DSN); without those
+                  env vars events are accepted on the gRPC stream and dropped
+                  after acking.
+                </>
+              }
+              disabled={!permission.settings.update}
+              // Square the toggle's bottom corners when the expansion
+              // is open so the two surfaces visually join.
+              className={flowEnabled ? "!rounded-b-none" : undefined}
+            />
 
-          {flowEnabled && (
-            <div
-              className={cn(
-                "border border-t-0 rounded-b-md px-[1.28rem] pt-3 pb-5 flex flex-col gap-3 mx-[0.25rem]",
-                "border-neutral-200 bg-neutral-50",
-                "dark:border-nb-gray-900 dark:bg-nb-gray-940",
-                !permission.settings.update &&
-                  "opacity-50 pointer-events-none",
-              )}
-            >
-              <div>
-                <Label className={"flex items-center gap-2"}>
-                  <FilterIcon size={14} />
-                  Limit to specific groups
-                </Label>
-                <HelpText>
-                  Optional. When set, only peers in these groups capture and
-                  report traffic events — excluded peers never spend CPU on
-                  conntrack and never push events to management. Leave empty
-                  to apply to all peers.
-                </HelpText>
+            {flowEnabled && (
+              <div
+                className={cn(
+                  "border border-t-0 rounded-b-md px-[1.28rem] pt-3 pb-5 flex flex-col gap-3 mx-[0.25rem]",
+                  "border-neutral-200 bg-neutral-50",
+                  "dark:border-nb-gray-900 dark:bg-nb-gray-940",
+                  !permission.settings.update &&
+                    "opacity-50 pointer-events-none",
+                )}
+              >
+                <div>
+                  <Label className={"flex items-center gap-2"}>
+                    <FilterIcon size={14} />
+                    Limit to specific groups
+                  </Label>
+                  <HelpText>
+                    Optional. When set, only peers in these groups capture
+                    and report traffic events — excluded peers never spend
+                    CPU on conntrack and never push events to management.
+                    Leave empty to apply to all peers.
+                  </HelpText>
+                </div>
+                <PeerGroupSelector
+                  values={flowGroups}
+                  onChange={setFlowGroups}
+                  disabled={!permission.settings.update}
+                  hideAllGroup
+                />
+                <div className={"flex"}>
+                  <Button
+                    size={"sm"}
+                    variant={"primary"}
+                    disabled={
+                      !flowGroupsDirty || !permission.settings.update
+                    }
+                    onClick={saveFlowGroupsFilter}
+                  >
+                    Save filter
+                  </Button>
+                </div>
               </div>
-              <PeerGroupSelector
-                values={flowGroups}
-                onChange={setFlowGroups}
-                disabled={!permission.settings.update}
-                hideAllGroup
-              />
-              <div className={"flex"}>
-                <Button
-                  size={"sm"}
-                  variant={"primary"}
-                  disabled={!flowGroupsDirty || !permission.settings.update}
-                  onClick={saveFlowGroupsFilter}
-                >
-                  Save filter
-                </Button>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </Tabs.Content>

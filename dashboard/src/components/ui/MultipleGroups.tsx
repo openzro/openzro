@@ -61,7 +61,7 @@ export default function MultipleGroups({
               <GroupBadge
                 group={firstGroup}
                 className={
-                  permission.groups.update ? "group-hover:bg-nb-gray-800" : ""
+                  permission.groups.update ? "group-hover:bg-neutral-200 dark:group-hover:bg-nb-gray-800" : ""
                 }
               />
             )}
@@ -71,7 +71,7 @@ export default function MultipleGroups({
                 useHover={true}
                 className={cn(
                   "px-3 gap-2 whitespace-nowrap",
-                  permission.groups.update ? "group-hover:bg-nb-gray-800" : "",
+                  permission.groups.update ? "group-hover:bg-neutral-200 dark:group-hover:bg-nb-gray-800" : "",
                 )}
               >
                 + {otherGroups.length}

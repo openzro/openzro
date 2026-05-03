@@ -16,9 +16,18 @@ export const calloutVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-nb-gray-900/60 border-nb-gray-800/80 text-nb-gray-300",
-        warning: "bg-openzro-500/10 border-openzro-400/20 text-openzro-150",
-        info: "bg-sky-400/10 border-sky-400/20 text-sky-100",
+        default: [
+          "bg-neutral-100 border-neutral-200 text-neutral-700",
+          "dark:bg-nb-gray-900/60 dark:border-nb-gray-800/80 dark:text-nb-gray-300",
+        ].join(" "),
+        warning: [
+          "bg-openzro-50 border-openzro-200 text-openzro-800",
+          "dark:bg-openzro-500/10 dark:border-openzro-400/20 dark:text-openzro-150",
+        ].join(" "),
+        info: [
+          "bg-sky-50 border-sky-200 text-sky-800",
+          "dark:bg-sky-400/10 dark:border-sky-400/20 dark:text-sky-100",
+        ].join(" "),
       },
     },
   },

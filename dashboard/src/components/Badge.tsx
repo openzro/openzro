@@ -17,8 +17,14 @@ const variants = cva("", {
       blue: [
         "bg-sky-100 border-sky-500 text-sky-800 border border-transparent",
       ],
-      blueDark: ["bg-sky-900 border-sky-500 text-white border"],
-      "blue-darker": ["bg-sky-900 border-sky-500 text-white border"],
+      blueDark: [
+        "bg-sky-100 border-sky-300 text-sky-800 border",
+        "dark:bg-sky-900 dark:border-sky-500 dark:text-white",
+      ],
+      "blue-darker": [
+        "bg-sky-100 border-sky-300 text-sky-800 border",
+        "dark:bg-sky-900 dark:border-sky-500 dark:text-white",
+      ],
       red: ["bg-red-950/40 border-red-500 border text-red-500"],
       purple: ["bg-purple-950/50 border-purple-500 border text-purple-500"],
       yellow: ["bg-yellow-950 border-yellow-500 border text-yellow-400"],
@@ -37,7 +43,10 @@ const variants = cva("", {
         "dark:bg-nb-gray-900 dark:border-nb-gray-800 dark:text-nb-gray-300",
         "border dark:border-nb-gray-800/50",
       ],
-      green: ["bg-green-950 border-green-500 border text-green-400"],
+      green: [
+        "bg-green-100 border-green-300 text-green-800 border",
+        "dark:bg-green-950 dark:border-green-500 dark:text-green-400",
+      ],
       openzro: [
         // Light: soft brand-coloured chip mirroring how Tailwind's
         // accent-100/700 pair builds light-mode badges. Dark theme
@@ -51,13 +60,13 @@ const variants = cva("", {
       blue: ["hover:bg-sky-200"],
       purple: ["hover:bg-purple-950/40"],
       yellow: ["hover:bg-yellow-950/40"],
-      blueDark: ["hover:bg-sky-800"],
-      "blue-darker": ["hover:bg-sky-800"],
+      blueDark: ["hover:bg-sky-200 dark:hover:bg-sky-800"],
+      "blue-darker": ["hover:bg-sky-200 dark:hover:bg-sky-800"],
       red: ["hover:bg-red-950/40"],
       gray: ["hover:bg-neutral-200 dark:hover:bg-nb-gray-900"],
       grayer: ["hover:bg-neutral-200 dark:hover:bg-nb-gray-900"],
       "gray-ghost": ["hover:bg-neutral-200 dark:hover:bg-nb-gray-900"],
-      green: ["hover:bg-green-950/50"],
+      green: ["hover:bg-green-200 dark:hover:bg-green-950/50"],
       openzro: ["hover:bg-openzro-950/50"],
     },
   },

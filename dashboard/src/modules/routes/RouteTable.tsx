@@ -133,7 +133,7 @@ export default function RouteTable({ row }: Props) {
         tableClassName={"mt-0"}
         minimal={true}
         showSearchAndFilters={false}
-        className={"bg-neutral-900/50 py-2"}
+        className={"py-2 bg-neutral-100 dark:bg-neutral-900/50"}
         inset={true}
         text={"Network Routes"}
         manualPagination={true}
