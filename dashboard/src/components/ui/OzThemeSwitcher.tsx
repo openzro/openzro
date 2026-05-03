@@ -70,14 +70,18 @@ export default function OzThemeSwitcher() {
                   className={cn(
                     "text-[10px] uppercase tracking-wide font-medium",
                     "px-1.5 py-0.5 rounded",
-                    "bg-openzro-900/40 text-openzro-200",
+                    "bg-openzro-100 text-openzro-700",
+                    "dark:bg-openzro-900/40 dark:text-openzro-200",
                   )}
                 >
                   Beta
                 </span>
               )}
               {active && (
-                <Check size={14} className="text-openzro-200" />
+                <Check
+                  size={14}
+                  className="text-openzro-700 dark:text-openzro-200"
+                />
               )}
             </DropdownMenuItem>
           );

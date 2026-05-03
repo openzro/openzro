@@ -99,7 +99,7 @@ export default function AccessTokensTable({ user }: Readonly<Props>) {
             data={tokens}
           />
         ) : (
-          <div className={"bg-nb-gray-950 overflow-hidden"}>
+          <div className={"overflow-hidden bg-neutral-50 dark:bg-nb-gray-950"}>
             <NoResults
               className={"py-3"}
               title={"No access tokens"}
