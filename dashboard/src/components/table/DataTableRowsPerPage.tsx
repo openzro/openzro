@@ -31,12 +31,18 @@ export function DataTableRowsPerPage<TData>({
             data-cy={"rows-per-page"}
             className="w-[200px] justify-between"
           >
-            <RowsIcon size={15} className={"text-nb-gray-300 shrink-0"} />
+            <RowsIcon
+              size={15}
+              className={"text-neutral-600 dark:text-nb-gray-300 shrink-0"}
+            />
             <div>
-              <span className={"text-white"}>
+              <span className={"text-neutral-900 dark:text-white"}>
                 {table.getState().pagination.pageSize}
               </span>
-              <span className={"text-nb-gray-300"}> rows per page</span>
+              <span className={"text-neutral-600 dark:text-nb-gray-300"}>
+                {" "}
+                rows per page
+              </span>
             </div>
             <ChevronDown className="h-4 w-4 opacity-50" />
           </Button>
@@ -57,16 +63,19 @@ export function DataTableRowsPerPage<TData>({
                   <div
                     className={cn(
                       "cursor-pointer",
-                      "flex gap-2 px-2 py-1.5 my-1 mx-1 rounded-md items-center hover:dark:bg-nb-gray-800 text-nb-gray-400 hover:text-white",
+                      "flex gap-2 px-2 py-1.5 my-1 mx-1 rounded-md items-center",
+                      "text-neutral-600 dark:text-nb-gray-400",
+                      "hover:bg-neutral-100 dark:hover:bg-nb-gray-800",
+                      "hover:text-neutral-900 dark:hover:text-white",
                       table.getState().pagination.pageSize === val
-                        ? "text-white"
+                        ? "text-neutral-900 dark:text-white"
                         : "",
                     )}
                   >
                     <Check
                       size={15}
                       className={cn(
-                        "text-white shrink-0",
+                        "text-neutral-900 dark:text-white shrink-0",
                         table.getState().pagination.pageSize === val
                           ? "opacity-100"
                           : "opacity-0",
