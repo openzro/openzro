@@ -55,10 +55,10 @@ build.dashboard: ## Production build of the Next.js dashboard
 build.management: ## Build the management server binary
 	$(GO) build $(GOFLAGS) -o management/management ./management
 
-dev.dashboard: dev.idp.up dev.management.up ## Full dev stack: Zitadel + management + dashboard. http://localhost:3000
+dev.dashboard: dev.idp.up dev.management.up dev.seed.flow-events ## Full dev stack: Zitadel + management + dashboard + flow events seed. http://localhost:3000
 	cd $(DASHBOARD_DIR) && $(NPM) install && $(NPM) run dev
 
-dev.dashboard.turbo: dev.idp.up dev.management.up ## Same as dev.dashboard but with Turbopack
+dev.dashboard.turbo: dev.idp.up dev.management.up dev.seed.flow-events ## Same as dev.dashboard but with Turbopack
 	cd $(DASHBOARD_DIR) && $(NPM) install && $(NPM) run turbo
 
 dev.dashboard.bare: ## Run dashboard without IdP/management (use when pointing at external services)
@@ -169,7 +169,26 @@ MGMT_CONFIG  := deploy/dev-mgmt/management.json
 # BEFORE management starts. Without this, Make is free to interleave
 # the two recipes and management hits "connection refused" trying to
 # fetch OIDC discovery from a still-booting Dex.
-dev.management.up: build.management dev.idp.up ## Start the management server in the background (HTTP :33071)
+.PHONY: dev.deps.create-dbs
+# Idempotent — creates the auxiliary databases the management daemon
+# expects when running with external store engines. The dev-deps
+# compose only auto-creates POSTGRES_DB=openzro; flow events and the
+# activity log live in their own databases (openzro_flow,
+# openzro_activity) per chart 2.1.0-alpha.7+. Skips DBs that already
+# exist (`SELECT 1 FROM pg_database` then conditional CREATE) so
+# re-runs after a partial bring-up don't fail.
+dev.deps.create-dbs: dev.deps.up ## Ensure auxiliary Postgres DBs exist (openzro_flow, openzro_activity)
+	@for db in openzro_flow openzro_activity; do \
+	  exists=$$(docker exec openzro-dev-postgres psql -U openzro -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$$db'" 2>/dev/null); \
+	  if [ "$$exists" = "1" ]; then \
+	    echo "✓ database $$db already exists"; \
+	  else \
+	    docker exec openzro-dev-postgres psql -U openzro -d postgres -c "CREATE DATABASE $$db" >/dev/null && \
+	      echo "✓ created database $$db"; \
+	  fi; \
+	done
+
+dev.management.up: build.management dev.deps.create-dbs dev.idp.up ## Start the management server in the background (HTTP :33071)
 	@if [ ! -f $(MGMT_CONFIG) ]; then \
 	  echo "ERROR: $(MGMT_CONFIG) missing. Run 'make dev.idp.up' first."; exit 1; \
 	fi
@@ -178,6 +197,9 @@ dev.management.up: build.management dev.idp.up ## Start the management server in
 	else \
 	  mkdir -p $(MGMT_DATADIR); \
 	  OPENZRO_DEX_GRPC_ADDR=localhost:5557 \
+	  OPENZRO_FLOW_STORE_ENGINE=postgres \
+	  OPENZRO_FLOW_STORE_DSN="host=localhost port=5432 dbname=openzro_flow user=openzro password=openzro sslmode=disable" \
+	  OPENZRO_FLOW_RETENTION=720h \
 	  ./$(MGMT_BIN) management \
 	    --config $(MGMT_CONFIG) \
 	    --datadir $(MGMT_DATADIR) \
@@ -188,12 +210,26 @@ dev.management.up: build.management dev.idp.up ## Start the management server in
 	    --disable-geolite-update \
 	    >>$(MGMT_LOGFILE) 2>&1 & \
 	  echo $$! > $(MGMT_PIDFILE); \
-	  sleep 1; \
-	  if ! kill -0 $$(cat $(MGMT_PIDFILE)) 2>/dev/null; then \
-	    echo "management failed to start. Last 20 log lines:"; tail -20 $(MGMT_LOGFILE); exit 1; \
-	  fi; \
-	  echo "management started (pid $$(cat $(MGMT_PIDFILE))). Logs: $(MGMT_LOGFILE)"; \
+	  for i in $$(seq 1 30); do \
+	    if ! kill -0 $$(cat $(MGMT_PIDFILE)) 2>/dev/null; then \
+	      echo "management failed to start. Last 20 log lines:"; tail -20 $(MGMT_LOGFILE); exit 1; \
+	    fi; \
+	    if docker exec openzro-dev-postgres psql -U openzro -d openzro_flow -tAc "SELECT 1 FROM pg_partitioned_table pt JOIN pg_class c ON c.oid=pt.partrelid WHERE c.relname='flow_events'" 2>/dev/null | grep -q 1; then \
+	      break; \
+	    fi; \
+	    sleep 0.5; \
+	  done; \
+	  echo "management started (pid $$(cat $(MGMT_PIDFILE))), flow_events partitioned schema ready. Logs: $(MGMT_LOGFILE)"; \
 	fi
+
+.PHONY: dev.seed.flow-events
+# Depends on dev.management.up so management's setupPostgresSchema
+# (the partitioned-table builder in flow/store/sql/partition_postgres.go)
+# has a chance to run BEFORE the seed connects. If both run
+# concurrently, the second CREATE TABLE loses the race with a
+# `relation already exists` error from Postgres.
+dev.seed.flow-events: dev.management.up ## Seed the local Postgres flow store with synthetic events for dashboard previews
+	@$(GO) run ./scripts/dev-seed-flow-events
 
 dev.management.down: ## Stop the management server
 	@if [ -f $(MGMT_PIDFILE) ]; then \
