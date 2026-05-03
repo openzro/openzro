@@ -136,15 +136,26 @@ function NameserverTemplate({
 }>) {
   return (
     <button
-      className={
-        "bg-nb-gray-930/90 h-full hover:bg-nb-gray-900 border transition-all cursor-pointer border-nb-gray-900 hover:border-nb-gray-800 flex items-center rounded-lg overflow-hidden"
-      }
+      className={cn(
+        "h-full border transition-all cursor-pointer flex items-center rounded-lg overflow-hidden",
+        // Card surface + frame: neutral chip on light, the existing
+        // ink/violet on dark. nb-gray-930/90 read as a near-black
+        // panel on the white modal bg.
+        "bg-neutral-50 hover:bg-neutral-100 border-neutral-200 hover:border-neutral-300",
+        "dark:bg-nb-gray-930/90 dark:hover:bg-nb-gray-900 dark:border-nb-gray-900 dark:hover:border-nb-gray-800",
+      )}
       onClick={onClick}
     >
       <div
         className={cn(
           "w-1/4",
-          "bg-gradient-to-b h-full flex items-center justify-center from-white to-nb-gray-200 overflow-hidden p-4 border-r border-nb-gray-800",
+          // Logo column: subtle white → light-gray gradient. The
+          // previous `to-nb-gray-200` resolved to dark ink in light
+          // (mirror palette flip) and produced the dark stripe the
+          // user flagged. neutral-200 is a static light gray so the
+          // gradient stays soft in both themes.
+          "bg-gradient-to-b h-full flex items-center justify-center from-white to-neutral-200 overflow-hidden p-4",
+          "border-r border-neutral-200 dark:border-nb-gray-800",
         )}
       >
         {src && <Image src={src} alt={title} width={100} />}
