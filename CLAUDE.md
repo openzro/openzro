@@ -178,14 +178,27 @@ These rules govern every Go file under `client/`, `management/`, `signal/`,
 
 The whole tree is **BSD-3-Clause** and stays that way forever.
 
-- Do NOT copy, paste, mirror, or translate code from `netbirdio/netbird`
-  post-`v0.53.0` (their AGPL relicense), or from any AGPL-licensed
-  third-party Go module. Importing GPL or AGPL into openZro contaminates
-  the binary and forces a relicense — see [ADR-0001 §3.1](docs/adr/0001-openzro-foundation.md).
-- For security backports: read CVE / GHSA / CWE prose, NOT the upstream
-  patch. Reimplement clean-room. The commit message MUST cite the
-  public sources used and confirm no AGPL diff was consulted. Examples:
-  [0f956e72](https://github.com/openzro/openzro/commit/0f956e72),
+- The upstream `netbirdio/netbird` repo is **mixed-licensed today**.
+  Only `management/`, `signal/`, `relay/` and `combined/` were
+  relicensed to **AGPLv3** (each dir carries its own `LICENSE`).
+  Everything else — `client/`, `iface/`, `dns/`, `formatter/`,
+  shared libraries, etc. — **stays BSD-3-Clause** even on
+  upstream `main`.
+- That means:
+  - **AGPL territory** — never copy/translate/port from upstream
+    `management/`, `signal/`, `relay/`, `combined/`. For security
+    backports there read CVE / GHSA / CWE prose, not the upstream
+    patch. Reimplement clean-room. The commit message MUST cite
+    the public sources used and confirm no AGPL diff was consulted.
+  - **BSD-3 territory** — upstream `client/` and the rest stay
+    license-compatible with our fork. You may consult and adapt
+    code from there, attributing the change in the commit message
+    when appropriate. The same care still applies to AGPL-licensed
+    third-party Go modules: do not pull them in.
+- Importing GPL or AGPL into openZro contaminates the binary and
+  forces a relicense — see [ADR-0001 §3.1](docs/adr/0001-openzro-foundation.md).
+- Examples of clean-room security backports against AGPL upstream
+  paths: [0f956e72](https://github.com/openzro/openzro/commit/0f956e72),
   [3196cbbf](https://github.com/openzro/openzro/commit/3196cbbf),
   [c761e80f](https://github.com/openzro/openzro/commit/c761e80f).
 - `LICENSE` and `AUTHORS` files (root, `dashboard/`, `signal/dispatcher/`)

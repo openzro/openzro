@@ -33,7 +33,7 @@ We are forking [netbirdio/netbird](https://github.com/netbirdio/netbird) and [ne
 | Web dashboard    | `netbirdio/dashboard`             | v2.15.0 | 2025-07-30 | BSD-3-Clause |
 
 - **License**: openzro stays BSD-3-Clause **everywhere, forever**. Upstream `LICENSE` and `AUTHORS` files (root and `dashboard/`) are preserved verbatim per BSD-3 attribution clause; we add to `AUTHORS` rather than modifying it.
-- **No AGPL ingestion**: post-`v0.52.2` upstream commits to `management/`, `signal/`, `relay/` (or any directory now AGPL upstream) are **never** cherry-picked or copied. Cross-pollination requires clean-room re-implementation from public descriptions only.
+- **No AGPL ingestion**: upstream `netbirdio/netbird` is **mixed-licensed** today — only `management/`, `signal/`, `relay/`, and `combined/` carry per-directory `LICENSE` files declaring **AGPLv3**; everything else (`client/`, `iface/`, shared libs, etc.) stays **BSD-3-Clause** even on `main`. Post-`v0.52.2` commits to the AGPL directories are **never** cherry-picked or copied — cross-pollination there requires clean-room re-implementation from public descriptions only. BSD-3 directories remain license-compatible and may be consulted; the upstream `netbirdio/dashboard` repo is treated as AGPL post-`v2.15.0` (its license followed shortly after the server cut).
 - **No CLA**: deleted `CONTRIBUTOR_LICENSE_AGREEMENT.md` (a NetBird GmbH–specific instrument under German law). openzro accepts contributions under the inbound-equals-outbound BSD-3 rule.
 
 ### 2. Vision: full-featured zero-trust, no artificial limits
