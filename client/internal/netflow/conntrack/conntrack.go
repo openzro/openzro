@@ -19,10 +19,20 @@ import (
 
 const defaultChannelSize = 100
 
+// PolicyResolver maps the agent-local rule_index that the firewall
+// backend stamped on the conntrack mark (per ADR-0013) back to the
+// management-issued PolicyID. Returns ok=false when the index is
+// unknown — the caller emits an empty RuleId in that case, matching
+// the behaviour before ADR-0013.
+type PolicyResolver interface {
+	LookupPolicyID(ruleIndex uint32) ([]byte, bool)
+}
+
 // ConnTrack manages kernel-based conntrack events
 type ConnTrack struct {
 	flowLogger nftypes.FlowLogger
 	iface      nftypes.IFaceMapper
+	resolver   PolicyResolver
 
 	conn *nfct.Conn
 	mux  sync.Mutex
@@ -33,11 +43,14 @@ type ConnTrack struct {
 	sysctlModified bool
 }
 
-// New creates a new connection tracker that interfaces with the kernel's conntrack system
-func New(flowLogger nftypes.FlowLogger, iface nftypes.IFaceMapper) *ConnTrack {
+// New creates a new connection tracker that interfaces with the kernel's conntrack system.
+// If resolver is nil the collector emits events without RuleId, matching the
+// behaviour from before the ADR-0013 mark layout.
+func New(flowLogger nftypes.FlowLogger, iface nftypes.IFaceMapper, resolver PolicyResolver) *ConnTrack {
 	return &ConnTrack{
 		flowLogger: flowLogger,
 		iface:      iface,
+		resolver:   resolver,
 		instanceID: uuid.New(),
 		started:    false,
 		done:       make(chan struct{}, 1),
@@ -206,9 +219,25 @@ func (c *ConnTrack) handleEvent(event nfct.Event) {
 
 	log.Tracef("%s %s %s connection: %s:%d → %s:%d", eventStr, direction, proto, srcIP, srcPort, dstIP, dstPort)
 
+	// ADR-0013: pull the rule_index that the firewall backend
+	// stamped onto the high bits of the ct mark and resolve it
+	// back to the originating PolicyID. The legacy 17-bit fwmark
+	// space stays on the low bits; the resolver handles unknown
+	// indices (returning ok=false) by emitting an empty RuleId,
+	// matching pre-ADR behaviour.
+	var ruleID []byte
+	if c.resolver != nil {
+		if ruleIndex := nbnet.MarkRuleIndex(flow.Mark); ruleIndex != 0 {
+			if pid, ok := c.resolver.LookupPolicyID(ruleIndex); ok {
+				ruleID = pid
+			}
+		}
+	}
+
 	c.flowLogger.StoreEvent(nftypes.EventFields{
 		FlowID:     flowID,
 		Type:       eventType,
+		RuleID:     ruleID,
 		Direction:  direction,
 		Protocol:   proto,
 		SourceIP:   srcIP,
@@ -283,7 +312,11 @@ func (c *ConnTrack) getFlowID(conntrackID uint32) uuid.UUID {
 }
 
 func (c *ConnTrack) inferDirection(mark uint32, srcIP, dstIP netip.Addr) nftypes.Direction {
-	switch mark {
+	// ADR-0013: peer ACL rules now stamp a rule_index on the
+	// upper 15 bits of the ct mark, so an exact match on
+	// `DataPlaneMark{In,Out}` no longer fits. Strip the index
+	// before comparing.
+	switch nbnet.MarkValue(mark) {
 	case nbnet.DataPlaneMarkIn:
 		return nftypes.Ingress
 	case nbnet.DataPlaneMarkOut:

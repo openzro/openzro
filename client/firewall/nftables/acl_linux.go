@@ -16,6 +16,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	firewall "github.com/openzro/openzro/client/firewall/manager"
+	"github.com/openzro/openzro/client/firewall/policymark"
 	nbnet "github.com/openzro/openzro/util/net"
 )
 
@@ -102,8 +103,15 @@ func (m *AclManager) AddPeerFiltering(
 		}
 	}
 
+	// ADR-0013: stamp the conntrack mark with the agent-local rule
+	// index so the netflow collector can resolve the matching
+	// PolicyID. ruleIndex == 0 means "no PolicyID" (e.g. an
+	// internal allow-rule the agent installs unprompted) and falls
+	// back to the pre-ADR behaviour of an empty FlowEvent.RuleId.
+	ruleIndex := policymark.Default().Index(id)
+
 	newRules := make([]firewall.Rule, 0, 2)
-	ioRule, err := m.addIOFiltering(ip, proto, sPort, dPort, action, ipset)
+	ioRule, err := m.addIOFiltering(ip, proto, sPort, dPort, action, ipset, ruleIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -257,6 +265,7 @@ func (m *AclManager) addIOFiltering(
 	dPort *firewall.Port,
 	action firewall.Action,
 	ipset *nftables.Set,
+	ruleIndex uint32,
 ) (*Rule, error) {
 	ruleId := generatePeerRuleId(ip, sPort, dPort, action, ipset)
 	if r, ok := m.rules[ruleId]; ok {
@@ -330,6 +339,43 @@ func (m *AclManager) addIOFiltering(
 	expressions = append(expressions, applyPort(dPort, false)...)
 
 	mainExpressions := slices.Clone(expressions)
+
+	// ADR-0013: stamp rule_index on the high bits of the ct mark
+	// so the netflow conntrack collector can resolve the
+	// originating PolicyID. The legacy mark space (DataPlaneMarkIn,
+	// DataPlaneMarkOut, …) lives on bits 0-16 and is preserved by
+	// the OR. ruleIndex == 0 means "no PolicyID for this rule" —
+	// skip the stamp and let the event carry an empty RuleId, the
+	// pre-ADR behaviour. We only stamp on Accept rules; Drop
+	// packets never reach the collector via the conntrack new-event
+	// path so the stamp would be wasted.
+	if ruleIndex != 0 && action == firewall.ActionAccept {
+		markBits := ruleIndex << nbnet.RuleIndexShift
+		mainExpressions = append(mainExpressions,
+			// reg1 = ct mark
+			&expr.Ct{
+				Key:      expr.CtKeyMARK,
+				Register: 1,
+			},
+			// reg1 = (reg1 & ~markBits) ^ markBits == reg1 | markBits
+			// (legitimate because markBits live in their own bit
+			// range; clearing-then-XORing with the same value
+			// reduces to a logical OR there.)
+			&expr.Bitwise{
+				SourceRegister: 1,
+				DestRegister:   1,
+				Len:            4,
+				Mask:           binaryutil.NativeEndian.PutUint32(^markBits),
+				Xor:            binaryutil.NativeEndian.PutUint32(markBits),
+			},
+			// ct mark = reg1
+			&expr.Ct{
+				Key:            expr.CtKeyMARK,
+				Register:       1,
+				SourceRegister: true,
+			},
+		)
+	}
 
 	switch action {
 	case firewall.ActionAccept:
