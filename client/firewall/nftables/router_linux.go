@@ -19,6 +19,7 @@ import (
 
 	nberrors "github.com/openzro/openzro/client/errors"
 	firewall "github.com/openzro/openzro/client/firewall/manager"
+	"github.com/openzro/openzro/client/firewall/policymark"
 	nbid "github.com/openzro/openzro/client/internal/acl/id"
 	"github.com/openzro/openzro/client/internal/routemanager/ipfwdstate"
 	"github.com/openzro/openzro/client/internal/routemanager/refcounter"
@@ -377,6 +378,35 @@ func (r *router) AddRouteFiltering(
 	}
 
 	exprs = append(exprs, &expr.Counter{})
+
+	// ADR-0013: stamp rule_index on the high bits of the ct mark so
+	// the netflow conntrack collector can resolve this route's
+	// PolicyID. Routing peers handle the forward chain (kleber-pc
+	// → routing peer → IPsec → external service); without this
+	// stamp the dashboard would show empty Policy on every flow
+	// that exits the mesh through a Network Route. Mirrors the
+	// peer-ACL path in acl_linux.go::addIOFiltering.
+	if ruleIndex := policymark.Default().Index(id); ruleIndex != 0 && action == firewall.ActionAccept {
+		markBits := ruleIndex << nbnet.RuleIndexShift
+		exprs = append(exprs,
+			&expr.Ct{
+				Key:      expr.CtKeyMARK,
+				Register: 1,
+			},
+			&expr.Bitwise{
+				SourceRegister: 1,
+				DestRegister:   1,
+				Len:            4,
+				Mask:           binaryutil.NativeEndian.PutUint32(^markBits),
+				Xor:            binaryutil.NativeEndian.PutUint32(markBits),
+			},
+			&expr.Ct{
+				Key:            expr.CtKeyMARK,
+				Register:       1,
+				SourceRegister: true,
+			},
+		)
+	}
 
 	var verdict expr.VerdictKind
 	if action == firewall.ActionAccept {

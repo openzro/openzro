@@ -281,10 +281,35 @@ func toDTO(e *store.Event) eventDTO {
 		TxPackets:      e.TxPackets,
 		RxBytes:        e.RxBytes,
 		TxBytes:        e.TxBytes,
-		RuleID:         hex.EncodeToString(e.RuleID),
-		SourceResource: hex.EncodeToString(e.SourceResource),
-		DestResource:   hex.EncodeToString(e.DestResource),
+		// RuleID, SourceResource, DestResource carry the originating
+		// PolicyID (or resource id) as the agent stamped them — for
+		// openzro that's an xid string in printable ASCII bytes (the
+		// management hands them out via `xid.New().String()` and the
+		// agent sets the firewall rule's `id []byte` to those bytes).
+		// Returning them as hex breaks the dashboard lookup, which
+		// keys policyByID on the same xid string the API exposes
+		// elsewhere. Decode as UTF-8 when the bytes look like a
+		// printable ASCII id, fall back to hex for anything binary
+		// (e.g. older agents that stamped raw uuid bytes).
+		RuleID:         decodeIDBytes(e.RuleID),
+		SourceResource: decodeIDBytes(e.SourceResource),
+		DestResource:   decodeIDBytes(e.DestResource),
 	}
+}
+
+// decodeIDBytes returns the bytes as a UTF-8 string when they are
+// all printable ASCII (the format used by xid-issued IDs), or the
+// hex encoding otherwise. Empty input round-trips to "".
+func decodeIDBytes(b []byte) string {
+	if len(b) == 0 {
+		return ""
+	}
+	for _, c := range b {
+		if c < 0x20 || c > 0x7E {
+			return hex.EncodeToString(b)
+		}
+	}
+	return string(b)
 }
 
 func formatType(t store.EventType) string {
