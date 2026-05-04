@@ -198,20 +198,9 @@ func (am *DefaultAccountManager) GetUserFromUserAuth(ctx context.Context, userAu
 		log.WithContext(ctx).Debugf("failed to update user last login: %v", err)
 	}
 
-	// Refresh cached email/name from JWT claims when they changed (or
-	// were empty on a previous login). Without this, dashboards on
-	// IdP-manager-less deployments (Dex with passwordDB, generic OIDC)
-	// show "—" for email forever even though the JWT carries the
-	// claim. Service users skip this since they don't authenticate
-	// via JWT.
-	if !user.IsServiceUser && (userAuth.Email != "" || userAuth.Name != "") &&
-		(user.Email != userAuth.Email || user.Name != userAuth.Name) {
-		user.Email = userAuth.Email
-		user.Name = userAuth.Name
-		if saveErr := am.Store.SaveUser(ctx, store.LockingStrengthUpdate, user); saveErr != nil {
-			log.WithContext(ctx).Warnf("failed to cache JWT email/name for user %s: %v", user.Id, saveErr)
-		}
-	}
+	// Refresh cached email/name from JWT claims. See
+	// cacheUserClaimsFromAuth in account.go for the rationale.
+	cacheUserClaimsFromAuth(ctx, am.Store, user, userAuth)
 
 	if newLogin {
 		meta := map[string]any{"timestamp": userAuth.LastLogin}

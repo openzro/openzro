@@ -637,6 +637,84 @@ func TestDefaultAccountManager_GetAccountIDFromToken(t *testing.T) {
 	}
 }
 
+// TestDefaultAccountManager_GetAccountIDFromUserAuth_CachesClaims
+// guards against the regression where the gRPC peer-login path
+// (GetAccountIDFromUserAuth) failed to refresh the cached email/name
+// on the user record while the dashboard HTTP path
+// (GetUserFromUserAuth) did. Without this, IdP-manager-less
+// deployments (Dex with ManagerType=none, generic OIDC) carried user
+// records with empty email/name forever after the first agent
+// connect, even though every JWT carried the claims.
+//
+// See: cacheUserClaimsFromAuth in account.go.
+func TestDefaultAccountManager_GetAccountIDFromUserAuth_CachesClaims(t *testing.T) {
+	manager, err := createManager(t)
+	require.NoError(t, err, "unable to create account manager")
+
+	const (
+		userID     = "agent-grpc-user"
+		domain     = "example.com"
+		firstEmail = "user@example.com"
+		firstName  = "User Original"
+		nextEmail  = "user.renamed@example.com"
+		nextName   = "User Renamed"
+	)
+
+	// Bootstrap: create the account+user via the same path that gRPC
+	// would hit on first contact. After this the user record exists
+	// but with empty email/name (mirrors the upstream gap).
+	accountID, err := manager.GetAccountIDByUserID(context.Background(), userID, domain)
+	require.NoError(t, err)
+
+	user, err := manager.Store.GetUserByUserID(context.Background(), store.LockingStrengthShare, userID)
+	require.NoError(t, err)
+	user.Email = ""
+	user.Name = ""
+	require.NoError(t, manager.Store.SaveUser(context.Background(), store.LockingStrengthUpdate, user))
+
+	// First gRPC login carrying email/name should cache them.
+	auth := nbcontext.UserAuth{
+		UserId:         userID,
+		AccountId:      accountID,
+		Domain:         domain,
+		DomainCategory: types.PrivateCategory,
+		Email:          firstEmail,
+		Name:           firstName,
+	}
+	gotAccount, gotUser, err := manager.GetAccountIDFromUserAuth(context.Background(), auth)
+	require.NoError(t, err)
+	require.Equal(t, accountID, gotAccount)
+	require.Equal(t, userID, gotUser)
+
+	persisted, err := manager.Store.GetUserByUserID(context.Background(), store.LockingStrengthShare, userID)
+	require.NoError(t, err)
+	require.Equal(t, firstEmail, persisted.Email, "email must be cached on first gRPC login carrying claims")
+	require.Equal(t, firstName, persisted.Name, "name must be cached on first gRPC login carrying claims")
+
+	// Subsequent login with updated claims should overwrite.
+	auth.Email = nextEmail
+	auth.Name = nextName
+	_, _, err = manager.GetAccountIDFromUserAuth(context.Background(), auth)
+	require.NoError(t, err)
+
+	persisted, err = manager.Store.GetUserByUserID(context.Background(), store.LockingStrengthShare, userID)
+	require.NoError(t, err)
+	require.Equal(t, nextEmail, persisted.Email, "renamed email from JWT must propagate to the cache")
+	require.Equal(t, nextName, persisted.Name, "renamed name from JWT must propagate to the cache")
+
+	// JWT without claims must not erase the cached values — agents
+	// can downgrade their requested scopes between sessions.
+	auth.Email = ""
+	auth.Name = ""
+	_, _, err = manager.GetAccountIDFromUserAuth(context.Background(), auth)
+	require.NoError(t, err)
+
+	persisted, err = manager.Store.GetUserByUserID(context.Background(), store.LockingStrengthShare, userID)
+	require.NoError(t, err)
+	require.Equal(t, nextEmail, persisted.Email, "claim-less JWT must not erase cached email")
+	require.Equal(t, nextName, persisted.Name, "claim-less JWT must not erase cached name")
+}
+
 func TestDefaultAccountManager_SyncUserJWTGroups(t *testing.T) {
 	userId := "user-id"
 	domain := "test.domain"
@@ -1464,7 +1542,7 @@ func getEvent(t *testing.T, accountID string, manager nbAccount.Manager, eventTy
 	t.Helper()
 	for {
 		select {
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			t.Fatal("no PeerAddedWithSetupKey event was generated")
 		default:
 			events, err := manager.GetEvents(context.Background(), accountID, userID)

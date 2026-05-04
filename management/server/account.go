@@ -1368,6 +1368,14 @@ func (am *DefaultAccountManager) GetAccountIDFromUserAuth(ctx context.Context, u
 		return "", "", status.Errorf(status.NotFound, "user %s not found", userAuth.UserId)
 	}
 
+	// Refresh cached email/name from the JWT claims. The HTTP path
+	// (dashboard login) does this in GetUserFromUserAuth; the gRPC
+	// path (peer agent login) was missing it, so IdP-manager-less
+	// deployments (Dex with ManagerType=none, generic OIDC) ended up
+	// with user records carrying just the `sub` and an empty email/
+	// name forever — even though every login carries the claims.
+	cacheUserClaimsFromAuth(ctx, am.Store, user, userAuth)
+
 	if userAuth.IsChild {
 		return accountID, user.Id, nil
 	}
@@ -1384,6 +1392,30 @@ func (am *DefaultAccountManager) GetAccountIDFromUserAuth(ctx context.Context, u
 	}
 
 	return accountID, user.Id, nil
+}
+
+// cacheUserClaimsFromAuth refreshes the persisted email/name on the
+// given user when the JWT carries values that diverge from what's in
+// the store. Used by both the HTTP and gRPC login paths so device
+// agents see the same email/name resolution that dashboard logins do.
+// Service users are skipped because they don't authenticate via JWT.
+// Failures only log a warning — the login itself succeeds even if the
+// cache update fails (DB hiccup, deadlock, etc.).
+func cacheUserClaimsFromAuth(ctx context.Context, s store.Store, user *types.User, userAuth nbcontext.UserAuth) {
+	if user == nil || user.IsServiceUser {
+		return
+	}
+	if userAuth.Email == "" && userAuth.Name == "" {
+		return
+	}
+	if user.Email == userAuth.Email && user.Name == userAuth.Name {
+		return
+	}
+	user.Email = userAuth.Email
+	user.Name = userAuth.Name
+	if err := s.SaveUser(ctx, store.LockingStrengthUpdate, user); err != nil {
+		log.WithContext(ctx).Warnf("failed to cache JWT email/name for user %s: %v", user.Id, err)
+	}
 }
 
 // syncJWTGroups processes the JWT groups for a user, updates the account based on the groups,
