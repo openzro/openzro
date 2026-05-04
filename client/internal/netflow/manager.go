@@ -13,6 +13,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/openzro/openzro/client/firewall/policymark"
 	"github.com/openzro/openzro/client/internal/netflow/conntrack"
 	"github.com/openzro/openzro/client/internal/netflow/logger"
 	nftypes "github.com/openzro/openzro/client/internal/netflow/types"
@@ -42,7 +43,12 @@ func NewManager(iface nftypes.IFaceMapper, publicKey []byte, statusRecorder *pee
 
 	var ct nftypes.ConnTracker
 	if runtime.GOOS == "linux" && iface != nil && !iface.IsUserspaceBind() {
-		ct = conntrack.New(flowLogger, iface)
+		// ADR-0013: hand the netlink collector a reference to the
+		// process-wide policymark indexer so it can translate the
+		// rule_index that nftables/iptables stamped on the ct mark
+		// back into a PolicyID inside the FlowEvent. Both writer
+		// and reader share the same Default() singleton.
+		ct = conntrack.New(flowLogger, iface, policymark.Default())
 	}
 
 	return &Manager{

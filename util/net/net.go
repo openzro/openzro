@@ -37,11 +37,72 @@ const (
 
 	// PreroutingFwmarkMasqueradeReturn is applied to packets that will leave through the Openzro interface and should be masqueraded.
 	PreroutingFwmarkMasqueradeReturn = 0x1BD22
+
+	// Bit layout of the ct mark / fwmark when openzro is the writer
+	// (per ADR-0013):
+	//
+	//   bit 31 ............ 17 | bit 16 ........... 0
+	//   [    rule_index      ] | [ legacy mark space ]
+	//        15 bits                  17 bits
+	//
+	// Bits 0-16 carry the constants above unchanged. Bits 17-31
+	// are reserved for an in-process index that the agent assigns
+	// to each peer ACL rule, so the netlink-based conntrack
+	// collector can correlate a flow event back to the originating
+	// PolicyID. Routing / masquerade / control-plane writers leave
+	// the high bits zero, in which case `MarkRuleIndex(mark) == 0`
+	// and the collector emits an empty RuleId — matching the
+	// behaviour before ADR-0013.
+
+	// MarkValueMask isolates the legacy 17-bit fwmark space.
+	MarkValueMask uint32 = 0x0001FFFF
+
+	// RuleIndexMask isolates the 15-bit rule_index that ACL rules
+	// stamp on packets they match.
+	RuleIndexMask uint32 = 0xFFFE0000
+
+	// RuleIndexShift is the bit position where rule_index starts.
+	RuleIndexShift uint32 = 17
+
+	// MaxRuleIndex is the largest rule_index that fits in the
+	// reserved 15 bits. Index 0 is a sentinel meaning "no rule
+	// associated" and is therefore never handed out.
+	MaxRuleIndex uint32 = (RuleIndexMask >> RuleIndexShift) - 1
 )
 
-// IsDataPlaneMark determines if a fwmark is in the data plane range (0x1BD10-0x1BDFF)
+// IsDataPlaneMark determines if a fwmark is in the data plane range (0x1BD10-0x1BDFF).
+// The rule_index in the upper bits (per ADR-0013) is masked off before the
+// range check so a rule-stamped mark like 0x000A_0000_001BD10 still classifies
+// as data-plane.
 func IsDataPlaneMark(fwmark uint32) bool {
-	return fwmark >= DataPlaneMarkLower && fwmark <= DataPlaneMarkUpper
+	v := MarkValue(fwmark)
+	return v >= DataPlaneMarkLower && v <= DataPlaneMarkUpper
+}
+
+// MarkValue returns the legacy 17-bit fwmark portion (DataPlaneMarkIn,
+// ControlPlaneMark, PreroutingFwmark*, …). Use this whenever you want
+// to compare a mark against one of the existing constants — the bare
+// value may carry a rule_index in its upper bits.
+func MarkValue(fwmark uint32) uint32 {
+	return fwmark & MarkValueMask
+}
+
+// MarkRuleIndex returns the in-process index the agent assigned to
+// the matched ACL rule, or 0 when no rule stamped the packet.
+// Callers resolve the index back to a PolicyID through the ACL
+// manager's PolicyResolver interface.
+func MarkRuleIndex(fwmark uint32) uint32 {
+	return (fwmark & RuleIndexMask) >> RuleIndexShift
+}
+
+// ComposeRuleMark returns `base | (ruleIndex << RuleIndexShift)`,
+// clamping the index to MaxRuleIndex. Used by the firewall backends
+// to stamp rule_index onto a base mark when installing rules.
+func ComposeRuleMark(base uint32, ruleIndex uint32) uint32 {
+	if ruleIndex == 0 || ruleIndex > MaxRuleIndex {
+		return base
+	}
+	return (base & MarkValueMask) | (ruleIndex << RuleIndexShift)
 }
 
 // ConnectionID provides a globally unique identifier for network connections.
