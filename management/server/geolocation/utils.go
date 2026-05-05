@@ -150,10 +150,12 @@ func verifyChecksum(filepath, expectedChecksum string) error {
 }
 
 // downloadFile downloads a file from a URL and saves it to a local file path.
-func downloadFile(url, filepath string) error {
-	resp, err := http.Get(url)
+func downloadFile(rawURL, filepath string) error {
+	resp, err := http.Get(rawURL)
 	if err != nil {
-		return err
+		// http.Get errors stringify the URL — strip license_key
+		// before propagating so a debug log doesn't leak it.
+		return fmt.Errorf("GET %s: %w", redactURL(rawURL), err)
 	}
 	defer resp.Body.Close()
 
@@ -176,10 +178,12 @@ func downloadFile(url, filepath string) error {
 	return err
 }
 
-func getFilenameFromURL(url string) (string, error) {
-	resp, err := http.Head(url)
+func getFilenameFromURL(rawURL string) (string, error) {
+	resp, err := http.Head(rawURL)
 	if err != nil {
-		return "", err
+		// net.OpError, DNS errors, etc. may stringify the URL —
+		// don't propagate one with a license_key in it.
+		return "", fmt.Errorf("HEAD %s: %w", redactURL(rawURL), err)
 	}
 	defer resp.Body.Close()
 
@@ -191,12 +195,12 @@ func getFilenameFromURL(url string) (string, error) {
 	// startup. Caller handles the error by warning + continuing
 	// without geolocation support.
 	if resp.StatusCode/100 != 2 {
-		return "", fmt.Errorf("HEAD %s: %s", url, resp.Status)
+		return "", fmt.Errorf("HEAD %s: %s", redactURL(rawURL), resp.Status)
 	}
 
 	cd := resp.Header.Values("Content-Disposition")
 	if len(cd) == 0 {
-		return "", fmt.Errorf("HEAD %s: no Content-Disposition header", url)
+		return "", fmt.Errorf("HEAD %s: no Content-Disposition header", redactURL(rawURL))
 	}
 
 	_, params, err := mime.ParseMediaType(cd[0])
@@ -206,7 +210,7 @@ func getFilenameFromURL(url string) (string, error) {
 
 	filename := params["filename"]
 	if filename == "" {
-		return "", fmt.Errorf("HEAD %s: Content-Disposition has no filename param", url)
+		return "", fmt.Errorf("HEAD %s: Content-Disposition has no filename param", redactURL(rawURL))
 	}
 	return filename, nil
 }

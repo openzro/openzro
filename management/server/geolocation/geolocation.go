@@ -61,20 +61,20 @@ const (
 	geonamesdbPattern = "geonames_*.db"
 )
 
-func NewGeolocation(ctx context.Context, dataDir string, autoUpdate bool) (Geolocation, error) {
+func NewGeolocation(ctx context.Context, dataDir string, autoUpdate bool, src DownloadSource) (Geolocation, error) {
 	mmdbGlobPattern := filepath.Join(dataDir, mmdbPattern)
-	mmdbFile, err := getDatabaseFilename(ctx, geoLiteCityTarGZURL, mmdbGlobPattern, autoUpdate)
+	mmdbFile, err := getDatabaseFilename(ctx, src.MMDB(), mmdbGlobPattern, autoUpdate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get database filename: %v", err)
 	}
 
 	geonamesDbGlobPattern := filepath.Join(dataDir, geonamesdbPattern)
-	geonamesDbFile, err := getDatabaseFilename(ctx, geoLiteCityZipURL, geonamesDbGlobPattern, autoUpdate)
+	geonamesDbFile, err := getDatabaseFilename(ctx, src.CSV(), geonamesDbGlobPattern, autoUpdate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get database filename: %v", err)
 	}
 
-	if err := loadGeolocationDatabases(ctx, dataDir, mmdbFile, geonamesDbFile); err != nil {
+	if err := loadGeolocationDatabases(ctx, src, dataDir, mmdbFile, geonamesDbFile); err != nil {
 		return nil, fmt.Errorf("failed to load MaxMind databases: %v", err)
 	}
 
@@ -205,7 +205,9 @@ func getDatabaseFilename(ctx context.Context, databaseURL string, filenamePatter
 	if autoUpdate {
 		filename, err = getFilenameFromURL(databaseURL)
 		if err != nil {
-			log.WithContext(ctx).Debugf("Failed to update database from url: %s", databaseURL)
+			// databaseURL may carry a license_key query param when
+			// the operator chose MaxMind direct — never log it raw.
+			log.WithContext(ctx).Debugf("Failed to update database via %s: %v", redactURL(databaseURL), err)
 			return "", err
 		}
 	} else {
