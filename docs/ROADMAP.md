@@ -1,6 +1,6 @@
 # openZro Roadmap
 
-Snapshot taken 2026-04-27. Items are ordered by priority within each
+Snapshot taken 2026-05-05. Items are ordered by priority within each
 band; difficulty estimate is a rough engineering-week budget for one
 contributor (multiply by ~1.5 for review + integration polish).
 
@@ -20,13 +20,62 @@ know what's queued, not as a substitute for reading the code.
 
 ## P1 — Maintenance / security
 
-(Originally listed Next.js 14 → 15.5.15+ here; that bump landed
-2026-04-29 alongside the react-day-picker 8 → 9 upgrade — see
-the "Recently shipped" section below.)
+### ADR-0014 chaos validation in lab — 🟢
+
+The multi-pod relay fabric ([ADR-0014](adr/0014-coordinated-multi-pod-relay.md))
+landed in alpha.38 with full implementation, HMAC inter-pod auth, and
+metrics. **Phase 7 of the ADR (chaos test) hasn't run yet.** Pre-prod
+validation needs:
+
+- Pod kill mid-stream → assert peer reconnects sub-second, locator
+  caches recover via re-broadcast within 5 min cache TTL
+- Scale-up `replicaCount` 2 → 5 → assert new pods join the fabric
+  on next discovery tick (≤ 10 s) and start receiving FWD frames
+- Network partition between pod-pair → assert HELLO replay window
+  catches stale streams; `relay_cluster_hello_rejects_total{reason="stale_timestamp"}`
+  bumps; recovery on heal
+
+Run on the lab cluster; fail conditions block the move from alpha → beta
+on the chart. ~1 day of work.
+
+### Inter-pod keepalive (PING/PONG loop) — 🟢
+
+Frame types `MsgPing` (`0x20`) and `MsgPong` (`0x21`) are defined in
+[`relay/server/cluster/frame.go`](../relay/server/cluster/frame.go)
+but no goroutine emits them today. Long-lived inter-pod TCP streams
+behind a stateful firewall can go zombie until the next write fails
+— a 30 s keepalive loop on the transport closes that gap and lets us
+detect partitions earlier than the kernel's 2h TCP keepalive default.
+
+Wires into the existing `relay_cluster_pings_{sent,lost}_total`
+metrics (already declared, no consumers yet). ~2 hours of work.
 
 ---
 
 ## P2 — Coverage / scale
+
+### Ansible `openzro_routing_peer` role — 🟢
+
+The K8s path for routing peers / exit nodes is solved via the
+operator's `OZRoutingPeer` CRD. Bare-metal / VM operators have no
+equivalent — they install the binary by hand and `openzro up`
+manually. Mirror the existing `openzro_management` /
+`openzro_signal` / `openzro_relay` roles in
+[openzro/openzro-ansible](https://github.com/openzro/openzro-ansible)
+with a fourth role:
+
+- Per-host idempotent enrollment via setup key (Ansible Vault var)
+- Marker file (`/var/lib/openzro/.enrolled`) to skip re-enroll on
+  re-runs
+- systemd unit + drop-in for routes
+- Per-component playbooks (`relay-only.yml`, `peer-gateway-only.yml`,
+  `control-plane.yml`, `full.yml`) so operators can pick what to
+  install
+- Pre-flight check that management API is reachable before
+  attempting enrollment
+
+Pair with chart docs (already updated) that point operators at the
+operator path for K8s and Ansible for bare-metal. ~1 day of work.
 
 ### Tanium posture provider — 🟢
 
@@ -259,6 +308,24 @@ See the corresponding entry under P3.
 For context — these were on the gap list at one point and are now
 done. Skip these when picking up tasks.
 
+- **Coordinated multi-pod relay** ([ADR-0014](adr/0014-coordinated-multi-pod-relay.md))
+  — landed in `v0.53.1-alpha.38`. Inter-pod TCP fabric, broadcast-on-miss
+  peer locator with 5min cache, K8s Headless Service discovery,
+  HMAC-SHA256 authenticated HELLO frames, full `relay_cluster_*`
+  metric set. Chart auto-enables at `relay.replicaCount > 1`
+  (chart `2.1.0-alpha.11`). Phase 7 chaos test pending — see P1.
+- **Flow event policy correlation on Linux nftables**
+  ([ADR-0013](adr/0013-flow-policy-correlation.md)) — peers using
+  the kernel firewall now stamp the policy ID into ct mark via a
+  bit-split layout; conntrack reader resolves it back to the
+  PolicyID in flow events. Dashboard's traffic events list now
+  shows "Policy default allowed the connection" instead of empty.
+- **MaxMind GeoLite2 auto-update + license-key opt-in** —
+  `--disable-geolite-update` default flipped to `false`, fresh
+  installs populate the country/city posture-check dropdowns
+  without operator action. New `--maxmind-license-key` for
+  operators who prefer fetching directly from MaxMind instead of
+  the openZro mirror.
 - **Next.js 14.2.28 → 15.5.15+** (closes
   [GHSA-q4gf-8mx6-v5v3](https://github.com/advisories/GHSA-q4gf-8mx6-v5v3),
   [GHSA-h25m-26qc-wcjf](https://github.com/advisories/GHSA-h25m-26qc-wcjf),
@@ -267,8 +334,11 @@ done. Skip these when picking up tasks.
   for v9 API. See `dashboard/package.json` and the
   `fix(dashboard): audit page works on Next 15` commit.
 - **Helm chart + K8s operator** ([ADR-0008](adr/0008-kubernetes-helm-operator.md)):
-  `openzro-2.0.0-alpha.3` published at https://openzro.github.io/helms,
+  `openzro-2.1.0-alpha.11` published at https://openzro.github.io/helms,
   operator image at `ghcr.io/openzro/openzro-operator:0.3.2-alpha.1`.
+  Chart now ships HA modes (`cluster.mode: embedded|external|disabled`),
+  multi-pod relay (ADR-0014), MaxMind license-key wiring, and
+  postgres / mysql auto-wiring with restricted-grant provisioning Job.
 - **Native installers** ([ADR-0007](adr/0007-client-packaging.md)
   Phase 1): unsigned Windows MSI (WiX 4) + macOS PKG (pkgbuild) +
   Homebrew tap on every tag push. Linux apt/yum repos at
