@@ -64,8 +64,8 @@ func startPair(t *testing.T, ownsA, ownsB []messages.PeerID) (*PeerLocator, *Pee
 	ownerA := newFakeOwner(ownsA...)
 	ownerB := newFakeOwner(ownsB...)
 
-	transA := NewTransport("127.0.0.1:0", nil)
-	transB := NewTransport("127.0.0.1:0", nil)
+	transA := NewTransport("127.0.0.1:0", "", nil)
+	transB := NewTransport("127.0.0.1:0", "", nil)
 
 	locA := NewPeerLocator(transA, ownerA)
 	locB := NewPeerLocator(transB, ownerB)
@@ -81,19 +81,18 @@ func startPair(t *testing.T, ownsA, ownsB []messages.PeerID) (*PeerLocator, *Pee
 	addrA := transA.listener.Addr().String()
 	addrB := transB.listener.Addr().String()
 
-	// Unidirectional dial: A → B only. The single TCP connection
-	// is bidirectional at the application layer (B replies I_HAVE
-	// over the same stream it received WHO_HAS on), so locA's
-	// cache learns the correct addrB. Symmetric dialing would
-	// create two TCP conns between the pair, with each side's
-	// accepted-side keyed by the dialer's ephemeral source port —
-	// the locator would then cache that ephemeral port, which is
-	// useless for any later forwarding request. The proper fix
-	// (HELLO exchange + listen-addr keying) lands in phase 3
-	// alongside the K8s Headless-Service discovery layer; for now
-	// the test mirrors the steady-state production shape: each
-	// pod-pair has one TCP connection, regardless of who dialed.
+	// Symmetric dial: each pod dials the other. Without the HELLO
+	// exchange this would produce two TCP conns between the pair,
+	// each accepted side keyed by an ephemeral source port that
+	// the locator can't dial back to. With HELLO (phase 3) the
+	// accepted side keys its stream by the dialer's announced
+	// listen address, so both sides end up with one logical entry
+	// keyed by the OTHER pod's listen address — and the dedup
+	// inside Dial / handleAccepted collapses any racing duplicate
+	// connection.
 	_, err := transA.Dial(context.Background(), addrB)
+	require.NoError(t, err)
+	_, err = transB.Dial(context.Background(), addrA)
 	require.NoError(t, err)
 
 	return locA, locB, addrA, addrB
@@ -145,7 +144,7 @@ func TestLocator_LookupNoOwner(t *testing.T) {
 
 func TestLocator_LookupNoPeerPodsFailsFast(t *testing.T) {
 	loc := NewPeerLocator(
-		NewTransport("127.0.0.1:0", nil),
+		NewTransport("127.0.0.1:0", "", nil),
 		newFakeOwner(),
 	)
 	require.NoError(t, loc.transport.ListenAndServe(context.Background()))
@@ -175,7 +174,7 @@ func TestLocator_HigherSeqnoWinsRace(t *testing.T) {
 	// pod, then handle an I_HAVE with a higher seqno from another
 	// pod. The cache must update.
 	loc := NewPeerLocator(
-		NewTransport("127.0.0.1:0", nil),
+		NewTransport("127.0.0.1:0", "", nil),
 		newFakeOwner(),
 	)
 	peer := newPeerID(0x33)
@@ -191,7 +190,7 @@ func TestLocator_HigherSeqnoWinsRace(t *testing.T) {
 
 func TestLocator_LowerSeqnoIgnored(t *testing.T) {
 	loc := NewPeerLocator(
-		NewTransport("127.0.0.1:0", nil),
+		NewTransport("127.0.0.1:0", "", nil),
 		newFakeOwner(),
 	)
 	peer := newPeerID(0x33)
@@ -207,7 +206,7 @@ func TestLocator_LowerSeqnoIgnored(t *testing.T) {
 
 func TestLocator_StaleCacheEntryIsLazilyEvicted(t *testing.T) {
 	loc := NewPeerLocator(
-		NewTransport("127.0.0.1:0", nil),
+		NewTransport("127.0.0.1:0", "", nil),
 		newFakeOwner(),
 	)
 	now := time.Now()

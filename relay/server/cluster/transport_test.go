@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"net"
 	"sync"
 	"testing"
 	"time"
@@ -75,7 +76,7 @@ func (h *captureHandler) snapshot() []capturedFrame {
 // + the address it bound to. t.Cleanup tears it down.
 func startTransport(t *testing.T, h FrameHandler) (*Transport, string) {
 	t.Helper()
-	tr := NewTransport("127.0.0.1:0", h)
+	tr := NewTransport("127.0.0.1:0", "", h)
 	require.NoError(t, tr.ListenAndServe(context.Background()))
 	addr := tr.listener.Addr().String()
 	t.Cleanup(tr.Stop)
@@ -119,7 +120,7 @@ func TestTransport_DialIsIdempotent(t *testing.T) {
 
 func TestTransport_StopClosesEverything(t *testing.T) {
 	_, srvAddr := startTransport(t, newCaptureHandler())
-	clientTr := NewTransport("127.0.0.1:0", newCaptureHandler())
+	clientTr := NewTransport("127.0.0.1:0", "", newCaptureHandler())
 	require.NoError(t, clientTr.ListenAndServe(context.Background()))
 
 	stream, err := clientTr.Dial(context.Background(), srvAddr)
@@ -136,6 +137,67 @@ func TestTransport_StopClosesEverything(t *testing.T) {
 func TestTransport_StreamReturnsNilWhenAbsent(t *testing.T) {
 	tr, _ := startTransport(t, newCaptureHandler())
 	require.Nil(t, tr.Stream("127.0.0.1:0"))
+}
+
+func TestTransport_HelloKeyingMakesBidirectionalDialCollapse(t *testing.T) {
+	// Two pods symmetrically dial each other. With HELLO, both
+	// streams are keyed by the OTHER pod's listen address — and
+	// the connection-dedup inside handleAccepted / Dial collapses
+	// any racing duplicate connection. End state: exactly one
+	// stream entry on each side, keyed correctly.
+	hA := newCaptureHandler()
+	hB := newCaptureHandler()
+	tA, addrA := startTransport(t, hA)
+	tB, addrB := startTransport(t, hB)
+
+	_, err := tA.Dial(context.Background(), addrB)
+	require.NoError(t, err)
+	_, err = tB.Dial(context.Background(), addrA)
+	require.NoError(t, err)
+
+	// Give the accept side a moment to read HELLO and register.
+	require.Eventually(t, func() bool {
+		return tA.Stream(addrB) != nil && tB.Stream(addrA) != nil
+	}, 2*time.Second, 5*time.Millisecond)
+
+	require.Len(t, tA.Streams(), 1, "A must have exactly one stream after dedup")
+	require.Len(t, tB.Streams(), 1, "B must have exactly one stream after dedup")
+	require.NotNil(t, tA.Stream(addrB), "A's stream must be keyed by B's announced listen address")
+	require.NotNil(t, tB.Stream(addrA), "B's stream must be keyed by A's announced listen address")
+}
+
+func TestTransport_AcceptedConnWithoutHelloIsDropped(t *testing.T) {
+	srvHandler := newCaptureHandler()
+	srv, addr := startTransport(t, srvHandler)
+
+	conn, err := net.Dial("tcp", addr)
+	require.NoError(t, err)
+	defer func() { _ = conn.Close() }()
+
+	// Send a non-HELLO frame as the first thing. Acceptor must
+	// drop the conn instead of registering it.
+	require.NoError(t, WriteFrame(conn, MsgWhoHas, make([]byte, peerIDSize)))
+
+	require.Eventually(t, func() bool {
+		return len(srv.Streams()) == 0
+	}, 2*time.Second, 5*time.Millisecond,
+		"transport must reject conns whose first frame is not HELLO")
+}
+
+func TestTransport_AcceptedConnWithoutHelloTimesOut(t *testing.T) {
+	// A dialer that opens the conn and never sends anything must
+	// be reaped by the helloTimeout, not held forever.
+	srvHandler := newCaptureHandler()
+	srv, addr := startTransport(t, srvHandler)
+
+	conn, err := net.Dial("tcp", addr)
+	require.NoError(t, err)
+	defer func() { _ = conn.Close() }()
+
+	// Wait past the hello timeout and then some.
+	time.Sleep(helloTimeout + 200*time.Millisecond)
+	require.Empty(t, srv.Streams(),
+		"silent dialers must time out — half-open conns can't accumulate")
 }
 
 func TestStream_SendAfterCloseRejects(t *testing.T) {
