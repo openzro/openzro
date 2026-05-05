@@ -41,7 +41,7 @@ export const SelectDropdownSearchInput = forwardRef<HTMLInputElement, Props>(
         <div className={"absolute right-0 top-0 h-full flex items-center pr-4"}>
           <div
             className={
-              "flex items-center bg-nb-gray-800 py-1 px-1.5 rounded-[4px] border border-nb-gray-500"
+              "flex items-center py-1 px-1.5 rounded-[4px] bg-nb-gray-940 dark:bg-nb-gray-800 border border-nb-gray-925 dark:border-nb-gray-500 text-nb-gray-500 dark:text-nb-gray-200"
             }
           >
             <IconArrowBack size={10} />
