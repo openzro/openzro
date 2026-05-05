@@ -8,6 +8,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/metric"
 
 	"github.com/openzro/openzro/relay/server/cluster"
 	"github.com/openzro/openzro/relay/server/store"
@@ -23,6 +24,7 @@ type ClusterBootstrap struct {
 	Locator   *cluster.PeerLocator
 	Forwarder *cluster.Forwarder
 	Discovery *cluster.Discovery
+	Metrics   *cluster.Metrics
 }
 
 // ClusterBootstrapConfig is what the relay command needs to know
@@ -50,6 +52,12 @@ type ClusterBootstrapConfig struct {
 	// only safe behind a NetworkPolicy that limits the cluster
 	// port to relay pods. Logs a loud warning when empty.
 	AuthSecret string
+
+	// Meter, when non-nil, drives the relay_cluster_* metric set
+	// (forwards by outcome, lookup latency, HELLO rejects by
+	// reason, live stream count). Pass the same meter the rest of
+	// the relay uses; nil keeps the cluster components silent.
+	Meter metric.Meter
 
 	// Interval is the discovery reconcile period. Defaults to
 	// cluster.DefaultDiscoveryInterval (10 s) when zero.
@@ -103,12 +111,24 @@ func StartCluster(ctx context.Context, st *store.Store, cfg ClusterBootstrapConf
 			"Restrict the inter-pod port via NetworkPolicy or set OZ_CLUSTER_AUTH_SECRET.")
 	}
 
+	var metrics *cluster.Metrics
+	if cfg.Meter != nil {
+		m, err := cluster.NewMetrics(cfg.Meter)
+		if err != nil {
+			return nil, fmt.Errorf("cluster bootstrap: metrics: %w", err)
+		}
+		metrics = m
+		transport.SetMetrics(metrics)
+	}
+
 	dispatcher := NewLocalPeerDispatcher(st)
 	locator := cluster.NewPeerLocator(transport, dispatcher)
+	locator.SetMetrics(metrics)
 	forwarder, err := cluster.NewForwarder(transport, locator, dispatcher)
 	if err != nil {
 		return nil, fmt.Errorf("cluster bootstrap: forwarder: %w", err)
 	}
+	forwarder.SetMetrics(metrics)
 
 	transport.SetHandler(&clusterFrameRouter{loc: locator, fwd: forwarder})
 
@@ -133,13 +153,15 @@ func StartCluster(ctx context.Context, st *store.Store, cfg ClusterBootstrapConf
 		Locator:   locator,
 		Forwarder: forwarder,
 		Discovery: disc,
+		Metrics:   metrics,
 	}, nil
 }
 
 // Stop tears down the cluster machinery in reverse construction
 // order: stop discovery (no new outbound dials), then stop the
-// transport (which closes every live stream and the listener).
-// Safe on a nil receiver and idempotent.
+// transport (which closes every live stream and the listener),
+// then unregister the metrics gauge callback. Safe on a nil
+// receiver and idempotent.
 func (cb *ClusterBootstrap) Stop() {
 	if cb == nil {
 		return
@@ -149,6 +171,9 @@ func (cb *ClusterBootstrap) Stop() {
 	}
 	if cb.Transport != nil {
 		cb.Transport.Stop()
+	}
+	if cb.Metrics != nil {
+		_ = cb.Metrics.Close()
 	}
 }
 

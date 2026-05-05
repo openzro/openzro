@@ -49,6 +49,14 @@ type Forwarder struct {
 	transport *Transport
 	locator   *PeerLocator
 	local     LocalDispatcher
+	metrics   *Metrics
+}
+
+// SetMetrics installs the cluster metrics handle. Passing nil
+// disables instrumentation; the *Metrics lifetime is owned by the
+// caller.
+func (f *Forwarder) SetMetrics(m *Metrics) {
+	f.metrics = m
 }
 
 // NewForwarder wires a forwarder against a transport, a peer
@@ -77,7 +85,13 @@ func NewForwarder(transport *Transport, locator *PeerLocator, local LocalDispatc
 // peer (the caller should drop the packet, same as today).
 func (f *Forwarder) Forward(ctx context.Context, dst messages.PeerID, msg []byte) error {
 	if f.local.HasPeer(dst) {
-		return f.local.DispatchToLocal(dst, msg)
+		err := f.local.DispatchToLocal(dst, msg)
+		if err == nil {
+			f.metrics.IncForward(ctx, ForwardResultOK)
+		} else {
+			f.metrics.IncForward(ctx, ForwardResultSendError)
+		}
+		return err
 	}
 
 	pod, ok, err := f.locator.Lookup(ctx, dst)
@@ -88,11 +102,13 @@ func (f *Forwarder) Forward(ctx context.Context, dst messages.PeerID, msg []byte
 		// same thing — drop the packet. Translate to a single
 		// forwarder-level sentinel so peer.go's transport
 		// handler can branch cleanly.
+		f.metrics.IncForward(ctx, ForwardResultPeerNotFound)
 		return ErrPeerNotFound
 	}
 	if err != nil {
 		// !ok is false but err is set — shouldn't happen with
 		// the current locator, but guard anyway.
+		f.metrics.IncForward(ctx, ForwardResultSendError)
 		return err
 	}
 
@@ -103,6 +119,7 @@ func (f *Forwarder) Forward(ctx context.Context, dst messages.PeerID, msg []byte
 		// finished its HELLO handshake. Invalidate and let the
 		// next packet's Lookup re-broadcast.
 		f.locator.Invalidate(dst)
+		f.metrics.IncForward(ctx, ForwardResultStreamGone)
 		return ErrPeerNotFound
 	}
 
@@ -114,8 +131,10 @@ func (f *Forwarder) Forward(ctx context.Context, dst messages.PeerID, msg []byte
 		// re-broadcasts. The packet itself is lost (we don't
 		// retry — relay is best-effort by design).
 		f.locator.Invalidate(dst)
+		f.metrics.IncForward(ctx, ForwardResultSendError)
 		return fmt.Errorf("cluster forwarder: send to %s: %w", pod, err)
 	}
+	f.metrics.IncForward(ctx, ForwardResultOK)
 	return nil
 }
 

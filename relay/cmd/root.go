@@ -180,6 +180,7 @@ func execute(cmd *cobra.Command, args []string) error {
 			Port:       cobraConfig.ClusterPort,
 			PodIP:      cobraConfig.PodIP,
 			AuthSecret: cobraConfig.ClusterAuthSecret,
+			Meter:      metricsServer.Meter,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to start relay cluster fabric: %w", err)

@@ -65,7 +65,8 @@ type PeerLocator struct {
 	waitersMu sync.Mutex
 	waiters   map[messages.PeerID]*locatorWait
 
-	clock func() time.Time
+	clock   func() time.Time
+	metrics *Metrics
 }
 
 type locatorEntry struct {
@@ -95,6 +96,13 @@ func NewPeerLocator(transport *Transport, local LocalOwnership) *PeerLocator {
 	}
 }
 
+// SetMetrics installs the cluster metrics handle. Safe to call
+// before any Lookup; passing nil disables instrumentation. The
+// caller owns the *Metrics lifetime.
+func (pl *PeerLocator) SetMetrics(m *Metrics) {
+	pl.metrics = m
+}
+
 // LocalSeqno bumps and returns the locator's own sequence number.
 // This pod stamps every I_HAVE answer with this value, so when two
 // pods briefly claim the same peer (peer migration race) the asker
@@ -111,6 +119,11 @@ func (pl *PeerLocator) LocalSeqno() uint32 {
 // Cache hits return immediately; misses broadcast WHO_HAS and
 // wait for I_HAVE answers.
 func (pl *PeerLocator) Lookup(ctx context.Context, peer messages.PeerID) (string, bool, error) {
+	start := pl.clock()
+	defer func() {
+		pl.metrics.ObserveLookup(ctx, pl.clock().Sub(start).Seconds())
+	}()
+
 	// Cache fast-path. Stale entries are silently dropped here so
 	// a Lookup after expiry behaves like a fresh miss.
 	if pod, ok := pl.cacheGet(peer); ok {

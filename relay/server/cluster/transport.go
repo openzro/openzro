@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -118,6 +119,29 @@ func (s *Stream) readLoop(handler FrameHandler) {
 // startup without enabling a long-tail DoS via half-open conns.
 const helloTimeout = 3 * time.Second
 
+// classifyHelloReject maps a DecodeHello failure to a metric label.
+// Pattern-matching on the error text keeps the cluster package
+// decoupled from messages.go's error sentinels — adding a new
+// reject reason is a one-line case here.
+func classifyHelloReject(err error) HelloRejectReason {
+	if err == nil {
+		return HelloRejectMalformed
+	}
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "hmac mismatch"):
+		return HelloRejectHMAC
+	case strings.Contains(msg, "requires auth"):
+		return HelloRejectUnsigned
+	case strings.Contains(msg, "asymmetric"):
+		return HelloRejectAsymmetric
+	case strings.Contains(msg, "timestamp out of window"):
+		return HelloRejectStale
+	default:
+		return HelloRejectMalformed
+	}
+}
+
 // Transport owns the inter-pod TCP fabric of one relay pod. It
 // listens for inbound connections from other pods and tracks
 // outbound streams to remote pods. Streams are keyed by the
@@ -148,6 +172,7 @@ type Transport struct {
 
 	dialer  net.Dialer
 	handler FrameHandler
+	metrics *Metrics
 
 	listener net.Listener
 
@@ -197,6 +222,27 @@ func (t *Transport) SetHandler(h FrameHandler) {
 // after the call.
 func (t *Transport) SetAuthSecret(secret []byte) {
 	t.authSecret = secret
+}
+
+// SetMetrics installs the cluster metrics handle and wires the
+// streams gauge to this transport's live stream count. Must be
+// called before ListenAndServe; passing nil disables
+// instrumentation. The *Metrics lifetime is owned by the caller.
+func (t *Transport) SetMetrics(m *Metrics) {
+	t.metrics = m
+	if m != nil {
+		m.SetStreamSource(func() int {
+			t.streamsMu.RLock()
+			defer t.streamsMu.RUnlock()
+			n := 0
+			for _, s := range t.streams {
+				if !s.closed.Load() {
+					n++
+				}
+			}
+			return n
+		})
+	}
 }
 
 // ListenAndServe binds the listener and accepts inbound pod
@@ -384,17 +430,20 @@ func (t *Transport) handleAccepted(ctx context.Context, conn net.Conn) {
 	_ = conn.SetReadDeadline(time.Time{}) // back to no deadline for the steady stream
 	if err != nil {
 		log.Warnf("cluster: accept from %s: read HELLO: %v", conn.RemoteAddr(), err)
+		t.metrics.IncHelloReject(ctx, HelloRejectTimeout)
 		_ = conn.Close()
 		return
 	}
 	if msgType != MsgHello {
 		log.Warnf("cluster: accept from %s: first frame was %s, expected HELLO; dropping", conn.RemoteAddr(), msgType)
+		t.metrics.IncHelloReject(ctx, HelloRejectWrongFirst)
 		_ = conn.Close()
 		return
 	}
 	announced, err := DecodeHello(payload, t.authSecret, time.Now())
 	if err != nil {
 		log.Warnf("cluster: accept from %s: rejecting HELLO: %v", conn.RemoteAddr(), err)
+		t.metrics.IncHelloReject(ctx, classifyHelloReject(err))
 		_ = conn.Close()
 		return
 	}
