@@ -76,6 +76,16 @@ const (
 	// Payload: uint32 channel_id (4).
 	MsgClose MsgType = 0x13
 
+	// MsgFwd carries an entire relay transport message that needs
+	// to be delivered to a peer connected to a different pod. The
+	// payload is the bytes the originating pod would have written
+	// to the local peer — destination peer ID is embedded in the
+	// transport msg header, so the receiving pod just unmarshals
+	// the dst id, looks it up locally, and forwards. Stateless;
+	// every packet is independently routed and there's no
+	// per-(src, dst) channel to keep alive.
+	MsgFwd MsgType = 0x14
+
 	// MsgPing / MsgPong keep the long-lived TCP stream warm and
 	// detect partitions earlier than the kernel TCP keepalive
 	// would. Empty payload.
@@ -108,6 +118,8 @@ func (t MsgType) String() string {
 		return "DATA"
 	case MsgClose:
 		return "CLOSE"
+	case MsgFwd:
+		return "FWD"
 	case MsgPing:
 		return "PING"
 	case MsgPong:
