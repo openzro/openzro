@@ -22,6 +22,12 @@ type Config struct {
 	TLSSupport     bool
 	AuthValidator  Validator
 
+	// CrossPodForwarder, when non-nil, hands transport messages
+	// destined to peers not connected to this pod to the cluster
+	// fabric (per ADR-0014). Leave nil for single-pod deployments
+	// — the relay then drops on local-store miss, same as before.
+	CrossPodForwarder CrossPodForwarder
+
 	instanceURL string
 }
 
@@ -56,8 +62,18 @@ type Relay struct {
 	instanceURL string
 	preparedMsg *preparedMsg
 
+	crossPodFwd CrossPodForwarder
+
 	closed  bool
 	closeMu sync.RWMutex
+}
+
+// Store exposes the relay's peer store so a caller wiring up the
+// cluster fabric can hand it to NewLocalPeerDispatcher. There's no
+// unrestricted mutation surface here — Store's API only lets callers
+// look peers up; AddPeer/DeletePeer are driven by the relay itself.
+func (r *Relay) Store() *store.Store {
+	return r.store
 }
 
 // NewRelay creates and returns a new Relay instance.
@@ -93,6 +109,7 @@ func NewRelay(config Config) (*Relay, error) {
 		instanceURL:   config.instanceURL,
 		store:         store.NewStore(),
 		notifier:      store.NewPeerNotifier(),
+		crossPodFwd:   config.CrossPodForwarder,
 	}
 
 	r.preparedMsg, err = newPreparedMsg(r.instanceURL)
@@ -127,7 +144,7 @@ func (r *Relay) Accept(conn net.Conn) {
 		return
 	}
 
-	peer := NewPeer(r.metrics, *peerID, conn, r.store, r.notifier)
+	peer := NewPeer(r.metrics, *peerID, conn, r.store, r.notifier, r.crossPodFwd)
 	peer.log.Infof("peer connected from: %s", conn.RemoteAddr())
 	storeTime := time.Now()
 	if isReconnection := r.store.AddPeer(peer); isReconnection {
