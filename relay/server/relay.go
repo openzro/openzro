@@ -76,6 +76,16 @@ func (r *Relay) Store() *store.Store {
 	return r.store
 }
 
+// SetCrossPodForwarder installs a CrossPodForwarder for ADR-0014.
+// Must be called before peer connections start arriving (i.e.
+// before Listen). New peers accepted after this call route through
+// the cluster fabric on local-store miss; existing peers (none, in
+// the bootstrap-time use case) keep whatever forwarder was set
+// when they were created.
+func (r *Relay) SetCrossPodForwarder(f CrossPodForwarder) {
+	r.crossPodFwd = f
+}
+
 // NewRelay creates and returns a new Relay instance.
 //
 // Parameters:
