@@ -6,13 +6,13 @@ relay, embedded Dex IdP, and (optionally) the openZro
 Kubernetes operator that reconciles peers / groups / policies / setup
 keys / network resources from CRDs.
 
-**Current versions** (as of 2026-04-29):
+**Current versions** (as of 2026-05-05):
 
 | Artifact | Version | Source |
 |---|---|---|
-| Helm chart `openzro` | `2.0.0-alpha.3` (appVersion `0.53.1-alpha.1`) | https://openzro.github.io/helms |
+| Helm chart `openzro` | `2.1.0-alpha.11` (appVersion `0.53.1-alpha.38`) | https://openzro.github.io/helms |
 | Helm chart `openzro-operator` | `0.3.2-alpha.1` | same repo |
-| Container images | `0.53.1-alpha.1` (core) / `0.3.2-alpha.1` (operator) | `ghcr.io/openzro/{management,signal,relay,dashboard,openzro-operator}` |
+| Container images | `0.53.1-alpha.38` (core) / `0.3.2-alpha.1` (operator) | `ghcr.io/openzro/{management,signal,relay,dashboard,openzro-operator}` |
 
 For the architectural decisions behind this layout, see
 [ADR-0008](../adr/0008-kubernetes-helm-operator.md). For the IdP
@@ -80,7 +80,7 @@ helm repo update
 **OCI registry (modern):**
 ```bash
 # No `helm repo add` needed — install directly from OCI
-helm install --version 2.0.0-alpha.1 \
+helm install --version 2.1.0-alpha.11 \
   openzro oci://ghcr.io/openzro/charts/openzro
 ```
 
@@ -206,6 +206,132 @@ management REST, relay) and GRPCRoute for the gRPC services
 chart, set `gatewayApi.createGateway: false` and provide
 `gatewayApi.parentRefs`.
 
+## Optional: high availability (multi-replica)
+
+The chart's defaults run one replica of each component — fine for
+small teams and labs. Two HA paths are wired in:
+
+### Management + signal
+
+These two share the same broker mode toggle (`cluster.mode`):
+
+```yaml
+cluster:
+  mode: embedded   # each pod runs its own NATS+JetStream cluster
+  embedded:
+    clientPort: 4222
+    clusterPort: 6222
+
+management:
+  replicaCount: 3
+signal:
+  replicaCount: 3
+```
+
+In `embedded` mode the chart switches both deployments to
+`StatefulSet`, renders a Headless Service that anchors per-pod DNS
+names, and wires NATS routes via `OPENZRO_CLUSTER_PEERS` so the
+embedded brokers gossip between siblings — see
+[ADR-0009](../adr/0009-bare-metal-ansible-and-ha.md) for the
+broker mode rationale.
+
+If you already operate NATS at a known endpoint, point at it:
+
+```yaml
+cluster:
+  mode: external
+  external:
+    url: nats://my-nats.svc.cluster.local:4222
+```
+
+### Relay (multi-pod fabric, ADR-0014)
+
+The relay has its own multi-pod fabric independent of `cluster.mode`.
+At `relay.replicaCount > 1` the chart auto-wires:
+
+- A Headless Service (`<release>-relay-internal`) that resolves to
+  every relay pod's IP (used for inter-pod discovery)
+- A second container port (`relay.cluster.port`, default `7090`)
+  for the inter-pod TCP fabric
+- Downward API env vars (`POD_IP`, `POD_NAME`)
+- An HMAC-SHA256 secret (auto-generated on first install, preserved
+  across upgrades) that authenticates inter-pod HELLO frames
+
+```yaml
+relay:
+  replicaCount: 3
+  cluster:
+    enabled: true        # null (default) = auto when replicaCount > 1
+    port: 7090
+    authSecret:
+      value: ""              # leave empty for chart auto-gen
+      # value: "your-32-char-secret"        # OR pin a literal
+      # existingSecret: "my-relay-secret"   # OR point at your own
+```
+
+Operators with strict pod-to-pod NetworkPolicy must allow TCP/7090
+between pods labeled `app.kubernetes.io/name: openzro-relay`. The
+HMAC gate authenticates HELLO either way — NetworkPolicy is
+defense-in-depth, not the primary trust boundary.
+
+See [ADR-0014](../adr/0014-coordinated-multi-pod-relay.md) for the
+full design (broadcast-on-miss locator, single-pod bypass, HELLO
+handshake) and the trade-offs against alternatives like
+state-replication (pfsync-style) or external coordination.
+
+## Optional: geolocation database (MaxMind GeoLite2)
+
+The dashboard's geolocation posture-check populates from a GeoLite2
+database the management binary fetches on cold boot. By default it
+pulls from the openZro mirror (`pkg.openzro.io`) — zero operator
+config:
+
+```yaml
+# default — leave geoLite empty and country/city dropdowns just work
+```
+
+For first-party-only egress (or to fetch at MaxMind's freshness
+cadence), provide a free MaxMind license key:
+
+```yaml
+management:
+  geoLite:
+    licenseKey:
+      value: "abc123-your-key"             # OR
+      # existingSecret: "my-mm-secret"     # ...point at your own
+      # existingSecretKey: "licenseKey"    # ...with this key name
+```
+
+Get the free key at [maxmind.com/en/geolite2/signup](https://www.maxmind.com/en/geolite2/signup).
+Air-gapped installs stage their own `GeoLite2-City_<date>.mmdb` in
+the management `datadir` and pass `--disable-geolite-update=true`
+via `management.extraArgs`.
+
+## Optional: external database (postgres / mysql)
+
+The chart auto-wires the management daemon, flow store, and activity
+event store against PostgreSQL or MySQL when either subchart is
+enabled. Each store gets its own database + dedicated user with
+restricted grants, provisioned by a pre-install Helm hook:
+
+```yaml
+postgres:
+  enabled: true
+  username: openzro
+  password: change-me-in-production
+
+# OR
+
+mysql:
+  enabled: true
+  rootPassword: change-me-in-production
+```
+
+Skip the auto-wiring entirely by leaving both `enabled: false` and
+configuring DSNs manually via `management.envFromSecret`. See the
+chart [`values.yaml`](https://github.com/openzro/helms/blob/main/charts/openzro/values.yaml)
+for the full set of knobs.
+
 ## Optional: install the operator
 
 The operator reconciles openZro's domain objects (groups, policies,
@@ -256,17 +382,20 @@ repo's `examples/` directory for full manifests.
 
 ### CRD support tier — known limitations
 
-At the time of this writing (2026-04-28):
+At the time of this writing (2026-05-05):
 
-- **Native CRDs** (OZGroup, OZPolicy, OZSetupKey, OZRoutingPeer)
+- **Native CRDs** (`OZGroup`, `OZPolicy`, `OZSetupKey`, `OZRoutingPeer`)
   reconcile against the openZro management server end-to-end.
-- **NetworkResource** + **HTTPRoute** controllers (which provision
-  DNS zones / records and reverse-proxy services) reach the
-  management server but receive 404 because the **server-side
+  `OZRoutingPeer` provisions the gateway pod, materializes the
+  setup-key Secret, and runs the openZro client binary in `up`
+  mode — see the operator's [`examples/`](https://github.com/openzro/openzro-operator/tree/main/examples).
+- **`OZNetworkResource`** + **`OZHTTPRoute`** controllers (which
+  provision DNS zones / records and reverse-proxy services) reach
+  the management server but receive 404 because the **server-side
   handlers haven't shipped yet** — they're tracked under
   [ADR-0008 Stage 3](../adr/0008-kubernetes-helm-operator.md#stage-3--server-side-handlers-for-dns-zones--reverse-proxy-services).
-  The CRDs themselves apply cleanly; reconciliation will
-  start succeeding once that work lands.
+  The CRDs themselves apply cleanly; reconciliation will start
+  succeeding once that work lands.
 
 ## Upgrades
 
