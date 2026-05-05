@@ -2,8 +2,17 @@
 
 ## Status
 
-**Proposed**, implementation deferred. Reopen and implement when one
-of the trigger conditions in [§9](#9-trigger-conditions) is met.
+**Accepted**, implementation landed across `relay/server/cluster/`,
+`relay/server/clusterboot.go`, `relay/cmd/root.go`, and the
+[openzro/helms](https://github.com/openzro/helms) chart at
+`2.1.0-alpha.8`. Lab chaos validation (pod kill mid-stream,
+scale-up, partition) remains as a follow-up before the chart leaves
+the alpha line.
+
+Single-pod deployments are unaffected — `--cluster-headless` is
+opt-in, and the chart only renders the new Headless Service +
+downward-API env vars when `relay.replicaCount > 1` (or the
+operator sets `relay.cluster.enabled: true` explicitly).
 
 ## Context
 
