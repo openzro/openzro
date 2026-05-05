@@ -17,7 +17,7 @@ export const RadioGroup = ({ value, onChange, children }: Props) => {
       value={value}
       onValueChange={onChange}
       className={
-        "flex bg-nb-gray-900 rounded-md  border border-nb-gray-700 text-sm items-center justify-center p-1"
+        "flex bg-nb-gray-940 dark:bg-nb-gray-900 rounded-md border border-nb-gray-925 dark:border-nb-gray-700 text-sm items-center justify-center p-1"
       }
     >
       {children}
@@ -29,7 +29,11 @@ export const RadioGroupItems = ({
 }: {
   children: React.ReactNode;
 }) => {
-  return <div className={"flex w-full  bg-nb-gray-900"}>{children}</div>;
+  return (
+    <div className={"flex w-full bg-nb-gray-940 dark:bg-nb-gray-900"}>
+      {children}
+    </div>
+  );
 };
 
 export const RadioGroupItem = ({
