@@ -33,6 +33,17 @@ const (
 type MsgType uint8
 
 const (
+	// MsgHello is the very first frame on a freshly-dialed inter-
+	// pod connection. The dialer announces the address it listens
+	// on (`host:port`), so the accepting pod can index the stream
+	// by that logical address rather than by the connection's
+	// ephemeral source port. Without it, accepted streams would be
+	// keyed by an ephemeral the receiver can't dial back to —
+	// future forward attempts would fail.
+	// Payload: UTF-8 listen address, length prefixed by the frame
+	// header itself (≤ 255 bytes is more than any host:port needs).
+	MsgHello MsgType = 0x00
+
 	// MsgWhoHas asks every other pod whether they have a given peer
 	// connected. Sent on a local-store miss when forwarding to a
 	// peer this pod doesn't own. Payload: a fixed-size PeerID.
@@ -83,6 +94,8 @@ var (
 // String makes MsgType safer to log without leaking surprise values.
 func (t MsgType) String() string {
 	switch t {
+	case MsgHello:
+		return "HELLO"
 	case MsgWhoHas:
 		return "WHO_HAS"
 	case MsgIHave:

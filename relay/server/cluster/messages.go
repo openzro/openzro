@@ -35,6 +35,32 @@ var (
 	ErrMalformedPacket = errors.New("cluster: malformed message payload")
 )
 
+// MaxHelloAddressLen caps the announced listen address. host:port
+// in any sane K8s cluster is well under 100 bytes; 255 is generous
+// and keeps the cap inside one byte for any future framing.
+const MaxHelloAddressLen = 255
+
+// EncodeHello builds the HELLO payload — the dialer's own listen
+// address as a UTF-8 string. The frame header carries the length;
+// no extra prefix needed inside the payload.
+func EncodeHello(listenAddr string) []byte {
+	return []byte(listenAddr)
+}
+
+// DecodeHello parses a HELLO payload. Returns the announced listen
+// address. Empty or oversized payloads are rejected — those would
+// be from a misbehaving peer (or a future-protocol pod we shouldn't
+// trust as a valid cluster member).
+func DecodeHello(payload []byte) (string, error) {
+	if len(payload) == 0 {
+		return "", fmt.Errorf("%w: HELLO payload is empty", ErrMalformedPacket)
+	}
+	if len(payload) > MaxHelloAddressLen {
+		return "", fmt.Errorf("%w: HELLO payload is %d bytes, max %d", ErrMalformedPacket, len(payload), MaxHelloAddressLen)
+	}
+	return string(payload), nil
+}
+
 // EncodeWhoHas builds the WHO_HAS payload for the given peer.
 func EncodeWhoHas(target messages.PeerID) []byte {
 	out := make([]byte, peerIDSize)

@@ -112,37 +112,61 @@ func (s *Stream) readLoop(handler FrameHandler) {
 	}
 }
 
+// helloTimeout caps how long an accepted connection has to send
+// its HELLO frame before we drop it. Real intra-cluster handshakes
+// finish in microseconds; 3 s leaves plenty of room for slow CNI
+// startup without enabling a long-tail DoS via half-open conns.
+const helloTimeout = 3 * time.Second
+
 // Transport owns the inter-pod TCP fabric of one relay pod. It
 // listens for inbound connections from other pods and tracks
-// outbound streams to remote pods. Streams are addressed by remote
-// `host:port` — the discovery layer (next phase) will translate
-// `pod-2.relay-internal.svc` into the right address.
+// outbound streams to remote pods. Streams are keyed by the
+// remote pod's announced listen address — the dialer transmits it
+// as a HELLO frame, so the accepting side doesn't have to fall
+// back to the conn's ephemeral source port (which it can't dial
+// back to). The discovery layer (next phase) only has to know
+// each pod's listen address, never an ephemeral.
 //
 // The Transport intentionally has no opinions about discovery,
 // reconnection, or peer placement — those layer above it.
 type Transport struct {
 	listenAddr string
-	dialer     net.Dialer
-	handler    FrameHandler
+
+	// announceAddr is what we transmit in our HELLO. In production
+	// this is the pod's POD_IP:port reachable from sibling pods —
+	// often different from listenAddr (which may be `:7090` or
+	// `0.0.0.0:7090`). For tests we set it to the bound address.
+	announceAddr string
+
+	dialer  net.Dialer
+	handler FrameHandler
 
 	listener net.Listener
 
 	streamsMu sync.RWMutex
-	streams   map[string]*Stream // remote address → live stream
+	streams   map[string]*Stream // remote announced address → live stream
 
 	wg     sync.WaitGroup
 	cancel context.CancelFunc
 }
 
 // NewTransport constructs a Transport that listens on listenAddr
-// for inbound pod connections and dispatches all received frames
-// through handler. Use ListenAndServe to start.
-func NewTransport(listenAddr string, handler FrameHandler) *Transport {
+// for inbound pod connections, dispatches all received frames
+// through handler, and announces itself to other pods as
+// `announceAddr`. announceAddr must be reachable from sibling pods
+// — typically `<pod-ip>:<port>` resolved from the K8s downward API.
+// If empty, the transport falls back to whatever address the
+// listener bound to (`listener.Addr()`), which is fine for tests
+// on 127.0.0.1 but not for cross-pod traffic.
+//
+// Use ListenAndServe to start.
+func NewTransport(listenAddr, announceAddr string, handler FrameHandler) *Transport {
 	return &Transport{
-		listenAddr: listenAddr,
-		handler:    handler,
-		dialer:     net.Dialer{Timeout: 3 * time.Second},
-		streams:    make(map[string]*Stream),
+		listenAddr:   listenAddr,
+		announceAddr: announceAddr,
+		handler:      handler,
+		dialer:       net.Dialer{Timeout: 3 * time.Second},
+		streams:      make(map[string]*Stream),
 	}
 }
 
@@ -159,6 +183,13 @@ func (t *Transport) ListenAndServe(ctx context.Context) error {
 	}
 	t.listener = ln
 
+	// Fall back to the bound address when the caller didn't pass an
+	// explicit announcement — tests use 127.0.0.1:0 and rely on
+	// this; production wires in POD_IP:port and never hits this.
+	if t.announceAddr == "" {
+		t.announceAddr = ln.Addr().String()
+	}
+
 	ctx, cancel := context.WithCancel(ctx)
 	t.cancel = cancel
 
@@ -172,7 +203,7 @@ func (t *Transport) ListenAndServe(ctx context.Context) error {
 	t.wg.Add(1)
 	go t.acceptLoop(ctx)
 
-	log.Infof("cluster: transport listening on %s", t.listenAddr)
+	log.Infof("cluster: transport listening on %s, announcing %s", t.listenAddr, t.announceAddr)
 	return nil
 }
 
@@ -199,6 +230,12 @@ func (t *Transport) Stop() {
 // exists for that address, the existing one is returned and no new
 // connection is opened — Stream is one per pod-pair regardless of
 // who initiated.
+//
+// Right after the TCP connection establishes, Dial transmits a
+// HELLO frame announcing this pod's address. The accepting side
+// uses that to key its streams map by the same logical address —
+// avoiding the ephemeral-source-port problem that would otherwise
+// make the inverse lookup impossible on the accepted side.
 func (t *Transport) Dial(ctx context.Context, remote string) (*Stream, error) {
 	t.streamsMu.RLock()
 	if existing, ok := t.streams[remote]; ok && !existing.closed.Load() {
@@ -213,6 +250,14 @@ func (t *Transport) Dial(ctx context.Context, remote string) (*Stream, error) {
 	}
 
 	s := newStream(remote, conn)
+
+	// Announce who we are. We send HELLO before any other frame so
+	// the accepting side can key its stream map on our listen
+	// address (not the ephemeral source port of this conn).
+	if err := s.Send(MsgHello, EncodeHello(t.announceAddr)); err != nil {
+		_ = s.Close()
+		return nil, fmt.Errorf("cluster transport: send HELLO to %s: %w", remote, err)
+	}
 
 	t.streamsMu.Lock()
 	if existing, ok := t.streams[remote]; ok && !existing.closed.Load() {
@@ -284,30 +329,68 @@ func (t *Transport) acceptLoop(ctx context.Context) {
 			continue
 		}
 
-		remote := conn.RemoteAddr().String()
-		s := newStream(remote, conn)
-
-		t.streamsMu.Lock()
-		// If we already have a stream to this remote, prefer the
-		// older one and drop the newer. Both pods racing to
-		// initiate would otherwise leave us with two streams to
-		// the same place. Tie-break: keep what's there.
-		if existing, ok := t.streams[remote]; ok && !existing.closed.Load() {
-			t.streamsMu.Unlock()
-			log.Debugf("cluster: incoming dup stream from %s — dropping new conn", remote)
-			_ = s.Close()
-			continue
-		}
-		t.streams[remote] = s
-		t.streamsMu.Unlock()
-
 		t.wg.Add(1)
 		go func() {
 			defer t.wg.Done()
-			s.readLoop(t.handler)
-			t.dropStream(remote, s)
+			t.handleAccepted(ctx, conn)
 		}()
 	}
+}
+
+// handleAccepted reads the HELLO frame off a freshly-accepted conn
+// and registers the stream keyed by the announced listen address.
+// Runs in its own goroutine so a single slow / misbehaving dialer
+// doesn't stall the accept loop.
+func (t *Transport) handleAccepted(ctx context.Context, conn net.Conn) {
+	// Bound the HELLO read so half-open conns don't accumulate.
+	_ = conn.SetReadDeadline(time.Now().Add(helloTimeout))
+	msgType, payload, err := ReadFrame(conn)
+	_ = conn.SetReadDeadline(time.Time{}) // back to no deadline for the steady stream
+	if err != nil {
+		log.Warnf("cluster: accept from %s: read HELLO: %v", conn.RemoteAddr(), err)
+		_ = conn.Close()
+		return
+	}
+	if msgType != MsgHello {
+		log.Warnf("cluster: accept from %s: first frame was %s, expected HELLO; dropping", conn.RemoteAddr(), msgType)
+		_ = conn.Close()
+		return
+	}
+	announced, err := DecodeHello(payload)
+	if err != nil {
+		log.Warnf("cluster: accept from %s: malformed HELLO: %v", conn.RemoteAddr(), err)
+		_ = conn.Close()
+		return
+	}
+
+	s := newStream(announced, conn)
+
+	t.streamsMu.Lock()
+	// If we already have a stream to this announced address, drop
+	// the newcomer and keep the existing. Two pods racing to
+	// initiate land here exactly once each — the second one wins
+	// the race on the dialing side or this side, never both.
+	if existing, ok := t.streams[announced]; ok && !existing.closed.Load() {
+		t.streamsMu.Unlock()
+		log.Debugf("cluster: incoming dup stream from %s — keeping existing", announced)
+		_ = s.Close()
+		return
+	}
+	t.streams[announced] = s
+	t.streamsMu.Unlock()
+
+	if ctx.Err() != nil {
+		t.dropStream(announced, s)
+		_ = s.Close()
+		return
+	}
+
+	t.wg.Add(1)
+	go func() {
+		defer t.wg.Done()
+		s.readLoop(t.handler)
+		t.dropStream(announced, s)
+	}()
 }
 
 // dropStream removes a stream from the map only if the entry is
