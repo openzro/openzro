@@ -138,6 +138,14 @@ type Transport struct {
 	// `0.0.0.0:7090`). For tests we set it to the bound address.
 	announceAddr string
 
+	// authSecret authenticates the inter-pod fabric. When non-empty,
+	// every HELLO carries an HMAC-SHA256 over (version, addr,
+	// timestamp); receivers reject unsigned or wrong-hmac frames.
+	// Empty (the default) keeps the legacy unsigned format and
+	// requires the operator to isolate the backplane via
+	// NetworkPolicy or equivalent.
+	authSecret []byte
+
 	dialer  net.Dialer
 	handler FrameHandler
 
@@ -179,6 +187,16 @@ func NewTransport(listenAddr, announceAddr string, handler FrameHandler) *Transp
 // construction-time and aren't safe to swap mid-flight.
 func (t *Transport) SetHandler(h FrameHandler) {
 	t.handler = h
+}
+
+// SetAuthSecret installs the shared inter-pod HMAC key. Must be
+// called before ListenAndServe; the field is read on every Dial
+// and Accept and must not change once handshakes start. An empty
+// secret keeps the unsigned HELLO format (legacy / NetworkPolicy
+// trust). The byte slice is stored by reference — don't mutate it
+// after the call.
+func (t *Transport) SetAuthSecret(secret []byte) {
+	t.authSecret = secret
 }
 
 // ListenAndServe binds the listener and accepts inbound pod
@@ -264,8 +282,15 @@ func (t *Transport) Dial(ctx context.Context, remote string) (*Stream, error) {
 
 	// Announce who we are. We send HELLO before any other frame so
 	// the accepting side can key its stream map on our listen
-	// address (not the ephemeral source port of this conn).
-	if err := s.Send(MsgHello, EncodeHello(t.announceAddr)); err != nil {
+	// address (not the ephemeral source port of this conn). The
+	// payload carries an HMAC when authSecret is set, so the peer
+	// can authenticate us before adding the stream to its map.
+	hello, err := EncodeHello(t.announceAddr, t.authSecret, time.Now())
+	if err != nil {
+		_ = s.Close()
+		return nil, fmt.Errorf("cluster transport: encode HELLO: %w", err)
+	}
+	if err := s.Send(MsgHello, hello); err != nil {
 		_ = s.Close()
 		return nil, fmt.Errorf("cluster transport: send HELLO to %s: %w", remote, err)
 	}
@@ -367,9 +392,9 @@ func (t *Transport) handleAccepted(ctx context.Context, conn net.Conn) {
 		_ = conn.Close()
 		return
 	}
-	announced, err := DecodeHello(payload)
+	announced, err := DecodeHello(payload, t.authSecret, time.Now())
 	if err != nil {
-		log.Warnf("cluster: accept from %s: malformed HELLO: %v", conn.RemoteAddr(), err)
+		log.Warnf("cluster: accept from %s: rejecting HELLO: %v", conn.RemoteAddr(), err)
 		_ = conn.Close()
 		return
 	}

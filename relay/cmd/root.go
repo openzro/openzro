@@ -44,9 +44,10 @@ type Config struct {
 	// Multi-pod (ADR-0014) settings — leave ClusterHeadless empty
 	// for single-pod deployments. The relay then runs exactly as
 	// before, with no inter-pod fabric.
-	ClusterHeadless string // K8s Headless Service FQDN
-	ClusterPort     int    // inter-pod TCP port (default 7090)
-	PodIP           string // POD_IP via the K8s downward API
+	ClusterHeadless   string // K8s Headless Service FQDN
+	ClusterPort       int    // inter-pod TCP port (default 7090)
+	PodIP             string // POD_IP via the K8s downward API
+	ClusterAuthSecret string // shared HMAC key for HELLO authentication
 }
 
 func (c Config) Validate() error {
@@ -97,6 +98,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cobraConfig.ClusterHeadless, "cluster-headless", "", "K8s Headless Service FQDN that resolves to every relay pod (enables ADR-0014 multi-pod fabric)")
 	rootCmd.PersistentFlags().IntVar(&cobraConfig.ClusterPort, "cluster-port", 0, "inter-pod TCP port (defaults to 7090). Same value on every pod.")
 	rootCmd.PersistentFlags().StringVar(&cobraConfig.PodIP, "pod-ip", "", "this pod's IP, set from the K8s downward API. Required when --cluster-headless is set.")
+	rootCmd.PersistentFlags().StringVar(&cobraConfig.ClusterAuthSecret, "cluster-auth-secret", "", "shared HMAC secret authenticating inter-pod HELLO frames. Same value on every relay pod. Empty = unsigned HELLO (legacy; requires NetworkPolicy isolation).")
 
 	setFlagsFromEnvVars(rootCmd)
 }
@@ -174,9 +176,10 @@ func execute(cmd *cobra.Command, args []string) error {
 	var clusterBoot *server.ClusterBootstrap
 	if cobraConfig.ClusterHeadless != "" {
 		clusterBoot, err = server.StartCluster(clusterCtx, srv.Store(), server.ClusterBootstrapConfig{
-			Headless: cobraConfig.ClusterHeadless,
-			Port:     cobraConfig.ClusterPort,
-			PodIP:    cobraConfig.PodIP,
+			Headless:   cobraConfig.ClusterHeadless,
+			Port:       cobraConfig.ClusterPort,
+			PodIP:      cobraConfig.PodIP,
+			AuthSecret: cobraConfig.ClusterAuthSecret,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to start relay cluster fabric: %w", err)
