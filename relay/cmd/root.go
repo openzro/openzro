@@ -40,6 +40,13 @@ type Config struct {
 	AuthSecret            string
 	LogLevel              string
 	LogFile               string
+
+	// Multi-pod (ADR-0014) settings — leave ClusterHeadless empty
+	// for single-pod deployments. The relay then runs exactly as
+	// before, with no inter-pod fabric.
+	ClusterHeadless string // K8s Headless Service FQDN
+	ClusterPort     int    // inter-pod TCP port (default 7090)
+	PodIP           string // POD_IP via the K8s downward API
 }
 
 func (c Config) Validate() error {
@@ -87,6 +94,9 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&cobraConfig.AuthSecret, "auth-secret", "s", "", "auth secret")
 	rootCmd.PersistentFlags().StringVar(&cobraConfig.LogLevel, "log-level", "info", "log level")
 	rootCmd.PersistentFlags().StringVar(&cobraConfig.LogFile, "log-file", "console", "log file")
+	rootCmd.PersistentFlags().StringVar(&cobraConfig.ClusterHeadless, "cluster-headless", "", "K8s Headless Service FQDN that resolves to every relay pod (enables ADR-0014 multi-pod fabric)")
+	rootCmd.PersistentFlags().IntVar(&cobraConfig.ClusterPort, "cluster-port", 0, "inter-pod TCP port (defaults to 7090). Same value on every pod.")
+	rootCmd.PersistentFlags().StringVar(&cobraConfig.PodIP, "pod-ip", "", "this pod's IP, set from the K8s downward API. Required when --cluster-headless is set.")
 
 	setFlagsFromEnvVars(rootCmd)
 }
@@ -154,6 +164,28 @@ func execute(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create relay server: %v", err)
 	}
 	log.Infof("server will be available on: %s", srv.InstanceURL())
+
+	// ADR-0014 multi-pod fabric. When --cluster-headless is empty
+	// the relay runs as before (single-pod, drop on local-store
+	// miss); set it to the headless Service name and pass POD_IP
+	// via the K8s downward API to enable cross-pod forwarding.
+	clusterCtx, clusterCancel := context.WithCancel(context.Background())
+	defer clusterCancel()
+	var clusterBoot *server.ClusterBootstrap
+	if cobraConfig.ClusterHeadless != "" {
+		clusterBoot, err = server.StartCluster(clusterCtx, srv.Store(), server.ClusterBootstrapConfig{
+			Headless: cobraConfig.ClusterHeadless,
+			Port:     cobraConfig.ClusterPort,
+			PodIP:    cobraConfig.PodIP,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to start relay cluster fabric: %w", err)
+		}
+		srv.SetCrossPodForwarder(clusterBoot.Forwarder)
+		log.Infof("relay cluster fabric enabled — headless=%s, pod-ip=%s, port=%d",
+			cobraConfig.ClusterHeadless, cobraConfig.PodIP, cobraConfig.ClusterPort)
+	}
+
 	go func() {
 		if err := srv.Listen(srvListenerCfg); err != nil {
 			log.Fatalf("failed to bind server: %s", err)
@@ -165,6 +197,14 @@ func execute(cmd *cobra.Command, args []string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+
+	// Stop accepting new cross-pod traffic before draining peers
+	// — the locator's caches go stale on shutdown anyway, but
+	// closing inter-pod streams first avoids a flurry of late
+	// FWD frames during peer-by-peer drain.
+	if clusterBoot != nil {
+		clusterBoot.Stop()
+	}
 
 	var shutDownErrors error
 	if err := srv.Shutdown(ctx); err != nil {

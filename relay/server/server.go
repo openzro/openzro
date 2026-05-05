@@ -10,6 +10,7 @@ import (
 	"github.com/openzro/openzro/relay/server/listener"
 	"github.com/openzro/openzro/relay/server/listener/quic"
 	"github.com/openzro/openzro/relay/server/listener/ws"
+	"github.com/openzro/openzro/relay/server/store"
 	quictls "github.com/openzro/openzro/relay/tls"
 	log "github.com/sirupsen/logrus"
 )
@@ -112,4 +113,18 @@ func (r *Server) Shutdown(ctx context.Context) error {
 // InstanceURL returns the instance URL of the relay server.
 func (r *Server) InstanceURL() string {
 	return r.relay.instanceURL
+}
+
+// Store exposes the underlying peer store so multi-pod setups can
+// hand it to the cluster fabric (per ADR-0014). The Store itself
+// only offers safe lookup APIs to outside callers.
+func (r *Server) Store() *store.Store {
+	return r.relay.Store()
+}
+
+// SetCrossPodForwarder hands the relay a cluster-fabric forwarder.
+// Wire this before calling Listen so all accepted peers route
+// cross-pod fall-through traffic correctly.
+func (r *Server) SetCrossPodForwarder(f CrossPodForwarder) {
+	r.relay.SetCrossPodForwarder(f)
 }

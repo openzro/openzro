@@ -159,6 +159,10 @@ type Transport struct {
 // listener bound to (`listener.Addr()`), which is fine for tests
 // on 127.0.0.1 but not for cross-pod traffic.
 //
+// handler may be nil at construction; the locator and forwarder
+// usually need a transport reference to be built first, so the
+// real handler is wired via SetHandler before ListenAndServe.
+//
 // Use ListenAndServe to start.
 func NewTransport(listenAddr, announceAddr string, handler FrameHandler) *Transport {
 	return &Transport{
@@ -168,6 +172,13 @@ func NewTransport(listenAddr, announceAddr string, handler FrameHandler) *Transp
 		dialer:       net.Dialer{Timeout: 3 * time.Second},
 		streams:      make(map[string]*Stream),
 	}
+}
+
+// SetHandler swaps the FrameHandler. Must be called before
+// ListenAndServe — the read loops capture the field once at
+// construction-time and aren't safe to swap mid-flight.
+func (t *Transport) SetHandler(h FrameHandler) {
+	t.handler = h
 }
 
 // ListenAndServe binds the listener and accepts inbound pod
