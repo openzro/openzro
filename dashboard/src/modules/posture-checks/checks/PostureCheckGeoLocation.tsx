@@ -11,6 +11,7 @@ import { isEmpty, uniqueId } from "lodash";
 import {
   ExternalLinkIcon,
   FlagIcon,
+  InfoIcon,
   MinusCircleIcon,
   PlusCircle,
   ShieldCheck,
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 import * as React from "react";
 import { useState } from "react";
+import { useCountries } from "@/contexts/CountryProvider";
 import { GeoLocation, GeoLocationCheck } from "@/interfaces/PostureCheck";
 import { PostureCheckCard } from "@/modules/posture-checks/ui/PostureCheckCard";
 
@@ -69,6 +71,16 @@ export const PostureCheckGeoLocation = ({
 };
 
 const CheckContent = ({ value, onChange, disabled }: Props) => {
+  const { countries, isLoading: countriesLoading } = useCountries();
+  // The check can only be configured when the management server has
+  // a GeoLite2 database staged or auto-updates enabled. Until then
+  // /locations/countries returns []; the country/city dropdowns
+  // would be empty and "Add Location" would create useless rows.
+  // We surface that state explicitly instead of letting the user
+  // fall into the empty-dropdown trap.
+  const geoUnavailable =
+    !countriesLoading && (!countries || countries.length === 0);
+
   const [allowDenyLocation, setAllowDenyLocation] = useState<string>(
     value?.action ? value.action : "allow",
   );
@@ -123,7 +135,31 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
             </RadioGroupItem>
           </RadioGroup>
         </div>
-        {locations.length > 0 && (
+        {geoUnavailable && (
+          <div
+            className={
+              "flex gap-2 items-start text-xs px-3 py-2 rounded-md border border-nb-gray-925 dark:border-nb-gray-800 bg-nb-gray-940 dark:bg-nb-gray-900 text-nb-gray-500 dark:text-nb-gray-300"
+            }
+          >
+            <InfoIcon size={14} className={"mt-0.5 shrink-0"} />
+            <div>
+              The geolocation database isn&rsquo;t configured on the management
+              server, so country and city lists are empty. Stage a GeoLite2
+              MaxMind mmdb in the management <code>datadir</code> or run with{" "}
+              <code>--disable-geolite-update=false</code> to auto-fetch.{" "}
+              <InlineLink
+                href={
+                  "https://docs.openzro.io/how-to/manage-posture-checks#geolocation-check"
+                }
+                target={"_blank"}
+              >
+                Setup guide
+                <ExternalLinkIcon size={12} />
+              </InlineLink>
+            </div>
+          </div>
+        )}
+        {!geoUnavailable && locations.length > 0 && (
           <div className={"mb-2 flex flex-col gap-2 w-full "}>
             {locations.map((location) => {
               return (
@@ -165,7 +201,9 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
         <Button
           variant={"dotted"}
           size={"sm"}
-          disabled={allowDenyLocation == "all" || disabled}
+          disabled={
+            allowDenyLocation == "all" || disabled || geoUnavailable
+          }
           onClick={addLocation}
         >
           <PlusCircle size={16} />
