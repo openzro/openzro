@@ -31,21 +31,29 @@ type Peer struct {
 	store    *store.Store
 	notifier *store.PeerNotifier
 
+	// crossPodFwd is the optional cluster-mode hook for ADR-0014.
+	// When non-nil, transport-msgs for peers not in the local store
+	// are forwarded across the inter-pod fabric instead of dropped.
+	crossPodFwd CrossPodForwarder
+
 	peersListener *store.Listener
 
 	// between the online peer collection step and the notification sending should not be sent offline notifications from another thread
 	notificationMutex sync.Mutex
 }
 
-// NewPeer creates a new Peer instance and prepare custom logging
-func NewPeer(metrics *metrics.Metrics, id messages.PeerID, conn net.Conn, store *store.Store, notifier *store.PeerNotifier) *Peer {
+// NewPeer creates a new Peer instance and prepare custom logging.
+// crossPodFwd is optional: pass nil for single-pod deployments to
+// keep the legacy "drop on local-store miss" path.
+func NewPeer(metrics *metrics.Metrics, id messages.PeerID, conn net.Conn, store *store.Store, notifier *store.PeerNotifier, crossPodFwd CrossPodForwarder) *Peer {
 	p := &Peer{
-		metrics:  metrics,
-		log:      log.WithField("peer_id", id.String()),
-		id:       id,
-		conn:     conn,
-		store:    store,
-		notifier: notifier,
+		metrics:     metrics,
+		log:         log.WithField("peer_id", id.String()),
+		id:          id,
+		conn:        conn,
+		store:       store,
+		notifier:    notifier,
+		crossPodFwd: crossPodFwd,
 	}
 
 	return p
@@ -215,25 +223,46 @@ func (p *Peer) handleTransportMsg(msg []byte) {
 		return
 	}
 
-	item, ok := p.store.Peer(*peerID)
-	if !ok {
-		p.log.Debugf("peer not found: %s", peerID)
-		return
-	}
-	dp := item.(*Peer)
-
-	err = messages.UpdateTransportMsg(msg, p.id)
-	if err != nil {
+	// Stamp the src peer ID up-front so the wire bytes we hand off
+	// (locally or across the cluster fabric) are identical in both
+	// paths. The cluster forwarder treats msg as opaque; the
+	// receiving pod's HandleFwd will write these same bytes to the
+	// destination peer's connection.
+	if err := messages.UpdateTransportMsg(msg, p.id); err != nil {
 		p.log.Errorf("failed to update transport message: %s", err)
 		return
 	}
 
-	n, err := dp.Write(msg)
-	if err != nil {
-		p.log.Errorf("failed to write transport message to: %s", dp.String())
+	if item, ok := p.store.Peer(*peerID); ok {
+		dp := item.(*Peer)
+		n, err := dp.Write(msg)
+		if err != nil {
+			p.log.Errorf("failed to write transport message to: %s", dp.String())
+			return
+		}
+		p.metrics.TransferBytesSent.Add(context.Background(), int64(n))
 		return
 	}
-	p.metrics.TransferBytesSent.Add(context.Background(), int64(n))
+
+	if p.crossPodFwd != nil {
+		// 5 s mirrors the cluster locator's broadcast deadline; a
+		// real K8s in-cluster RTT is sub-millisecond. Anything
+		// slower than 5 s is a partition we'd rather drop on.
+		ctx, cancel := context.WithTimeout(context.Background(), clusterForwardTimeout)
+		defer cancel()
+		if err := p.crossPodFwd.Forward(ctx, *peerID, msg); err != nil {
+			if errors.Is(err, errClusterPeerNotFound) {
+				p.log.Debugf("peer not found in cluster: %s", peerID)
+				return
+			}
+			p.log.Errorf("cluster forward to %s failed: %s", peerID, err)
+			return
+		}
+		p.metrics.TransferBytesSent.Add(context.Background(), int64(len(msg)))
+		return
+	}
+
+	p.log.Debugf("peer not found: %s", peerID)
 }
 
 func (p *Peer) handleSubscribePeerState(msg []byte) {
