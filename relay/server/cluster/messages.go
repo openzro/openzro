@@ -1,9 +1,12 @@
 package cluster
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/openzro/openzro/relay/messages"
 )
@@ -40,25 +43,127 @@ var (
 // and keeps the cap inside one byte for any future framing.
 const MaxHelloAddressLen = 255
 
-// EncodeHello builds the HELLO payload — the dialer's own listen
-// address as a UTF-8 string. The frame header carries the length;
-// no extra prefix needed inside the payload.
-func EncodeHello(listenAddr string) []byte {
-	return []byte(listenAddr)
+// HELLO v2 wire format:
+//
+//	┌──────────┬──────────┬──────────────┬───────────┬──────────┬─────────┐
+//	│ uint8    │ uint8    │ bytes        │ uint64 BE │ uint8    │ bytes   │
+//	│ version  │ addr_len │ announce_addr│ unix_sec  │ hmac_len │ hmac    │
+//	└──────────┴──────────┴──────────────┴───────────┴──────────┴─────────┘
+//
+// version pins the format so future bumps don't need a flag day.
+// timestamp + nonce-free design is enough — the receiver enforces a
+// ±5 min replay window, and an attacker who replays an old HELLO
+// just opens a duplicate stream that gets immediately deduped by
+// the transport's announceAddr key.
+//
+// hmac_len is 0 (unsigned) or 32 (HMAC-SHA256). HMAC covers
+// version || addr_len || announce_addr || timestamp. With an empty
+// secret on either side, the unsigned form is used; asymmetric
+// configs are rejected loudly.
+const (
+	helloVersionV2  = 2
+	helloHMACSize   = sha256.Size
+	helloMinPayload = 1 + 1 + 0 + 8 + 1 // version + addrLen + addr + ts + hmacLen
+
+	// helloReplayWindow caps how stale a HELLO timestamp can be.
+	// Clock skew between K8s pods is typically sub-second; 5 min
+	// is generous and short enough that a captured HELLO has a
+	// small window to be replayed.
+	helloReplayWindow = 5 * time.Minute
+)
+
+// EncodeHello builds a v2 HELLO payload announcing this pod's
+// listen address. When secret is non-empty, the payload includes
+// an HMAC-SHA256 over the preceding fields so the receiver can
+// authenticate the dialer without TLS. With empty secret the
+// payload still uses v2 framing but carries hmac_len = 0 (unsigned
+// — only acceptable on a NetworkPolicy-isolated backplane).
+//
+// ts is the wall-clock time stamped into the payload. Tests pass a
+// fixed value; production callers pass time.Now().
+func EncodeHello(listenAddr string, secret []byte, ts time.Time) ([]byte, error) {
+	if len(listenAddr) > MaxHelloAddressLen {
+		return nil, fmt.Errorf("%w: HELLO addr %d bytes, max %d", ErrMalformedPacket, len(listenAddr), MaxHelloAddressLen)
+	}
+
+	signedBody := make([]byte, 0, 2+len(listenAddr)+8)
+	signedBody = append(signedBody, helloVersionV2)
+	signedBody = append(signedBody, uint8(len(listenAddr)))
+	signedBody = append(signedBody, listenAddr...)
+	var tsBuf [8]byte
+	binary.BigEndian.PutUint64(tsBuf[:], uint64(ts.Unix()))
+	signedBody = append(signedBody, tsBuf[:]...)
+
+	out := make([]byte, 0, len(signedBody)+1+helloHMACSize)
+	out = append(out, signedBody...)
+	if len(secret) > 0 {
+		mac := hmac.New(sha256.New, secret)
+		mac.Write(signedBody)
+		out = append(out, helloHMACSize)
+		out = mac.Sum(out)
+	} else {
+		out = append(out, 0)
+	}
+	return out, nil
 }
 
-// DecodeHello parses a HELLO payload. Returns the announced listen
-// address. Empty or oversized payloads are rejected — those would
-// be from a misbehaving peer (or a future-protocol pod we shouldn't
-// trust as a valid cluster member).
-func DecodeHello(payload []byte) (string, error) {
-	if len(payload) == 0 {
-		return "", fmt.Errorf("%w: HELLO payload is empty", ErrMalformedPacket)
+// DecodeHello parses a v2 HELLO payload and returns the announced
+// listen address. Authentication rules:
+//
+//   - secret non-empty: payload must carry a valid HMAC; missing
+//     or mismatched HMAC is a hard reject.
+//   - secret empty: payload must carry hmac_len=0; a signed HELLO
+//     against an unconfigured receiver is a hard reject (asymmetric
+//     config — the operator forgot the secret on this pod).
+//
+// Stale timestamps (outside ±helloReplayWindow) are rejected.
+func DecodeHello(payload []byte, secret []byte, now time.Time) (string, error) {
+	if len(payload) < helloMinPayload {
+		return "", fmt.Errorf("%w: HELLO too short (%d bytes)", ErrMalformedPacket, len(payload))
 	}
-	if len(payload) > MaxHelloAddressLen {
-		return "", fmt.Errorf("%w: HELLO payload is %d bytes, max %d", ErrMalformedPacket, len(payload), MaxHelloAddressLen)
+	if payload[0] != helloVersionV2 {
+		return "", fmt.Errorf("%w: HELLO version %d, want %d", ErrMalformedPacket, payload[0], helloVersionV2)
 	}
-	return string(payload), nil
+	addrLen := int(payload[1])
+	if addrLen > MaxHelloAddressLen {
+		return "", fmt.Errorf("%w: HELLO addr_len %d exceeds %d", ErrMalformedPacket, addrLen, MaxHelloAddressLen)
+	}
+	bodyEnd := 2 + addrLen + 8
+	if len(payload) < bodyEnd+1 {
+		return "", fmt.Errorf("%w: HELLO body truncated", ErrMalformedPacket)
+	}
+	addr := string(payload[2 : 2+addrLen])
+	tsRaw := binary.BigEndian.Uint64(payload[2+addrLen : bodyEnd])
+	ts := time.Unix(int64(tsRaw), 0)
+	if d := now.Sub(ts); d > helloReplayWindow || d < -helloReplayWindow {
+		return "", fmt.Errorf("%w: HELLO timestamp out of window: %s (skew=%s)", ErrMalformedPacket, ts, d)
+	}
+
+	hmacLen := int(payload[bodyEnd])
+	sigStart := bodyEnd + 1
+	if len(payload) < sigStart+hmacLen {
+		return "", fmt.Errorf("%w: HELLO hmac field truncated", ErrMalformedPacket)
+	}
+	sig := payload[sigStart : sigStart+hmacLen]
+
+	if len(secret) > 0 {
+		if hmacLen == 0 {
+			return "", fmt.Errorf("%w: peer sent unsigned HELLO but local pod requires auth", ErrMalformedPacket)
+		}
+		if hmacLen != helloHMACSize {
+			return "", fmt.Errorf("%w: HELLO hmac %d bytes, want %d", ErrMalformedPacket, hmacLen, helloHMACSize)
+		}
+		mac := hmac.New(sha256.New, secret)
+		mac.Write(payload[:bodyEnd])
+		expect := mac.Sum(nil)
+		if !hmac.Equal(expect, sig) {
+			return "", fmt.Errorf("%w: HELLO hmac mismatch", ErrMalformedPacket)
+		}
+	} else if hmacLen != 0 {
+		return "", fmt.Errorf("%w: peer sent signed HELLO but local pod has no auth secret (asymmetric config)", ErrMalformedPacket)
+	}
+
+	return addr, nil
 }
 
 // EncodeWhoHas builds the WHO_HAS payload for the given peer.

@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/openzro/openzro/relay/server/cluster"
 	"github.com/openzro/openzro/relay/server/store"
 )
@@ -42,6 +44,12 @@ type ClusterBootstrapConfig struct {
 	// announce a useless 0.0.0.0 in our HELLO frame and sibling
 	// pods could never establish back-streams.
 	PodIP string
+
+	// AuthSecret authenticates the inter-pod HELLO via HMAC-SHA256.
+	// Same value on every relay pod. Empty means unsigned HELLO —
+	// only safe behind a NetworkPolicy that limits the cluster
+	// port to relay pods. Logs a loud warning when empty.
+	AuthSecret string
 
 	// Interval is the discovery reconcile period. Defaults to
 	// cluster.DefaultDiscoveryInterval (10 s) when zero.
@@ -88,6 +96,12 @@ func StartCluster(ctx context.Context, st *store.Store, cfg ClusterBootstrapConf
 	announceAddr := net.JoinHostPort(cfg.PodIP, strconv.Itoa(port))
 
 	transport := cluster.NewTransport(listenAddr, announceAddr, nil)
+	if cfg.AuthSecret != "" {
+		transport.SetAuthSecret([]byte(cfg.AuthSecret))
+	} else {
+		log.Warnf("cluster bootstrap: AuthSecret is empty — inter-pod HELLO frames are unsigned. " +
+			"Restrict the inter-pod port via NetworkPolicy or set OZ_CLUSTER_AUTH_SECRET.")
+	}
 
 	dispatcher := NewLocalPeerDispatcher(st)
 	locator := cluster.NewPeerLocator(transport, dispatcher)
