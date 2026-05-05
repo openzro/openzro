@@ -25,6 +25,7 @@ var (
 	disableMetrics           bool
 	disableSingleAccMode     bool
 	disableGeoliteUpdate     bool
+	maxmindLicenseKey        string
 	idpSignKeyRefreshEnabled bool
 	userDeleteFromIDPEnabled bool
 
@@ -66,7 +67,8 @@ func init() {
 	mgmtCmd.Flags().StringVar(&dnsDomain, "dns-domain", defaultSingleAccModeDomain, fmt.Sprintf("Domain used for peer resolution. This is appended to the peer's name, e.g. pi-server. %s. Max length is 192 characters to allow appending to a peer name with up to 63 characters.", defaultSingleAccModeDomain))
 	mgmtCmd.Flags().BoolVar(&idpSignKeyRefreshEnabled, idpSignKeyRefreshEnabledFlagName, false, "Enable cache headers evaluation to determine signing key rotation period. This will refresh the signing key upon expiry.")
 	mgmtCmd.Flags().BoolVar(&userDeleteFromIDPEnabled, "user-delete-from-idp", false, "Allows to delete user from IDP when user is deleted from account")
-	mgmtCmd.Flags().BoolVar(&disableGeoliteUpdate, "disable-geolite-update", true, "disables automatic updates to the Geolite2 geolocation databases")
+	mgmtCmd.Flags().BoolVar(&disableGeoliteUpdate, "disable-geolite-update", false, "disables automatic updates to the GeoLite2 geolocation databases. When false (default) management fetches from pkg.openzro.io on cold boot — set --maxmind-license-key to fetch directly from MaxMind instead, or set this to true on air-gapped installs that stage their own mmdb")
+	mgmtCmd.Flags().StringVar(&maxmindLicenseKey, "maxmind-license-key", "", "MaxMind GeoLite2 license key (free at https://www.maxmind.com/en/geolite2/signup). When set, management bypasses the openZro mirror and fetches GeoLite2 directly from download.maxmind.com")
 	rootCmd.MarkFlagRequired("config") //nolint
 
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "")

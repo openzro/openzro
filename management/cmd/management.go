@@ -221,17 +221,20 @@ var (
 				}
 			}
 
-			geo, err := geolocation.NewGeolocation(ctx, config.Datadir, !disableGeoliteUpdate)
+			geoSrc := geolocation.DownloadSource{LicenseKey: maxmindLicenseKey}
+			geo, err := geolocation.NewGeolocation(ctx, config.Datadir, !disableGeoliteUpdate, geoSrc)
 			if err != nil {
-				// Geolocation is opt-in: when neither a local mmdb is
-				// staged nor auto-update is enabled, this returns a
-				// "not configured" error and the daemon runs without
-				// geolocation. INFO instead of WARN reflects the
-				// configuration choice — the operator decided not to
-				// wire it.
+				// Geolocation is best-effort: when auto-update is
+				// disabled and no local mmdb is staged, we land here
+				// with a "not configured" error. INFO instead of WARN
+				// reflects the configuration choice — operator
+				// disabled it deliberately or hasn't staged the DB
+				// yet. The dashboard's geo posture-check modal
+				// surfaces this state with a setup-instructions
+				// banner.
 				log.WithContext(ctx).Infof("geolocation service not initialized (running without geolocation support): %v", err)
 			} else {
-				log.WithContext(ctx).Infof("geolocation service has been initialized from %s", config.Datadir)
+				log.WithContext(ctx).Infof("geolocation service has been initialized from %s (source: %s)", config.Datadir, geoSrc)
 			}
 
 			integratedPeerValidator, err := integrations.NewIntegratedValidator(ctx, eventStore)
