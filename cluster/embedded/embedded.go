@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"time"
 
 	natsserver "github.com/nats-io/nats-server/v2/server"
@@ -55,6 +56,14 @@ type Config struct {
 	ClusterHost string
 	ClusterPort int
 	ClusterName string
+
+	// ServerName uniquely identifies this NATS instance within the cluster.
+	// Mandatory for JetStream cluster mode (NATS rejects the server with
+	// "jetstream cluster requires server_name to be set" if it's empty).
+	// When left empty Start() defaults to os.Hostname() — in K8s pods this
+	// resolves to the pod name (StatefulSet ordinal-stable), which is the
+	// right thing for HA replica sets.
+	ServerName string
 
 	// ClusterPeers is the seed list of other openzro instances to route
 	// to, in nats:// URL form, e.g.
@@ -114,6 +123,17 @@ func Start(cfg Config) (*Server, error) {
 	if cfg.ClusterName == "" {
 		cfg.ClusterName = DefaultClusterName
 	}
+	if cfg.ServerName == "" {
+		// os.Hostname() resolves to the K8s pod name in StatefulSets,
+		// which is unique per replica and stable across restarts. Falls
+		// back to a UUID-shaped string only if hostname lookup fails
+		// (rare — should only happen on broken /etc/hostname).
+		hn, err := os.Hostname()
+		if err != nil || hn == "" {
+			return nil, fmt.Errorf("embedded nats: ServerName not set and os.Hostname() failed: %w", err)
+		}
+		cfg.ServerName = hn
+	}
 	if cfg.StartupTimeout <= 0 {
 		cfg.StartupTimeout = defaultStartupTimeout
 	}
@@ -133,8 +153,9 @@ func Start(cfg Config) (*Server, error) {
 	jsEnabled := !cfg.DisableJetStream
 
 	opts := &natsserver.Options{
-		Host: cfg.ClientHost,
-		Port: cfg.ClientPort,
+		ServerName: cfg.ServerName,
+		Host:       cfg.ClientHost,
+		Port:       cfg.ClientPort,
 		Cluster: natsserver.ClusterOpts{
 			Name: cfg.ClusterName,
 			Host: cfg.ClusterHost,
