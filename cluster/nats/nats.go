@@ -91,23 +91,46 @@ func New(ctx context.Context, cfg Config) (*Coordinator, error) {
 
 	parentCtx, cancel := context.WithCancel(ctx)
 
-	kv, err := js.CreateOrUpdateKeyValue(parentCtx, jetstream.KeyValueConfig{
-		Bucket:      LocksBucket,
-		Description: "openzro distributed locks",
-		TTL:         ttl,
-		// Locks are TTL-bound and inherently ephemeral — they expire
-		// in seconds and re-acquire on restart. Memory storage is the
-		// right semantic match (and avoids needing JetStream file
-		// store + PVCs in HA deployments). The KV API requests file
-		// storage by default, which fails on NATS deployments that
-		// only allow memory streams (e.g. our chart's nats subchart
-		// with fileStore.enabled=false). Pinning Storage here makes
-		// the coordinator portable across both layouts.
-		Storage: jetstream.MemoryStorage,
-	})
-	if err != nil {
-		cancel()
-		return nil, fmt.Errorf("nats coordinator: locks bucket: %w", err)
+	// JetStream cluster precisa de meta-leader eleito antes do bucket KV
+	// poder ser criado. Em deploys HA fresh (3 pods boot juntos), a eleição
+	// leva alguns segundos — o boot do management nesse momento perde a
+	// janela e o pod sai com erro, criando um loop de restart que nunca
+	// converge. Retry com backoff até 60s cobre o caso comum.
+	var kv jetstream.KeyValue
+	const (
+		bucketRetryTimeout = 60 * time.Second
+		bucketRetryBackoff = 2 * time.Second
+	)
+	deadline := time.Now().Add(bucketRetryTimeout)
+	for {
+		kv, err = js.CreateOrUpdateKeyValue(parentCtx, jetstream.KeyValueConfig{
+			Bucket:      LocksBucket,
+			Description: "openzro distributed locks",
+			TTL:         ttl,
+			// Locks are TTL-bound and inherently ephemeral — they expire
+			// in seconds and re-acquire on restart. Memory storage is the
+			// right semantic match (and avoids needing JetStream file
+			// store + PVCs in HA deployments). The KV API requests file
+			// storage by default, which fails on NATS deployments that
+			// only allow memory streams (e.g. our chart's nats subchart
+			// with fileStore.enabled=false). Pinning Storage here makes
+			// the coordinator portable across both layouts.
+			Storage: jetstream.MemoryStorage,
+		})
+		if err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			cancel()
+			return nil, fmt.Errorf("nats coordinator: locks bucket (after %s): %w", bucketRetryTimeout, err)
+		}
+		log.WithContext(parentCtx).Warnf("nats coordinator: locks bucket creation failed, retrying in %s: %v", bucketRetryBackoff, err)
+		select {
+		case <-parentCtx.Done():
+			cancel()
+			return nil, fmt.Errorf("nats coordinator: locks bucket cancelled: %w", parentCtx.Err())
+		case <-time.After(bucketRetryBackoff):
+		}
 	}
 
 	return &Coordinator{
