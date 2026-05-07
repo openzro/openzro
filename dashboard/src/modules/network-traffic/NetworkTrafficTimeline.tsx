@@ -46,6 +46,7 @@ import {
   NetworkTrafficEvent,
   NetworkTrafficEventsResponse,
 } from "@/interfaces/NetworkTrafficEvent";
+import { NetworkResource } from "@/interfaces/Network";
 import { Peer } from "@/interfaces/Peer";
 import { Policy } from "@/interfaces/Policy";
 import { OSLogo } from "@/modules/peers/PeerOSCell";
@@ -56,6 +57,13 @@ type FlowGroup = {
   reportingPeer?: Peer;
   sourcePeer?: Peer;
   destPeer?: Peer;
+  // Network Resource on the destination side. Populated when the
+  // flow event carries a non-empty dest_resource_id and we can match
+  // it against /api/networks/resources. Used to render the resource's
+  // address (e.g. ci.example.com) on the destination pill instead of
+  // the bare IP labelled "external".
+  destResource?: NetworkResource;
+  sourceResource?: NetworkResource;
   policy?: Policy;
   totalRx: number;
   totalTx: number;
@@ -89,6 +97,14 @@ const GRID_COLS =
 export default function NetworkTrafficTimeline() {
   const { peers } = usePeers();
   const { data: policies } = useFetchApi<Policy[]>("/policies");
+  // Network Resources surface as flow-event destinations once the
+  // routing peer's forward chain stamps the rule_index — without
+  // this fetch, a flow to e.g. ci.example.com would render the bare
+  // IP labelled "external", losing the operator-friendly hostname
+  // they configured the resource with.
+  const { data: resources } = useFetchApi<NetworkResource[]>(
+    "/networks/resources",
+  );
 
   const [search, setSearch] = useState("");
   const [range, setRange] = useState<DateRange | undefined>();
@@ -113,8 +129,14 @@ export default function NetworkTrafficTimeline() {
     useFetchApi<NetworkTrafficEventsResponse>(queryUrl);
 
   const groups = useMemo(
-    () => groupFlows(data?.events ?? [], peers ?? [], policies ?? []),
-    [data, peers, policies],
+    () =>
+      groupFlows(
+        data?.events ?? [],
+        peers ?? [],
+        policies ?? [],
+        resources ?? [],
+      ),
+    [data, peers, policies, resources],
   );
 
   const filteredGroups = useMemo(() => {
@@ -844,13 +866,25 @@ function RowCells({
         <EventCell row={row} />
       </div>
       <div className={cellCls} role={"cell"}>
-        {isFlowFirst && <PeerCell peer={row.group.sourcePeer} ip={firstEvent(row).source_ip} />}
+        {isFlowFirst && (
+          <PeerCell
+            peer={row.group.sourcePeer}
+            resource={row.group.sourceResource}
+            ip={firstEvent(row).source_ip}
+          />
+        )}
       </div>
       <div className={cellCls} role={"cell"}>
         {isFlowFirst && <ProtoCell event={firstEvent(row)} />}
       </div>
       <div className={cellCls} role={"cell"}>
-        {isFlowFirst && <PeerCell peer={row.group.destPeer} ip={firstEvent(row).dest_ip} />}
+        {isFlowFirst && (
+          <PeerCell
+            peer={row.group.destPeer}
+            resource={row.group.destResource}
+            ip={firstEvent(row).dest_ip}
+          />
+        )}
       </div>
       <div className={cellCls + " text-right"} role={"cell"}>
         {isFlowFirst && <TrafficCell rx={row.group.totalRx} tx={row.group.totalTx} />}
@@ -947,10 +981,23 @@ function PolicyContent({ policy }: { policy: Policy }) {
 
 // PeerCell shows the peer as an OS-icon avatar with a country flag
 // overlay, name on top, IP underneath in mono. When the peer didn't
-// resolve (off-mesh endpoint or stale event), we still render the IP
-// — knowing which IP fired matters even when the friendly name is
-// missing. The Globe icon stands in for the avatar in that case.
-function PeerCell({ peer, ip }: { peer?: Peer; ip: string }) {
+// resolve, we walk a fallback chain before giving up: a Network
+// Resource match (rendering the operator-configured address such as
+// ci.example.com) takes precedence over the bare-IP "external" label.
+// Knowing which IP fired matters even when the friendly name is
+// missing — we always print the IP underneath. The Globe icon stands
+// in for the avatar when neither a peer nor a resource matches.
+function PeerCell({
+  peer,
+  resource,
+  ip,
+}: {
+  peer?: Peer;
+  resource?: NetworkResource;
+  ip: string;
+}) {
+  const fallbackTitle = resource?.address ?? "external";
+  const fallbackKind = resource?.type ?? null; // "domain" | "host" | "subnet"
   return (
     <div className={"flex items-center gap-2 min-w-0"}>
       <div className={"relative shrink-0"}>
@@ -976,11 +1023,18 @@ function PeerCell({ peer, ip }: { peer?: Peer; ip: string }) {
       <div className={"flex flex-col min-w-0"}>
         {peer ? (
           <span className={"text-sm text-neutral-900 dark:text-white truncate"}>{peer.name}</span>
+        ) : resource ? (
+          <span
+            className={"text-sm text-neutral-900 dark:text-white truncate"}
+            title={resource.name ? `${resource.name} (${resource.address})` : resource.address}
+          >
+            {fallbackTitle}
+          </span>
         ) : (
           <span className={"text-xs text-neutral-500 dark:text-nb-gray-400 truncate"}>external</span>
         )}
         <span className={"font-mono text-[11px] text-neutral-500 dark:text-nb-gray-400 truncate"}>
-          {ip}
+          {fallbackKind && !peer ? `${fallbackKind} · ${ip}` : ip}
         </span>
       </div>
     </div>
@@ -1132,6 +1186,7 @@ function groupFlows(
   events: NetworkTrafficEvent[],
   peers: Peer[],
   policies: Policy[],
+  resources: NetworkResource[],
 ): FlowGroup[] {
   const byID = new Map<string, Peer>();
   const byIP = new Map<string, Peer>();
@@ -1143,6 +1198,10 @@ function groupFlows(
   for (const p of policies) {
     if (p.id) policyByID.set(p.id, p);
   }
+  const resourceByID = new Map<string, NetworkResource>();
+  for (const r of resources) {
+    if (r.id) resourceByID.set(r.id, r);
+  }
 
   const grouped = new Map<string, FlowGroup>();
   for (const e of events) {
@@ -1151,6 +1210,12 @@ function groupFlows(
     let dest = byIP.get(e.dest_ip);
     if (!source && reporting && e.direction === "egress") source = reporting;
     if (!dest && reporting && e.direction === "ingress") dest = reporting;
+    const sourceResource = e.source_resource_id
+      ? resourceByID.get(e.source_resource_id)
+      : undefined;
+    const destResource = e.dest_resource_id
+      ? resourceByID.get(e.dest_resource_id)
+      : undefined;
 
     const key = e.flow_id || e.event_id;
     let g = grouped.get(key);
@@ -1161,6 +1226,8 @@ function groupFlows(
         reportingPeer: reporting,
         sourcePeer: source,
         destPeer: dest,
+        sourceResource,
+        destResource,
         policy: e.rule_id ? policyByID.get(e.rule_id) : undefined,
         totalRx: 0,
         totalTx: 0,
@@ -1171,6 +1238,8 @@ function groupFlows(
       g.sourcePeer = g.sourcePeer ?? source;
       g.destPeer = g.destPeer ?? dest;
       g.reportingPeer = g.reportingPeer ?? reporting;
+      g.sourceResource = g.sourceResource ?? sourceResource;
+      g.destResource = g.destResource ?? destResource;
     }
     g.events.push(e);
     g.totalRx += e.rx_bytes;
@@ -1190,6 +1259,10 @@ function matchesSearch(g: FlowGroup, q: string): boolean {
     g.sourcePeer?.hostname,
     g.destPeer?.name,
     g.destPeer?.hostname,
+    g.sourceResource?.name,
+    g.sourceResource?.address,
+    g.destResource?.name,
+    g.destResource?.address,
     g.reportingPeer?.name,
     g.policy?.name,
     g.events[0]?.source_ip,
@@ -1199,8 +1272,8 @@ function matchesSearch(g: FlowGroup, q: string): boolean {
 }
 
 function narrativeFor(e: NetworkTrafficEvent, g: FlowGroup): string {
-  const dest = g.destPeer?.name ?? e.dest_ip;
-  const src = g.sourcePeer?.name ?? e.source_ip;
+  const dest = g.destPeer?.name ?? g.destResource?.address ?? e.dest_ip;
+  const src = g.sourcePeer?.name ?? g.sourceResource?.address ?? e.source_ip;
   switch (e.type) {
     case "start":
       // Mirror NetBird's wording. "received P2P connection from" reads
