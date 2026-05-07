@@ -27,6 +27,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -51,6 +52,13 @@ const defaultDSN = "host=localhost port=5432 dbname=openzro_flow user=openzro pa
 // inserting events under any other ID makes them invisible to the
 // dashboard even though they're persisted in Postgres.
 const defaultMgmtStorePath = "/tmp/openzro-mgmt-data/store.db"
+
+// errNoAccount fires when the dev management store has no account row
+// yet — i.e. the operator has not logged into the dashboard once.
+// Treated as a soft skip in main(): a fresh checkout shouldn't fail
+// the whole `make dev.dashboard` chain just because there's nothing
+// to seed yet.
+var errNoAccount = errors.New("dev seed: no account in management store")
 
 // fakePeer is a synthetic peer used to populate source/dest IPs and
 // peer_id columns. Names are intentionally suggestive of typical
@@ -113,7 +121,18 @@ func main() {
 
 	accountID, err := resolveAccountID()
 	if err != nil {
-		log.Fatalf("resolve account id: %v\n  → log into the dev dashboard at least once so the management daemon provisions an account, then re-run", err)
+		// First-run fresh-checkout case: management is up, but no
+		// operator has logged into the dashboard yet, so no account
+		// exists to attach seed data to. Exit cleanly so a parent
+		// `make dev.dashboard` doesn't bail out before the dashboard
+		// even renders. The user logs in once, then `make dev.seed.flow-events`
+		// (or any subsequent `make dev.dashboard`) picks the new
+		// account up automatically.
+		if errors.Is(err, errNoAccount) {
+			log.Printf("dev seed: %v — skipping (log in once, then re-run for synthetic events)", err)
+			return
+		}
+		log.Fatalf("resolve account id: %v", err)
 	}
 
 	if err := seedPeers(accountID); err != nil {
@@ -251,7 +270,7 @@ func resolveAccountID() (string, error) {
 	row := db.QueryRow("SELECT id FROM accounts ORDER BY created_at LIMIT 1")
 	if err := row.Scan(&id); err != nil {
 		if err == sql.ErrNoRows {
-			return "", fmt.Errorf("no accounts in %s — log into the dev dashboard first", path)
+			return "", fmt.Errorf("no accounts in %s — log into the dev dashboard first: %w", path, errNoAccount)
 		}
 		return "", fmt.Errorf("query accounts: %w", err)
 	}
