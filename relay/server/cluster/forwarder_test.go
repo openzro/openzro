@@ -245,6 +245,45 @@ func TestForwarder_RemoteWithoutPeerSilentlyDrops(t *testing.T) {
 	require.Empty(t, got, "stale FWD must not surface on the wrong pod's local peer")
 }
 
+func TestForwarder_RemoteDispatchPreservesSrcStamp(t *testing.T) {
+	// Production reproducer for the data-plane bug fixed by adding
+	// a dst prefix to the MsgFwd frame: peer.go's handleTransportMsg
+	// rewrites the msg's peer-ID slot to *src* before calling
+	// Forward, but the previous wire format had HandleFwd reading
+	// the slot as *dst* on the receiving pod — so every cross-pod
+	// packet was silently dropped because the slot held the asker's
+	// id (not local) and HandleFwd's `if !HasPeer(slot)` short-circuit
+	// fired.
+	//
+	// This test simulates that production sequence: build a msg
+	// with slot=src, then forward it across the fabric. The
+	// receiving pod must dispatch to the dst the asker passed to
+	// Forward (NOT to whatever the slot reads as), and the bytes
+	// the destination dispatcher receives must still have slot=src
+	// so the destination peer's local TCP/WS conn sees a packet
+	// stamped with the originator.
+	src := newPeerID(0xAA)
+	dst := newPeerID(0xBB)
+	fwdA, _, _, dispB, _, _ := startForwarderPair(t,
+		nil,                       // src not on A in this scenario; only matters that dst is on B
+		[]messages.PeerID{dst},
+	)
+
+	// Seed: build msg as if it came from peer A (slot=dst at this
+	// point — it's how the openzro client emits TransportMsg), then
+	// flip slot to src like handleTransportMsg does in production.
+	msg := makeTransportMsg(t, dst, "wg-handshake-init")
+	require.NoError(t, messages.UpdateTransportMsg(msg, src))
+
+	require.NoError(t, fwdA.Forward(context.Background(), dst, msg))
+
+	dispB.waitFor(t, 1, time.Second)
+	got := dispB.snapshot(dst)
+	require.Len(t, got, 1, "cross-pod dispatch must deliver the msg to dst")
+	require.Equal(t, msg, got[0],
+		"dispatched bytes must preserve slot=src so the dst's local conn reads the originator correctly")
+}
+
 func TestForwarder_StreamGoneInvalidatesAndReturnsNotFound(t *testing.T) {
 	peer := newPeerID(0xEE)
 	fwdA, _, _, _, _, _ := startForwarderPair(t, nil, nil)
