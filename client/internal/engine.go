@@ -752,17 +752,29 @@ func toFlowLoggerConfig(config *mgmProto.FlowConfig) (*nftypes.FlowConfig, error
 	if config.GetInterval() == nil {
 		return nil, errors.New("flow interval is nil")
 	}
-	return &nftypes.FlowConfig{
-		Enabled:            config.GetEnabled(),
-		Counters:           config.GetCounters(),
-		URL:                config.GetUrl(),
-		TokenPayload:       config.GetTokenPayload(),
-		TokenSignature:     config.GetTokenSignature(),
-		Interval:           config.GetInterval().AsDuration(),
-		DNSCollection:      config.GetDnsCollection(),
-		ExitNodeCollection: config.GetExitNodeCollection(),
-		Groups:             append([]string(nil), config.GetGroups()...),
-	}, nil
+	excluded := config.GetExcludedPorts()
+	out := &nftypes.FlowConfig{
+		Enabled:                  config.GetEnabled(),
+		Counters:                 config.GetCounters(),
+		URL:                      config.GetUrl(),
+		TokenPayload:             config.GetTokenPayload(),
+		TokenSignature:           config.GetTokenSignature(),
+		Interval:                 config.GetInterval().AsDuration(),
+		DNSCollection:            config.GetDnsCollection(),
+		ExitNodeCollection:       config.GetExitNodeCollection(),
+		Groups:                   append([]string(nil), config.GetGroups()...),
+		DisableDefaultPortFilter: config.GetDisableDefaultPortFilter(),
+	}
+	if len(excluded) > 0 {
+		out.ExcludedPorts = make([]nftypes.FlowPortFilter, 0, len(excluded))
+		for _, p := range excluded {
+			out.ExcludedPorts = append(out.ExcludedPorts, nftypes.FlowPortFilter{
+				Port:     uint16(p.GetPort()),
+				Protocol: p.GetProtocol(),
+			})
+		}
+	}
+	return out, nil
 }
 
 // updateChecksIfNew updates checks if there are changes and sync new meta with management

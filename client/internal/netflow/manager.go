@@ -15,6 +15,7 @@ import (
 
 	"github.com/openzro/openzro/client/firewall/policymark"
 	"github.com/openzro/openzro/client/internal/netflow/conntrack"
+	"github.com/openzro/openzro/client/internal/netflow/filter"
 	"github.com/openzro/openzro/client/internal/netflow/logger"
 	nftypes "github.com/openzro/openzro/client/internal/netflow/types"
 	"github.com/openzro/openzro/client/internal/peer"
@@ -163,7 +164,8 @@ func (m *Manager) Update(update *nftypes.FlowConfig) error {
 		m.flowConfig.TokenSignature = previous.TokenSignature
 	}
 
-	m.logger.UpdateConfig(update.DNSCollection, update.ExitNodeCollection)
+	m.logger.UpdateConfig(update.DNSCollection, update.ExitNodeCollection,
+		filter.New(update.DisableDefaultPortFilter, update.ExcludedPorts))
 
 	changed := previous != nil && update.Enabled != previous.Enabled
 	if update.Enabled {

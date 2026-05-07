@@ -17,6 +17,14 @@ import (
 )
 
 type rcvChan chan *types.EventFields
+
+// portFilterHolder boxes a types.PortFilter interface so it can ride
+// in an atomic.Pointer (Go's atomic.Value would also work, but the
+// pointer flavour matches the rest of this struct).
+type portFilterHolder struct {
+	pf types.PortFilter
+}
+
 type Logger struct {
 	mux                sync.Mutex
 	enabled            atomic.Bool
@@ -26,7 +34,11 @@ type Logger struct {
 	wgIfaceNet         netip.Prefix
 	dnsCollection      atomic.Bool
 	exitNodeCollection atomic.Bool
-	Store              types.Store
+	// portFilter is swapped atomically on every UpdateConfig — the
+	// hot path reads the current pointer once per event. nil means
+	// "filter disabled" (a fresh Logger before its first config push).
+	portFilter atomic.Pointer[portFilterHolder]
+	Store      types.Store
 }
 
 func New(statusRecorder *peer.Status, wgIfaceIPNet netip.Prefix) *Logger {
@@ -131,9 +143,14 @@ func (l *Logger) DeleteEvents(ids []uuid.UUID) {
 	l.Store.DeleteEvents(ids)
 }
 
-func (l *Logger) UpdateConfig(dnsCollection, exitNodeCollection bool) {
+func (l *Logger) UpdateConfig(dnsCollection, exitNodeCollection bool, portFilter types.PortFilter) {
 	l.dnsCollection.Store(dnsCollection)
 	l.exitNodeCollection.Store(exitNodeCollection)
+	if portFilter == nil {
+		l.portFilter.Store(nil)
+		return
+	}
+	l.portFilter.Store(&portFilterHolder{pf: portFilter})
 }
 
 func (l *Logger) shouldStore(event *types.EventFields, isExitNode bool) bool {
@@ -144,6 +161,13 @@ func (l *Logger) shouldStore(event *types.EventFields, isExitNode bool) bool {
 
 	// check exit node collection
 	if !l.exitNodeCollection.Load() && isExitNode {
+		return false
+	}
+
+	// check operator-configured + built-in port filter (SSDP, mDNS, etc).
+	// The filter is set on every Sync update so a fresh Logger before
+	// its first UpdateConfig has portFilter==nil and we fall through.
+	if h := l.portFilter.Load(); h != nil && h.pf != nil && h.pf.Excludes(event.Protocol, event.DestPort) {
 		return false
 	}
 
