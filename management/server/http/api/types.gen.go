@@ -63,6 +63,14 @@ const (
 	EventActivityCodeUserUnblock                              EventActivityCode = "user.unblock"
 )
 
+// Defines values for FlowPortFilterProtocol.
+const (
+	FlowPortFilterProtocolAny   FlowPortFilterProtocol = "any"
+	FlowPortFilterProtocolEmpty FlowPortFilterProtocol = ""
+	FlowPortFilterProtocolTcp   FlowPortFilterProtocol = "tcp"
+	FlowPortFilterProtocolUdp   FlowPortFilterProtocol = "udp"
+)
+
 // Defines values for GeoLocationCheckAction.
 const (
 	GeoLocationCheckActionAllow GeoLocationCheckAction = "allow"
@@ -257,6 +265,22 @@ type Account struct {
 
 // AccountExtraSettings defines model for AccountExtraSettings.
 type AccountExtraSettings struct {
+	// NetworkTrafficDisableDefaultPortFilter Turns OFF the client-side built-in skip list of broadcast /
+	// discovery ports (NetBIOS-137/138, SSDP-1900, mDNS-5353, LLMNR-5355,
+	// all UDP). Default false: a corporate VPN almost never wants those
+	// events polluting telemetry. Operators flip this to true when they
+	// DO want to capture discovery traffic (incident response on a
+	// compromised IoT segment, threat hunting, etc).
+	NetworkTrafficDisableDefaultPortFilter *bool `json:"network_traffic_disable_default_port_filter,omitempty"`
+
+	// NetworkTrafficExcludedPorts Operator-defined list of (port, protocol) pairs the client drops at
+	// the conntrack-event boundary before queueing for management. Added
+	// to the built-in skip list, or replaces it entirely when
+	// network_traffic_disable_default_port_filter is true. Useful for
+	// extra protocols generating uninteresting flow events (internal
+	// heartbeats, custom multicast, app-specific service discovery).
+	NetworkTrafficExcludedPorts *[]FlowPortFilter `json:"network_traffic_excluded_ports,omitempty"`
+
 	// NetworkTrafficLogsEnabled Enables or disables network traffic logging. If enabled, all network traffic events from peers will be stored.
 	NetworkTrafficLogsEnabled bool `json:"network_traffic_logs_enabled"`
 
@@ -465,6 +489,22 @@ type Event struct {
 
 // EventActivityCode The string code of the activity that occurred during the event
 type EventActivityCode string
+
+// FlowPortFilter A single (port, protocol) pair the client drops before reporting flow
+// events. protocol is "tcp", "udp", or "any" / "" (matches both);
+// comparison is case-insensitive on the wire.
+type FlowPortFilter struct {
+	// Port Destination port to drop. Source port is ephemeral so the filter
+	// keys on dest. Port 0 entries are rejected (port 0 events are
+	// handled separately upstream).
+	Port int `json:"port"`
+
+	// Protocol L4 protocol — "tcp", "udp", "any" or empty (matches both).
+	Protocol FlowPortFilterProtocol `json:"protocol"`
+}
+
+// FlowPortFilterProtocol L4 protocol — "tcp", "udp", "any" or empty (matches both).
+type FlowPortFilterProtocol string
 
 // GeoLocationCheck Posture check for geo location
 type GeoLocationCheck struct {
