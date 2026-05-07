@@ -750,12 +750,13 @@ func buildFlowConfig(config *types.Config, extra *types.ExtraSettings) *proto.Fl
 		return nil
 	}
 	fc := &proto.FlowConfig{
-		Url:                url,
-		Interval:           defaultFlowIntervalProto,
-		Enabled:            extra.FlowEnabled,
-		Counters:           extra.FlowPacketCounterEnabled,
-		DnsCollection:      extra.FlowDnsCollectionEnabled,
-		ExitNodeCollection: extra.FlowENCollectionEnabled,
+		Url:                      url,
+		Interval:                 defaultFlowIntervalProto,
+		Enabled:                  extra.FlowEnabled,
+		Counters:                 extra.FlowPacketCounterEnabled,
+		DnsCollection:            extra.FlowDnsCollectionEnabled,
+		ExitNodeCollection:       extra.FlowENCollectionEnabled,
+		DisableDefaultPortFilter: extra.FlowDisableDefaultPortFilter,
 	}
 	// The Groups slice is treated as immutable on the read path
 	// (peer + applyFlowGroupFilter both read, never mutate). Reusing
@@ -765,6 +766,15 @@ func buildFlowConfig(config *types.Config, extra *types.ExtraSettings) *proto.Fl
 	// copy first.
 	if len(extra.FlowEventsGroups) > 0 {
 		fc.Groups = extra.FlowEventsGroups
+	}
+	if len(extra.FlowExcludedPorts) > 0 {
+		fc.ExcludedPorts = make([]*proto.FlowPortFilter, 0, len(extra.FlowExcludedPorts))
+		for _, p := range extra.FlowExcludedPorts {
+			fc.ExcludedPorts = append(fc.ExcludedPorts, &proto.FlowPortFilter{
+				Port:     p.Port,
+				Protocol: p.Protocol,
+			})
+		}
 	}
 	return fc
 }
