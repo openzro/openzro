@@ -9,6 +9,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc/metadata"
 
 	flowProto "github.com/openzro/openzro/flow/proto"
 	"github.com/openzro/openzro/flow/store"
@@ -206,6 +207,18 @@ type bufferedEvent struct {
 // the hot path in runWorker.
 func (s *FlowService) Events(stream flowProto.FlowService_EventsServer) error {
 	ctx := stream.Context()
+	// Send initial response headers proactively so the client's
+	// stream.Header() returns immediately with non-empty metadata
+	// instead of blocking on the first ack. The flow client (see
+	// flow/client/client.go:checkHeader) treats an empty header set
+	// as "stream broken" and retries forever — which manifested as
+	// "flow receiver sent no headers" + "stream not initialized" in
+	// every operator deployment that turned on Network Traffic
+	// Logs. Empty MD is fine; gRPC-go flushes the END_HEADERS frame
+	// regardless and that's all the client checks for.
+	if err := stream.SendHeader(metadata.MD{}); err != nil {
+		log.WithContext(ctx).Debugf("flow stream send header: %v", err)
+	}
 	for {
 		event, err := stream.Recv()
 		if err == io.EOF {
