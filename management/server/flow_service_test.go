@@ -71,6 +71,14 @@ func TestFlowService_AcksEverySentEvent(t *testing.T) {
 		if err != nil {
 			break
 		}
+		// Drop the server's leading IsInitiator ack — the handler
+		// emits one with empty EventId on stream-open to flush the
+		// initial gRPC HEADERS frame past intermediaries that
+		// otherwise stall the client's Header() call. The flow
+		// client at flow/client/client.go:142 ignores these too.
+		if ack.IsInitiator && len(ack.EventId) == 0 {
+			continue
+		}
 		got = append(got, ack)
 	}
 
