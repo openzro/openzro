@@ -242,6 +242,32 @@ message FlowConfig {
   // locally so excluded peers never spend CPU on capture or push
   // events to management.
   repeated string groups = 9;
+
+  // disableDefaultPortFilter turns off the client's built-in skip
+  // list of broadcast / discovery ports (SSDP-1900, mDNS-5353,
+  // NetBIOS-137/138, LLMNR-5355). Off by default: a corporate VPN
+  // typically does NOT want these events polluting telemetry,
+  // they're high-volume "device A is here" chatter that no audit
+  // policy cares about. Operators who explicitly want to track
+  // discovery traffic flip this to true and the built-in skip
+  // list is ignored.
+  bool disableDefaultPortFilter = 10;
+
+  // excludedPorts is an operator-defined list of (port, protocol)
+  // pairs to drop on the client side, ADDED to the built-in skip
+  // list (unless disableDefaultPortFilter is true, in which case
+  // ONLY this list applies). Useful for environments with
+  // additional protocols generating uninteresting flow events
+  // (e.g. internal heartbeats, custom multicast).
+  repeated FlowPortFilter excludedPorts = 11;
+}
+
+// FlowPortFilter describes a single (port, protocol) pair the client
+// drops at the conntrack-event boundary before queueing for the
+// management. protocol is "tcp" / "udp" / "any" (matches both).
+message FlowPortFilter {
+  uint32 port = 1;
+  string protocol = 2;
 }
 
 // ProtectedHostConfig is similar to HostConfig but has additional user and password
