@@ -253,15 +253,27 @@ func (c *ConnTrack) handleEvent(event nfct.Event) {
 	})
 }
 
-// relevantFlow checks if the flow is related to the specified interface
-func (c *ConnTrack) relevantFlow(mark uint32, srcIP, dstIP netip.Addr) bool {
-	if nbnet.IsDataPlaneMark(mark) {
-		return true
-	}
-
-	// fallback if mark rules are not in place
-	wgnet := c.iface.Address().Network
-	return wgnet.Contains(srcIP) || wgnet.Contains(dstIP)
+// relevantFlow decides whether a conntrack flow should reach the
+// dashboard's traffic log. The data-plane mark is the canonical
+// signal — every accept rule the agent installs (peer-ACL chain in
+// acl_linux.go and routing-peer forward chain in router_linux.go)
+// stamps it via the policymark indexer (ADR-0013). A flow without
+// the mark never matched a mesh-installed rule, which means it
+// either bypassed the agent entirely or was a kernel-side
+// connection unrelated to mesh traffic; in both cases it does not
+// belong in the operator's flow log.
+//
+// The pre-ADR-0013 implementation also accepted flows whose src or
+// dst landed in the WG network range as a transitional fallback.
+// That fallback drove a class of false positives (kernel-side
+// bind() to the wgaddr emitting outbound to the public internet,
+// stale conntrack from before the agent restarted, etc.) without
+// ever providing useful audit signal — those flows have no
+// rule_id, so the dashboard renders them with an empty Policy line
+// and "external" destination labels. Removed in
+// ADR-0015's diagnostic follow-up.
+func (c *ConnTrack) relevantFlow(mark uint32, _, _ netip.Addr) bool {
+	return nbnet.IsDataPlaneMark(mark)
 }
 
 // mapRxPackets maps packet counts to RX based on flow direction
