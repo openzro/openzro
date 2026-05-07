@@ -113,6 +113,19 @@ func (h *handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 			FlowPacketCounterEnabled: req.Settings.Extra.NetworkTrafficPacketCounterEnabled,
 			FlowEventsGroups:         groups,
 		}
+		if req.Settings.Extra.NetworkTrafficDisableDefaultPortFilter != nil {
+			settings.Extra.FlowDisableDefaultPortFilter = *req.Settings.Extra.NetworkTrafficDisableDefaultPortFilter
+		}
+		if req.Settings.Extra.NetworkTrafficExcludedPorts != nil {
+			ports := make([]types.FlowPortFilter, 0, len(*req.Settings.Extra.NetworkTrafficExcludedPorts))
+			for _, p := range *req.Settings.Extra.NetworkTrafficExcludedPorts {
+				ports = append(ports, types.FlowPortFilter{
+					Port:     uint32(p.Port),
+					Protocol: string(p.Protocol),
+				})
+			}
+			settings.Extra.FlowExcludedPorts = ports
+		}
 	}
 
 	if req.Settings.JwtGroupsEnabled != nil {
@@ -250,6 +263,18 @@ func toAccountResponse(accountID string, settings *types.Settings, meta *types.A
 			NetworkTrafficLogsEnabled:          settings.Extra.FlowEnabled,
 			NetworkTrafficPacketCounterEnabled: settings.Extra.FlowPacketCounterEnabled,
 			NetworkTrafficLogsGroups:           groups,
+		}
+		disableDefault := settings.Extra.FlowDisableDefaultPortFilter
+		apiSettings.Extra.NetworkTrafficDisableDefaultPortFilter = &disableDefault
+		if len(settings.Extra.FlowExcludedPorts) > 0 {
+			ports := make([]api.FlowPortFilter, 0, len(settings.Extra.FlowExcludedPorts))
+			for _, p := range settings.Extra.FlowExcludedPorts {
+				ports = append(ports, api.FlowPortFilter{
+					Port:     int(p.Port),
+					Protocol: api.FlowPortFilterProtocol(p.Protocol),
+				})
+			}
+			apiSettings.Extra.NetworkTrafficExcludedPorts = &ports
 		}
 	}
 
