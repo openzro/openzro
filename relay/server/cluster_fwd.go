@@ -33,6 +33,16 @@ var errClusterPeerNotFound = cluster.ErrPeerNotFound
 // to its legacy "drop on local-store miss" behaviour, byte-for-byte.
 type CrossPodForwarder interface {
 	Forward(ctx context.Context, dst messages.PeerID, msg []byte) error
+
+	// Locate answers "is this peer connected anywhere in the
+	// cluster?" without sending data. Used by the subscribe path
+	// (handleSubscribePeerState) so a peer on pod-A can discover
+	// that the peer it wants to talk to is on pod-B and proceed to
+	// open a relay connection, instead of silently timing out as
+	// "peer not available". Returns ok=true when some pod in the
+	// fabric responded with I_HAVE for the peer, ok=false on
+	// timeout / no-owner.
+	Locate(ctx context.Context, peer messages.PeerID) (pod string, ok bool)
 }
 
 // ErrLocalPeerGone is returned by LocalPeerDispatcher when the peer

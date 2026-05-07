@@ -138,6 +138,23 @@ func (f *Forwarder) Forward(ctx context.Context, dst messages.PeerID, msg []byte
 	return nil
 }
 
+// Locate answers "does any pod in the cluster currently own this
+// peer?" without sending any data. Used by the relay's subscribe
+// path so a client on pod-A asking about a peer on pod-B sees that
+// the peer is online (rather than silently timing out as if the
+// peer didn't exist anywhere). Local hits short-circuit without
+// hitting the fabric.
+func (f *Forwarder) Locate(ctx context.Context, peer messages.PeerID) (string, bool) {
+	if f.local.HasPeer(peer) {
+		return "", true
+	}
+	pod, ok, _ := f.locator.Lookup(ctx, peer)
+	if !ok {
+		return "", false
+	}
+	return pod, true
+}
+
 // HandleFwd dispatches an inbound MsgFwd that arrived from a peer
 // pod. The payload is the complete transport msg; we unmarshal the
 // dst peer ID, look it up locally, and hand off. If the peer isn't
