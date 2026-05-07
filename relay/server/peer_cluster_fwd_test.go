@@ -27,6 +27,11 @@ type fakeForwarder struct {
 	lastDst messages.PeerID
 	lastMsg []byte
 	retErr  error
+	// locateOK governs the Locate response. Defaults to false (peer
+	// not found anywhere) to keep older tests working unchanged;
+	// the subscribe-via-fabric tests flip this on per-case.
+	locateOK  bool
+	locatePod string
 }
 
 func (f *fakeForwarder) Forward(_ context.Context, dst messages.PeerID, msg []byte) error {
@@ -36,6 +41,12 @@ func (f *fakeForwarder) Forward(_ context.Context, dst messages.PeerID, msg []by
 	f.lastDst = dst
 	f.lastMsg = append([]byte(nil), msg...)
 	return f.retErr
+}
+
+func (f *fakeForwarder) Locate(_ context.Context, _ messages.PeerID) (string, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.locatePod, f.locateOK
 }
 
 // recordingConn is a minimal net.Conn that buffers everything
@@ -79,6 +90,10 @@ func newPeerForTest(t *testing.T, idByte byte, fwd CrossPodForwarder) (*Peer, *r
 	st := store.NewStore()
 	notif := store.NewPeerNotifier()
 	p := NewPeer(mustMetrics(t), id, conn, st, notif, fwd)
+	// Work() normally wires this on first run; tests bypass Work
+	// and exercise handlers directly, so set it up here for the
+	// subscribe-path tests that depend on it.
+	p.peersListener = notif.NewListener(p.sendPeersOnline, p.sendPeersWentOffline)
 	return p, conn, st
 }
 
@@ -166,6 +181,49 @@ func TestHandleTransportMsg_NoForwarderDropsOnMiss(t *testing.T) {
 	require.NoError(t, err)
 
 	src.handleTransportMsg(msg) // must not panic
+}
+
+func TestHandleSubscribePeerState_CrossPodPeerReturnsAsOnline(t *testing.T) {
+	// Multi-pod fabric (ADR-0014): A asks the relay "is peer B
+	// online?" When B is on a sibling pod, the local store says no
+	// — but the cluster locator can answer yes. Without consulting
+	// the fabric the asker silently times out as if B didn't exist
+	// anywhere, which is what the user-reported "peers connect but
+	// don't talk to each other unless they happen to land on the
+	// same pod" symptom looked like in production.
+	fwd := &fakeForwarder{locateOK: true, locatePod: "10.0.0.42:7090"}
+	src, conn, _ := newPeerForTest(t, 0xAA, fwd)
+
+	dstID := newPeerID(0xBB) // never added to local store
+	subMsgs, err := messages.MarshalSubPeerStateMsg([]messages.PeerID{dstID})
+	require.NoError(t, err)
+	require.NotEmpty(t, subMsgs)
+
+	src.handleSubscribePeerState(subMsgs[0])
+
+	// The asker must have received a PeersOnline notification —
+	// MarshalPeersOnline embeds the dst peer ID so the client's
+	// stateSubscription unblocks WaitToBeOnlineAndSubscribe.
+	require.NotEmpty(t, conn.snapshot(),
+		"a cross-pod hit must surface as a PeersOnline notification, not as silence")
+}
+
+func TestHandleSubscribePeerState_AbsentEverywhereStaysSilent(t *testing.T) {
+	// Negative case: when neither the local store nor the fabric
+	// has the peer, we keep the existing "stay silent" semantics so
+	// the asker times out exactly like in single-pod deployments.
+	fwd := &fakeForwarder{locateOK: false}
+	src, conn, _ := newPeerForTest(t, 0xAA, fwd)
+
+	dstID := newPeerID(0xCC)
+	subMsgs, err := messages.MarshalSubPeerStateMsg([]messages.PeerID{dstID})
+	require.NoError(t, err)
+	require.NotEmpty(t, subMsgs)
+
+	src.handleSubscribePeerState(subMsgs[0])
+
+	require.Empty(t, conn.snapshot(),
+		"a true miss (local + cluster) must not fabricate an online notification")
 }
 
 func TestLocalPeerDispatcher_HasAndDispatch(t *testing.T) {

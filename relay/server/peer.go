@@ -279,6 +279,39 @@ func (p *Peer) handleSubscribePeerState(msg []byte) {
 	defer p.notificationMutex.Unlock()
 
 	onlinePeers := p.store.GetOnlinePeersAndRegisterInterest(peerIDs, p.peersListener)
+
+	// Multi-pod fabric (ADR-0014): peers may be connected to a
+	// sibling pod. The local store only knows about peers connected
+	// to *this* pod, so the asker would silently time out on
+	// "peer not available" until both peers happen to land on the
+	// same pod via the LB. Fix: for every requested peer the local
+	// store didn't account for, ask the cluster fabric whether some
+	// other pod owns it; if so, treat it as online so the asker
+	// proceeds to open a relayed connection (which already flows
+	// cross-pod via crossPodFwd.Forward).
+	//
+	// This does NOT register a cross-pod offline listener — the
+	// asker still relies on the existing "send fails on dead peer"
+	// fall-through, same as the single-pod path. A future patch can
+	// add a fabric-level subscription channel for symmetric
+	// online/offline notifications.
+	if p.crossPodFwd != nil && len(onlinePeers) < len(peerIDs) {
+		known := make(map[messages.PeerID]struct{}, len(onlinePeers))
+		for _, id := range onlinePeers {
+			known[id] = struct{}{}
+		}
+		for _, id := range peerIDs {
+			if _, ok := known[id]; ok {
+				continue
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), clusterForwardTimeout)
+			if _, ok := p.crossPodFwd.Locate(ctx, id); ok {
+				onlinePeers = append(onlinePeers, id)
+			}
+			cancel()
+		}
+	}
+
 	if len(onlinePeers) == 0 {
 		return
 	}
