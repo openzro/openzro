@@ -260,11 +260,13 @@ type AccountExtraSettings struct {
 	// NetworkTrafficLogsEnabled Enables or disables network traffic logging. If enabled, all network traffic events from peers will be stored.
 	NetworkTrafficLogsEnabled bool `json:"network_traffic_logs_enabled"`
 
-	// NetworkTrafficLogsGroups Optional list of group IDs that scope network
-	// traffic event capture. When non-empty AND
-	// network_traffic_logs_enabled is true, only peers whose own groups
-	// intersect this list will capture and report flow events. Empty list
-	// (default) means every peer reports while logging is enabled.
+	// NetworkTrafficLogsGroups Optional list of group IDs that scope network traffic event capture.
+	// When non-empty AND network_traffic_logs_enabled is true, only peers
+	// whose own groups intersect this list will capture and report flow
+	// events. Empty list (default) means every peer reports while logging
+	// is enabled. Filtering happens peer-side: excluded peers never spend
+	// CPU on capture or report bandwidth, so the cost is bounded by the
+	// scoped subset.
 	NetworkTrafficLogsGroups *[]string `json:"network_traffic_logs_groups,omitempty"`
 
 	// NetworkTrafficPacketCounterEnabled Enables or disables network traffic packet counter. If enabled, network packets and their size will be counted and reported. (This can have an slight impact on performance)
@@ -291,13 +293,13 @@ type AccountRequest struct {
 
 // AccountSettings defines model for AccountSettings.
 type AccountSettings struct {
-	// AdmissionEnforcementEnabled When true, peer Login/Sync is gated on the listed posture checks.
+	// AdmissionEnforcementEnabled When true, peer Login/Sync is gated on the listed posture checks. A peer that fails any listed check is refused with PermissionDenied and cannot enter the mesh. Required for regulated tenants (e.g. Bacen 4.893 / Circular 3.909) that need provable endpoint admission control with an audit trail.
 	AdmissionEnforcementEnabled *bool `json:"admission_enforcement_enabled,omitempty"`
 
-	// AdmissionExemptGroups Group IDs whose member peers skip the admission gate (gateway / routing peers without MDM).
+	// AdmissionExemptGroups Group IDs whose member peers skip the admission gate. Motivating case is gateway / routing peers (cloud VMs, K8s pods, on-prem servers) that are part of the mesh but never enrol in MDM/EDR. Membership in ANY listed group is sufficient.
 	AdmissionExemptGroups *[]string `json:"admission_exempt_groups,omitempty"`
 
-	// AdmissionPostureChecks Posture check IDs evaluated as the admission gate when admission_enforcement_enabled is true.
+	// AdmissionPostureChecks Posture check IDs evaluated as the admission gate when admission_enforcement_enabled is true. ALL listed checks must pass for the peer to be admitted.
 	AdmissionPostureChecks *[]string `json:"admission_posture_checks,omitempty"`
 
 	// DnsDomain Allows to define a custom dns domain for the account
@@ -349,7 +351,7 @@ type AvailablePorts struct {
 
 // Checks List of objects that perform the actual checks
 type Checks struct {
-	// EndpointSecurityCheck Posture check that delegates compliance to a configured MDM/EDR provider.
+	// EndpointSecurityCheck Posture check that delegates compliance to a configured MDM/EDR provider (Intune, SentinelOne, Huntress).
 	EndpointSecurityCheck *EndpointSecurityCheck `json:"endpoint_security_check,omitempty"`
 
 	// GeoLocationCheck Posture check for geo location
@@ -366,16 +368,6 @@ type Checks struct {
 
 	// ProcessCheck Posture Check for binaries exist and are running in the peer’s system
 	ProcessCheck *ProcessCheck `json:"process_check,omitempty"`
-}
-
-// EndpointSecurityCheck Posture check that delegates compliance to a configured
-// MDM/EDR provider (Intune, SentinelOne, Huntress).
-type EndpointSecurityCheck struct {
-	// FailOpen When true, peers are treated as compliant if the vendor lookup itself fails (timeout, vendor outage, device not found).
-	FailOpen *bool `json:"fail_open,omitempty"`
-
-	// ProviderID ID of the MDM/EDR provider configured under /api/admin/mdm-providers.
-	ProviderId uint64 `json:"provider_id"`
 }
 
 // City Describe city geographical location information
@@ -430,6 +422,15 @@ type CreateSetupKeyRequest struct {
 type DNSSettings struct {
 	// DisabledManagementGroups Groups whose DNS management is disabled
 	DisabledManagementGroups []string `json:"disabled_management_groups"`
+}
+
+// EndpointSecurityCheck Posture check that delegates compliance to a configured MDM/EDR provider (Intune, SentinelOne, Huntress).
+type EndpointSecurityCheck struct {
+	// FailOpen When true, peers are treated as compliant if the vendor lookup itself fails (timeout, vendor outage, device not found). When false (default), lookup failures are treated as non-compliant.
+	FailOpen *bool `json:"fail_open,omitempty"`
+
+	// ProviderId ID of the MDM/EDR provider configured under /api/admin/mdm-providers.
+	ProviderId uint64 `json:"provider_id"`
 }
 
 // Event defines model for Event.
