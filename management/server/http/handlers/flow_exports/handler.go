@@ -63,14 +63,16 @@ func AddEndpoints(
 }
 
 // requestBody is the wire shape for create/update. Type determines
-// which of the three Config blocks is consulted.
+// which of the per-destination Config blocks is consulted.
 type requestBody struct {
-	Name    string                          `json:"name"`
-	Type    flowExports.ExportType          `json:"type"`
-	Enabled *bool                           `json:"enabled,omitempty"`
-	Elastic *flowExports.ElasticDestConfig  `json:"elastic,omitempty"`
-	S3      *flowExports.S3DestConfig       `json:"s3,omitempty"`
-	HTTP    *flowExports.HTTPDestConfig     `json:"http,omitempty"`
+	Name    string                         `json:"name"`
+	Type    flowExports.ExportType         `json:"type"`
+	Enabled *bool                          `json:"enabled,omitempty"`
+	Elastic *flowExports.ElasticDestConfig `json:"elastic,omitempty"`
+	S3      *flowExports.S3DestConfig      `json:"s3,omitempty"`
+	HTTP    *flowExports.HTTPDestConfig    `json:"http,omitempty"`
+	Datadog *flowExports.DatadogDestConfig `json:"datadog,omitempty"`
+	GCS     *flowExports.GCSDestConfig     `json:"gcs,omitempty"`
 }
 
 // responseBody is the wire shape returned by every read endpoint and
@@ -244,6 +246,8 @@ func bodyToSaveInput(b requestBody, id uint64) flowExports.SaveInput {
 		Elastic: b.Elastic,
 		S3:      b.S3,
 		HTTP:    b.HTTP,
+		Datadog: b.Datadog,
+		GCS:     b.GCS,
 	}
 }
 
