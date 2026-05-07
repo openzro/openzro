@@ -108,6 +108,26 @@ type FlowConfig struct {
 	// from ExtraSettings.FlowEventsGroups (proto field
 	// management.FlowConfig.groups).
 	Groups []string
+
+	// DisableDefaultPortFilter turns OFF the built-in skip list of
+	// broadcast / discovery ports (SSDP-1900, mDNS-5353,
+	// NetBIOS-137/138, LLMNR-5355). Default false: a corporate
+	// VPN almost never wants those events polluting telemetry.
+	DisableDefaultPortFilter bool
+
+	// ExcludedPorts is operator-defined extra (port, protocol) pairs
+	// to drop. ADDED to the built-in skip list, or replaces it
+	// entirely when DisableDefaultPortFilter is true.
+	ExcludedPorts []FlowPortFilter
+}
+
+// FlowPortFilter is a (port, protocol) pair the client drops at the
+// conntrack-event boundary before queueing for the management.
+// Protocol is "tcp" / "udp" / "any" (matches both); compared
+// case-insensitively against the IANA-style protocol name.
+type FlowPortFilter struct {
+	Port     uint16
+	Protocol string
 }
 
 type FlowManager interface {
@@ -130,8 +150,18 @@ type FlowLogger interface {
 	Close()
 	// Enable enables the flow logger receiver
 	Enable()
-	// UpdateConfig updates the flow manager configuration
-	UpdateConfig(dnsCollection, exitNodeCollection bool)
+	// UpdateConfig updates the flow manager configuration. portFilter
+	// can be nil to disable port filtering (the fresh-Logger default).
+	// Caller owns the *filter.Filter lifetime; logger reads atomically.
+	UpdateConfig(dnsCollection, exitNodeCollection bool, portFilter PortFilter)
+}
+
+// PortFilter is the interface the logger consumes to decide whether
+// an event should be dropped before reaching the store. Concrete
+// implementation lives in client/internal/netflow/filter to avoid an
+// import cycle (filter imports types, types must not import filter).
+type PortFilter interface {
+	Excludes(proto Protocol, port uint16) bool
 }
 
 type Store interface {
