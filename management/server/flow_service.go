@@ -208,15 +208,15 @@ type bufferedEvent struct {
 func (s *FlowService) Events(stream flowProto.FlowService_EventsServer) error {
 	ctx := stream.Context()
 	// Send initial response headers proactively so the client's
-	// stream.Header() returns immediately with non-empty metadata
-	// instead of blocking on the first ack. The flow client (see
-	// flow/client/client.go:checkHeader) treats an empty header set
-	// as "stream broken" and retries forever — which manifested as
-	// "flow receiver sent no headers" + "stream not initialized" in
-	// every operator deployment that turned on Network Traffic
-	// Logs. Empty MD is fine; gRPC-go flushes the END_HEADERS frame
-	// regardless and that's all the client checks for.
-	if err := stream.SendHeader(metadata.MD{}); err != nil {
+	// stream.Header() unblocks immediately with non-empty metadata
+	// instead of stalling until the first ack. The flow client at
+	// flow/client/client.go:checkHeader rejects with "flow receiver
+	// sent no headers" when len(header)==0, so the metadata MUST be
+	// non-empty — an empty MD send-header would technically flush
+	// the gRPC HEADERS frame but the client predicate still trips.
+	// Pick a stable, semantically-meaningless key so we never trick
+	// a future caller into reading actual data out of it.
+	if err := stream.SendHeader(metadata.Pairs("flow-server", "openzro")); err != nil {
 		log.WithContext(ctx).Debugf("flow stream send header: %v", err)
 	}
 	for {
