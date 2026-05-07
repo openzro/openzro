@@ -138,18 +138,48 @@ type ExtraSettings struct {
 	// the cardinality is small (operators typically pick 1–5 groups
 	// when they care to scope at all).
 	FlowEventsGroups []string `gorm:"serializer:json"`
+
+	// FlowDisableDefaultPortFilter turns OFF the client-side built-in
+	// skip list of broadcast/discovery ports (SSDP-1900, mDNS-5353,
+	// NetBIOS-137/138, LLMNR-5355). Default false: an enterprise VPN
+	// almost never wants those events polluting traffic logs — they're
+	// high-volume "device A is here" chatter that no audit policy
+	// cares about, and on a typical workstation they account for the
+	// majority of recorded events. Operators who DO want to track
+	// discovery traffic flip this to true and the built-in skip list
+	// is bypassed.
+	FlowDisableDefaultPortFilter bool
+
+	// FlowExcludedPorts is an operator-defined list of (port, protocol)
+	// pairs to drop on the client side, ADDED to the built-in skip
+	// list (or replacing it entirely when FlowDisableDefaultPortFilter
+	// is true). Useful for environments with extra protocols generating
+	// uninteresting flow events — internal heartbeats, custom multicast,
+	// app-specific service discovery on a non-IANA port, etc.
+	FlowExcludedPorts []FlowPortFilter `gorm:"serializer:json"`
+}
+
+// FlowPortFilter is a single (port, protocol) pair the client drops at
+// the conntrack-event boundary before queueing for the management.
+// protocol is "tcp" / "udp" / "any" (case-insensitive on the wire,
+// normalised to lowercase before propagation).
+type FlowPortFilter struct {
+	Port     uint32 `json:"port"`
+	Protocol string `json:"protocol"`
 }
 
 // Copy copies the ExtraSettings struct
 func (e *ExtraSettings) Copy() *ExtraSettings {
 	return &ExtraSettings{
-		PeerApprovalEnabled:       e.PeerApprovalEnabled,
-		IntegratedValidatorGroups: append([]string(nil), e.IntegratedValidatorGroups...),
-		IntegratedValidator:       e.IntegratedValidator,
-		FlowEnabled:               e.FlowEnabled,
-		FlowPacketCounterEnabled:  e.FlowPacketCounterEnabled,
-		FlowENCollectionEnabled:   e.FlowENCollectionEnabled,
-		FlowDnsCollectionEnabled:  e.FlowDnsCollectionEnabled,
-		FlowEventsGroups:          append([]string(nil), e.FlowEventsGroups...),
+		PeerApprovalEnabled:          e.PeerApprovalEnabled,
+		IntegratedValidatorGroups:    append([]string(nil), e.IntegratedValidatorGroups...),
+		IntegratedValidator:          e.IntegratedValidator,
+		FlowEnabled:                  e.FlowEnabled,
+		FlowPacketCounterEnabled:     e.FlowPacketCounterEnabled,
+		FlowENCollectionEnabled:      e.FlowENCollectionEnabled,
+		FlowDnsCollectionEnabled:     e.FlowDnsCollectionEnabled,
+		FlowEventsGroups:             append([]string(nil), e.FlowEventsGroups...),
+		FlowDisableDefaultPortFilter: e.FlowDisableDefaultPortFilter,
+		FlowExcludedPorts:            append([]FlowPortFilter(nil), e.FlowExcludedPorts...),
 	}
 }
