@@ -78,11 +78,24 @@ func NewForwarder(transport *Transport, locator *PeerLocator, local LocalDispatc
 	}, nil
 }
 
-// Forward delivers msg to the peer whose ID is embedded in the
-// transport-msg header. Tries local first; on miss, asks the
-// locator which pod owns the peer and pushes the bytes through the
-// inter-pod fabric. Returns ErrPeerNotFound when nobody owns the
-// peer (the caller should drop the packet, same as today).
+// Forward delivers msg to the peer whose ID is the dst arg. Tries
+// local first; on miss, asks the locator which pod owns the peer
+// and pushes the bytes through the inter-pod fabric. Returns
+// ErrPeerNotFound when nobody owns the peer (the caller should
+// drop the packet, same as today).
+//
+// Wire format of MsgFwd is `dst PeerID || msg`. The msg has
+// already had its peer-ID slot rewritten to the SRC by peer.go's
+// handleTransportMsg before Forward is called, so dispatching
+// `msg` to the local destination on the receiving pod is a clean
+// hand-off — the destination's TCP/WS connection sees the same
+// bytes a same-pod relay would have produced. We carry dst as an
+// explicit prefix because it would otherwise be unrecoverable on
+// the receiving side (the sender already overwrote the slot to
+// stamp src). Without this prefix, HandleFwd would read slot=src
+// where it expects slot=dst and silently drop every cross-pod
+// packet — which is the exact bug shipped in the alpha.41…42
+// fabric line.
 func (f *Forwarder) Forward(ctx context.Context, dst messages.PeerID, msg []byte) error {
 	if f.local.HasPeer(dst) {
 		err := f.local.DispatchToLocal(dst, msg)
@@ -123,7 +136,11 @@ func (f *Forwarder) Forward(ctx context.Context, dst messages.PeerID, msg []byte
 		return ErrPeerNotFound
 	}
 
-	if err := stream.Send(MsgFwd, msg); err != nil {
+	framed := make([]byte, len(dst)+len(msg))
+	copy(framed, dst[:])
+	copy(framed[len(dst):], msg)
+
+	if err := stream.Send(MsgFwd, framed); err != nil {
 		// Send errored — the underlying conn is broken. The
 		// transport's read loop will have noticed too and is
 		// dropping the stream from its map; from our side, we
@@ -156,16 +173,20 @@ func (f *Forwarder) Locate(ctx context.Context, peer messages.PeerID) (string, b
 }
 
 // HandleFwd dispatches an inbound MsgFwd that arrived from a peer
-// pod. The payload is the complete transport msg; we unmarshal the
-// dst peer ID, look it up locally, and hand off. If the peer isn't
-// here (anymore), drop quietly — the asking pod will time out and
-// re-broadcast on the next Lookup.
+// pod. Wire format is `dst PeerID || msg`. We extract dst from the
+// prefix and dispatch the embedded msg (which still has its slot
+// stamped with src) to the local destination's connection. If the
+// peer isn't here (anymore), drop quietly — the asking pod will
+// time out and re-broadcast on the next Lookup.
 func (f *Forwarder) HandleFwd(remote string, payload []byte) error {
-	dst, err := messages.UnmarshalTransportID(payload)
-	if err != nil {
-		return fmt.Errorf("cluster forwarder: malformed FWD from %s: %w", remote, err)
+	if len(payload) < peerIDSize {
+		return fmt.Errorf("cluster forwarder: short FWD payload from %s (%d < %d)", remote, len(payload), peerIDSize)
 	}
-	if !f.local.HasPeer(*dst) {
+	var dst messages.PeerID
+	copy(dst[:], payload[:peerIDSize])
+	msg := payload[peerIDSize:]
+
+	if !f.local.HasPeer(dst) {
 		// Stale forward — the asking pod's locator cache thinks
 		// we own this peer but we don't (peer disconnected
 		// between Lookup and Send, or migrated to a third pod).
@@ -174,7 +195,7 @@ func (f *Forwarder) HandleFwd(remote string, payload []byte) error {
 		log.Debugf("cluster forwarder: FWD from %s for peer not connected here, dropping", remote)
 		return nil
 	}
-	if err := f.local.DispatchToLocal(*dst, payload); err != nil {
+	if err := f.local.DispatchToLocal(dst, msg); err != nil {
 		log.Debugf("cluster forwarder: dispatch FWD from %s to local peer failed: %v", remote, err)
 	}
 	return nil
