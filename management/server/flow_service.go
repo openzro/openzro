@@ -207,17 +207,29 @@ type bufferedEvent struct {
 // the hot path in runWorker.
 func (s *FlowService) Events(stream flowProto.FlowService_EventsServer) error {
 	ctx := stream.Context()
-	// Send initial response headers proactively so the client's
-	// stream.Header() unblocks immediately with non-empty metadata
-	// instead of stalling until the first ack. The flow client at
-	// flow/client/client.go:checkHeader rejects with "flow receiver
-	// sent no headers" when len(header)==0, so the metadata MUST be
-	// non-empty — an empty MD send-header would technically flush
-	// the gRPC HEADERS frame but the client predicate still trips.
-	// Pick a stable, semantically-meaningless key so we never trick
-	// a future caller into reading actual data out of it.
-	if err := stream.SendHeader(metadata.Pairs("flow-server", "openzro")); err != nil {
-		log.WithContext(ctx).Debugf("flow stream send header: %v", err)
+	// The flow client's checkHeader (flow/client/client.go) blocks
+	// on stream.Header() with the predicate len(header)==0 — and
+	// some HTTP/2 paths (notably nginx-ingress in front of this
+	// gRPC server) only flush response HEADERS to the client when
+	// a DATA frame goes out. SendHeader alone with non-empty
+	// metadata IS visible to a curl probe but not always to a
+	// gRPC client behind a proxy: the metadata frame and the first
+	// data frame can get coalesced, in which case Header() blocks
+	// indefinitely waiting for "initial" headers that the client
+	// stream parser already classified as something else.
+	//
+	// Sending a real FlowEventAck up-front is the cheap belt-and-
+	// suspenders fix: it forces the HEADERS frame and a DATA frame
+	// to land on the wire immediately, the client's Header()
+	// returns with the metadata + data path open. The peer client
+	// at flow/client/client.go:142 specifically ignores
+	// IsInitiator=true acks (just a trace log), so this is safe to
+	// send without any companion message having been received.
+	if err := stream.SetHeader(metadata.Pairs("flow-server", "openzro")); err != nil {
+		log.WithContext(ctx).Debugf("flow stream set header: %v", err)
+	}
+	if err := stream.Send(&flowProto.FlowEventAck{IsInitiator: true}); err != nil {
+		log.WithContext(ctx).Debugf("flow stream send initiator ack: %v", err)
 	}
 	for {
 		event, err := stream.Recv()
