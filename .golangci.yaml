@@ -114,9 +114,11 @@ issues:
   exclude-rules:
     # allow fmt
     - path: management/cmd/root\.go
-      linters: forbidigo
+      linters:
+        - forbidigo
     - path: signal/cmd/root\.go
-      linters: forbidigo
+      linters:
+        - forbidigo
     - path: sharedsock/filter\.go
       linters:
       - unused
