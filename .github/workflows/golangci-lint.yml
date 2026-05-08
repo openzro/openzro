@@ -53,13 +53,6 @@ jobs:
     name: ${{ matrix.display_name }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
-    # Track regressions but don't block PRs while the pre-existing
-    # ~30+ findings (forbidigo on dev tools, gosec G101 false positives
-    # on Token/Pass constants, unused stubs in build-tagged files,
-    # misspell on PT-BR comments, etc) get triaged. Tracked separately;
-    # flip to default (`continue-on-error: false`) once findings are
-    # at or near zero.
-    continue-on-error: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -91,7 +84,15 @@ jobs:
         # Pinned to v1.62.2 — last v1.x release before the v2 split. v2
         # would force a config migration (this repo's .golangci.yaml is
         # in v1 format); revisit when there's appetite for that.
+        #
+        # `continue-on-error: true` at step level keeps the job
+        # conclusion green while the ~30+ pre-existing findings get
+        # triaged (track via the cleanup issue). Without this, every
+        # PR shows a red X on Lint and operators can't tell at a
+        # glance whether the failure is real or backlog. Flip to
+        # default (drop this line) once findings are at or near zero.
         uses: golangci/golangci-lint-action@v6
+        continue-on-error: true
         with:
           version: v1.62.2
           install-mode: goinstall
