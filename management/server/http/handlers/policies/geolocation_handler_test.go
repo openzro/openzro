@@ -41,7 +41,10 @@ func initGeolocationTestData(t *testing.T) *geolocationsHandler {
 	err = util.CopyFileContents(geonamesdbPath, path.Join(tempDir, filepath.Base(geonamesdbPath)))
 	assert.NoError(t, err)
 
-	geo, err := geolocation.NewGeolocation(context.Background(), tempDir, false)
+	// autoUpdate=false + a staged mmdb + geonames in tempDir means
+	// NewGeolocation never reaches for the network, so an empty
+	// DownloadSource is fine here.
+	geo, err := geolocation.NewGeolocation(context.Background(), tempDir, false, geolocation.DownloadSource{})
 	assert.NoError(t, err)
 	t.Cleanup(func() { _ = geo.Stop() })
 
