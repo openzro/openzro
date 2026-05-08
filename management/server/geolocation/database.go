@@ -20,12 +20,15 @@ const (
 	geoLiteCityMMDB = "GeoLite2-City.mmdb"
 	geoLiteCityCSV  = "GeoLite2-City-Locations-en.csv"
 
-	// Mirror hosted by openZro (a fork-specific CDN that mirrors
-	// MaxMind GeoLite2). Default download path: zero operator
-	// configuration, but every install pings this host on cold
-	// boot. Operators in air-gapped networks set --disable-geolite-
-	// update=true and stage a local mmdb instead.
-	geoLiteOpenzroMirror = "https://pkg.openzro.io/geolocation-dbs"
+	// Mirror hosted by openZro at github.com/openzro/geolocation-dbs.
+	// A scheduled workflow on that repo pulls fresh GeoLite2 archives
+	// from MaxMind twice a week (Tue + Fri) and publishes them as
+	// release assets; the URL below resolves to the most recent
+	// release via GitHub's `latest` alias. MaxMind retains ownership
+	// of the GeoLite2 data — see https://www.maxmind.com/en/geolite2/eula.
+	// Operators in air-gapped networks set --disable-geolite-update=true
+	// and stage a local mmdb instead.
+	geoLiteOpenzroMirror = "https://github.com/openzro/geolocation-dbs/releases/latest/download"
 
 	// MaxMind's official direct-download endpoint. Requires a
 	// (free) license key from https://www.maxmind.com/en/geolite2/signup.
@@ -61,8 +64,13 @@ func (s DownloadSource) CSVChecksum() string {
 }
 
 // archiveURL builds the per-edition / per-suffix download URL.
-// Branch on LicenseKey: empty → openZro mirror (no key in URL);
+// Branch on LicenseKey: empty → openZro mirror (GitHub Releases asset);
 // non-empty → MaxMind direct (license key is a query param).
+//
+// The openZro mirror serves un-dated asset filenames
+// (`GeoLite2-City.tar.gz`); MaxMind direct serves date-stamped ones
+// (`GeoLite2-City_YYYYMMDD.tar.gz`). getDatabaseFilename handles
+// both shapes.
 func (s DownloadSource) archiveURL(editionID, suffix string) string {
 	if s.LicenseKey != "" {
 		v := url.Values{}
@@ -71,9 +79,7 @@ func (s DownloadSource) archiveURL(editionID, suffix string) string {
 		v.Set("suffix", suffix)
 		return geoLiteMaxMindDirect + "?" + v.Encode()
 	}
-	v := url.Values{}
-	v.Set("suffix", suffix)
-	return fmt.Sprintf("%s/%s/download?%s", geoLiteOpenzroMirror, editionID, v.Encode())
+	return fmt.Sprintf("%s/%s.%s", geoLiteOpenzroMirror, editionID, suffix)
 }
 
 // String redacts the license key when the source is logged. Always

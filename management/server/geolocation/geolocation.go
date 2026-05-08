@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/oschwald/maxminddb-golang"
 	log "github.com/sirupsen/logrus"
@@ -214,13 +215,9 @@ func getDatabaseFilename(ctx context.Context, databaseURL string, filenamePatter
 		files := getExistingDatabases(filenamePattern)
 		if len(files) < 1 {
 			// Auto-update is disabled and no local database is staged
-			// in dataDir. Don't reach for the network — we'd 404
-			// against `pkg.openzro.io/geolocation-dbs/` which the
-			// project doesn't host (the upstream NetBird operator
-			// distributed GeoLite2 from their package server). Return
-			// a clean "not configured" error; the management.go
-			// wrapper logs it as INFO once and continues without
-			// geolocation support.
+			// in dataDir. Don't reach for the network — return a clean
+			// "not configured" error; the management.go wrapper logs
+			// it as INFO once and continues without geolocation support.
 			return "", fmt.Errorf("geolocation database not configured (no local %s found and --disable-geolite-update is set; drop a GeoLite2 mmdb in dataDir or pass --disable-geolite-update=false to auto-fetch)", filepath.Base(filenamePattern))
 		}
 		filename = filepath.Base(files[len(files)-1])
@@ -230,8 +227,21 @@ func getDatabaseFilename(ctx context.Context, databaseURL string, filenamePatter
 
 	// strip suffixes that may be nested, such as .tar.gz
 	basename := strings.SplitN(filename, ".", 2)[0]
-	// get date version from basename
-	date := strings.SplitN(basename, "_", 2)[1]
+	// Two filename shapes hit this path:
+	//   1. MaxMind direct + the upstream NetBird mirror serve
+	//      "GeoLite2-City_YYYYMMDD.tar.gz" (date encoded in the name).
+	//   2. The openZro GitHub Releases mirror serves the un-dated
+	//      "GeoLite2-City.tar.gz" — the build date lives in the
+	//      release tag, not the asset name.
+	// When the underscore is absent (case 2), stamp the local file
+	// with the current UTC date so the cleanup logic can still
+	// distinguish a fresh download from prior builds.
+	var date string
+	if parts := strings.SplitN(basename, "_", 2); len(parts) == 2 {
+		date = parts[1]
+	} else {
+		date = time.Now().UTC().Format("20060102")
+	}
 	// format db as "GeoLite2-Cities-{maxmind|geonames}_{DATE}.{mmdb|db}"
 	databaseFilename := filepath.Base(strings.Replace(filenamePattern, "*", date, 1))
 
