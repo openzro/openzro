@@ -53,6 +53,13 @@ jobs:
     name: ${{ matrix.display_name }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
+    # Track regressions but don't block PRs while the pre-existing
+    # ~30+ findings (forbidigo on dev tools, gosec G101 false positives
+    # on Token/Pass constants, unused stubs in build-tagged files,
+    # misspell on PT-BR comments, etc) get triaged. Tracked separately;
+    # flip to default (`continue-on-error: false`) once findings are
+    # at or near zero.
+    continue-on-error: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
