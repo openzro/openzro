@@ -233,11 +233,16 @@ func TestList_RendersEventDTO(t *testing.T) {
 	require.Len(t, got.Events, 1)
 
 	e := got.Events[0]
-	assert.Equal(t, "deadbeef", e.EventID, "byte fields must be hex-encoded on the wire")
+	assert.Equal(t, "deadbeef", e.EventID, "binary byte fields must be hex-encoded on the wire")
 	assert.Equal(t, "start", e.Type)
 	assert.Equal(t, "egress", e.Direction)
 	assert.Equal(t, uint16(6), e.Protocol)
 	assert.Equal(t, "10.0.0.1", e.SourceIP)
 	assert.Equal(t, uint32(49152), e.SourcePort)
-	assert.Equal(t, hex.EncodeToString([]byte("rule-allow")), e.RuleID)
+	// RuleID carries an xid string in printable ASCII bytes — decodeIDBytes
+	// returns it as UTF-8 (not hex) so the dashboard's policyByID lookup
+	// keys the same xid the API exposes elsewhere. Binary RuleID values
+	// (older agents) round-trip via hex; that path is exercised by other
+	// cases.
+	assert.Equal(t, "rule-allow", e.RuleID)
 }
