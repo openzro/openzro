@@ -34,6 +34,12 @@ interface MockPeer {
   lastSeen: string;
   version: string;
   status: "on" | "warn" | "off";
+  // Operational notices — render as pills before the kebab. Most
+  // severe wins when multiple apply; loginRequired > approvalPending
+  // > expirationDisabled.
+  loginRequired?: boolean;
+  approvalPending?: boolean;
+  expirationDisabled?: boolean;
 }
 
 const peers: MockPeer[] = [
@@ -92,6 +98,7 @@ const peers: MockPeer[] = [
     lastSeen: "Just now",
     version: "0.53.1-alpha.50",
     status: "on",
+    expirationDisabled: true,
   },
   {
     id: "4",
@@ -110,6 +117,7 @@ const peers: MockPeer[] = [
     lastSeen: "Just now",
     version: "0.53.1-alpha.50",
     status: "on",
+    expirationDisabled: true,
   },
   {
     id: "5",
@@ -146,6 +154,7 @@ const peers: MockPeer[] = [
     lastSeen: "1h ago",
     version: "0.53.1-alpha.47",
     status: "off",
+    loginRequired: true,
   },
   {
     id: "7",
@@ -183,6 +192,7 @@ const peers: MockPeer[] = [
     lastSeen: "4d ago",
     version: "0.53.1-alpha.21",
     status: "off",
+    approvalPending: true,
   },
   {
     id: "9",
@@ -355,6 +365,29 @@ const icons = {
     </>,
   ),
   arrow: ico(<path d="m6 9 6 6 6-6" />),
+  refresh: ico(
+    <>
+      <path d="M21 12a9 9 0 1 1-3.5-7.1" />
+      <path d="M21 4v5h-5" />
+    </>,
+  ),
+  alert: ico(
+    <>
+      <path d="M12 9v4M12 17h.01" />
+      <path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+    </>,
+  ),
+  clock: ico(
+    <>
+      <circle cx={12} cy={12} r={9} />
+      <path d="M12 7v5l3 2" />
+    </>,
+  ),
+  hourglass: ico(
+    <>
+      <path d="M5 22h14M5 2h14M17 22v-4.17a2 2 0 0 0-.59-1.42L12 12l-4.41 4.41A2 2 0 0 0 7 17.83V22M7 2v4.17c0 .53.21 1.04.59 1.42L12 12l4.41-4.41A2 2 0 0 0 17 6.17V2" />
+    </>,
+  ),
 };
 
 const sections: OzSidebarSection[] = [
@@ -402,6 +435,21 @@ export default function V2PeersPreview() {
   const [groupOpen, setGroupOpen] = useState(false);
   const [pageSize, setPageSize] = useState<number>(10);
   const [page, setPage] = useState<number>(1);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+
+  const toggleSelected = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const refreshClick = () => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 600);
+  };
 
   useEffect(() => {
     const root = document.documentElement;
@@ -574,12 +622,70 @@ export default function V2PeersPreview() {
             />
 
             <PageSizeCombobox value={pageSize} onChange={setPageSize} />
+
+            <button
+              type="button"
+              onClick={refreshClick}
+              aria-label="Refresh peers"
+              className="grid h-[34px] w-[34px] place-items-center rounded-oz2-input border border-oz2-border bg-oz2-surface text-oz2-text-2 hover:border-oz2-border-strong hover:bg-oz2-hover"
+            >
+              <span className={refreshing ? "animate-spin text-oz2-acc" : ""}>
+                {icons.refresh}
+              </span>
+            </button>
           </div>
+
+          {/* Bulk-action band — appears when any row is selected */}
+          {selected.size > 0 && (
+            <div className="flex items-center justify-between gap-3 border-b border-oz2-border-soft bg-oz2-acc-soft px-[18px] py-2.5 text-[12.5px]">
+              <span className="font-medium text-oz2-acc-text">
+                {selected.size} {selected.size === 1 ? "peer" : "peers"} selected
+              </span>
+              <div className="flex items-center gap-2">
+                <OzButton variant="default">Add to group</OzButton>
+                <OzButton variant="default">Block</OzButton>
+                <OzButton variant="default" className="text-oz2-err">
+                  Delete
+                </OzButton>
+                <button
+                  type="button"
+                  onClick={() => setSelected(new Set())}
+                  className="rounded-oz2-input px-2 py-1 text-[12px] text-oz2-text-muted hover:bg-oz2-hover hover:text-oz2-text"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Table */}
           <table className="w-full text-[13px]">
             <thead>
               <tr className="bg-oz2-bg-sunken text-left">
+                <Th aria-label="Select" className="w-[44px]">
+                  <OzCheckbox
+                    checked={
+                      paginated.length > 0 &&
+                      paginated.every((p) => selected.has(p.id))
+                    }
+                    indeterminate={
+                      paginated.some((p) => selected.has(p.id)) &&
+                      !paginated.every((p) => selected.has(p.id))
+                    }
+                    onChange={(checked) => {
+                      setSelected((prev) => {
+                        const next = new Set(prev);
+                        if (checked) {
+                          paginated.forEach((p) => next.add(p.id));
+                        } else {
+                          paginated.forEach((p) => next.delete(p.id));
+                        }
+                        return next;
+                      });
+                    }}
+                    aria-label="Select all visible"
+                  />
+                </Th>
                 <Th>Name</Th>
                 <Th>User</Th>
                 <Th>Group</Th>
@@ -588,15 +694,26 @@ export default function V2PeersPreview() {
                 <Th>Version</Th>
                 <Th>Connection</Th>
                 <Th>Last seen</Th>
-                <Th aria-label="Actions">{""}</Th>
+                <Th>Notice</Th>
+                <Th aria-label="Actions" className="w-[40px]">{""}</Th>
               </tr>
             </thead>
             <tbody>
               {paginated.map((p) => (
                 <tr
                   key={p.id}
-                  className="group border-t border-oz2-border-soft transition-colors hover:bg-oz2-hover"
+                  className={
+                    "group border-t border-oz2-border-soft transition-colors " +
+                    (selected.has(p.id) ? "bg-oz2-acc-soft/40" : "hover:bg-oz2-hover")
+                  }
                 >
+                  <Td>
+                    <OzCheckbox
+                      checked={selected.has(p.id)}
+                      onChange={() => toggleSelected(p.id)}
+                      aria-label={`Select ${p.name}`}
+                    />
+                  </Td>
                   <Td>
                     <NameCell peer={p} />
                   </Td>
@@ -628,6 +745,9 @@ export default function V2PeersPreview() {
                     </span>
                   </Td>
                   <Td>
+                    <NoticeCell peer={p} />
+                  </Td>
+                  <Td>
                     <RowKebab peer={p} />
                   </Td>
                 </tr>
@@ -635,7 +755,7 @@ export default function V2PeersPreview() {
               {paginated.length === 0 && (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={11}
                     className="px-[18px] py-12 text-center text-oz2-text-muted"
                   >
                     No peers match your filter.
@@ -737,6 +857,101 @@ function ConnectionPill({ connection }: { connection: "p2p" | "relay" }) {
     <OzPill variant={connection === "p2p" ? "ok" : "default"}>
       {connection === "p2p" ? "P2P" : "Relay"}
     </OzPill>
+  );
+}
+
+// Render up to one notice pill per peer (most-severe wins). Order:
+// loginRequired > approvalPending > expirationDisabled. Empty cell
+// when no notice applies — most peers fall here, so the column reads
+// as "exception space" not "always populated".
+function NoticeCell({ peer }: { peer: MockPeer }) {
+  if (peer.loginRequired) {
+    return (
+      <OzPill variant="err">
+        <span className="opacity-80">{icons.alert}</span>
+        Login required
+      </OzPill>
+    );
+  }
+  if (peer.approvalPending) {
+    return (
+      <OzPill variant="warn">
+        <span className="opacity-80">{icons.clock}</span>
+        Approval pending
+      </OzPill>
+    );
+  }
+  if (peer.expirationDisabled) {
+    return (
+      <OzPill variant="default">
+        <span className="opacity-70">{icons.hourglass}</span>
+        Expiration disabled
+      </OzPill>
+    );
+  }
+  return null;
+}
+
+// Tri-state checkbox: checked, unchecked, indeterminate. The
+// `indeterminate` visual is owned via a horizontal bar instead of
+// the check glyph (matching shadcn / Radix pattern). Keyboard +
+// space-to-toggle work via the underlying input.
+function OzCheckbox({
+  checked,
+  indeterminate,
+  onChange,
+  ...props
+}: {
+  checked: boolean;
+  indeterminate?: boolean;
+  onChange: (checked: boolean) => void;
+} & Omit<React.InputHTMLAttributes<HTMLInputElement>, "checked" | "onChange" | "type">) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = !!indeterminate && !checked;
+  }, [indeterminate, checked]);
+
+  const showFill = checked || indeterminate;
+
+  return (
+    <label className="inline-flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center">
+      <input
+        ref={ref}
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="peer sr-only"
+        {...props}
+      />
+      <span
+        aria-hidden="true"
+        className={
+          "grid h-4 w-4 place-items-center rounded border transition-colors " +
+          (showFill
+            ? "border-transparent bg-oz2-acc text-oz2-text-on-acc"
+            : "border-oz2-border bg-oz2-surface peer-hover:border-oz2-border-strong") +
+          " peer-focus-visible:ring-2 peer-focus-visible:ring-oz2-acc peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-oz2-bg"
+        }
+      >
+        {checked && !indeterminate && (
+          <svg
+            width={10}
+            height={10}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={3}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m5 12 5 5L20 7" />
+          </svg>
+        )}
+        {indeterminate && !checked && (
+          <span className="h-[2px] w-[8px] rounded-full bg-oz2-text-on-acc" />
+        )}
+      </span>
+    </label>
   );
 }
 
@@ -1017,6 +1232,7 @@ function KpiCard({
 
 function Th({
   children,
+  className,
   ...props
 }: React.ThHTMLAttributes<HTMLTableCellElement> & {
   children: React.ReactNode;
@@ -1024,7 +1240,10 @@ function Th({
   return (
     <th
       {...props}
-      className="whitespace-nowrap px-[14px] py-[11px] font-mono text-[10.5px] font-semibold uppercase tracking-widest text-oz2-text-muted"
+      className={
+        "whitespace-nowrap px-[14px] py-[11px] font-mono text-[10.5px] font-semibold uppercase tracking-widest text-oz2-text-muted " +
+        (className ?? "")
+      }
     >
       {children}
     </th>
