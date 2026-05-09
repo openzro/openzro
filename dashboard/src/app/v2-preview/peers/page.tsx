@@ -688,9 +688,8 @@ export default function V2PeersPreview() {
                   />
                 </Th>
                 <Th>Name</Th>
-                <Th>User</Th>
                 <Th>Group</Th>
-                <Th>IP</Th>
+                <Th>Address</Th>
                 <Th>OS</Th>
                 <Th>Version</Th>
                 <Th>Connection</Th>
@@ -719,15 +718,10 @@ export default function V2PeersPreview() {
                     <NameCell peer={p} />
                   </Td>
                   <Td>
-                    <UserCell peer={p} />
-                  </Td>
-                  <Td>
                     <GroupsCell peer={p} />
                   </Td>
                   <Td>
-                    <span className="font-mono text-[12px] text-oz2-text-2">
-                      {p.ip}
-                    </span>
+                    <AddressCell peer={p} />
                   </Td>
                   <Td>
                     <OSCell peer={p} />
@@ -756,7 +750,7 @@ export default function V2PeersPreview() {
               {paginated.length === 0 && (
                 <tr>
                   <td
-                    colSpan={11}
+                    colSpan={10}
                     className="px-[18px] py-12 text-center text-oz2-text-muted"
                   >
                     No peers match your filter.
@@ -791,6 +785,33 @@ export default function V2PeersPreview() {
 // ─── Cells ─────────────────────────────────────────────────────────────────
 
 function NameCell({ peer }: { peer: MockPeer }) {
+  // Mirror production PeerNameCell: peer name on top with the
+  // online dot, user email/name below in a lighter weight. Two
+  // lines is enough — anything else (dns_label, public IP, region)
+  // belongs in the Address cell next to it.
+  const displayUser = peer.userEmail && peer.userEmail !== "—"
+    ? peer.userEmail
+    : peer.userName;
+  return (
+    <div className="flex min-w-0 flex-col">
+      <span className="flex items-center gap-2">
+        <OzStatusDot status={peer.status} />
+        <span className="truncate font-medium text-oz2-text">
+          {peer.name}
+        </span>
+      </span>
+      <span className="truncate pl-[16px] text-[11.5px] text-oz2-text-muted">
+        {displayUser}
+      </span>
+    </div>
+  );
+}
+
+function AddressCell({ peer }: { peer: MockPeer }) {
+  // Mirror production PeerAddressCell: country flag halo on the
+  // left, dns_label on top, openZro IP below in mono. Tooltip
+  // carries the network info (public IP, region) so the cell stays
+  // dense.
   return (
     <Tip
       content={
@@ -820,36 +841,20 @@ function NameCell({ peer }: { peer: MockPeer }) {
         </div>
       }
     >
-      <div className="flex items-center gap-3">
-        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-oz2-bg-sunken text-[14px] leading-none">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-oz2-bg-sunken text-[14px] leading-none">
           {flagEmoji(peer.country)}
         </span>
         <div className="flex min-w-0 flex-col">
-          <span className="flex items-center gap-2">
-            <OzStatusDot status={peer.status} />
-            <span className="truncate font-medium text-oz2-text">
-              {peer.name}
-            </span>
-          </span>
-          <span className="truncate font-mono text-[11px] text-oz2-text-faint">
+          <span className="truncate text-[13px] text-oz2-text">
             {peer.dnsLabel}
+          </span>
+          <span className="truncate font-mono text-[11.5px] text-oz2-text-muted">
+            {peer.ip}
           </span>
         </div>
       </div>
     </Tip>
-  );
-}
-
-function UserCell({ peer }: { peer: MockPeer }) {
-  return (
-    <div className="flex min-w-0 flex-col">
-      <span className="truncate text-[13px] text-oz2-text">
-        {peer.userName}
-      </span>
-      <span className="truncate text-[11.5px] text-oz2-text-muted">
-        {peer.userEmail}
-      </span>
-    </div>
   );
 }
 
