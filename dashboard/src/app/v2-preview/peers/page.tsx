@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import OzButton from "@/components/v2/OzButton";
 import OzCard from "@/components/v2/OzCard";
@@ -12,20 +12,22 @@ import OzThemeToggle from "@/components/v2/OzThemeToggle";
 import OzTopbar, { OzBreadcrumb } from "@/components/v2/OzTopbar";
 
 // ─── Mock peer data ────────────────────────────────────────────────────────
-// Realistic shape (status, OS, group, IP) so the table exercises every
-// cell type. Replace with real PeersProvider data when this design
-// migrates to /peers.
-//
-// Status mix: 6 online, 1 idle (warn), 2 disconnected — exercises all
-// three OzStatusDot states.
+// Realistic shape (status, OS, country, groups, IP) so the table
+// exercises every cell type. Replace with real PeersProvider data
+// when this design migrates to /peers.
 
 interface MockPeer {
   id: string;
   name: string;
+  dnsLabel: string;
   ip: string;
+  publicIp: string;
   os: string;
   osVersion: string;
-  group: string;
+  serial?: string;
+  groups: string[];
+  country: string; // ISO 2-letter
+  region: string;
   lastSeen: string;
   version: string;
   status: "on" | "warn" | "off";
@@ -35,10 +37,15 @@ const peers: MockPeer[] = [
   {
     id: "1",
     name: "alice-laptop",
+    dnsLabel: "alice-laptop.acme.example.mesh",
     ip: "100.80.1.42",
+    publicIp: "201.17.42.18",
     os: "macOS",
     osVersion: "15.3",
-    group: "developers",
+    serial: "C02XL0AAJG5L",
+    groups: ["developers", "all"],
+    country: "BR",
+    region: "São Paulo, BR",
     lastSeen: "Just now",
     version: "0.53.1-alpha.50",
     status: "on",
@@ -46,10 +53,15 @@ const peers: MockPeer[] = [
   {
     id: "2",
     name: "bob-mbp",
+    dnsLabel: "bob-mbp.acme.example.mesh",
     ip: "100.80.1.51",
+    publicIp: "201.17.42.32",
     os: "macOS",
     osVersion: "14.7",
-    group: "developers",
+    serial: "C02WK0AAJG5L",
+    groups: ["developers", "all"],
+    country: "BR",
+    region: "São Paulo, BR",
     lastSeen: "2 min ago",
     version: "0.53.1-alpha.49",
     status: "on",
@@ -57,10 +69,14 @@ const peers: MockPeer[] = [
   {
     id: "3",
     name: "routing-peer-br-1",
+    dnsLabel: "routing-peer-br-1.acme.example.mesh",
     ip: "100.80.2.10",
+    publicIp: "34.95.120.4",
     os: "Rocky Linux",
     osVersion: "9.5",
-    group: "routing-peers-br",
+    groups: ["routing-peers-br", "production", "all"],
+    country: "BR",
+    region: "São Paulo, BR",
     lastSeen: "Just now",
     version: "0.53.1-alpha.50",
     status: "on",
@@ -68,10 +84,14 @@ const peers: MockPeer[] = [
   {
     id: "4",
     name: "routing-peer-br-2",
+    dnsLabel: "routing-peer-br-2.acme.example.mesh",
     ip: "100.80.2.11",
+    publicIp: "34.95.120.5",
     os: "Rocky Linux",
     osVersion: "9.5",
-    group: "routing-peers-br",
+    groups: ["routing-peers-br", "production", "all"],
+    country: "BR",
+    region: "São Paulo, BR",
     lastSeen: "Just now",
     version: "0.53.1-alpha.50",
     status: "on",
@@ -79,10 +99,14 @@ const peers: MockPeer[] = [
   {
     id: "5",
     name: "partner-prod-jumphost",
+    dnsLabel: "partner-jumphost.acme.example.mesh",
     ip: "100.80.3.5",
+    publicIp: "52.169.72.18",
     os: "Ubuntu",
     osVersion: "24.04",
-    group: "partner-jumphosts",
+    groups: ["partner-jumphosts", "production", "all"],
+    country: "US",
+    region: "Iowa, US",
     lastSeen: "12 min ago",
     version: "0.53.1-alpha.48",
     status: "warn",
@@ -90,10 +114,14 @@ const peers: MockPeer[] = [
   {
     id: "6",
     name: "ci-runner-01",
+    dnsLabel: "ci-runner-01.acme.example.mesh",
     ip: "100.80.4.1",
+    publicIp: "35.224.18.9",
     os: "Ubuntu",
     osVersion: "24.04",
-    group: "ci",
+    groups: ["ci", "all"],
+    country: "US",
+    region: "Iowa, US",
     lastSeen: "1h ago",
     version: "0.53.1-alpha.47",
     status: "off",
@@ -101,10 +129,15 @@ const peers: MockPeer[] = [
   {
     id: "7",
     name: "carol-workstation",
+    dnsLabel: "carol-workstation.acme.example.mesh",
     ip: "100.80.1.18",
+    publicIp: "201.17.42.71",
     os: "Windows",
     osVersion: "11 23H2",
-    group: "developers",
+    serial: "WIN-AN12-3456",
+    groups: ["developers", "designers", "all"],
+    country: "BR",
+    region: "São Paulo, BR",
     lastSeen: "Just now",
     version: "0.53.1-alpha.50",
     status: "on",
@@ -112,10 +145,14 @@ const peers: MockPeer[] = [
   {
     id: "8",
     name: "old-vpn-gateway",
+    dnsLabel: "old-vpn-gateway.acme.example.mesh",
     ip: "100.80.5.99",
+    publicIp: "85.214.132.18",
     os: "Debian",
     osVersion: "11",
-    group: "deprecated",
+    groups: ["deprecated", "all"],
+    country: "DE",
+    region: "Frankfurt, DE",
     lastSeen: "4d ago",
     version: "0.53.1-alpha.21",
     status: "off",
@@ -123,17 +160,37 @@ const peers: MockPeer[] = [
   {
     id: "9",
     name: "dave-laptop",
+    dnsLabel: "dave-laptop.acme.example.mesh",
     ip: "100.80.1.77",
+    publicIp: "201.17.42.94",
     os: "macOS",
     osVersion: "15.2",
-    group: "developers",
+    serial: "C02ZL0AAJG5L",
+    groups: ["developers", "all"],
+    country: "BR",
+    region: "Rio de Janeiro, BR",
     lastSeen: "Just now",
     version: "0.53.1-alpha.50",
     status: "on",
   },
 ];
 
-// ─── Sidebar config (peers active here) ────────────────────────────────────
+// All distinct groups (for the Groups filter dropdown)
+const allGroups = Array.from(
+  new Set(peers.flatMap((p) => p.groups)),
+).sort((a, b) => a.localeCompare(b));
+
+// ISO 2-letter → flag emoji using regional indicator letters
+function flagEmoji(country: string): string {
+  if (!country || country.length !== 2) return "🌐";
+  const codePoints = country
+    .toUpperCase()
+    .split("")
+    .map((c) => 127397 + c.charCodeAt(0));
+  return String.fromCodePoint(...codePoints);
+}
+
+// ─── Sidebar config ────────────────────────────────────────────────────────
 
 const ico = (path: React.ReactNode) => (
   <svg
@@ -212,6 +269,37 @@ const icons = {
       <path d="M12 5v14M5 12h14" />
     </svg>
   ),
+  chevDown: ico(<path d="m6 9 6 6 6-6" />),
+  pin: ico(
+    <>
+      <path d="M12 13c2 0 4-2 4-4 0-2-1.5-4-4-4S8 7 8 9c0 2 2 4 4 4z" />
+      <path d="M12 13v8" />
+    </>,
+  ),
+  globe: ico(
+    <>
+      <circle cx={12} cy={12} r={9} />
+      <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+    </>,
+  ),
+  cpu: ico(
+    <>
+      <rect x={4} y={4} width={16} height={16} rx={2} />
+      <rect x={9} y={9} width={6} height={6} />
+      <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3" />
+    </>,
+  ),
+  barcode: ico(
+    <>
+      <path d="M3 5v14M7 5v14M11 5v14M14 5v14M18 5v14M21 5v14" />
+    </>,
+  ),
+  groupIcon: ico(
+    <>
+      <circle cx={12} cy={8} r={4} />
+      <path d="M4 21a8 8 0 0 1 16 0" />
+    </>,
+  ),
 };
 
 const sections: OzSidebarSection[] = [
@@ -255,6 +343,8 @@ export default function V2PeersPreview() {
   const [statusFilter, setStatusFilter] = useState<
     "all" | "on" | "warn" | "off"
   >("all");
+  const [groupFilter, setGroupFilter] = useState<string[]>([]);
+  const [groupOpen, setGroupOpen] = useState(false);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -270,10 +360,14 @@ export default function V2PeersPreview() {
         !q ||
         p.name.toLowerCase().includes(q) ||
         p.ip.includes(q) ||
-        p.group.toLowerCase().includes(q);
-      return statusOk && searchOk;
+        p.dnsLabel.toLowerCase().includes(q) ||
+        p.groups.some((g) => g.toLowerCase().includes(q));
+      const groupOk =
+        groupFilter.length === 0 ||
+        groupFilter.some((g) => p.groups.includes(g));
+      return statusOk && searchOk && groupOk;
     });
-  }, [search, statusFilter]);
+  }, [search, statusFilter, groupFilter]);
 
   const counts = useMemo(
     () => ({
@@ -372,10 +466,20 @@ export default function V2PeersPreview() {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by name, IP, group…"
+                placeholder="Search by name, DNS, IP, group…"
                 className="h-full flex-1 border-0 bg-transparent text-[13px] outline-none placeholder:text-oz2-text-faint"
               />
             </div>
+
+            {/* Group dropdown */}
+            <GroupFilter
+              value={groupFilter}
+              onChange={setGroupFilter}
+              open={groupOpen}
+              onOpenChange={setGroupOpen}
+            />
+
+            {/* Status pills */}
             <div className="flex items-center gap-1.5">
               {(
                 [
@@ -406,10 +510,9 @@ export default function V2PeersPreview() {
           <table className="w-full text-[13px]">
             <thead>
               <tr className="text-left">
-                <Th>Name</Th>
-                <Th>IP address</Th>
+                <Th>Address</Th>
                 <Th>OS</Th>
-                <Th>Group</Th>
+                <Th>Groups</Th>
                 <Th>Last seen</Th>
                 <Th>Version</Th>
               </tr>
@@ -421,26 +524,13 @@ export default function V2PeersPreview() {
                   className="group border-t border-oz2-border-soft transition-colors hover:bg-oz2-hover"
                 >
                   <Td>
-                    <div className="flex items-center gap-2.5">
-                      <OzStatusDot status={p.status} />
-                      <span className="font-medium text-oz2-text">
-                        {p.name}
-                      </span>
-                    </div>
+                    <AddressCell peer={p} />
                   </Td>
                   <Td>
-                    <span className="font-mono text-[12px] text-oz2-text-2">
-                      {p.ip}
-                    </span>
+                    <OSCell peer={p} />
                   </Td>
                   <Td>
-                    <span className="text-oz2-text-2">{p.os}</span>
-                    <span className="ml-1.5 text-oz2-text-faint">
-                      {p.osVersion}
-                    </span>
-                  </Td>
-                  <Td>
-                    <OzPill variant="default">{p.group}</OzPill>
+                    <GroupsCell peer={p} />
                   </Td>
                   <Td>
                     <span className="text-oz2-text-muted">{p.lastSeen}</span>
@@ -455,7 +545,7 @@ export default function V2PeersPreview() {
               {filtered.length === 0 && (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={5}
                     className="px-[18px] py-12 text-center text-oz2-text-muted"
                   >
                     No peers match your filter.
@@ -470,9 +560,320 @@ export default function V2PeersPreview() {
   );
 }
 
-// Local helpers — kept inline rather than extracted into v2/ until
-// the same pattern shows up on a second screen and we can see what
-// the right abstraction is.
+// ─── Cells ─────────────────────────────────────────────────────────────────
+
+function AddressCell({ peer }: { peer: MockPeer }) {
+  return (
+    <Tip
+      content={
+        <div className="w-[280px]">
+          <TipRow icon={icons.pin} label="Openzro IP" value={peer.ip} />
+          <TipRow
+            icon={icons.network}
+            label="Public IP"
+            value={peer.publicIp}
+          />
+          <TipRow
+            icon={icons.globe}
+            label="Domain"
+            value={peer.dnsLabel}
+            mono={false}
+          />
+          <TipRow
+            icon={
+              <span className="text-[16px] leading-none">
+                {flagEmoji(peer.country)}
+              </span>
+            }
+            label="Region"
+            value={peer.region}
+            mono={false}
+          />
+        </div>
+      }
+    >
+      <div className="flex items-center gap-3">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-oz2-bg-sunken text-[18px] leading-none">
+          {flagEmoji(peer.country)}
+        </span>
+        <div className="flex min-w-0 flex-col">
+          <OzStatusDotInline status={peer.status} name={peer.name} />
+          <span className="font-mono text-[11.5px] text-oz2-text-faint">
+            {peer.ip}
+          </span>
+        </div>
+      </div>
+    </Tip>
+  );
+}
+
+function OzStatusDotInline({
+  status,
+  name,
+}: {
+  status: "on" | "warn" | "off";
+  name: string;
+}) {
+  return (
+    <span className="flex items-center gap-2">
+      <OzStatusDot status={status} />
+      <span className="truncate font-medium text-oz2-text">{name}</span>
+    </span>
+  );
+}
+
+function OSCell({ peer }: { peer: MockPeer }) {
+  return (
+    <Tip
+      content={
+        <div className="w-[240px]">
+          <TipRow
+            icon={icons.cpu}
+            label="OS"
+            value={`${peer.os} ${peer.osVersion}`}
+            mono={false}
+          />
+          {peer.serial && (
+            <TipRow
+              icon={icons.barcode}
+              label="Serial Number"
+              value={peer.serial}
+            />
+          )}
+        </div>
+      }
+    >
+      <span className="inline-flex items-center gap-1.5">
+        <span className="text-oz2-text-2">{peer.os}</span>
+        <span className="text-oz2-text-faint">{peer.osVersion}</span>
+      </span>
+    </Tip>
+  );
+}
+
+function GroupsCell({ peer }: { peer: MockPeer }) {
+  const visible = peer.groups.slice(0, 2);
+  const overflow = peer.groups.length - visible.length;
+  return (
+    <Tip
+      content={
+        <div className="w-[200px]">
+          <p className="mb-2 px-3 pt-3 font-mono text-[10.5px] uppercase tracking-widest text-oz2-text-faint">
+            Assigned groups
+          </p>
+          <ul className="space-y-1 px-3 pb-3">
+            {peer.groups.map((g) => (
+              <li
+                key={g}
+                className="flex items-center gap-2 text-[12px] text-oz2-text"
+              >
+                <span className="text-oz2-text-faint">{icons.groupIcon}</span>
+                {g}
+              </li>
+            ))}
+          </ul>
+        </div>
+      }
+    >
+      <div className="flex items-center gap-1.5">
+        {visible.map((g) => (
+          <OzPill key={g} variant="default">
+            {g}
+          </OzPill>
+        ))}
+        {overflow > 0 && (
+          <OzPill variant="default">+{overflow}</OzPill>
+        )}
+      </div>
+    </Tip>
+  );
+}
+
+// ─── Tooltip helper (lightweight, hover-driven) ────────────────────────────
+// Inline implementation rather than wiring the project's Radix Tooltip
+// — this is a preview surface and the simpler box keeps the page
+// dependency-free. When the migration touches /peers the real
+// components import @components/Tooltip / FullTooltip directly.
+
+function Tip({
+  children,
+  content,
+}: {
+  children: React.ReactNode;
+  content: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  return (
+    <span
+      className="relative inline-flex"
+      onMouseEnter={() => {
+        if (closeTimer.current) clearTimeout(closeTimer.current);
+        setOpen(true);
+      }}
+      onMouseLeave={() => {
+        closeTimer.current = setTimeout(() => setOpen(false), 80);
+      }}
+    >
+      {children}
+      {open && (
+        <span
+          role="tooltip"
+          className="absolute left-0 top-full z-30 mt-2 overflow-hidden rounded-oz2-input border border-oz2-border bg-oz2-bg-elev shadow-oz2-md"
+        >
+          {content}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function TipRow({
+  icon,
+  label,
+  value,
+  mono = true,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-oz2-border-soft px-3 py-2 text-[12px] last:border-b-0">
+      <span className="flex items-center gap-2 text-oz2-text-muted">
+        <span className="text-oz2-text-faint">{icon}</span>
+        {label}
+      </span>
+      <span
+        className={
+          (mono ? "font-mono text-[11.5px] " : "text-[12px] ") +
+          "text-oz2-text"
+        }
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+// ─── Group filter dropdown ─────────────────────────────────────────────────
+// Click button → opens panel listing all groups with checkboxes;
+// closes on outside click. Same UX as the existing
+// GroupFilterSelector but with v2 paint.
+
+function GroupFilter({
+  value,
+  onChange,
+  open,
+  onOpenChange,
+}: {
+  value: string[];
+  onChange: (next: string[]) => void;
+  open: boolean;
+  onOpenChange: (next: boolean) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) onOpenChange(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open, onOpenChange]);
+
+  const toggle = (g: string) => {
+    onChange(value.includes(g) ? value.filter((x) => x !== g) : [...value, g]);
+  };
+
+  const label =
+    value.length === 0
+      ? "All groups"
+      : value.length === 1
+        ? value[0]
+        : `${value.length} selected`;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => onOpenChange(!open)}
+        className={
+          "inline-flex h-[34px] items-center gap-2 rounded-oz2-input border px-3 text-[13px] font-medium transition-colors " +
+          (value.length > 0
+            ? "border-transparent bg-oz2-acc-soft text-oz2-acc-text"
+            : "border-oz2-border bg-oz2-surface text-oz2-text-2 hover:bg-oz2-hover")
+        }
+      >
+        <span className="text-oz2-text-faint">{icons.groupIcon}</span>
+        {label}
+        <span className="text-oz2-text-faint">{icons.chevDown}</span>
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-30 mt-2 w-[220px] overflow-hidden rounded-oz2-input border border-oz2-border bg-oz2-bg-elev shadow-oz2-md">
+          <p className="border-b border-oz2-border-soft px-3 py-2 font-mono text-[10.5px] uppercase tracking-widest text-oz2-text-faint">
+            Filter by group
+          </p>
+          <ul className="max-h-[260px] overflow-y-auto py-1">
+            {allGroups.map((g) => {
+              const checked = value.includes(g);
+              return (
+                <li key={g}>
+                  <button
+                    type="button"
+                    onClick={() => toggle(g)}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] hover:bg-oz2-hover"
+                  >
+                    <span
+                      className={
+                        "grid h-4 w-4 shrink-0 place-items-center rounded border " +
+                        (checked
+                          ? "border-transparent bg-oz2-acc text-oz2-text-on-acc"
+                          : "border-oz2-border bg-oz2-surface")
+                      }
+                    >
+                      {checked && (
+                        <svg
+                          width={10}
+                          height={10}
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={3}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="m5 12 5 5L20 7" />
+                        </svg>
+                      )}
+                    </span>
+                    <span className="flex-1 text-oz2-text">{g}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {value.length > 0 && (
+            <div className="border-t border-oz2-border-soft p-2">
+              <button
+                type="button"
+                onClick={() => onChange([])}
+                className="w-full rounded-oz2-input px-3 py-1.5 text-left text-[12px] text-oz2-text-muted hover:bg-oz2-hover hover:text-oz2-text"
+              >
+                Clear selection
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── KPI + table primitives ────────────────────────────────────────────────
 
 function KpiCard({
   label,
@@ -505,5 +906,5 @@ function Th({ children }: { children: React.ReactNode }) {
 }
 
 function Td({ children }: { children: React.ReactNode }) {
-  return <td className="px-[18px] py-3">{children}</td>;
+  return <td className="px-[18px] py-3 align-middle">{children}</td>;
 }
