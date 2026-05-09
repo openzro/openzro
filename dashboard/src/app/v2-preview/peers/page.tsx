@@ -1049,7 +1049,7 @@ function Tip({
 
   return (
     <span
-      className="relative inline-flex"
+      className="relative inline-flex cursor-pointer"
       onMouseEnter={() => {
         if (closeTimer.current) clearTimeout(closeTimer.current);
         setOpen(true);
@@ -1062,7 +1062,7 @@ function Tip({
       {open && (
         <span
           role="tooltip"
-          className="absolute left-0 top-full z-30 mt-2 overflow-hidden rounded-oz2-input border border-oz2-border bg-oz2-bg-elev shadow-oz2-md"
+          className="absolute left-0 bottom-full z-30 mb-2 overflow-hidden rounded-oz2-input border border-oz2-border bg-oz2-bg-elev shadow-oz2-md"
         >
           {content}
         </span>
