@@ -29,6 +29,20 @@ remove() {
      printf "\n\033[32m running daemon reload\033[0m\n"
      systemctl daemon-reload || true
   fi
+
+  # Drop the NetworkManager unmanaged-devices config that
+  # post_install.sh placed under /etc/NetworkManager/conf.d/. Without
+  # this, an uninstall leaves the file orphaned, telling NM forever
+  # to leave wt0 alone — wrong if the operator later installs a
+  # different WireGuard tool that uses the same interface name.
+  nm_file="/etc/NetworkManager/conf.d/openzro.conf"
+  if [ -f "${nm_file}" ]; then
+    rm -f "${nm_file}"
+    if command -V nmcli >/dev/null 2>&1; then
+      nmcli general reload 2>/dev/null || nmcli connection reload 2>/dev/null || true
+    fi
+    printf "\033[32m Removed NetworkManager unmanaged-devices config (%s)\033[0m\n" "${nm_file}"
+  fi
 }
 
 action="$1"
