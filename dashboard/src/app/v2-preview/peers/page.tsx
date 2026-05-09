@@ -10,6 +10,7 @@ import OzSidebar, { type OzSidebarSection } from "@/components/v2/OzSidebar";
 import OzStatusDot from "@/components/v2/OzStatusDot";
 import OzThemeToggle from "@/components/v2/OzThemeToggle";
 import OzTopbar, { OzBreadcrumb } from "@/components/v2/OzTopbar";
+import { OSLogo } from "@/modules/peers/PeerOSCell";
 
 // ─── Mock peer data ────────────────────────────────────────────────────────
 // Realistic shape (status, OS, country, groups, IP) so the table
@@ -976,16 +977,20 @@ function OSCell({ peer }: { peer: MockPeer }) {
         </div>
       }
     >
-      <span className="inline-flex items-center gap-1.5">
-        <span className="text-oz2-text-2">{peer.os}</span>
-        <span className="text-oz2-text-faint">{peer.osVersion}</span>
+      <span
+        className="inline-flex h-6 w-6 items-center justify-center grayscale brightness-[100%] contrast-[40%]"
+        aria-label={`${peer.os} ${peer.osVersion}`}
+      >
+        <OSLogo os={peer.os} />
       </span>
     </Tip>
   );
 }
 
 function GroupsCell({ peer }: { peer: MockPeer }) {
-  const visible = peer.groups.slice(0, 2);
+  // Mirror the production /peers behaviour — only one chip visible,
+  // overflow rolls into a "+N" badge (full list is in the tooltip).
+  const visible = peer.groups.slice(0, 1);
   const overflow = peer.groups.length - visible.length;
   return (
     <Tip
