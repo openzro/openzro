@@ -63,6 +63,21 @@ linters-settings:
     enable:
       - nilness
 
+  misspell:
+    # Some openZro files (BACEN compliance docs, cluster/nats comments,
+    # brand notes) are intentionally written in Portuguese. misspell's
+    # English dictionary flags them as typos — `momento` → `memento`,
+    # `ser` → `set`, etc. Whitelist the PT words we ship deliberately.
+    # codespell already has the equivalent ignore_words_list in
+    # .github/workflows/golangci-lint.yml; keep the two in sync if
+    # adding new entries.
+    locale: US
+    ignore-words:
+      - momento
+      - ser
+      - vai
+      - controles
+
   revive:
     rules:
       - name: exported
@@ -119,12 +134,32 @@ issues:
     - path: signal/cmd/root\.go
       linters:
         - forbidigo
+    # CLI dev tool — fmt.Print* is the user-facing output, not log spam.
+    - path: scripts/dev-seed-flow-events/main\.go
+      linters:
+        - forbidigo
     - path: sharedsock/filter\.go
       linters:
       - unused
     - path: client/firewall/iptables/rule\.go
       linters:
       - unused
+    # Stubs under a no-cgo build tag — intentionally unused outside
+    # the CGO build path. The real implementations live in
+    # flow/store/archive/duckdb.go (cgo build tag).
+    - path: flow/store/archive/duckdb_stub\.go
+      linters:
+      - unused
+    # Constants like `tokenAuth`, `bucketSecret`, `archivePass` that
+    # gosec flags as G101 hardcoded-credentials. None are credentials —
+    # they're identifier suffixes that happen to match gosec's
+    # heuristic. The actual secrets come from environment / config.
+    - path: flow/store/archive/factory\.go
+      linters:
+      - gosec
+    - path: flow/sinks/factory\.go
+      linters:
+      - gosec
     - path: test\.go
       linters:
       - mirror
