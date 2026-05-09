@@ -76,7 +76,16 @@ jobs:
       - run: echo "files=$(go list ./... | ForEach-Object { $_ } | Where-Object { $_ -notmatch '/management' })" >> $env:GITHUB_ENV
 
       - name: test
-        run: PsExec64 -s -w ${{ github.workspace }} cmd.exe /c "${{ env.goexe }} test -tags=devcert -timeout 10m -p 1 ${{ env.files }} > test-out.txt 2>&1"
-      - name: test output
-        if: ${{ always() }}
-        run: Get-Content test-out.txt
+        # Direct PsExec64 → go.exe, without the cmd.exe /c "..."
+        # wrapper. The previous form redirected to test-out.txt and
+        # the next step tried to Get-Content it back, but the file
+        # was either never created (cmd.exe command-line length
+        # limit truncating the huge package list before the redirect
+        # parsed) or was SYSTEM-owned and unreadable to the runner
+        # user — either way every Windows run failed with
+        # "test-out.txt does not exist" and the underlying go test
+        # error stayed invisible. PsExec64 forwards the remote
+        # process stdout/stderr to its own stdout, which Actions
+        # captures into the job log natively — no intermediate file
+        # needed.
+        run: PsExec64 -s -nobanner -w ${{ github.workspace }} ${{ env.goexe }} test -tags=devcert -timeout 10m -p 1 ${{ env.files }}
