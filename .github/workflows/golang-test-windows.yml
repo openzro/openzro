@@ -88,4 +88,12 @@ jobs:
         # process stdout/stderr to its own stdout, which Actions
         # captures into the job log natively — no intermediate file
         # needed.
-        run: PsExec64 -s -nobanner -w ${{ github.workspace }} ${{ env.goexe }} test -tags=devcert -timeout 10m -p 1 ${{ env.files }}
+        # -v emits per-test progress so when the suite hangs we can
+        # see WHICH package or test is the slow one (PsExec running
+        # as -s SYSTEM does not pty-attach the child's stdout, so
+        # without -v the buffered output only flushes on go test
+        # exit — meaning a 10-minute hang shows ~zero log lines).
+        # -timeout 20m gives slack while the slow test gets diagnosed
+        # separately; current 10m was already insufficient on at
+        # least one main run (commit 17da2d3b hit it).
+        run: PsExec64 -s -nobanner -w ${{ github.workspace }} ${{ env.goexe }} test -tags=devcert -v -timeout 20m -p 1 ${{ env.files }}
