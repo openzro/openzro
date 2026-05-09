@@ -78,6 +78,44 @@ const config: Config = {
         "oz-ink": "#0f0a1f",
         "oz-ink-2": "#1a1330",
         "oz-paper": "#faf9fc",
+
+        // ──── v2 design language semantic colors ─────────────────────
+        // Wired to --ozv2-* CSS variables in globals.css. Same class
+        // flips between light + dark via the `.dark` selector.
+        // Primitives migrating to the redesigned look use these
+        // (`bg-oz2-surface`, `text-oz2-text-muted`, `border-oz2-strong`);
+        // legacy components keep using the existing nb-gray-* / oz-*
+        // classes until they're migrated screen-by-screen.
+        "oz2-bg":           "var(--ozv2-bg)",
+        "oz2-bg-elev":      "var(--ozv2-bg-elev)",
+        "oz2-bg-soft":      "var(--ozv2-bg-soft)",
+        "oz2-bg-sunken":    "var(--ozv2-bg-sunken)",
+        "oz2-surface":      "var(--ozv2-surface)",
+        "oz2-surface-2":    "var(--ozv2-surface-2)",
+        "oz2-hover":        "var(--ozv2-hover)",
+        "oz2-active":       "var(--ozv2-active)",
+        "oz2-border":       "var(--ozv2-border)",
+        "oz2-border-soft":  "var(--ozv2-border-soft)",
+        "oz2-border-strong":"var(--ozv2-border-strong)",
+        "oz2-text":         "var(--ozv2-text)",
+        "oz2-text-2":       "var(--ozv2-text-2)",
+        "oz2-text-muted":   "var(--ozv2-text-muted)",
+        "oz2-text-faint":   "var(--ozv2-text-faint)",
+        "oz2-text-on-acc":  "var(--ozv2-text-on-acc)",
+        "oz2-acc":          "var(--ozv2-acc)",
+        "oz2-acc-hover":    "var(--ozv2-acc-hover)",
+        "oz2-acc-soft":     "var(--ozv2-acc-soft)",
+        "oz2-acc-soft-2":   "var(--ozv2-acc-soft-2)",
+        "oz2-acc-text":     "var(--ozv2-acc-text)",
+        "oz2-ok":           "var(--ozv2-ok)",
+        "oz2-warn":         "var(--ozv2-warn)",
+        "oz2-err":          "var(--ozv2-err)",
+        "oz2-ok-bg":        "var(--ozv2-ok-bg)",
+        "oz2-warn-bg":      "var(--ozv2-warn-bg)",
+        "oz2-err-bg":       "var(--ozv2-err-bg)",
+        "oz2-dot-on":       "var(--ozv2-dot-on)",
+        "oz2-dot-off":      "var(--ozv2-dot-off)",
+        "oz2-dot-warn":     "var(--ozv2-dot-warn)",
         "nb-blue": {
           DEFAULT: "#31e4f5",
           "50": "#ebffff",
@@ -92,6 +130,20 @@ const config: Config = {
           "900": "#145365",
           "950": "#063746",
         },
+      },
+      // v2 elevation tokens — drop-in for the redesigned primitives.
+      // shadow-oz2-acc is the violet-glow specific to primary buttons.
+      boxShadow: {
+        "oz2-sm":  "var(--ozv2-shadow-sm)",
+        "oz2-md":  "var(--ozv2-shadow-md)",
+        "oz2-lg":  "var(--ozv2-shadow-lg)",
+        "oz2-acc": "var(--ozv2-shadow-acc)",
+      },
+      // v2 radius — handoff specifies inputs/buttons 10, cards 14,
+      // pills 99 (already covered by `rounded-full`).
+      borderRadius: {
+        "oz2-input": "10px",
+        "oz2-card":  "14px",
       },
       keyframes: {
         "accordion-down": {
