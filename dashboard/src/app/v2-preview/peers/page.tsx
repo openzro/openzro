@@ -28,6 +28,9 @@ interface MockPeer {
   groups: string[];
   country: string; // ISO 2-letter
   region: string;
+  userName: string;
+  userEmail: string;
+  connection: "p2p" | "relay";
   lastSeen: string;
   version: string;
   status: "on" | "warn" | "off";
@@ -46,6 +49,9 @@ const peers: MockPeer[] = [
     groups: ["developers", "all"],
     country: "BR",
     region: "São Paulo, BR",
+    userName: "Alice Lin",
+    userEmail: "alice@acme.example",
+    connection: "p2p",
     lastSeen: "Just now",
     version: "0.53.1-alpha.50",
     status: "on",
@@ -62,6 +68,9 @@ const peers: MockPeer[] = [
     groups: ["developers", "all"],
     country: "BR",
     region: "São Paulo, BR",
+    userName: "Bob Sato",
+    userEmail: "andre@acme.example",
+    connection: "p2p",
     lastSeen: "2 min ago",
     version: "0.53.1-alpha.49",
     status: "on",
@@ -77,6 +86,9 @@ const peers: MockPeer[] = [
     groups: ["routing-peers-br", "production", "all"],
     country: "BR",
     region: "São Paulo, BR",
+    userName: "platform-engineering",
+    userEmail: "platform@acme.example",
+    connection: "p2p",
     lastSeen: "Just now",
     version: "0.53.1-alpha.50",
     status: "on",
@@ -92,6 +104,9 @@ const peers: MockPeer[] = [
     groups: ["routing-peers-br", "production", "all"],
     country: "BR",
     region: "São Paulo, BR",
+    userName: "platform-engineering",
+    userEmail: "platform@acme.example",
+    connection: "p2p",
     lastSeen: "Just now",
     version: "0.53.1-alpha.50",
     status: "on",
@@ -107,6 +122,9 @@ const peers: MockPeer[] = [
     groups: ["partner-jumphosts", "production", "all"],
     country: "US",
     region: "Iowa, US",
+    userName: "partner-svc",
+    userEmail: "partner-integration@acme.example",
+    connection: "relay",
     lastSeen: "12 min ago",
     version: "0.53.1-alpha.48",
     status: "warn",
@@ -122,6 +140,9 @@ const peers: MockPeer[] = [
     groups: ["ci", "all"],
     country: "US",
     region: "Iowa, US",
+    userName: "ci-bot",
+    userEmail: "ci@acme.example",
+    connection: "relay",
     lastSeen: "1h ago",
     version: "0.53.1-alpha.47",
     status: "off",
@@ -138,6 +159,9 @@ const peers: MockPeer[] = [
     groups: ["developers", "designers", "all"],
     country: "BR",
     region: "São Paulo, BR",
+    userName: "Carol Mendes",
+    userEmail: "ana@acme.example",
+    connection: "p2p",
     lastSeen: "Just now",
     version: "0.53.1-alpha.50",
     status: "on",
@@ -153,6 +177,9 @@ const peers: MockPeer[] = [
     groups: ["deprecated", "all"],
     country: "DE",
     region: "Frankfurt, DE",
+    userName: "(removed user)",
+    userEmail: "—",
+    connection: "relay",
     lastSeen: "4d ago",
     version: "0.53.1-alpha.21",
     status: "off",
@@ -169,6 +196,9 @@ const peers: MockPeer[] = [
     groups: ["developers", "all"],
     country: "BR",
     region: "Rio de Janeiro, BR",
+    userName: "Dave Park",
+    userEmail: "felipe@acme.example",
+    connection: "p2p",
     lastSeen: "Just now",
     version: "0.53.1-alpha.50",
     status: "on",
@@ -300,6 +330,31 @@ const icons = {
       <path d="M4 21a8 8 0 0 1 16 0" />
     </>,
   ),
+  more: ico(
+    <>
+      <circle cx={5} cy={12} r={1.4} />
+      <circle cx={12} cy={12} r={1.4} />
+      <circle cx={19} cy={12} r={1.4} />
+    </>,
+  ),
+  copy: ico(
+    <>
+      <rect x={9} y={9} width={13} height={13} rx={2} />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </>,
+  ),
+  block: ico(
+    <>
+      <circle cx={12} cy={12} r={9} />
+      <path d="m5.6 5.6 12.8 12.8" />
+    </>,
+  ),
+  trash: ico(
+    <>
+      <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M6 6v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6" />
+    </>,
+  ),
+  arrow: ico(<path d="m6 9 6 6 6-6" />),
 };
 
 const sections: OzSidebarSection[] = [
@@ -345,6 +400,8 @@ export default function V2PeersPreview() {
   >("all");
   const [groupFilter, setGroupFilter] = useState<string[]>([]);
   const [groupOpen, setGroupOpen] = useState(false);
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [page, setPage] = useState<number>(1);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -368,6 +425,12 @@ export default function V2PeersPreview() {
       return statusOk && searchOk && groupOk;
     });
   }, [search, statusFilter, groupFilter]);
+
+  // Pagination derived state
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const visiblePage = Math.min(page, totalPages);
+  const pageStart = (visiblePage - 1) * pageSize;
+  const paginated = filtered.slice(pageStart, pageStart + pageSize);
 
   const counts = useMemo(
     () => ({
@@ -458,94 +521,124 @@ export default function V2PeersPreview() {
           <KpiCard label="Total peers" value={String(counts.total)} />
         </div>
 
-        {/* Toolbar */}
+        {/* Status tabs (segmented) — primary axis filter */}
+        <SegmentedTabs
+          value={statusFilter}
+          onChange={(v) => {
+            setStatusFilter(v);
+            setPage(1);
+          }}
+          options={[
+            {
+              id: "all",
+              label: "All peers",
+              count: peers.length,
+            },
+            {
+              id: "on",
+              label: "Online",
+              count: counts.online,
+            },
+            {
+              id: "warn",
+              label: "Idle",
+              count: counts.idle,
+            },
+            {
+              id: "off",
+              label: "Disconnected",
+              count: counts.offline,
+            },
+          ]}
+        />
+
+        {/* Toolbar + Table card */}
         <OzCard flush>
           <div className="flex flex-wrap items-center gap-3 border-b border-oz2-border-soft px-[18px] py-3">
             <div className="inline-flex h-[34px] flex-1 min-w-[220px] items-center gap-2 rounded-oz2-input border border-oz2-border bg-oz2-surface px-3">
               <span className="text-oz2-text-faint">{icons.search}</span>
               <input
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
                 placeholder="Search by name, DNS, IP, group…"
                 className="h-full flex-1 border-0 bg-transparent text-[13px] outline-none placeholder:text-oz2-text-faint"
               />
             </div>
 
-            {/* Group dropdown */}
             <GroupFilter
               value={groupFilter}
-              onChange={setGroupFilter}
+              onChange={(v) => {
+                setGroupFilter(v);
+                setPage(1);
+              }}
               open={groupOpen}
               onOpenChange={setGroupOpen}
             />
-
-            {/* Status pills */}
-            <div className="flex items-center gap-1.5">
-              {(
-                [
-                  { id: "all", label: "All" },
-                  { id: "on", label: "Online" },
-                  { id: "warn", label: "Idle" },
-                  { id: "off", label: "Disconnected" },
-                ] as const
-              ).map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => setStatusFilter(f.id)}
-                  className={
-                    "inline-flex h-[28px] items-center rounded-full border px-3 text-[12px] font-medium transition-colors " +
-                    (statusFilter === f.id
-                      ? "border-transparent bg-oz2-acc-soft text-oz2-acc-text"
-                      : "border-oz2-border bg-oz2-surface text-oz2-text-2 hover:bg-oz2-hover")
-                  }
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
           </div>
 
           {/* Table */}
           <table className="w-full text-[13px]">
             <thead>
-              <tr className="text-left">
-                <Th>Address</Th>
+              <tr className="bg-oz2-bg-sunken text-left">
+                <Th>Name</Th>
+                <Th>User</Th>
+                <Th>Group</Th>
+                <Th>IP</Th>
                 <Th>OS</Th>
-                <Th>Groups</Th>
-                <Th>Last seen</Th>
                 <Th>Version</Th>
+                <Th>Connection</Th>
+                <Th>Last seen</Th>
+                <Th aria-label="Actions">{""}</Th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((p) => (
+              {paginated.map((p) => (
                 <tr
                   key={p.id}
                   className="group border-t border-oz2-border-soft transition-colors hover:bg-oz2-hover"
                 >
                   <Td>
-                    <AddressCell peer={p} />
+                    <NameCell peer={p} />
                   </Td>
                   <Td>
-                    <OSCell peer={p} />
+                    <UserCell peer={p} />
                   </Td>
                   <Td>
                     <GroupsCell peer={p} />
                   </Td>
                   <Td>
-                    <span className="text-oz2-text-muted">{p.lastSeen}</span>
+                    <span className="font-mono text-[12px] text-oz2-text-2">
+                      {p.ip}
+                    </span>
+                  </Td>
+                  <Td>
+                    <OSCell peer={p} />
                   </Td>
                   <Td>
                     <span className="font-mono text-[11.5px] text-oz2-text-faint">
                       {p.version}
                     </span>
                   </Td>
+                  <Td>
+                    <ConnectionPill connection={p.connection} />
+                  </Td>
+                  <Td>
+                    <span className="whitespace-nowrap text-oz2-text-muted">
+                      {p.lastSeen}
+                    </span>
+                  </Td>
+                  <Td>
+                    <RowKebab peer={p} />
+                  </Td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {paginated.length === 0 && (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={9}
                     className="px-[18px] py-12 text-center text-oz2-text-muted"
                   >
                     No peers match your filter.
@@ -554,6 +647,26 @@ export default function V2PeersPreview() {
               )}
             </tbody>
           </table>
+
+          {/* Pagination footer */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-oz2-border-soft bg-oz2-bg-sunken px-[18px] py-3 text-[12.5px]">
+            <span className="text-oz2-text-muted">
+              {filtered.length === 0
+                ? "0 peers"
+                : `Showing ${pageStart + 1}–${Math.min(
+                    pageStart + pageSize,
+                    filtered.length,
+                  )} of ${filtered.length}`}
+            </span>
+            <div className="flex items-center gap-3">
+              <PageSizeCombobox value={pageSize} onChange={setPageSize} />
+              <Pager
+                page={visiblePage}
+                totalPages={totalPages}
+                onChange={setPage}
+              />
+            </div>
+          </div>
         </OzCard>
       </div>
     </OzShell>
@@ -562,7 +675,7 @@ export default function V2PeersPreview() {
 
 // ─── Cells ─────────────────────────────────────────────────────────────────
 
-function AddressCell({ peer }: { peer: MockPeer }) {
+function NameCell({ peer }: { peer: MockPeer }) {
   return (
     <Tip
       content={
@@ -593,13 +706,18 @@ function AddressCell({ peer }: { peer: MockPeer }) {
       }
     >
       <div className="flex items-center gap-3">
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-oz2-bg-sunken text-[18px] leading-none">
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-oz2-bg-sunken text-[14px] leading-none">
           {flagEmoji(peer.country)}
         </span>
         <div className="flex min-w-0 flex-col">
-          <OzStatusDotInline status={peer.status} name={peer.name} />
-          <span className="font-mono text-[11.5px] text-oz2-text-faint">
-            {peer.ip}
+          <span className="flex items-center gap-2">
+            <OzStatusDot status={peer.status} />
+            <span className="truncate font-medium text-oz2-text">
+              {peer.name}
+            </span>
+          </span>
+          <span className="truncate font-mono text-[11px] text-oz2-text-faint">
+            {peer.dnsLabel}
           </span>
         </div>
       </div>
@@ -607,18 +725,24 @@ function AddressCell({ peer }: { peer: MockPeer }) {
   );
 }
 
-function OzStatusDotInline({
-  status,
-  name,
-}: {
-  status: "on" | "warn" | "off";
-  name: string;
-}) {
+function UserCell({ peer }: { peer: MockPeer }) {
   return (
-    <span className="flex items-center gap-2">
-      <OzStatusDot status={status} />
-      <span className="truncate font-medium text-oz2-text">{name}</span>
-    </span>
+    <div className="flex min-w-0 flex-col">
+      <span className="truncate text-[13px] text-oz2-text">
+        {peer.userName}
+      </span>
+      <span className="truncate text-[11.5px] text-oz2-text-muted">
+        {peer.userEmail}
+      </span>
+    </div>
+  );
+}
+
+function ConnectionPill({ connection }: { connection: "p2p" | "relay" }) {
+  return (
+    <OzPill variant={connection === "p2p" ? "ok" : "default"}>
+      {connection === "p2p" ? "P2P" : "Relay"}
+    </OzPill>
   );
 }
 
@@ -897,14 +1021,269 @@ function KpiCard({
   );
 }
 
-function Th({ children }: { children: React.ReactNode }) {
+function Th({
+  children,
+  ...props
+}: React.ThHTMLAttributes<HTMLTableCellElement> & {
+  children: React.ReactNode;
+}) {
   return (
-    <th className="px-[18px] py-3 font-mono text-[10.5px] font-semibold uppercase tracking-widest text-oz2-text-faint">
+    <th
+      {...props}
+      className="whitespace-nowrap px-[14px] py-[11px] font-mono text-[10.5px] font-semibold uppercase tracking-widest text-oz2-text-muted"
+    >
       {children}
     </th>
   );
 }
 
 function Td({ children }: { children: React.ReactNode }) {
-  return <td className="px-[18px] py-3 align-middle">{children}</td>;
+  return (
+    <td className="px-[14px] py-[13px] align-middle">{children}</td>
+  );
+}
+
+// ─── SegmentedTabs ─────────────────────────────────────────────────────────
+// Border-soft underline across the strip; active tab gets a 2px acc
+// underline + heavy text. Each tab includes a count badge (mono).
+
+function SegmentedTabs<T extends string>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T;
+  onChange: (next: T) => void;
+  options: { id: T; label: string; count?: number }[];
+}) {
+  return (
+    <div className="flex gap-6 border-b border-oz2-border-soft">
+      {options.map((opt) => {
+        const active = opt.id === value;
+        return (
+          <button
+            key={opt.id}
+            type="button"
+            onClick={() => onChange(opt.id)}
+            className={
+              "relative -mb-px inline-flex h-9 items-center gap-2 border-b-2 px-1 text-[13px] font-medium transition-colors " +
+              (active
+                ? "border-oz2-acc text-oz2-text"
+                : "border-transparent text-oz2-text-muted hover:text-oz2-text")
+            }
+          >
+            {opt.label}
+            {typeof opt.count === "number" && (
+              <span
+                className={
+                  "rounded-full px-1.5 py-px font-mono text-[10.5px] font-semibold " +
+                  (active
+                    ? "bg-oz2-acc-soft text-oz2-acc-text"
+                    : "bg-oz2-bg-soft text-oz2-text-faint")
+                }
+              >
+                {opt.count}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── PageSizeCombobox ──────────────────────────────────────────────────────
+// Native-feeling combobox: button shows current size, click opens
+// listbox of options. Closes on outside click.
+
+function PageSizeCombobox({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (next: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const choices = [5, 10, 25, 50];
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="inline-flex h-7 items-center gap-1.5 rounded-md border border-oz2-border bg-oz2-surface px-2.5 text-[12px] font-medium text-oz2-text-2 hover:border-oz2-border-strong"
+      >
+        <span className="font-mono">{value}</span>
+        <span className="text-oz2-text-faint">/ page</span>
+        <span className="text-oz2-text-faint">{icons.chevDown}</span>
+      </button>
+      {open && (
+        <div className="absolute right-0 bottom-full z-30 mb-1 min-w-[110px] overflow-hidden rounded-oz2-input border border-oz2-border bg-oz2-bg-elev shadow-oz2-md">
+          <ul className="py-1">
+            {choices.map((c) => (
+              <li key={c}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange(c);
+                    setOpen(false);
+                  }}
+                  className={
+                    "flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-[12.5px] hover:bg-oz2-hover " +
+                    (c === value
+                      ? "text-oz2-acc-text"
+                      : "text-oz2-text")
+                  }
+                >
+                  <span className="font-mono">{c}</span>
+                  <span className="text-oz2-text-faint">/ page</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Pager (prev/next + page numbers) ──────────────────────────────────────
+
+function Pager({
+  page,
+  totalPages,
+  onChange,
+}: {
+  page: number;
+  totalPages: number;
+  onChange: (next: number) => void;
+}) {
+  const canPrev = page > 1;
+  const canNext = page < totalPages;
+  return (
+    <div className="flex items-center gap-1">
+      <PagerBtn
+        disabled={!canPrev}
+        onClick={() => onChange(page - 1)}
+        aria-label="Previous page"
+      >
+        <span className="rotate-90">{icons.chevDown}</span>
+      </PagerBtn>
+      <span className="px-2 font-mono text-[12px] tabular-nums text-oz2-text-muted">
+        {page} / {totalPages}
+      </span>
+      <PagerBtn
+        disabled={!canNext}
+        onClick={() => onChange(page + 1)}
+        aria-label="Next page"
+      >
+        <span className="-rotate-90">{icons.chevDown}</span>
+      </PagerBtn>
+    </div>
+  );
+}
+
+function PagerBtn({
+  children,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      type="button"
+      {...props}
+      className={
+        "grid h-7 w-7 place-items-center rounded-md border border-oz2-border bg-oz2-surface text-oz2-text-2 transition-colors " +
+        "hover:border-oz2-border-strong hover:bg-oz2-hover " +
+        "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-oz2-border disabled:hover:bg-oz2-surface"
+      }
+    >
+      {children}
+    </button>
+  );
+}
+
+// ─── RowKebab ──────────────────────────────────────────────────────────────
+// Per-row action menu: View details / Copy IP / Block / Delete.
+// Action handlers no-op in preview — real /peers wires them to the
+// existing PeerActionCell logic.
+
+function RowKebab({ peer }: { peer: MockPeer }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const items: { id: string; label: string; icon: React.ReactNode; danger?: boolean }[] = [
+    { id: "view", label: "View details", icon: icons.peer },
+    { id: "copy", label: "Copy IP", icon: icons.copy },
+    { id: "block", label: "Block peer", icon: icons.block },
+    { id: "delete", label: "Delete peer", icon: icons.trash, danger: true },
+  ];
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(!open);
+        }}
+        aria-label={`Actions for ${peer.name}`}
+        className={
+          "grid h-7 w-7 place-items-center rounded-md border text-oz2-text-2 transition-all " +
+          (open
+            ? "border-oz2-border-strong bg-oz2-hover"
+            : "border-transparent opacity-0 group-hover:opacity-100 hover:border-oz2-border-strong hover:bg-oz2-hover")
+        }
+      >
+        {icons.more}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full z-30 mt-1 w-[180px] overflow-hidden rounded-oz2-input border border-oz2-border bg-oz2-bg-elev shadow-oz2-md">
+          <ul className="py-1">
+            {items.map((it) => (
+              <li key={it.id}>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className={
+                    "flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] " +
+                    (it.danger
+                      ? "text-oz2-err hover:bg-oz2-err-bg"
+                      : "text-oz2-text hover:bg-oz2-hover")
+                  }
+                >
+                  <span
+                    className={
+                      it.danger ? "text-oz2-err" : "text-oz2-text-faint"
+                    }
+                  >
+                    {it.icon}
+                  </span>
+                  {it.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
 }
