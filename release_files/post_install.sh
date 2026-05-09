@@ -36,8 +36,40 @@ skip_service_install_msg() {
     printf "manually once systemd/sysv is available.\033[0m\n"
 }
 
+# Tell NetworkManager to leave the openzro tunnel interface alone
+# (closes the GUI race where users disconnect the tunnel and break
+# their internet because NM-managed DNS gets cleared with it).
+# Upstream NetBird issue #5555 has been open and unaddressed since
+# Mar/2026; the fix is a one-shot config drop, no daemon to invoke.
+configure_networkmanager_unmanaged() {
+    nm_dir="/etc/NetworkManager/conf.d"
+    nm_file="${nm_dir}/openzro.conf"
+    # Only act when the directory exists — otherwise NM isn't
+    # installed on this host and we'd be littering /etc.
+    if [ ! -d "${nm_dir}" ]; then
+        return 0
+    fi
+    if [ -f "${nm_file}" ] && grep -q "^unmanaged-devices=interface-name:wt0" "${nm_file}" 2>/dev/null; then
+        return 0
+    fi
+    cat > "${nm_file}" <<'EOF'
+# Managed by openzro package. Do not edit — overwritten on upgrade.
+# Tells NetworkManager to ignore the openzro WireGuard tunnel
+# interface so the tunnel isn't accidentally torn down via the GUI
+# (which clears its DNS along the way and breaks browsing).
+[keyfile]
+unmanaged-devices=interface-name:wt0
+EOF
+    chmod 0644 "${nm_file}" 2>/dev/null || true
+    if command -V nmcli >/dev/null 2>&1; then
+        nmcli general reload 2>/dev/null || nmcli connection reload 2>/dev/null || true
+    fi
+    printf "\033[32m  NetworkManager configured to leave wt0 unmanaged (%s)\033[0m\n" "${nm_file}"
+}
+
 cleanInstall() {
     printf "\033[32m Post Install of a clean install\033[0m\n"
+    configure_networkmanager_unmanaged
     if ! have_usable_init; then
         skip_service_install_msg
         return 0
@@ -49,6 +81,7 @@ cleanInstall() {
 
 upgrade() {
     printf "\033[32m Post Install of an upgrade\033[0m\n"
+    configure_networkmanager_unmanaged
     if [ "${use_systemctl}" = "True" ]; then
       printf "\033[32m Stopping the service\033[0m\n"
       systemctl stop openzro 2> /dev/null || true
