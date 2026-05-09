@@ -484,9 +484,12 @@ export default function V2PeersPreview() {
                   setTheme(theme === "dark" ? "light" : "dark")
                 }
               />
-              <span className="grid h-7 w-7 place-items-center rounded-full bg-oz2-acc-soft text-[11px] font-semibold text-oz2-acc-text">
-                KR
-              </span>
+              <OzButton variant="primary">
+                <span className="inline-flex h-3.5 w-3.5 items-center justify-center">
+                  {icons.plus}
+                </span>
+                Add peer
+              </OzButton>
             </>
           }
         />
@@ -494,19 +497,11 @@ export default function V2PeersPreview() {
     >
       <div className="space-y-6 p-8">
         {/* Page title row */}
-        <header className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-[22px] font-semibold tracking-tight">Peers</h1>
-            <p className="mt-1 text-[13px] text-oz2-text-muted">
-              All machines and devices connected to your private mesh.
-            </p>
-          </div>
-          <OzButton variant="primary">
-            <span className="inline-flex h-3.5 w-3.5 items-center justify-center">
-              {icons.plus}
-            </span>
-            Add peer
-          </OzButton>
+        <header>
+          <h1 className="text-[22px] font-semibold tracking-tight">Peers</h1>
+          <p className="mt-1 text-[13px] text-oz2-text-muted">
+            All machines and devices connected to your private mesh.
+          </p>
         </header>
 
         {/* KPI band */}
@@ -577,6 +572,8 @@ export default function V2PeersPreview() {
               open={groupOpen}
               onOpenChange={setGroupOpen}
             />
+
+            <PageSizeCombobox value={pageSize} onChange={setPageSize} />
           </div>
 
           {/* Table */}
@@ -658,14 +655,11 @@ export default function V2PeersPreview() {
                     filtered.length,
                   )} of ${filtered.length}`}
             </span>
-            <div className="flex items-center gap-3">
-              <PageSizeCombobox value={pageSize} onChange={setPageSize} />
-              <Pager
-                page={visiblePage}
-                totalPages={totalPages}
-                onChange={setPage}
-              />
-            </div>
+            <Pager
+              page={visiblePage}
+              totalPages={totalPages}
+              onChange={setPage}
+            />
           </div>
         </OzCard>
       </div>
@@ -1121,14 +1115,14 @@ function PageSizeCombobox({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="inline-flex h-7 items-center gap-1.5 rounded-md border border-oz2-border bg-oz2-surface px-2.5 text-[12px] font-medium text-oz2-text-2 hover:border-oz2-border-strong"
+        className="inline-flex h-[34px] items-center gap-1.5 rounded-oz2-input border border-oz2-border bg-oz2-surface px-3 text-[13px] font-medium text-oz2-text-2 hover:bg-oz2-hover hover:border-oz2-border-strong"
       >
         <span className="font-mono">{value}</span>
         <span className="text-oz2-text-faint">/ page</span>
         <span className="text-oz2-text-faint">{icons.chevDown}</span>
       </button>
       {open && (
-        <div className="absolute right-0 bottom-full z-30 mb-1 min-w-[110px] overflow-hidden rounded-oz2-input border border-oz2-border bg-oz2-bg-elev shadow-oz2-md">
+        <div className="absolute left-0 top-full z-30 mt-1 min-w-[110px] overflow-hidden rounded-oz2-input border border-oz2-border bg-oz2-bg-elev shadow-oz2-md">
           <ul className="py-1">
             {choices.map((c) => (
               <li key={c}>
