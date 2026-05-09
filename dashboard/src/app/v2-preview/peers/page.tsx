@@ -688,8 +688,8 @@ export default function V2PeersPreview() {
                   />
                 </Th>
                 <Th>Name</Th>
-                <Th>Group</Th>
                 <Th>Address</Th>
+                <Th>Group</Th>
                 <Th>OS</Th>
                 <Th>Version</Th>
                 <Th>Connection</Th>
@@ -718,10 +718,10 @@ export default function V2PeersPreview() {
                     <NameCell peer={p} />
                   </Td>
                   <Td>
-                    <GroupsCell peer={p} />
+                    <AddressCell peer={p} />
                   </Td>
                   <Td>
-                    <AddressCell peer={p} />
+                    <GroupsCell peer={p} />
                   </Td>
                   <Td>
                     <OSCell peer={p} />
