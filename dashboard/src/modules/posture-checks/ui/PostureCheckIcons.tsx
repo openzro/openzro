@@ -1,10 +1,8 @@
 import { cn } from "@utils/helpers";
-import Image from "next/image";
 import * as React from "react";
-import { FaWindows } from "react-icons/fa6";
+import { FaApple, FaWindows } from "react-icons/fa6";
 import RoundedFlag from "@/assets/countries/RoundedFlag";
 import OpenzroIcon from "@/assets/icons/OpenzroIcon";
-import AppleLogo from "@/assets/os-icons/apple.svg";
 
 type Props = {
   children: React.ReactNode;
@@ -15,7 +13,7 @@ export const PostureCheckIcons = () => {
   return (
     <div className={"flex items-center justify-center -space-x-2"}>
       <Circle className={"top-2"}>
-        <Image src={AppleLogo} alt={""} width={14} />
+        <FaApple className={"text-neutral-700 dark:text-white text-md"} />
       </Circle>
       <Circle className={"top-1"}>
         <div

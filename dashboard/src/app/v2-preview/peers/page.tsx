@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-
 import OzButton from "@/components/v2/OzButton";
 import OzCard from "@/components/v2/OzCard";
 import OzPill from "@/components/v2/OzPill";
@@ -983,7 +982,7 @@ function OSCell({ peer }: { peer: MockPeer }) {
       }
     >
       <span
-        className="inline-flex h-6 w-6 items-center justify-center grayscale brightness-[100%] contrast-[40%]"
+        className="inline-flex h-6 w-6 items-center justify-center"
         aria-label={`${peer.os} ${peer.osVersion}`}
       >
         <OSLogo os={peer.os} />
