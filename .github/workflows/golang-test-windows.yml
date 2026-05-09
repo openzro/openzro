@@ -73,7 +73,15 @@ jobs:
       - run: PsExec64 -s -w ${{ github.workspace }} ${{ env.goexe }} env -w GOMODCACHE=${{ env.cache }}
       - run: PsExec64 -s -w ${{ github.workspace }} ${{ env.goexe }} env -w GOCACHE=${{ env.modcache }}
       - run: PsExec64 -s -w ${{ github.workspace }} ${{ env.goexe }} mod tidy
-      - run: echo "files=$(go list ./... | ForEach-Object { $_ } | Where-Object { $_ -notmatch '/management' })" >> $env:GITHUB_ENV
+      # Exclude server-side packages that don't ship Windows binaries:
+      # management / relay / signal / proxy / combined are all Linux-only
+      # daemons (systemd units, /etc paths, server-side TCP listeners).
+      # Running their tests on Windows runners burns ~minutes per CI
+      # without catching real Windows regressions — the relay binary
+      # we ship is in client/internal/relay (different package),
+      # which IS still tested. Mirrors the same filter NetBird upstream
+      # uses (netbirdio/netbird's golang-test-windows.yml).
+      - run: echo "files=$(go list ./... | ForEach-Object { $_ } | Where-Object { $_ -notmatch '/management' } | Where-Object { $_ -notmatch '/relay' } | Where-Object { $_ -notmatch '/signal' } | Where-Object { $_ -notmatch '/proxy' } | Where-Object { $_ -notmatch '/combined' })" >> $env:GITHUB_ENV
 
       - name: test
         # Direct PsExec64 → go.exe, without the cmd.exe /c "..."
