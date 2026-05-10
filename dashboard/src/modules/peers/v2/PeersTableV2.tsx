@@ -319,7 +319,13 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
   };
 
   return (
-    <div className="space-y-6 p-8">
+    // Single TooltipProvider wraps the whole page so skipDelayDuration
+    // works cross-cell — the address tooltip waits 250ms on first
+    // hover (matches legacy PeerAddressCell), then snaps in 100ms when
+    // the operator drags across adjacent rows. Per-Tooltip delayDuration
+    // overrides keep the OS/Notice/Last-seen tooltips snappy at 1ms.
+    <TooltipProvider delayDuration={250} skipDelayDuration={100}>
+      <div className="space-y-6 p-8">
       <header>
         <h1 className="text-[22px] font-semibold tracking-tight">Peers</h1>
         <p className="mt-1 max-w-2xl text-[13px] text-oz2-text-muted">
@@ -492,7 +498,8 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
           />
         </div>
       </OzCard>
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }
 
@@ -537,14 +544,17 @@ function NameCell({ peer }: { peer: Peer }) {
 function AddressCell({ peer }: { peer: Peer }) {
   // Hover tooltip carries the network detail (Openzro IP, Public IP,
   // Domain, Region) so the dense cell only shows dns_label + IP.
+  // No explicit delayDuration here — inherits the page-level
+  // TooltipProvider's 250ms (matches legacy PeerAddressCell).
+  // The IP shown in the row also gets an inline copy button revealed
+  // on row hover so operators can grab it without opening the tooltip.
   const region = [peer.city_name, peer.country_code]
     .filter(Boolean)
     .join(", ");
   return (
-    <TooltipProvider>
-      <Tooltip delayDuration={1}>
+      <Tooltip>
         <TooltipTrigger asChild>
-          <div className="flex min-w-0 cursor-pointer items-center gap-3">
+          <div className="group/address flex min-w-0 cursor-pointer items-center gap-3">
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-oz2-bg-sunken text-[14px] leading-none">
               {flagEmoji(peer.country_code)}
             </span>
@@ -552,8 +562,11 @@ function AddressCell({ peer }: { peer: Peer }) {
               <span className="truncate text-[13px] text-oz2-text">
                 {peer.dns_label || peer.name}
               </span>
-              <span className="truncate font-mono text-[11.5px] text-oz2-text-muted">
-                {peer.ip}
+              <span className="flex items-center gap-1.5">
+                <span className="truncate font-mono text-[11.5px] text-oz2-text-muted">
+                  {peer.ip}
+                </span>
+                {peer.ip && <InlineCopyButton value={peer.ip} />}
               </span>
             </div>
           </div>
@@ -577,6 +590,7 @@ function AddressCell({ peer }: { peer: Peer }) {
               label="Domain"
               value={peer.dns_label || peer.name || "—"}
               mono={false}
+              copyable
             />
             <InfoTooltipRow
               icon={
@@ -591,7 +605,43 @@ function AddressCell({ peer }: { peer: Peer }) {
           </div>
         </TooltipContent>
       </Tooltip>
-    </TooltipProvider>
+  );
+}
+
+// InlineCopyButton — small icon next to a value in the row body that
+// fades in on group-hover. Click copies; ✓ flashes for 1.4s. Stops
+// event propagation so it doesn't trip the surrounding TooltipTrigger
+// or the row's Link in NameCell.
+function InlineCopyButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  const onCopy = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!navigator.clipboard) return;
+    navigator.clipboard.writeText(value).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1400);
+      },
+      () => {
+        // Silent — clipboard API may be blocked by browser permissions.
+      },
+    );
+  };
+  return (
+    <button
+      type="button"
+      aria-label={copied ? "Copied" : `Copy ${value}`}
+      onClick={onCopy}
+      className={
+        "shrink-0 cursor-pointer rounded p-0.5 text-oz2-text-faint transition-opacity hover:bg-oz2-hover hover:text-oz2-text " +
+        (copied
+          ? "opacity-100 text-oz2-acc"
+          : "opacity-0 group-hover/address:opacity-100")
+      }
+    >
+      {copied ? <Check size={11} /> : <Copy size={11} />}
+    </button>
   );
 }
 
@@ -600,7 +650,6 @@ function OSCell({ peer }: { peer: Peer }) {
   // PeerOSCell behaviour: row stays dense, full label lives in the
   // tooltip so operators don't lose accessibility to the OS string.
   return (
-    <TooltipProvider>
       <Tooltip delayDuration={1}>
         <TooltipTrigger asChild>
           <span className="grid h-7 w-7 cursor-pointer place-items-center rounded-md text-oz2-text-2 transition-colors hover:bg-oz2-hover">
@@ -624,7 +673,6 @@ function OSCell({ peer }: { peer: Peer }) {
           </div>
         </TooltipContent>
       </Tooltip>
-    </TooltipProvider>
   );
 }
 
@@ -705,7 +753,6 @@ function LastSeenCell({ peer }: { peer: Peer }) {
   }
   // Hover reveals the absolute timestamp; mirrors LastTimeRow legacy.
   return (
-    <TooltipProvider>
       <Tooltip delayDuration={1}>
         <TooltipTrigger asChild>
           <span className="cursor-pointer whitespace-nowrap text-oz2-text-muted">
@@ -721,7 +768,6 @@ function LastSeenCell({ peer }: { peer: Peer }) {
           </div>
         </TooltipContent>
       </Tooltip>
-    </TooltipProvider>
   );
 }
 
@@ -773,7 +819,6 @@ function NoticeBadge({
   tooltip: string;
 }) {
   return (
-    <TooltipProvider>
       <Tooltip delayDuration={1}>
         <TooltipTrigger asChild>
           <OzPill variant={variant} className="cursor-pointer whitespace-nowrap">
@@ -785,7 +830,6 @@ function NoticeBadge({
           <p className="max-w-[260px] text-[12px] leading-relaxed">{tooltip}</p>
         </TooltipContent>
       </Tooltip>
-    </TooltipProvider>
   );
 }
 
