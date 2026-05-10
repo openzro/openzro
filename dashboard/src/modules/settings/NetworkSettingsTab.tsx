@@ -230,50 +230,59 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
         </OzButton>
       </header>
 
-      <OzSettingsCard
-        title="Custom DNS domain"
-        sub="Override the default mesh DNS zone. Peers register short names under this zone and resolve each other as <name>.<zone>."
-      >
-        <OzSettingsField
-          label="DNS Domain"
-          hint="Must not overlap with the management server's own hostname, or peers will lose access to the control plane on every reconnect."
+      {/* The two DNS cards are compact (single field / single toggle)
+          and read as a paired concern — both shape how peers find each
+          other. Render them side-by-side on wider viewports so the page
+          doesn't waste a screen of vertical space; collapse to a single
+          column on narrow viewports where the 2-col layout would crush
+          the inputs. Traffic events sits below at full width because
+          it carries the heavy group-filter sub-card. */}
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+        <OzSettingsCard
+          title="Custom DNS domain"
+          sub="Override the default mesh DNS zone. Peers register short names under this zone and resolve each other as <name>.<zone>."
         >
-          <OzInput
-            placeholder={
-              isOpenzroHosted() ? "openzro.cloud" : "openzro.selfhosted"
-            }
-            error={domainError}
-            value={customDNSDomain}
-            disabled={editDisabled}
-            onChange={(e) => setCustomDNSDomain(e.target.value)}
-          />
-        </OzSettingsField>
-      </OzSettingsCard>
+          <OzSettingsField
+            label="DNS Domain"
+            hint="Must not overlap with the management server's own hostname, or peers will lose access to the control plane on every reconnect."
+          >
+            <OzInput
+              placeholder={
+                isOpenzroHosted() ? "openzro.cloud" : "openzro.selfhosted"
+              }
+              error={domainError}
+              value={customDNSDomain}
+              disabled={editDisabled}
+              onChange={(e) => setCustomDNSDomain(e.target.value)}
+            />
+          </OzSettingsField>
+        </OzSettingsCard>
 
-      <OzSettingsCard
-        title="DNS wildcard routing"
-        sub={
-          <>
-            Allow routing rules to target whole DNS zones via wildcards instead
-            of explicit IPs.{" "}
-            <InlineLink
-              href="https://docs.openzro.io/how-to/accessing-entire-domains-within-networks#enabling-dns-wildcard-routing"
-              target="_blank"
-            >
-              Learn more
-              <ExternalLinkIcon size={11} />
-            </InlineLink>
-          </>
-        }
-      >
-        <OzSettingsToggle
-          value={routingPeerDNSSetting}
-          onChange={toggleNetworkDNSSetting}
-          disabled={editDisabled}
-          label="Enable DNS wildcard routing"
-          desc="Requires openZro client v0.35 or higher; changes apply after each client restarts."
-        />
-      </OzSettingsCard>
+        <OzSettingsCard
+          title="DNS wildcard routing"
+          sub={
+            <>
+              Allow routing rules to target whole DNS zones via wildcards
+              instead of explicit IPs.{" "}
+              <InlineLink
+                href="https://docs.openzro.io/how-to/accessing-entire-domains-within-networks#enabling-dns-wildcard-routing"
+                target="_blank"
+              >
+                Learn more
+                <ExternalLinkIcon size={11} />
+              </InlineLink>
+            </>
+          }
+        >
+          <OzSettingsToggle
+            value={routingPeerDNSSetting}
+            onChange={toggleNetworkDNSSetting}
+            disabled={editDisabled}
+            label="Enable DNS wildcard routing"
+            desc="Requires openZro client v0.35 or higher; changes apply after each client restarts."
+          />
+        </OzSettingsCard>
+      </div>
 
       <OzSettingsCard
         title="Network traffic events"
