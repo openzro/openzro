@@ -1,5 +1,4 @@
 import Badge from "@components/Badge";
-import { Checkbox } from "@components/Checkbox";
 import { CommandItem } from "@components/Command";
 import { DropdownInfoText } from "@components/DropdownInfoText";
 import FullTooltip from "@components/FullTooltip";
@@ -36,6 +35,7 @@ import * as React from "react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import Skeleton from "react-loading-skeleton";
 import { useGroups } from "@/contexts/GroupsProvider";
+import OzCheckbox from "@/components/v2/OzCheckbox";
 import { useElementSize } from "@/hooks/useElementSize";
 import type { Group, GroupPeer, GroupResource } from "@/interfaces/Group";
 import { NetworkResource } from "@/interfaces/Network";
@@ -285,7 +285,7 @@ export function PeerGroupSelector({
           >
             <div
               className={
-                "flex items-center gap-2 border-nb-gray-700 flex-wrap h-full"
+                "flex items-center gap-2 flex-wrap h-full"
               }
             >
               {resource && showResources && (
@@ -358,7 +358,12 @@ export function PeerGroupSelector({
         )}
       </PopoverTrigger>
       <PopoverContent
-        className="w-full p-0 shadow-sm shadow-nb-gray-950"
+        // v2 paint override: drop the legacy nb-gray shadow + raise
+        // to oz2-bg-elev so the popover reads as an elevated surface
+        // sitting above the trigger row. The wider Popover primitive
+        // is shared by 20 consumers; overriding inline here keeps the
+        // blast radius scoped to the group selector.
+        className="w-full overflow-hidden rounded-oz2-card border border-oz2-border bg-oz2-bg-elev p-0 text-oz2-text shadow-oz2-md"
         style={{
           width: popoverWidth === "auto" ? width : popoverWidth,
         }}
@@ -377,41 +382,26 @@ export function PeerGroupSelector({
           }}
         >
           <CommandList className={"w-full"}>
-            <div className={"relative"}>
+            <div className="relative border-b border-oz2-border-soft">
               <CommandInput
-                data-cy={"group-search-input"}
+                data-cy="group-search-input"
                 className={cn(
-                  "min-h-[42px] w-full relative",
-                  "border-b-0 border-t-0 border-r-0 border-l-0 border-neutral-200 dark:border-nb-gray-700 items-center",
-                  "bg-transparent text-sm outline-none focus-visible:outline-none ring-0 focus-visible:ring-0",
-                  "dark:placeholder:text-nb-gray-400 font-light placeholder:text-neutral-500 pl-10",
+                  "h-10 w-full bg-transparent text-[13px] text-oz2-text outline-none",
+                  "placeholder:text-oz2-text-faint",
+                  "pl-10 pr-12",
                 )}
                 ref={searchRef}
                 value={search}
                 onValueChange={setSearch}
                 placeholder={searchPlaceholder}
               />
-              <div
-                className={
-                  "absolute left-0 top-0 h-full flex items-center pl-4"
-                }
-              >
-                <div className={"flex items-center"}>
-                  <SearchIcon size={14} />
-                </div>
+              <div className="pointer-events-none absolute left-0 top-0 flex h-full items-center pl-4 text-oz2-text-faint">
+                <SearchIcon size={14} />
               </div>
-              <div
-                className={
-                  "absolute right-0 top-0 h-full flex items-center pr-4"
-                }
-              >
-                <div
-                  className={
-                    "flex items-center bg-nb-gray-800 py-1 px-1.5 rounded-[4px] border border-nb-gray-500"
-                  }
-                >
+              <div className="absolute right-0 top-0 flex h-full items-center pr-3">
+                <span className="inline-flex items-center gap-1 rounded-[5px] border border-oz2-border-soft bg-oz2-bg-sunken px-1.5 py-[3px] font-mono text-[10.5px] text-oz2-text-faint">
                   <IconArrowBack size={10} />
-                </div>
+                </span>
               </div>
             </div>
 
@@ -439,11 +429,9 @@ export function PeerGroupSelector({
                           {folderIcon}
                           {search}
                         </Badge>
-                        <div
-                          className={"text-neutral-500 dark:text-nb-gray-300"}
-                        >
+                        <div className="text-[12px] text-oz2-text-muted">
                           Add this group by pressing{" "}
-                          <span className={"font-bold text-openzro"}>
+                          <span className="font-semibold text-oz2-acc-text">
                             {"'Enter'"}
                           </span>
                         </div>
@@ -506,11 +494,7 @@ export function PeerGroupSelector({
 
                               <div className={"flex gap-3 items-center"}>
                                 {!users ? (
-                                  <div
-                                    className={
-                                      "text-neutral-500 dark:text-nb-gray-300 font-medium flex items-center gap-2"
-                                    }
-                                  >
+                                  <div className="flex items-center gap-2 text-[12px] font-medium text-oz2-text-muted">
                                     {peerIcon}
                                     {peerCount} Peer(s)
                                   </div>
@@ -522,7 +506,7 @@ export function PeerGroupSelector({
                                   />
                                 )}
 
-                                <Checkbox checked={isSelected} />
+                                <OzCheckbox checked={isSelected} />
                               </div>
                             </div>
                           </CommandItem>
@@ -564,9 +548,7 @@ const TabTriggers = ({
         onClick={() => searchRef.current?.focus()}
       >
         <FolderGit2
-          className={
-            "text-nb-gray-500 group-data-[state=active]/trigger:text-openzro transition-all"
-          }
+          className="text-oz2-text-faint transition-colors group-data-[state=active]/trigger:text-oz2-acc-text"
           size={14}
         />
         Groups
@@ -577,9 +559,7 @@ const TabTriggers = ({
         onClick={() => searchRef.current?.focus()}
       >
         <Layers3Icon
-          className={
-            "text-nb-gray-500 group-data-[state=active]/trigger:text-openzro transition-all"
-          }
+          className="text-oz2-text-faint transition-colors group-data-[state=active]/trigger:text-oz2-acc-text"
           size={14}
         />
         Resource
@@ -608,9 +588,9 @@ const UsersCounter = ({
       users={usersOfGroup}
       max={3}
       avatarClassName={cn(
-        "border-nb-gray-920",
-        "bg-nb-gray-800 group-hover/user-stack:bg-nb-gray-700",
-        "group-hover/command-item:border-nb-gray-910",
+        "border-oz2-border-soft",
+        "bg-oz2-bg-sunken group-hover/user-stack:bg-oz2-hover",
+        "group-hover/command-item:border-oz2-border",
       )}
     />
   );
@@ -618,12 +598,8 @@ const UsersCounter = ({
 
 const ResourcesCounter = ({ group }: { group: Group }) => {
   return group?.resources_count && group.resources_count > 0 ? (
-    <div
-      className={
-        "text-nb-gray-300 font-medium flex items-center gap-2 transition-all"
-      }
-    >
-      <Layers3 size={14} className={"shrink-0"} />
+    <div className="flex items-center gap-2 text-[12px] font-medium text-oz2-text-muted">
+      <Layers3 size={14} className="shrink-0" />
       {group.resources_count} Resource(s)
     </div>
   ) : null;
@@ -693,7 +669,7 @@ const ResourcesList = ({
       <VirtualScrollAreaList
         items={filteredItems}
         onSelect={onChange}
-        itemClassName={"dark:aria-selected:bg-nb-gray-800/20"}
+        itemClassName="aria-selected:bg-oz2-hover"
         renderItem={(res) => {
           return (
             <Fragment key={res.id}>
@@ -721,12 +697,8 @@ const ResourcesList = ({
                 </Badge>
               </div>
 
-              <div className={"flex items-center gap-5"}>
-                <div
-                  className={
-                    "text-neutral-500 dark:text-nb-gray-300 font-medium flex items-center gap-2"
-                  }
-                >
+              <div className="flex items-center gap-5">
+                <div className="flex items-center gap-2 text-[12px] font-medium text-oz2-text-muted">
                   {res.address}
                   <RadioItem value={res.id} />
                 </div>
