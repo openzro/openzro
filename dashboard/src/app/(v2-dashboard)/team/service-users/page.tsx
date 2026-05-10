@@ -1,78 +1,32 @@
 "use client";
 
-import Breadcrumbs from "@components/Breadcrumbs";
-import InlineLink from "@components/InlineLink";
-import Paragraph from "@components/Paragraph";
-import SkeletonTable from "@components/skeletons/SkeletonTable";
 import { RestrictedAccess } from "@components/ui/RestrictedAccess";
-import { usePortalElement } from "@hooks/usePortalElement";
-import { IconSettings2 } from "@tabler/icons-react";
 import useFetchApi from "@utils/api";
-import { ExternalLinkIcon } from "lucide-react";
-import React, { lazy, Suspense } from "react";
-import TeamIcon from "@/assets/icons/TeamIcon";
+import React from "react";
+import { useGroups } from "@/contexts/GroupsProvider";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { User } from "@/interfaces/User";
-import PageContainer from "@/layouts/PageContainer";
+import ServiceUsersTableV2 from "@/modules/users/v2/ServiceUsersTableV2";
 
-const ServiceUsersTable = lazy(
-  () => import("@/modules/users/ServiceUsersTable"),
-);
+// /team/service-users — v2 entry. Chrome (OzShell + sidebar + topbar)
+// lives in (v2-dashboard)/layout.tsx → V2DashboardLayout, which wraps
+// the page in GroupsProvider; this component just owns the data fetch
+// + the read-permission gate. Header H1 + TeamTabs render inside the
+// table component to keep the page-level wrapper trivial.
 
 export default function ServiceUsers() {
+  const { isLoading: isGroupsLoading } = useGroups();
   const { permission } = usePermissions();
   const { data: users, isLoading } = useFetchApi<User[]>(
     "/users?service_user=true",
   );
 
-  const { ref: headingRef, portalTarget } =
-    usePortalElement<HTMLHeadingElement>();
-
   return (
-    <PageContainer>
-      <div className={"p-default py-6"}>
-        <Breadcrumbs>
-          <Breadcrumbs.Item
-            href={"/team"}
-            label={"Team"}
-            icon={<TeamIcon size={13} />}
-          />
-          <Breadcrumbs.Item
-            href={"/team/service-users"}
-            label={"Service Users"}
-            active
-            icon={<IconSettings2 size={17} />}
-          />
-        </Breadcrumbs>
-        <h1 ref={headingRef}>Service Users</h1>
-        <Paragraph>
-          Use service users to create API tokens and avoid losing automated
-          access.
-        </Paragraph>
-        <Paragraph>
-          Learn more about
-          <InlineLink
-            href={"https://docs.openzro.io/how-to/access-openzro-public-api"}
-            target={"_blank"}
-          >
-            Service Users
-            <ExternalLinkIcon size={12} />
-          </InlineLink>
-          in our documentation.
-        </Paragraph>
-      </div>
-      <RestrictedAccess
-        page={"Service Users"}
-        hasAccess={permission.users.read}
-      >
-        <Suspense fallback={<SkeletonTable />}>
-          <ServiceUsersTable
-            users={users}
-            isLoading={isLoading}
-            headingTarget={portalTarget}
-          />
-        </Suspense>
-      </RestrictedAccess>
-    </PageContainer>
+    <RestrictedAccess hasAccess={permission.users.read}>
+      <ServiceUsersTableV2
+        users={users}
+        isLoading={isLoading || isGroupsLoading}
+      />
+    </RestrictedAccess>
   );
 }
