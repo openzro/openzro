@@ -1,17 +1,7 @@
 "use client";
 
-import HelpText from "@components/HelpText";
 import InlineLink from "@components/InlineLink";
-import { Input } from "@components/Input";
-import { Label } from "@components/Label";
 import { notify } from "@components/Notification";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@components/Select";
 import { useExpirationState } from "@hooks/useExpirationState";
 import { convertToSeconds } from "@hooks/useTimeFormatter";
 import * as Tabs from "@radix-ui/react-tabs";
@@ -20,6 +10,14 @@ import { CalendarClock, ExternalLinkIcon } from "lucide-react";
 import React, { useState } from "react";
 import { useSWRConfig } from "swr";
 import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
+import {
+  OzSelect,
+  OzSelectContent,
+  OzSelectItem,
+  OzSelectTrigger,
+  OzSelectValue,
+} from "@/components/v2/OzSelect";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { useHasChanges } from "@/hooks/useHasChanges";
 import { Account } from "@/interfaces/Account";
@@ -202,52 +200,46 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
         {loginExpiration && (
           <div className="flex flex-col gap-5 rounded-oz2-card border border-oz2-border-soft bg-oz2-bg-sunken p-4">
             <OzSettingsField
-              label={<Label className="mb-0">Session expiration</Label>}
-              hint={
-                <HelpText className="mt-0 text-[11.5px]">
-                  Time after which every peer added with SSO login will require
-                  re-authentication.
-                </HelpText>
-              }
+              label="Session expiration"
+              hint="Time after which every peer added with SSO login will require re-authentication."
             >
               <div className="flex gap-3">
-                <Input
+                <OzInput
                   placeholder="7"
-                  maxWidthClass="min-w-[100px]"
                   min={1}
                   max={180}
-                  className="w-full"
                   value={expiresIn}
                   type="number"
                   disabled={editDisabled}
                   data-cy="peer-login-expiration-input"
                   onChange={(e) => setExpiresIn(e.target.value)}
+                  wrapperClassName="w-[120px]"
                 />
-                <Select
+                <OzSelect
                   disabled={editDisabled}
                   value={expireInterval}
                   onValueChange={(v) => setExpireInterval(v)}
                 >
-                  <SelectTrigger
+                  <OzSelectTrigger
                     className="w-full"
                     data-cy="peer-login-expiration-select"
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
                       <CalendarClock
-                        size={15}
-                        className="text-neutral-600 dark:text-nb-gray-300"
+                        size={14}
+                        className="text-oz2-text-faint"
                       />
-                      <SelectValue
+                      <OzSelectValue
                         placeholder="Select interval..."
                         data-cy="peer-login-expiration-select-value"
                       />
                     </div>
-                  </SelectTrigger>
-                  <SelectContent data-cy="peer-login-expiration-select-content">
-                    <SelectItem value="days">Days</SelectItem>
-                    <SelectItem value="hours">Hours</SelectItem>
-                  </SelectContent>
-                </Select>
+                  </OzSelectTrigger>
+                  <OzSelectContent data-cy="peer-login-expiration-select-content">
+                    <OzSelectItem value="days">Days</OzSelectItem>
+                    <OzSelectItem value="hours">Hours</OzSelectItem>
+                  </OzSelectContent>
+                </OzSelect>
               </div>
             </OzSettingsField>
 
