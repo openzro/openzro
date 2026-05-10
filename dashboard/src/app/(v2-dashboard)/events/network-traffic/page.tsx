@@ -10,6 +10,7 @@ import ActivityIcon from "@/assets/icons/ActivityIcon";
 import PeersProvider from "@/contexts/PeersProvider";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import PageContainer from "@/layouts/PageContainer";
+import EventsTabs from "@/modules/events/v2/EventsTabs";
 import NetworkTrafficTimeline from "@/modules/network-traffic/NetworkTrafficTimeline";
 
 export default function NetworkTraffic() {
@@ -52,6 +53,15 @@ export default function NetworkTraffic() {
           </InlineLink>
           .
         </Paragraph>
+        {/* Transitional EventsTabs — this page still ships legacy
+            paint inside the v2 chrome until phase 5.12 lands the
+            v2 body. Mounting EventsTabs here gives the operator a
+            way back to /events/audit (which is already on the v2
+            timeline). Drop it once the body is ported and the page
+            wraps EventsTabs natively like AuditTimelineV2 does. */}
+        <div className={"mt-4"}>
+          <EventsTabs />
+        </div>
       </div>
       <RestrictedAccess
         page={"Network Traffic"}
