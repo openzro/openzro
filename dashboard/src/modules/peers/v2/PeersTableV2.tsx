@@ -8,6 +8,20 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@components/Tooltip";
+import {
+  Column,
+  ColumnDef,
+  FilterFn,
+  flexRender,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  PaginationState,
+  RowSelectionState,
+  SortingFn,
+  SortingState,
+  useReactTable,
+} from "@tanstack/react-table";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { Barcode, CpuIcon } from "lucide-react";
@@ -61,6 +75,18 @@ type StatusFilter = "all" | "on" | "warn" | "off" | "pending";
 // that the management hasn't yet flipped to disconnected.
 const IDLE_THRESHOLD_MS = 5 * 60 * 1000;
 
+const noopFilter: FilterFn<unknown> = () => true;
+const noopSort: SortingFn<unknown> = () => 0;
+const NOOP_FILTER_FNS = {
+  fuzzy: noopFilter,
+  dateRange: noopFilter,
+  exactMatch: noopFilter,
+  arrIncludesSomeExact: noopFilter,
+};
+const NOOP_SORTING_FNS = {
+  checkbox: noopSort,
+};
+
 function deriveStatus(peer: Peer): "on" | "warn" | "off" {
   if (!peer.connected) return "off";
   const lastSeenMs = new Date(peer.last_seen).getTime();
@@ -83,10 +109,18 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [groupFilter, setGroupFilter] = useState<string[]>([]);
   const [groupOpen, setGroupOpen] = useState(false);
-  const [pageSize, setPageSize] = useState<number>(20);
-  const [page, setPage] = useState<number>(1);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState<boolean>(false);
+
+  // TanStack-owned state — sort, selection, pagination. The
+  // status/group/search filters above run BEFORE the table sees
+  // the data; TanStack only handles the part of the pipeline that
+  // benefits from its built-in machinery.
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 20,
+  });
 
   const all = useMemo(() => peers ?? [], [peers]);
 
@@ -138,10 +172,139 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
     });
   }, [all, search, statusFilter, groupFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const visiblePage = Math.min(page, totalPages);
-  const pageStart = (visiblePage - 1) * pageSize;
-  const paginated = filtered.slice(pageStart, pageStart + pageSize);
+  // Reset to page 1 whenever filters narrow the dataset, otherwise
+  // operators can land on an empty page after applying a filter.
+  useEffect(() => {
+    setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+  }, [search, statusFilter, groupFilter]);
+
+  const columns = useMemo<ColumnDef<Peer>[]>(
+    () => [
+      {
+        id: "select",
+        size: 44,
+        enableSorting: false,
+        header: ({ table }) => (
+          <Checkbox
+            checked={table.getIsAllPageRowsSelected()}
+            indeterminate={
+              table.getIsSomePageRowsSelected() &&
+              !table.getIsAllPageRowsSelected()
+            }
+            onChange={(checked) => table.toggleAllPageRowsSelected(checked)}
+            aria-label="Select all visible"
+          />
+        ),
+        cell: ({ row }) => (
+          <Checkbox
+            checked={row.getIsSelected()}
+            onChange={(checked) => row.toggleSelected(checked)}
+            aria-label={`Select ${row.original.name}`}
+          />
+        ),
+      },
+      {
+        id: "name",
+        accessorFn: (peer) => peer.name ?? "",
+        sortingFn: "text",
+        header: ({ column }) => <SortHeader column={column} label="Name" />,
+        cell: ({ row }) => <NameCell peer={row.original} />,
+      },
+      {
+        id: "address",
+        accessorFn: (peer) => peer.dns_label ?? peer.ip ?? "",
+        sortingFn: "text",
+        header: ({ column }) => <SortHeader column={column} label="Address" />,
+        cell: ({ row }) => <AddressCell peer={row.original} />,
+      },
+      {
+        id: "groups",
+        accessorFn: (peer) => peer.groups?.length ?? 0,
+        sortingFn: "basic",
+        header: ({ column }) => <SortHeader column={column} label="Group" />,
+        cell: ({ row }) => <GroupsCell peer={row.original} />,
+      },
+      {
+        id: "os",
+        accessorFn: (peer) => peer.os ?? "",
+        sortingFn: "text",
+        header: ({ column }) => <SortHeader column={column} label="OS" />,
+        cell: ({ row }) => <OSCell peer={row.original} />,
+      },
+      {
+        id: "version",
+        accessorFn: (peer) => peer.version ?? "",
+        sortingFn: "text",
+        header: ({ column }) => <SortHeader column={column} label="Version" />,
+        cell: ({ row }) => (
+          <span className="font-mono text-[11.5px] text-oz2-text-faint">
+            {row.original.version || "—"}
+          </span>
+        ),
+      },
+      {
+        id: "lastSeen",
+        accessorFn: (peer) => {
+          const t = new Date(peer.last_seen).getTime();
+          return Number.isFinite(t) ? t : 0;
+        },
+        sortingFn: "basic",
+        header: ({ column }) => (
+          <SortHeader column={column} label="Last seen" />
+        ),
+        cell: ({ row }) => <LastSeenCell peer={row.original} />,
+      },
+      {
+        id: "notice",
+        enableSorting: false,
+        header: () => <span>Notice</span>,
+        cell: ({ row }) => <NoticeCell peer={row.original} />,
+      },
+      {
+        id: "actions",
+        size: 40,
+        enableSorting: false,
+        header: () => null,
+        cell: ({ row }) => (
+          <PeerProvider peer={row.original}>
+            <PeerActionCell />
+          </PeerProvider>
+        ),
+      },
+    ],
+    [],
+  );
+
+  const table = useReactTable({
+    data: filtered,
+    columns,
+    state: { sorting, rowSelection, pagination },
+    onSortingChange: setSorting,
+    onRowSelectionChange: setRowSelection,
+    onPaginationChange: setPagination,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    enableRowSelection: true,
+    getRowId: (peer) => peer.id ?? peer.name,
+    // The project's @components/table/DataTable extends TanStack's
+    // FilterFns / SortingFns interfaces globally with custom names
+    // (fuzzy / dateRange / exactMatch / arrIncludesSomeExact /
+    // checkbox). Strict TS then requires every useReactTable caller
+    // to provide them. We don't use any of these in PeersTableV2 —
+    // no-op stubs keep the typecheck happy without altering runtime.
+    filterFns: NOOP_FILTER_FNS,
+    sortingFns: NOOP_SORTING_FNS,
+  });
+
+  const selectedCount = Object.keys(rowSelection).length;
+  const pageInfo = table.getState().pagination;
+  const pageStart =
+    filtered.length === 0 ? 0 : pageInfo.pageIndex * pageInfo.pageSize + 1;
+  const pageEnd = Math.min(
+    filtered.length,
+    (pageInfo.pageIndex + 1) * pageInfo.pageSize,
+  );
 
   const refreshClick = () => {
     setRefreshing(true);
@@ -153,14 +316,6 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
       })
       .finally(() => setRefreshing(false));
   };
-
-  const toggleSelected = (id: string) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
 
   return (
     <div className="space-y-6 p-8">
@@ -208,10 +363,7 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
           <span className="text-oz2-text-faint">{ICONS.search}</span>
           <input
             value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name, IP, user…"
             className="h-full flex-1 border-0 bg-transparent text-[13px] outline-none placeholder:text-oz2-text-faint"
           />
@@ -219,10 +371,7 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
 
         <SegmentedTabs
           value={statusFilter}
-          onChange={(v) => {
-            setStatusFilter(v);
-            setPage(1);
-          }}
+          onChange={setStatusFilter}
           options={[
             { id: "all", label: "All", count: counts.total },
             { id: "on", label: "Online", count: counts.online },
@@ -234,16 +383,16 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
 
         <GroupFilter
           value={groupFilter}
-          onChange={(v) => {
-            setGroupFilter(v);
-            setPage(1);
-          }}
+          onChange={setGroupFilter}
           allGroups={allGroupNames}
           open={groupOpen}
           onOpenChange={setGroupOpen}
         />
 
-        <PageSizeCombobox value={pageSize} onChange={setPageSize} />
+        <PageSizeCombobox
+          value={pageInfo.pageSize}
+          onChange={(n) => table.setPageSize(n)}
+        />
 
         <button
           type="button"
@@ -258,10 +407,10 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
       </div>
 
       <OzCard flush>
-        {selected.size > 0 && (
+        {selectedCount > 0 && (
           <div className="flex items-center justify-between gap-3 border-b border-oz2-border-soft bg-oz2-acc-soft px-[18px] py-2.5 text-[12.5px]">
             <span className="font-medium text-oz2-acc-text">
-              {selected.size} {selected.size === 1 ? "peer" : "peers"} selected
+              {selectedCount} {selectedCount === 1 ? "peer" : "peers"} selected
             </span>
             <div className="flex items-center gap-2">
               <OzButton variant="default">Add to group</OzButton>
@@ -271,7 +420,7 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
               </OzButton>
               <button
                 type="button"
-                onClick={() => setSelected(new Set())}
+                onClick={() => table.resetRowSelection()}
                 className="rounded-oz2-input px-2 py-1 text-[12px] text-oz2-text-muted hover:bg-oz2-hover hover:text-oz2-text"
               >
                 Clear
@@ -282,91 +431,48 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
 
         <OzTable>
           <OzTableHeader>
-            <OzTableRow className="hover:bg-transparent">
-              <OzTableHead aria-label="Select" className="w-[44px]">
-                <Checkbox
-                  checked={
-                    paginated.length > 0 &&
-                    paginated.every((p) => p.id && selected.has(p.id))
-                  }
-                  indeterminate={
-                    paginated.some((p) => p.id && selected.has(p.id)) &&
-                    !paginated.every((p) => p.id && selected.has(p.id))
-                  }
-                  onChange={(checked) => {
-                    setSelected((prev) => {
-                      const next = new Set(prev);
-                      for (const p of paginated) {
-                        if (!p.id) continue;
-                        if (checked) next.add(p.id);
-                        else next.delete(p.id);
-                      }
-                      return next;
-                    });
-                  }}
-                  aria-label="Select all visible"
-                />
-              </OzTableHead>
-              <OzTableHead>Name</OzTableHead>
-              <OzTableHead>Address</OzTableHead>
-              <OzTableHead>Group</OzTableHead>
-              <OzTableHead>OS</OzTableHead>
-              <OzTableHead>Version</OzTableHead>
-              <OzTableHead>Last seen</OzTableHead>
-              <OzTableHead>Notice</OzTableHead>
-              <OzTableHead aria-label="Actions" className="w-[40px]" />
-            </OzTableRow>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <OzTableRow
+                key={headerGroup.id}
+                className="hover:bg-transparent"
+              >
+                {headerGroup.headers.map((header) => (
+                  <OzTableHead
+                    key={header.id}
+                    style={
+                      header.column.columnDef.size
+                        ? { width: header.column.columnDef.size }
+                        : undefined
+                    }
+                  >
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext(),
+                        )}
+                  </OzTableHead>
+                ))}
+              </OzTableRow>
+            ))}
           </OzTableHeader>
           <OzTableBody>
-            {paginated.map((p) => {
-              const id = p.id ?? p.name;
-              return (
-                <OzTableRow
-                  key={id}
-                  data-state={selected.has(id) ? "selected" : undefined}
-                >
-                  <OzTableCell>
-                    <Checkbox
-                      checked={selected.has(id)}
-                      onChange={() => toggleSelected(id)}
-                      aria-label={`Select ${p.name}`}
-                    />
+            {table.getRowModel().rows.map((row) => (
+              <OzTableRow
+                key={row.id}
+                data-state={row.getIsSelected() ? "selected" : undefined}
+              >
+                {row.getVisibleCells().map((cell) => (
+                  <OzTableCell key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </OzTableCell>
-                  <OzTableCell>
-                    <NameCell peer={p} />
-                  </OzTableCell>
-                  <OzTableCell>
-                    <AddressCell peer={p} />
-                  </OzTableCell>
-                  <OzTableCell>
-                    <GroupsCell peer={p} />
-                  </OzTableCell>
-                  <OzTableCell>
-                    <OSCell peer={p} />
-                  </OzTableCell>
-                  <OzTableCell>
-                    <span className="font-mono text-[11.5px] text-oz2-text-faint">
-                      {p.version || "—"}
-                    </span>
-                  </OzTableCell>
-                  <OzTableCell>
-                    <LastSeenCell peer={p} />
-                  </OzTableCell>
-                  <OzTableCell>
-                    <NoticeCell peer={p} />
-                  </OzTableCell>
-                  <OzTableCell>
-                    <PeerProvider peer={p}>
-                      <PeerActionCell />
-                    </PeerProvider>
-                  </OzTableCell>
-                </OzTableRow>
-              );
-            })}
-            {paginated.length === 0 && (
+                ))}
+              </OzTableRow>
+            ))}
+            {table.getRowModel().rows.length === 0 && (
               <OzTableRow className="hover:bg-transparent">
                 <OzTableCell
-                  colSpan={9}
+                  colSpan={columns.length}
                   className="px-[18px] py-12 text-center text-oz2-text-muted"
                 >
                   {isLoading ? "Loading peers…" : "No peers match your filter."}
@@ -380,15 +486,12 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
           <span className="text-oz2-text-muted">
             {filtered.length === 0
               ? "0 peers"
-              : `Showing ${pageStart + 1}–${Math.min(
-                  pageStart + pageSize,
-                  filtered.length,
-                )} of ${filtered.length}`}
+              : `Showing ${pageStart}–${pageEnd} of ${filtered.length}`}
           </span>
           <Pager
-            page={visiblePage}
-            totalPages={totalPages}
-            onChange={setPage}
+            page={pageInfo.pageIndex + 1}
+            totalPages={Math.max(1, table.getPageCount())}
+            onChange={(p) => table.setPageIndex(p - 1)}
           />
         </div>
       </OzCard>
@@ -672,6 +775,43 @@ function AddPeerButtonV2({ peerCount }: { peerCount: number }) {
 }
 
 // ─── Filter and helper components ─────────────────────────────────────────
+
+// Clickable column header that toggles ascending → descending → none
+// via TanStack's column.toggleSorting(). Inline arrow indicator
+// reflects the current sort state.
+function SortHeader({
+  column,
+  label,
+}: {
+  column: Column<Peer, unknown>;
+  label: string;
+}) {
+  if (!column.getCanSort()) {
+    return <span>{label}</span>;
+  }
+  const sorted = column.getIsSorted();
+  return (
+    <button
+      type="button"
+      onClick={() => column.toggleSorting()}
+      className="-mx-1 inline-flex h-5 items-center gap-1.5 rounded px-1 text-left transition-colors hover:text-oz2-text"
+    >
+      {label}
+      <span
+        className={
+          "text-oz2-text-faint transition-opacity " +
+          (sorted ? "opacity-100 text-oz2-text" : "opacity-50")
+        }
+      >
+        {sorted === "asc"
+          ? ICONS.sortAsc
+          : sorted === "desc"
+            ? ICONS.sortDesc
+            : ICONS.sortIdle}
+      </span>
+    </button>
+  );
+}
 
 function SegmentedTabs<T extends string>({
   value,
@@ -1083,6 +1223,48 @@ const ICONS = {
     </>,
   ),
   chevDown: baseIcon(<path d="m6 9 6 6 6-6" />),
+  sortAsc: (
+    <svg
+      viewBox="0 0 24 24"
+      width={11}
+      height={11}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m18 15-6-6-6 6" />
+    </svg>
+  ),
+  sortDesc: (
+    <svg
+      viewBox="0 0 24 24"
+      width={11}
+      height={11}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  ),
+  sortIdle: (
+    <svg
+      viewBox="0 0 24 24"
+      width={11}
+      height={11}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m6 9 6-6 6 6M6 15l6 6 6-6" />
+    </svg>
+  ),
   refresh: baseIcon(
     <>
       <path d="M21 12a9 9 0 1 1-3.5-7.1" />
