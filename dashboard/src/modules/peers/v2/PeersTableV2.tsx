@@ -8,6 +8,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@components/Tooltip";
+import MemoizedOpenzroIcon from "@components/ui/MemoizedOpenzroIcon";
 import {
   Column,
   ColumnDef,
@@ -243,11 +244,7 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
         accessorFn: (peer) => peer.version ?? "",
         sortingFn: "text",
         header: ({ column }) => <SortHeader column={column} label="Version" />,
-        cell: ({ row }) => (
-          <span className="font-mono text-[11.5px] text-oz2-text-faint">
-            {row.original.version || "—"}
-          </span>
-        ),
+        cell: ({ row }) => <VersionCell peer={row.original} />,
       },
       {
         id: "lastSeen",
@@ -263,6 +260,7 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
       },
       {
         id: "notice",
+        size: 200,
         enableSorting: false,
         header: () => <span>Notice</span>,
         cell: ({ row }) => <NoticeCell peer={row.original} />,
@@ -678,9 +676,14 @@ function InfoTooltipRow({
           type="button"
           aria-label={copied ? "Copied" : `Copy ${label}`}
           onClick={handleCopy}
-          className="grid h-5 w-5 shrink-0 cursor-pointer place-items-center rounded text-oz2-text-faint transition-colors hover:bg-oz2-hover hover:text-oz2-text"
+          // Explicit border + bg so the affordance reads as a real
+          // button against the tooltip's surface. Pointer-events:auto
+          // is the Radix Tooltip default, but stating it here documents
+          // the requirement and survives any future global style reset.
+          style={{ pointerEvents: "auto" }}
+          className="ml-1 grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded border border-oz2-border bg-oz2-bg-soft text-oz2-text-2 transition-colors hover:border-oz2-border-strong hover:bg-oz2-hover hover:text-oz2-text"
         >
-          {copied ? <Check size={11} /> : <Copy size={11} />}
+          {copied ? <Check size={12} /> : <Copy size={12} />}
         </button>
       )}
     </div>
@@ -689,43 +692,116 @@ function InfoTooltipRow({
 
 function LastSeenCell({ peer }: { peer: Peer }) {
   if (peer.connected) {
-    return <span className="whitespace-nowrap text-oz2-text-muted">just now</span>;
+    return (
+      <span className="whitespace-nowrap text-oz2-text-muted">just now</span>
+    );
   }
   const date = peer.last_seen ? dayjs(peer.last_seen) : null;
   const neverSeen = !date || date.isBefore(dayjs().subtract(2000, "years"));
+  if (neverSeen) {
+    return (
+      <span className="whitespace-nowrap text-oz2-text-muted">never</span>
+    );
+  }
+  // Hover reveals the absolute timestamp; mirrors LastTimeRow legacy.
   return (
-    <span className="whitespace-nowrap text-oz2-text-muted">
-      {neverSeen ? "never" : date.fromNow()}
-    </span>
+    <TooltipProvider>
+      <Tooltip delayDuration={1}>
+        <TooltipTrigger asChild>
+          <span className="cursor-pointer whitespace-nowrap text-oz2-text-muted">
+            {date.fromNow()}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>
+          <div className="flex flex-col gap-1">
+            <span className="text-[11px] text-oz2-text-faint">Last seen on</span>
+            <span className="text-[12.5px] text-oz2-text">
+              {date.format("D MMMM, YYYY [at] h:mm A")}
+            </span>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
+// Render up to one notice pill per peer (most-severe wins). Order:
+// login_expired > approval_required > !login_expiration_enabled.
 function NoticeCell({ peer }: { peer: Peer }) {
   if (peer.login_expired) {
     return (
-      <OzPill variant="err">
-        <span className="opacity-80">{ICONS.alert}</span>
-        Login required
-      </OzPill>
+      <NoticeBadge
+        variant="err"
+        icon={ICONS.alert}
+        label="Login required"
+        tooltip="This peer is offline and needs to be re-authenticated because its login has expired."
+      />
     );
   }
   if (peer.approval_required) {
     return (
-      <OzPill variant="warn">
-        <span className="opacity-80">{ICONS.clock}</span>
-        Approval pending
-      </OzPill>
+      <NoticeBadge
+        variant="warn"
+        icon={ICONS.clock}
+        label="Approval pending"
+        tooltip="This peer is waiting for an administrator to approve it before it can connect to the mesh."
+      />
     );
   }
   if (!peer.login_expiration_enabled) {
     return (
-      <OzPill variant="default">
-        <span className="opacity-70">{ICONS.hourglass}</span>
-        Expiration disabled
-      </OzPill>
+      <NoticeBadge
+        variant="default"
+        icon={ICONS.hourglass}
+        label="Expiration disabled"
+        tooltip="Session expiration is turned off for this peer — it will stay logged in indefinitely."
+      />
     );
   }
   return null;
+}
+
+function NoticeBadge({
+  variant,
+  icon,
+  label,
+  tooltip,
+}: {
+  variant: "default" | "warn" | "err";
+  icon: React.ReactNode;
+  label: string;
+  tooltip: string;
+}) {
+  return (
+    <TooltipProvider>
+      <Tooltip delayDuration={1}>
+        <TooltipTrigger asChild>
+          <OzPill variant={variant} className="cursor-pointer whitespace-nowrap">
+            <span className="opacity-80">{icon}</span>
+            {label}
+          </OzPill>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p className="max-w-[260px] text-[12px] leading-relaxed">{tooltip}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+function VersionCell({ peer }: { peer: Peer }) {
+  const v = peer.version || "";
+  const display = v === "development" ? "dev" : v || "—";
+  return (
+    <div className="inline-flex items-center gap-1.5">
+      <span className="text-oz2-text-faint">
+        <MemoizedOpenzroIcon />
+      </span>
+      <span className="font-mono text-[11.5px] text-oz2-text-faint">
+        {display}
+      </span>
+    </div>
+  );
 }
 
 // AddPeerButtonV2 — v2 paint over the legacy AddPeerButton modal flow.
