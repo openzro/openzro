@@ -1,6 +1,6 @@
 "use client";
 
-import { Checkbox } from "@components/Checkbox";
+import OzCheckbox from "@/components/v2/OzCheckbox";
 import InlineLink from "@components/InlineLink";
 import { notify } from "@components/Notification";
 import { useHasChanges } from "@hooks/useHasChanges";
@@ -209,11 +209,11 @@ export default function DeviceAdmissionTab({ account }: Readonly<Props>) {
             {(postureChecks ?? []).map((pc) => (
               <li key={pc.id}>
                 <label className="flex cursor-pointer select-none items-start gap-3 rounded-[8px] px-2 py-2 transition-colors hover:bg-oz2-hover">
-                  <Checkbox
+                  <OzCheckbox
                     checked={selectedIds.includes(pc.id)}
                     onCheckedChange={() => toggleCheck(pc.id)}
                     disabled={editDisabled}
-                    className="mt-[3px]"
+                    className="mt-[2px]"
                   />
                   <div className="flex min-w-0 flex-col">
                     <span className="text-[13px] font-medium text-oz2-text">
@@ -250,13 +250,13 @@ export default function DeviceAdmissionTab({ account }: Readonly<Props>) {
               .map((g) => (
                 <li key={g.id}>
                   <label className="flex cursor-pointer select-none items-start gap-3 rounded-[8px] px-2 py-2 transition-colors hover:bg-oz2-hover">
-                    <Checkbox
+                    <OzCheckbox
                       checked={exemptGroupIds.includes(g.id as string)}
                       onCheckedChange={() =>
                         toggleExemptGroup(g.id as string)
                       }
                       disabled={editDisabled}
-                      className="mt-[3px]"
+                      className="mt-[2px]"
                     />
                     <div className="flex min-w-0 flex-col">
                       <span className="text-[13px] font-medium text-oz2-text">
