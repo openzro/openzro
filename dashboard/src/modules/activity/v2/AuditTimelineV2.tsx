@@ -337,10 +337,13 @@ function DaySection({
       </div>
       <ol className="relative m-0 mt-2 list-none p-0">
         {/* Vertical rail running through the dot column. Sized so it
-            doesn't poke past the first/last dot. */}
+            doesn't poke past the first/last dot. 2px in
+            oz2-border-strong matches the rail weight used by the
+            Flow Traffic timeline so the two screens read with the
+            same visual density. */}
         <span
           aria-hidden
-          className="absolute bottom-3 left-[19px] top-3 w-px bg-oz2-border-soft"
+          className="absolute bottom-3 left-[18px] top-3 w-[2px] bg-oz2-border-strong"
         />
         {events.map((e, i) => (
           <EventRow key={e.id || `${e.timestamp}-${i}`} event={e} />
