@@ -380,7 +380,12 @@ function buildSidebarSections(
           label: "Activity",
           icon: NAV_ICONS.activity,
           active: matches("/events"),
-          onClick: () => go("/events/network-traffic"),
+          // Land on /events/audit so the operator hits the ported v2
+          // body first; from there the EventsTabs sub-nav exposes
+          // Network Traffic. Legacy was /events/network-traffic which
+          // was fine when both bodies were on the same paint, but
+          // /network-traffic still ships legacy paint until phase 5.12.
+          onClick: () => go("/events/audit"),
         },
       ],
     },
