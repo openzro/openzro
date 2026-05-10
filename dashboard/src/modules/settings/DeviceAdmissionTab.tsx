@@ -187,92 +187,101 @@ export default function DeviceAdmissionTab({ account }: Readonly<Props>) {
         />
       </OzSettingsCard>
 
-      <OzSettingsCard
-        title="Posture checks that gate admission"
-        sub={
-          <>
-            ALL selected checks must pass for a peer to be admitted. Order does
-            not matter. Configure new checks under{" "}
-            <InlineLink href="/posture-checks">Posture Checks</InlineLink>.
-          </>
-        }
-      >
-        {noChecksConfigured ? (
-          <div className="rounded-oz2-card border border-dashed border-oz2-border bg-oz2-bg-sunken/40 px-4 py-5 text-center text-[12.5px] text-oz2-text-muted">
-            No posture checks defined yet. Create one under{" "}
-            <InlineLink href="/posture-checks">Posture Checks</InlineLink>{" "}
-            first — for example, an Endpoint Security check pointed at your
-            MDM/EDR provider.
-          </div>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {(postureChecks ?? []).map((pc) => (
-              <li key={pc.id}>
-                <label className="flex cursor-pointer select-none items-start gap-3 rounded-[8px] px-2 py-2 transition-colors hover:bg-oz2-hover">
-                  <OzCheckbox
-                    checked={selectedIds.includes(pc.id)}
-                    onCheckedChange={() => toggleCheck(pc.id)}
-                    disabled={editDisabled}
-                    className="mt-[2px]"
-                  />
-                  <div className="flex min-w-0 flex-col">
-                    <span className="text-[13px] font-medium text-oz2-text">
-                      {pc.name}
-                    </span>
-                    {pc.description && (
-                      <span className="mt-[2px] text-[12px] text-oz2-text-muted">
-                        {pc.description}
-                      </span>
-                    )}
-                  </div>
-                </label>
-              </li>
-            ))}
-          </ul>
-        )}
-      </OzSettingsCard>
-
-      <OzSettingsCard
-        title="Exempt groups"
-        sub="Peers in any of these groups skip the admission gate entirely. Use this for routing/gateway peers (cloud VMs, K8s pods, on-prem servers) that aren't enrolled in MDM/EDR — without an exempt group, the gate would lock your own infrastructure out."
-      >
-        {(groups ?? []).length === 0 ? (
-          <div className="rounded-oz2-card border border-dashed border-oz2-border bg-oz2-bg-sunken/40 px-4 py-5 text-center text-[12.5px] text-oz2-text-muted">
-            No groups defined yet. Create a group (e.g.{" "}
-            <code className="font-mono text-[11.5px]">infrastructure-peers</code>
-            ) under <InlineLink href="/team/groups">Groups</InlineLink> first,
-            then attach it to the setup keys you use to enrol gateway peers.
-          </div>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {(groups ?? [])
-              .filter((g) => g.id)
-              .map((g) => (
-                <li key={g.id}>
+      {/* The two list cards (Posture checks + Exempt groups) share the
+          same checkbox-list shape and sit at the same level of the
+          admission policy — selecting which checks gate the gate, and
+          which groups bypass it. Pairing them side-by-side on md+
+          viewports keeps the page from sprawling vertically; on narrow
+          screens they stack. Enforcement above stays full-width as the
+          master switch that activates the whole gate. */}
+      <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-2">
+        <OzSettingsCard
+          title="Posture checks that gate admission"
+          sub={
+            <>
+              ALL selected checks must pass for a peer to be admitted. Order
+              does not matter. Configure new checks under{" "}
+              <InlineLink href="/posture-checks">Posture Checks</InlineLink>.
+            </>
+          }
+        >
+          {noChecksConfigured ? (
+            <div className="rounded-oz2-card border border-dashed border-oz2-border bg-oz2-bg-sunken/40 px-4 py-5 text-center text-[12.5px] text-oz2-text-muted">
+              No posture checks defined yet. Create one under{" "}
+              <InlineLink href="/posture-checks">Posture Checks</InlineLink>{" "}
+              first — for example, an Endpoint Security check pointed at your
+              MDM/EDR provider.
+            </div>
+          ) : (
+            <ul className="flex flex-col gap-1">
+              {(postureChecks ?? []).map((pc) => (
+                <li key={pc.id}>
                   <label className="flex cursor-pointer select-none items-start gap-3 rounded-[8px] px-2 py-2 transition-colors hover:bg-oz2-hover">
                     <OzCheckbox
-                      checked={exemptGroupIds.includes(g.id as string)}
-                      onCheckedChange={() =>
-                        toggleExemptGroup(g.id as string)
-                      }
+                      checked={selectedIds.includes(pc.id)}
+                      onCheckedChange={() => toggleCheck(pc.id)}
                       disabled={editDisabled}
                       className="mt-[2px]"
                     />
                     <div className="flex min-w-0 flex-col">
                       <span className="text-[13px] font-medium text-oz2-text">
-                        {g.name}
+                        {pc.name}
                       </span>
-                      <span className="mt-[2px] text-[12px] text-oz2-text-muted">
-                        {g.peers_count ?? 0} peer
-                        {(g.peers_count ?? 0) === 1 ? "" : "s"}
-                      </span>
+                      {pc.description && (
+                        <span className="mt-[2px] text-[12px] text-oz2-text-muted">
+                          {pc.description}
+                        </span>
+                      )}
                     </div>
                   </label>
                 </li>
               ))}
-          </ul>
-        )}
-      </OzSettingsCard>
+            </ul>
+          )}
+        </OzSettingsCard>
+
+        <OzSettingsCard
+          title="Exempt groups"
+          sub="Peers in any of these groups skip the admission gate entirely. Use this for routing/gateway peers (cloud VMs, K8s pods, on-prem servers) that aren't enrolled in MDM/EDR — without an exempt group, the gate would lock your own infrastructure out."
+        >
+          {(groups ?? []).length === 0 ? (
+            <div className="rounded-oz2-card border border-dashed border-oz2-border bg-oz2-bg-sunken/40 px-4 py-5 text-center text-[12.5px] text-oz2-text-muted">
+              No groups defined yet. Create a group (e.g.{" "}
+              <code className="font-mono text-[11.5px]">infrastructure-peers</code>
+              ) under <InlineLink href="/team/groups">Groups</InlineLink> first,
+              then attach it to the setup keys you use to enrol gateway peers.
+            </div>
+          ) : (
+            <ul className="flex flex-col gap-1">
+              {(groups ?? [])
+                .filter((g) => g.id)
+                .map((g) => (
+                  <li key={g.id}>
+                    <label className="flex cursor-pointer select-none items-start gap-3 rounded-[8px] px-2 py-2 transition-colors hover:bg-oz2-hover">
+                      <OzCheckbox
+                        checked={exemptGroupIds.includes(g.id as string)}
+                        onCheckedChange={() =>
+                          toggleExemptGroup(g.id as string)
+                        }
+                        disabled={editDisabled}
+                        className="mt-[2px]"
+                      />
+                      <div className="flex min-w-0 flex-col">
+                        <span className="text-[13px] font-medium text-oz2-text">
+                          {g.name}
+                        </span>
+                        <span className="mt-[2px] text-[12px] text-oz2-text-muted">
+                          {g.peers_count ?? 0} peer
+                          {(g.peers_count ?? 0) === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                    </label>
+                  </li>
+                ))}
+            </ul>
+          )}
+        </OzSettingsCard>
+      </div>
     </Tabs.Content>
   );
 }
