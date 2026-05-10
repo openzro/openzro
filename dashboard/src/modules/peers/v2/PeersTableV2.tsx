@@ -26,9 +26,11 @@ import {
   OzTableRow,
 } from "@/components/v2/OzTable";
 import { useGroups } from "@/contexts/GroupsProvider";
+import PeerProvider from "@/contexts/PeerProvider";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { Peer } from "@/interfaces/Peer";
 import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
+import PeerActionCell from "@/modules/peers/PeerActionCell";
 import { OSLogo } from "@/modules/peers/PeerOSCell";
 import SetupModal from "@/modules/setup-openzro-modal/SetupModal";
 
@@ -354,7 +356,9 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
                     <NoticeCell peer={p} />
                   </OzTableCell>
                   <OzTableCell>
-                    <RowKebab />
+                    <PeerProvider peer={p}>
+                      <PeerActionCell />
+                    </PeerProvider>
                   </OzTableCell>
                 </OzTableRow>
               );
@@ -622,22 +626,6 @@ function NoticeCell({ peer }: { peer: Peer }) {
     );
   }
   return null;
-}
-
-function RowKebab() {
-  // Phase 4.3 swaps this for the real PeerActionCell wired to
-  // permissions + AdmissionBypassModal.
-  return (
-    <button
-      type="button"
-      aria-label="Row actions"
-      disabled
-      title="Actions wire-up lands in phase 4.3"
-      className="grid h-7 w-7 place-items-center rounded-oz2-input text-oz2-text-faint opacity-60"
-    >
-      {ICONS.more}
-    </button>
-  );
 }
 
 // AddPeerButtonV2 — v2 paint over the legacy AddPeerButton modal flow.
