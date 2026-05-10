@@ -4,14 +4,15 @@ import * as TabsPrimitive from "@radix-ui/react-tabs";
 import classNames from "classnames";
 import * as React from "react";
 
-// OzTabs — v2 paint over Radix Tabs primitives. Drop-in API
-// (Root / List / Trigger / Content) with v2 tokens applied: the bar
-// uses a hairline bottom-border separator and each trigger gets a
-// 2px accent underline when active, mirroring the handoff
-// PeerDetailScreen tab visual.
+// OzTabs — v2 paint over Radix Tabs primitives, drop-in API
+// (Root / List / Trigger / Content). Renders as the segmented pill
+// control used everywhere else in the v2 dashboard (TeamTabs,
+// DnsTabs, SettingsTabsV2): 34px-tall sunken track with the active
+// trigger lifting onto the surface tone. Used in /peer detail and
+// any other v2 page that needs in-component tab state.
 //
-// Legacy components/Tabs.tsx (10+ consumers) stays untouched. v2
-// pages use this primitive directly.
+// Legacy components/Tabs.tsx (10+ consumers across modals + posture
+// checks) stays untouched.
 
 const OzTabs = TabsPrimitive.Root;
 
@@ -22,7 +23,7 @@ const OzTabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={classNames(
-      "inline-flex items-center gap-1 border-b border-oz2-border-soft",
+      "inline-flex h-[34px] items-center rounded-oz2-input bg-oz2-bg-sunken p-1 text-oz2-text-muted",
       className,
     )}
     {...props}
@@ -37,11 +38,11 @@ const OzTabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={classNames(
-      "-mb-px inline-flex items-center gap-2 whitespace-nowrap border-b-2 border-transparent px-3.5 py-2.5 text-[13px] font-medium text-oz2-text-muted transition-colors",
+      "inline-flex h-full items-center gap-2 whitespace-nowrap rounded-[6px] px-3 text-[13.5px] font-medium transition-colors",
       "hover:text-oz2-text",
-      "focus-visible:outline-none focus-visible:text-oz2-text",
+      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-oz2-acc/30",
       "disabled:pointer-events-none disabled:opacity-50",
-      "data-[state=active]:border-oz2-acc data-[state=active]:text-oz2-text data-[state=active]:font-semibold",
+      "data-[state=active]:bg-oz2-surface data-[state=active]:text-oz2-text data-[state=active]:shadow-oz2-sm",
       className,
     )}
     {...props}
