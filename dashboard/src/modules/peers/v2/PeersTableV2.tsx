@@ -235,6 +235,7 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
       },
       {
         id: "os",
+        size: 60,
         accessorFn: (peer) => peer.os ?? "",
         sortingFn: "text",
         header: ({ column }) => <SortHeader column={column} label="OS" />,

@@ -1,11 +1,19 @@
 "use client";
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@components/DropdownMenu";
+import { LogOutIcon, User2 } from "lucide-react";
 import { useTheme } from "next-themes";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
 import openzroIcon from "@/assets/openzro.svg";
-import UserDropdown from "@/components/ui/UserDropdown";
 import OzShell from "@/components/v2/OzShell";
 import OzSidebar, { type OzSidebarSection } from "@/components/v2/OzSidebar";
 import OzThemeToggle from "@/components/v2/OzThemeToggle";
@@ -14,9 +22,12 @@ import OzTopbar, {
   type OzBreadcrumbSegment,
 } from "@/components/v2/OzTopbar";
 import AnnouncementProvider from "@/contexts/AnnouncementProvider";
-import ApplicationProvider from "@/contexts/ApplicationProvider";
+import ApplicationProvider, {
+  useApplicationContext,
+} from "@/contexts/ApplicationProvider";
 import CountryProvider from "@/contexts/CountryProvider";
 import GroupsProvider from "@/contexts/GroupsProvider";
+import { usePermissions } from "@/contexts/PermissionsProvider";
 import UsersProvider, { useLoggedInUser } from "@/contexts/UsersProvider";
 
 // Slot context for the v2 topbar's right side. Pages call
@@ -136,14 +147,17 @@ function V2DashboardChrome({ children }: { children: React.ReactNode }) {
             }
             right={
               <>
-                {topbarRight}
+                {/* Theme toggle sits left of the per-page action so the
+                    layout pattern stays consistent across migrated
+                    screens. UserDropdown moved to the sidebar footer
+                    so the topbar focuses on page-level affordances. */}
                 <OzThemeToggle
                   theme={currentTheme}
                   onToggle={() =>
                     setTheme(currentTheme === "dark" ? "light" : "dark")
                   }
                 />
-                <UserDropdown />
+                {topbarRight}
               </>
             }
           />
@@ -320,22 +334,77 @@ function buildSidebarSections(
   ];
 }
 
+// UserFooter — sidebar bottom block. Click opens a dropdown with
+// Profile Settings (when permitted) and Log out. Mirrors the legacy
+// UserDropdown actions; trigger surface is the v2 avatar+name+role
+// row, so the chrome reads natively v2 and the menu items inherit
+// the project's existing DropdownMenu styling.
 function UserFooter() {
-  const { loggedInUser } = useLoggedInUser();
+  const [open, setOpen] = useState(false);
+  const router = useRouter();
+  const { loggedInUser, logout } = useLoggedInUser();
+  const { user } = useApplicationContext();
+  const { isRestricted } = usePermissions();
+
   const display = loggedInUser?.name || loggedInUser?.email || "—";
   const role = loggedInUser?.role || "user";
+
   return (
-    <div className="flex items-center gap-2.5">
-      <span className="grid h-7 w-7 place-items-center rounded-full bg-oz2-acc-soft text-[12px] font-semibold text-oz2-acc-text">
-        {computeInitials(loggedInUser?.name || loggedInUser?.email)}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[12.5px] font-medium text-oz2-text">
-          {display}
-        </p>
-        <p className="truncate text-[11px] text-oz2-text-muted">{role}</p>
-      </div>
-    </div>
+    <DropdownMenu modal={false} open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg p-1 text-left transition-colors hover:bg-oz2-hover"
+        >
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-oz2-acc-soft text-[12px] font-semibold text-oz2-acc-text">
+            {computeInitials(loggedInUser?.name || loggedInUser?.email)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[12.5px] font-medium text-oz2-text">
+              {display}
+            </p>
+            <p className="truncate text-[11px] text-oz2-text-muted">{role}</p>
+          </div>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        side="top"
+        align="start"
+        className="w-56"
+        forceMount
+      >
+        <DropdownMenuLabel className="font-normal">
+          <div className="flex flex-col space-y-1">
+            <div className="truncate text-sm font-medium leading-none">
+              {user?.name}
+            </div>
+            <div className="truncate text-xs leading-none text-neutral-500 dark:text-nb-gray-400">
+              {user?.email}
+            </div>
+          </div>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {!isRestricted && loggedInUser && (
+          <DropdownMenuItem
+            onClick={() => {
+              setOpen(false);
+              router.push(`/team/user?id=${loggedInUser.id}`);
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <User2 size={14} />
+              Profile Settings
+            </div>
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem onClick={() => logout()}>
+          <div className="flex items-center gap-3">
+            <LogOutIcon size={14} />
+            Log out
+          </div>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
