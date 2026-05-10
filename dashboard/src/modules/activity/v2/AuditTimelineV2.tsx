@@ -1,6 +1,5 @@
 "use client";
 
-import { DatePickerWithRange } from "@components/DatePickerWithRange";
 import dayjs from "dayjs";
 import { Cog, FileTextIcon } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -13,13 +12,12 @@ import OzPill, { type OzPillVariants } from "@/components/v2/OzPill";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { ActivityEvent } from "@/interfaces/ActivityEvent";
 import ActivityDescription from "@/modules/activity/ActivityDescription";
-import { ActivityEventCodeSelector } from "@/modules/activity/ActivityEventCodeSelector";
 import ActivityTypeIcon from "@/modules/activity/ActivityTypeIcon";
-import {
-  UsersDropdownSelector,
-  UserSelectOption,
-} from "@/modules/activity/UsersDropdownSelector";
+import { type UserSelectOption } from "@/modules/activity/UsersDropdownSelector";
 import { getColorFromCode } from "@/modules/activity/utils";
+import DateRangePickerV2 from "@/modules/activity/v2/DateRangePickerV2";
+import EventCodeSelectorV2 from "@/modules/activity/v2/EventCodeSelectorV2";
+import InitiatorSelectorV2 from "@/modules/activity/v2/InitiatorSelectorV2";
 import EventsTabs from "@/modules/events/v2/EventsTabs";
 
 // AuditTimelineV2 — phase-5.11 v2 paint over /events/audit.
@@ -245,7 +243,7 @@ export default function AuditTimelineV2({ events, isLoading }: Props) {
               />
             </div>
 
-            <DatePickerWithRange
+            <DateRangePickerV2
               value={dateRange}
               onChange={(range) => {
                 setDateRange(range);
@@ -254,7 +252,7 @@ export default function AuditTimelineV2({ events, isLoading }: Props) {
             />
 
             {events && (
-              <ActivityEventCodeSelector
+              <EventCodeSelectorV2
                 events={events}
                 values={eventCodes}
                 onChange={setEventCodes}
@@ -262,7 +260,7 @@ export default function AuditTimelineV2({ events, isLoading }: Props) {
             )}
 
             {events && (
-              <UsersDropdownSelector
+              <InitiatorSelectorV2
                 options={userSelectOptions}
                 value={initiator}
                 onChange={(item) => setInitiator(item ?? "")}
