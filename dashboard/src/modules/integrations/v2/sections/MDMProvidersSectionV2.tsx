@@ -3,12 +3,15 @@
 import { notify } from "@components/Notification";
 import { useApiCall } from "@utils/api";
 import useFetchApi from "@utils/api";
+import { PlusCircle } from "lucide-react";
 import React, { useState } from "react";
 import { useSWRConfig } from "swr";
+import OzButton from "@/components/v2/OzButton";
 import {
   MDMProvider,
   MDMProviderType,
 } from "@/interfaces/MDMProvider";
+import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
 import IntegrationCard from "@/modules/integrations/v2/sections/IntegrationCard";
 import SectionShell from "@/modules/integrations/v2/sections/SectionShell";
 import MDMProviderModal from "@/modules/mdm-providers/MDMProviderModal";
@@ -61,6 +64,13 @@ export default function MDMProvidersSectionV2() {
     setModalOpen(true);
   };
 
+  useV2TopbarRight(
+    <OzButton variant="primary" type="button" onClick={openCreate}>
+      <PlusCircle size={14} />
+      Add provider
+    </OzButton>,
+  );
+
   return (
     <>
       <SectionShell
@@ -79,8 +89,6 @@ export default function MDMProvidersSectionV2() {
             for 5 minutes per device to avoid hammering the vendor API.
           </>
         }
-        addLabel="Add provider"
-        onAdd={openCreate}
         isLoading={isLoading}
         isEmpty={!data || data.length === 0}
         emptyMessage="No MDM/EDR providers configured. Click Add provider to connect Intune, SentinelOne, Huntress, or CrowdStrike Falcon."

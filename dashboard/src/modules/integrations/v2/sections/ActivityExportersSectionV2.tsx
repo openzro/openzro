@@ -3,12 +3,15 @@
 import { notify } from "@components/Notification";
 import { useApiCall } from "@utils/api";
 import useFetchApi from "@utils/api";
+import { PlusCircle } from "lucide-react";
 import React, { useState } from "react";
 import { useSWRConfig } from "swr";
+import OzButton from "@/components/v2/OzButton";
 import {
   ActivityExporter,
   ActivityExporterType,
 } from "@/interfaces/ActivityExporter";
+import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
 import ActivityExporterModal from "@/modules/activity-exporters/ActivityExporterModal";
 import IntegrationCard from "@/modules/integrations/v2/sections/IntegrationCard";
 import SectionShell from "@/modules/integrations/v2/sections/SectionShell";
@@ -53,6 +56,13 @@ export default function ActivityExportersSectionV2() {
     setModalOpen(true);
   };
 
+  useV2TopbarRight(
+    <OzButton variant="primary" type="button" onClick={openCreate}>
+      <PlusCircle size={14} />
+      Add exporter
+    </OzButton>,
+  );
+
   return (
     <>
       <SectionShell
@@ -76,8 +86,6 @@ export default function ActivityExportersSectionV2() {
             Bit in the middle.
           </>
         }
-        addLabel="Add exporter"
-        onAdd={openCreate}
         isLoading={isLoading}
         isEmpty={!data || data.length === 0}
         emptyMessage="No activity exporters configured. Click Add exporter to start streaming the audit log to Datadog, Elastic, or any HTTP receiver."

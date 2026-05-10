@@ -1,22 +1,17 @@
 "use client";
 
-import { PlusCircle } from "lucide-react";
 import React from "react";
-import OzButton from "@/components/v2/OzButton";
 import OzCard from "@/components/v2/OzCard";
 
 // SectionShell — shared chrome around a Flow / Activity / MDM
-// section. Wraps the section's intro paragraph + add CTA + grid
-// of cards. Empty state and loading state are rendered inline.
+// section. Wraps the section's intro paragraph + grid of cards.
+// Add CTAs live in the V2 topbar slot via useV2TopbarRight at the
+// individual section level (each section registers its own
+// button; switching sub-tabs swaps the slot automatically).
 
 interface Props {
   description: React.ReactNode;
   hint?: React.ReactNode;
-  /** Add-button label (e.g. "Add destination", "Add provider"). */
-  addLabel: string;
-  /** Disabled state for the add CTA. */
-  addDisabled?: boolean;
-  onAdd: () => void;
   isLoading: boolean;
   isEmpty: boolean;
   emptyMessage: string;
@@ -26,9 +21,6 @@ interface Props {
 export default function SectionShell({
   description,
   hint,
-  addLabel,
-  addDisabled,
-  onAdd,
   isLoading,
   isEmpty,
   emptyMessage,
@@ -44,18 +36,6 @@ export default function SectionShell({
           {hint}
         </div>
       )}
-
-      <div className="flex justify-end">
-        <OzButton
-          variant="primary"
-          type="button"
-          onClick={onAdd}
-          disabled={addDisabled}
-        >
-          <PlusCircle size={14} />
-          {addLabel}
-        </OzButton>
-      </div>
 
       {isLoading ? (
         <OzCard className="px-6 py-8 text-center text-[13px] text-oz2-text-muted">
