@@ -45,11 +45,17 @@ export default function SettingsPageShell({ value, page, children }: Props) {
         </p>
       </header>
 
-      <SettingsTabsV2 />
-
-      <RestrictedAccess page="Settings" hasAccess={hasAccess}>
-        <Tabs.Root value={value}>{children}</Tabs.Root>
-      </RestrictedAccess>
+      {/* Two-column layout: vertical sub-nav on the left (220px),
+          tab content on the right. The nav becomes sticky on tall
+          viewports so it stays in reach while the content scrolls. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-8">
+        <aside className="lg:sticky lg:top-6 lg:self-start">
+          <SettingsTabsV2 />
+        </aside>
+        <RestrictedAccess page="Settings" hasAccess={hasAccess}>
+          <Tabs.Root value={value}>{children}</Tabs.Root>
+        </RestrictedAccess>
+      </div>
     </div>
   );
 }
