@@ -213,6 +213,18 @@ function breadcrumbForPath(path: string | null): OzBreadcrumbSegment[] {
   if (path === "/access-control" || path.startsWith("/access-control/")) {
     return [{ label: "Workspace" }, { label: "Access Control" }];
   }
+  if (path === "/team" || path === "/team/users") {
+    return [{ label: "Identity" }, { label: "Users" }];
+  }
+  if (path === "/team/groups") {
+    return [{ label: "Identity" }, { label: "Groups" }];
+  }
+  if (path === "/team/service-users") {
+    return [{ label: "Identity" }, { label: "Service Users" }];
+  }
+  if (path === "/team/user" || path.startsWith("/team/user?")) {
+    return [{ label: "Identity" }, { label: "Users" }, { label: "User" }];
+  }
   return [];
 }
 
