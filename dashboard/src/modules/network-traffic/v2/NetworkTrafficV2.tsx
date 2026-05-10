@@ -473,12 +473,13 @@ function EventCell({ row }: { row: Row }) {
             at small line heights. */}
         <span
           aria-hidden
-          className={
-            railUp
-              ? "w-[1.5px] flex-1 bg-oz2-border"
-              : "w-[1.5px] flex-1 bg-transparent"
-          }
-          style={{ minHeight: 6 }}
+          className="w-[2px] flex-1"
+          style={{
+            minHeight: 6,
+            background: railUp
+              ? "repeating-linear-gradient(to bottom, var(--ozv2-border-strong) 0 2px, transparent 2px 3.5px)"
+              : "transparent",
+          }}
         />
         <span
           aria-label={meta.label}
@@ -490,12 +491,13 @@ function EventCell({ row }: { row: Row }) {
         {/* Rail going DOWN — present only when there's a next step. */}
         <span
           aria-hidden
-          className={
-            railDown
-              ? "w-[1.5px] flex-1 bg-oz2-border"
-              : "w-[1.5px] flex-1 bg-transparent"
-          }
-          style={{ minHeight: 6 }}
+          className="w-[2px] flex-1"
+          style={{
+            minHeight: 6,
+            background: railDown
+              ? "repeating-linear-gradient(to bottom, var(--ozv2-border-strong) 0 2px, transparent 2px 3.5px)"
+              : "transparent",
+          }}
         />
       </div>
       <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
