@@ -43,6 +43,7 @@ import {
 } from "@/components/v2/OzTable";
 import { useGroups } from "@/contexts/GroupsProvider";
 import PeerProvider from "@/contexts/PeerProvider";
+import useCopyToClipboard from "@/hooks/useCopyToClipboard";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { Peer } from "@/interfaces/Peer";
 import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
@@ -559,14 +560,27 @@ function AddressCell({ peer }: { peer: Peer }) {
               {flagEmoji(peer.country_code)}
             </span>
             <div className="flex min-w-0 flex-col">
-              <span className="truncate text-[13px] text-oz2-text">
-                {peer.dns_label || peer.name}
+              <span className="flex items-center gap-1.5">
+                <span className="truncate text-[13px] text-oz2-text">
+                  {peer.dns_label || peer.name}
+                </span>
+                {peer.dns_label && (
+                  <InlineCopyButton
+                    value={peer.dns_label}
+                    message="DNS label has been copied to your clipboard"
+                  />
+                )}
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="truncate font-mono text-[11.5px] text-oz2-text-muted">
                   {peer.ip}
                 </span>
-                {peer.ip && <InlineCopyButton value={peer.ip} />}
+                {peer.ip && (
+                  <InlineCopyButton
+                    value={peer.ip}
+                    message="Openzro IP has been copied to your clipboard"
+                  />
+                )}
               </span>
             </div>
           </div>
@@ -609,24 +623,23 @@ function AddressCell({ peer }: { peer: Peer }) {
 }
 
 // InlineCopyButton — small icon next to a value in the row body that
-// fades in on group-hover. Click copies; ✓ flashes for 1.4s. Stops
-// event propagation so it doesn't trip the surrounding TooltipTrigger
+// fades in on group-hover. Uses the project-wide useCopyToClipboard
+// hook so the success toast ("Copied to clipboard" + the message)
+// matches every other copy surface in the dashboard. Stops event
+// propagation so the click doesn't trip the surrounding TooltipTrigger
 // or the row's Link in NameCell.
-function InlineCopyButton({ value }: { value: string }) {
-  const [copied, setCopied] = useState(false);
+function InlineCopyButton({
+  value,
+  message,
+}: {
+  value: string;
+  message: string;
+}) {
+  const [, copy, copied] = useCopyToClipboard(value);
   const onCopy = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!navigator.clipboard) return;
-    navigator.clipboard.writeText(value).then(
-      () => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1400);
-      },
-      () => {
-        // Silent — clipboard API may be blocked by browser permissions.
-      },
-    );
+    void copy(message);
   };
   return (
     <button
@@ -689,22 +702,16 @@ function InfoTooltipRow({
   mono?: boolean;
   copyable?: boolean;
 }) {
-  const [copied, setCopied] = useState(false);
+  // Hook owns the navigator.clipboard call + the success toast so
+  // every copy surface in the dashboard (legacy CopyToClipboardText
+  // + v2 InlineCopyButton + this tooltip row) shows the same
+  // "Copied to clipboard" notification.
+  const [, copy, copied] = useCopyToClipboard(value);
 
   const handleCopy = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!navigator.clipboard) return;
-    navigator.clipboard.writeText(value).then(
-      () => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1400);
-      },
-      () => {
-        // Clipboard write can be blocked (HTTP context, permissions).
-        // Silent fail keeps the tooltip stable.
-      },
-    );
+    void copy(`${label} has been copied to your clipboard`);
   };
 
   return (
