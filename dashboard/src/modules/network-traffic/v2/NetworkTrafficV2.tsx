@@ -462,13 +462,17 @@ function RowCells({ row }: { row: Row }) {
   // flow's anchor row.
   const isFirst = row.kind === "event" && row.isFirstInFlow;
 
-  // Uniform padding + min-height so every row in a flow has the
-  // same vertical real estate regardless of content density. Without
-  // this, a 1-line policy step + 2-line event steps produced
-  // different row heights, which slid the dot's vertical center
-  // around and made the rail's start→policy gap visibly larger
-  // than the policy→end gap.
-  const cellCls = "px-4 py-2.5 min-h-[44px]";
+  // Uniform padding + min-height so every row in a flow has EXACTLY
+  // the same vertical real estate regardless of content density.
+  // Event steps (start / stop / drop) stack a narrative + a mono
+  // timestamp ≈ 56px tall; the synthetic policy step has only one
+  // line ≈ 44px tall. Pinning min-h to 60 forces both shapes to the
+  // same row height — the dot, centered inside each cell, lands at
+  // a consistent vertical offset across rows, so the rail spacing
+  // is identical within a flow AND between flows (the inter-flow
+  // gap previously varied based on what kind of step the flow ended
+  // on: a 2-line stop vs a 1-line policy gave different gaps).
+  const cellCls = "px-4 py-2.5 min-h-[60px]";
   const firstEvent = row.group.events[0];
   const status = flowStatusPill(row.group);
 
