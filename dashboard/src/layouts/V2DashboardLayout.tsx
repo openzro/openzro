@@ -394,8 +394,9 @@ function UserFooter() {
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          side="top"
+          side="right"
           align="end"
+          sideOffset={6}
           className="w-56"
           forceMount
         >
