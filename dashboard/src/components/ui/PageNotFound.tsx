@@ -1,17 +1,23 @@
-import Button from "@components/Button";
-import Card from "@components/Card";
-import Paragraph from "@components/Paragraph";
-import SquareIcon from "@components/SquareIcon";
+"use client";
+
 import { CircleAlertIcon, Undo2Icon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
-import Skeleton from "react-loading-skeleton";
-import PageContainer from "@/layouts/PageContainer";
+import OzButton from "@/components/v2/OzButton";
+import OzCard from "@/components/v2/OzCard";
+
+// PageNotFound — v2-painted 404. Renders inside whatever page surface
+// the consumer mounts it in (V2DashboardLayout provides the chrome).
+// Centered OzCard with an alert glyph, title, body, and a "Go Back"
+// OzButton. The legacy version overlaid a skeleton-on-blur shell
+// inside a PageContainer; on v2 chrome that's heavy and visually
+// redundant — the v2 layout already gives the page its own surface.
 
 type Props = {
   title?: string;
   description?: string;
 };
+
 export const PageNotFound = ({
   title = "The requested page was not found",
   description = "The page you are attempting to access cannot be found. Please verify the URL or return to the dashboard to continue browsing.",
@@ -19,75 +25,33 @@ export const PageNotFound = ({
   const router = useRouter();
 
   return (
-    <PageContainer>
-      <div className={"px-8"}>
-        <div
-          className={
-            "absolute left-0 top-0 h-full w-full p-10 flex items-center justify-center mx-auto backdrop-blur-sm"
-          }
-        >
-          <Card className={"relative overflow-hidden max-w-4xl"}>
-            <div
-              className={
-                "absolute z-20 bg-gradient-to-b dark:to-nb-gray-950 dark:from-nb-gray-950/40 w-full h-full"
-              }
-            ></div>
-            <div
-              className={
-                "absolute w-full h-full left-0 top-0 z-10 px-5 py-3 overflow-hidden"
-              }
-            >
-              <div className={"flex flex-col gap-2"}>
-                <Skeleton className={"w-full"} height={70} duration={4} />
-                <Skeleton className={"w-full"} height={70} duration={4} />
-                <Skeleton className={"w-full"} height={70} duration={4} />
-                <Skeleton className={"w-full"} height={70} duration={4} />
-                <Skeleton className={"w-full"} height={70} duration={4} />
-              </div>
-            </div>
-            <div
-              className={"w-full h-full z-20 relative left-0 top-0 flex py-8"}
-            >
-              <div className={"inline-flex justify-center w-full"}>
-                <div>
-                  <div className={"max-w-2xl relative z-50"}>
-                    <div className={"text-center flex flex-col gap-2 p-8"}>
-                      <div className={"mx-auto"}>
-                        {" "}
-                        <SquareIcon
-                          icon={<CircleAlertIcon size={20} />}
-                          color={"openzro"}
-                          size={"large"}
-                        />
-                      </div>
-                      <div className={"text-center"}>
-                        <h1
-                          className={
-                            "text-3xl font-medium mx-auto mt-3 capitalize"
-                          }
-                        >
-                          {title}
-                        </h1>
-                        <Paragraph className={"justify-center my-3 max-w-xl"}>
-                          {description}
-                        </Paragraph>
-                        <Button
-                          variant={"secondary"}
-                          className={"mt-3"}
-                          onClick={() => router.back()}
-                        >
-                          <Undo2Icon size={15} className={"shrink-0"} />
-                          Go Back
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Card>
+    <div className="flex min-h-[60vh] items-center justify-center p-8">
+      <OzCard className="max-w-xl text-center">
+        <div className="flex flex-col items-center gap-4 px-6 py-8">
+          <div
+            aria-hidden
+            className="grid h-12 w-12 place-items-center rounded-full bg-oz2-acc-soft text-oz2-acc-text"
+          >
+            <CircleAlertIcon size={22} />
+          </div>
+          <div>
+            <h1 className="text-[20px] font-semibold tracking-tight text-oz2-text first-letter:uppercase">
+              {title}
+            </h1>
+            <p className="mx-auto mt-2 max-w-md text-[13.5px] leading-[1.6] text-oz2-text-muted">
+              {description}
+            </p>
+          </div>
+          <OzButton
+            variant="default"
+            type="button"
+            onClick={() => router.back()}
+          >
+            <Undo2Icon size={13} />
+            Go Back
+          </OzButton>
         </div>
-      </div>
-    </PageContainer>
+      </OzCard>
+    </div>
   );
 };
