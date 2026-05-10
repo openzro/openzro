@@ -253,6 +253,12 @@ function breadcrumbForPath(path: string | null): OzBreadcrumbSegment[] {
   ) {
     return [{ label: "Workspace" }, { label: "DNS" }];
   }
+  // /integrations sub-tabs are deep-linked via ?subtab=… (Flow /
+  // Activity / MDM / SCIM) but the URL path stays the same, so the
+  // breadcrumb collapses to the umbrella "Integrations" crumb.
+  if (path === "/integrations" || path.startsWith("/integrations/")) {
+    return [{ label: "System" }, { label: "Integrations" }];
+  }
   return [];
 }
 
@@ -311,6 +317,14 @@ const NAV_ICONS = {
     <>
       <path d="M3 7h13M16 7l-3-3m3 3-3 3" />
       <path d="M21 17H8M8 17l3-3m-3 3 3 3" />
+    </>,
+  ),
+  integrations: navIcon(
+    <>
+      <path d="M9 2v4M15 2v4" />
+      <rect x={4} y={6} width={16} height={6} rx={2} />
+      <path d="M12 12v4" />
+      <path d="M9 16h6a3 3 0 0 1 3 3v3H6v-3a3 3 0 0 1 3-3z" />
     </>,
   ),
   dns: navIcon(
@@ -434,6 +448,13 @@ function buildSidebarSections(
       id: "system",
       label: "System",
       items: [
+        {
+          id: "integrations",
+          label: "Integrations",
+          icon: NAV_ICONS.integrations,
+          active: matches("/integrations"),
+          onClick: () => go("/integrations"),
+        },
         {
           id: "settings",
           label: "Settings",
