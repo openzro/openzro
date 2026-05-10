@@ -50,12 +50,12 @@ export function useV2TopbarRight(node: React.ReactNode) {
     if (!ctx) return;
     ctx.setRight(node);
     return () => ctx.setRight(null);
-    // node is intentionally NOT a dep — pages pass static JSX once;
-    // re-renders that produce a new JSX object would otherwise churn
-    // the layout. If a page needs dynamic topbar content, refactor
-    // the action body to read from its own context instead.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ctx]);
+    // `node` is in the dep list so consumers can pass JSX whose
+    // disabled state depends on parent state (Save buttons gated on
+    // hasChanges, etc). Re-registering each render is cheap — it's
+    // a single setState on the slot context that React 18 batches
+    // alongside the page's own render commit, no visible flicker.
+  }, [ctx, node]);
 }
 
 // V2DashboardLayout — Notion/Arc-flavored chrome introduced by ADR-0016.
