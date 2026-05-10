@@ -19,11 +19,12 @@ import {
   SortingState,
   useReactTable,
 } from "@tanstack/react-table";
-import { PlusCircle } from "lucide-react";
+import { BookOpen, PlusCircle, Route, ShieldCheck } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSWRConfig } from "swr";
 import OzButton from "@/components/v2/OzButton";
 import OzCard from "@/components/v2/OzCard";
+import OzEmptyState from "@/components/v2/OzEmptyState";
 import {
   OzTable,
   OzTableBody,
@@ -34,6 +35,7 @@ import {
 } from "@/components/v2/OzTable";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { Network } from "@/interfaces/Network";
+import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
 import {
   NetworkProvider,
   useNetworksContext,
@@ -75,6 +77,14 @@ export default function NetworksTableV2({ data, isLoading }: Props) {
 
 function NetworksView({ data, isLoading }: Props) {
   const { mutate } = useSWRConfig();
+
+  // Mount the Add Network trigger into the V2 topbar's right slot so
+  // the action lives next to the theme toggle (matches PeersTableV2).
+  // AddNetworkButtonV2 reads NetworksContext for openCreateNetworkModal,
+  // so it has to be rendered from inside NetworkProvider — which is
+  // exactly where this view is mounted.
+  useV2TopbarRight(<AddNetworkButtonV2 />);
+
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [sorting, setSorting] = useState<SortingState>([
@@ -180,31 +190,38 @@ function NetworksView({ data, isLoading }: Props) {
   const pageStart = total === 0 ? 0 : pageInfo.pageIndex * pageInfo.pageSize + 1;
   const pageEnd = Math.min(total, (pageInfo.pageIndex + 1) * pageInfo.pageSize);
 
+  // Cold-start: no networks created yet. Keep the page header + Add
+  // Network CTA visible (so the operator still has the orientation
+  // copy and an action affordance), and replace the stats row +
+  // search/page toolbar + table with a centered "get started" hero.
+  // Mirrors PeersTableV2 cold-start; copy comes from the legacy
+  // GetStartedTest at /networks.
+  const isColdStart = !isLoading && all.length === 0;
+
   return (
     <TooltipProvider delayDuration={250} skipDelayDuration={100}>
       <div className="space-y-6 p-8">
-        <header className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-[24px] font-semibold tracking-tight">
-              Networks
-            </h1>
-            <p className="mt-1 max-w-2xl text-[14px] text-oz2-text-muted">
-              Networks allow you to access internal resources in LANs and VPCs
-              without installing Openzro on every machine. Learn more about{" "}
-              <a
-                href="https://docs.openzro.io/how-to/networks"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-oz2-acc-text underline-offset-2 hover:underline"
-              >
-                networks
-              </a>
-              .
-            </p>
-          </div>
-          <AddNetworkButtonV2 />
+        <header>
+          <h1 className="text-[24px] font-semibold tracking-tight">Networks</h1>
+          <p className="mt-1 max-w-2xl text-[14px] text-oz2-text-muted">
+            Networks allow you to access internal resources in LANs and VPCs
+            without installing Openzro on every machine. Learn more about{" "}
+            <a
+              href="https://docs.openzro.io/how-to/networks"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-oz2-acc-text underline-offset-2 hover:underline"
+            >
+              networks
+            </a>
+            .
+          </p>
         </header>
 
+        {isColdStart ? (
+          <NetworksEmptyState />
+        ) : (
+        <>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[13.5px] text-oz2-text-muted">
           <span className="inline-flex items-center gap-2">
             <span className="font-medium text-oz2-text">{stats.total}</span>
@@ -319,8 +336,62 @@ function NetworksView({ data, isLoading }: Props) {
             />
           </div>
         </OzCard>
+        </>
+        )}
       </div>
     </TooltipProvider>
+  );
+}
+
+// NetworksEmptyState — cold-start hero shown when no networks exist.
+// Delegates the visual to OzEmptyState (mesh emblem + helper-card row)
+// so /peers and /networks share the same paint. Copy is preserved
+// from the legacy NetworksTable GetStartedTest. The Add Network CTA
+// is the same one the page-header renders, since AddNetworkButtonV2
+// already lives next to NetworksContext via NetworkProvider.
+function NetworksEmptyState() {
+  return (
+    <OzEmptyState
+      title="Create New Network"
+      description="It looks like you don't have any networks. Access internal resources in your LANs and VPC by adding a network."
+      primaryAction={<AddNetworkButtonV2 />}
+      learnMore={
+        <>
+          Learn more about{" "}
+          <a
+            href="https://docs.openzro.io/how-to/networks"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-oz2-acc-text underline-offset-2 hover:underline"
+          >
+            Networks
+          </a>
+          .
+        </>
+      }
+      helperCards={[
+        {
+          icon: <BookOpen size={16} />,
+          title: "What are networks?",
+          description:
+            "Reach internal LANs and VPCs without installing Openzro on every machine.",
+          href: "https://docs.openzro.io/how-to/networks",
+        },
+        {
+          icon: <Route size={16} />,
+          title: "Routing peers",
+          description: "Designate peers that route traffic to internal resources.",
+          href: "https://docs.openzro.io/how-to/networks#routing-peers",
+        },
+        {
+          icon: <ShieldCheck size={16} />,
+          title: "Resources & policies",
+          description:
+            "Define what's reachable inside the network and who can access it.",
+          href: "https://docs.openzro.io/how-to/networks#resources",
+        },
+      ]}
+    />
   );
 }
 
