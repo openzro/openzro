@@ -476,16 +476,18 @@ function EventCell({ row }: { row: Row }) {
   return (
     <div className="flex items-stretch gap-3">
       <div className="relative flex w-6 shrink-0 flex-col items-center justify-center">
-        {/* Single rail span per cell. Dashed gradients reset their
-            origin at each cell boundary, so a flow with several
-            events shows visible jogs between cells. Solid is the
-            pragmatic fix — 2px in oz2-border-strong reads clearly
-            and is guaranteed continuous regardless of cell heights.
+        {/* Single solid rail per cell. The rail's parent (this dot
+            column wrapper) sits inside the cell's vertical padding,
+            so a naive top:0 / bottom:0 leaves a visible gap equal to
+            cellN.bottomPadding + cellN+1.topPadding (12px between
+            two `py-1.5` middle rows). Negative top / bottom values
+            extend the rail UP / DOWN through the cell padding so it
+            visually meets the adjacent cell's rail without a break.
             top / bottom pinned based on whether this step has prior
             / next steps in the flow:
 
               first event → top=50% (rail starts at dot's middle)
-              middle      → top=0, bottom=0 (full cell)
+              middle      → top=-12, bottom=-12 (extend through padding)
               last event  → bottom=50% (rail ends at dot's middle)
         */}
         {(railUp || railDown) && (
@@ -493,8 +495,8 @@ function EventCell({ row }: { row: Row }) {
             aria-hidden
             className="absolute left-1/2 w-[2px] -translate-x-1/2 bg-oz2-border-strong"
             style={{
-              top: railUp ? 0 : "50%",
-              bottom: railDown ? 0 : "50%",
+              top: railUp ? -12 : "50%",
+              bottom: railDown ? -12 : "50%",
             }}
           />
         )}
