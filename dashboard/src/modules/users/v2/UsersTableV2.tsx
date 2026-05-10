@@ -50,10 +50,10 @@ import { User } from "@/interfaces/User";
 import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
 import LastTimeRow from "@/modules/common-table-rows/LastTimeRow";
 import TeamTabs from "@/modules/team/v2/TeamTabs";
-import UserActionCell from "@/modules/users/table-cells/UserActionCell";
 import UserBlockCell from "@/modules/users/table-cells/UserBlockCell";
 import UserGroupCell from "@/modules/users/table-cells/UserGroupCell";
 import { UserInviteModalContent } from "@/modules/users/UserInviteModal";
+import UserActionCellV2 from "@/modules/users/v2/UserActionCellV2";
 import UserNameCellV2 from "@/modules/users/v2/UserNameCellV2";
 import UserRoleCellV2 from "@/modules/users/v2/UserRoleCellV2";
 import UserStatusCellV2 from "@/modules/users/v2/UserStatusCellV2";
@@ -214,10 +214,13 @@ export default function UsersTableV2({ users, isLoading }: Props) {
       },
       {
         id: "actions",
-        size: 40,
+        // Wider than other v2 tables' actions column because two row
+        // buttons can sit side-by-side here (Resend invite + Delete)
+        // for invited hosted users. Non-invited rows just show Delete.
+        size: 200,
         enableSorting: false,
         header: () => null,
-        cell: ({ row }) => <UserActionCell user={row.original} />,
+        cell: ({ row }) => <UserActionCellV2 user={row.original} />,
       },
     ],
     [],
