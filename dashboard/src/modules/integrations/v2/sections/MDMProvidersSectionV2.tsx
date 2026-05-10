@@ -13,6 +13,7 @@ import {
 } from "@/interfaces/MDMProvider";
 import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
 import IntegrationCard from "@/modules/integrations/v2/sections/IntegrationCard";
+import SectionAddCard from "@/modules/integrations/v2/sections/SectionAddCard";
 import SectionShell from "@/modules/integrations/v2/sections/SectionShell";
 import MDMProviderModal from "@/modules/mdm-providers/MDMProviderModal";
 
@@ -90,12 +91,20 @@ export default function MDMProvidersSectionV2() {
           </>
         }
         isLoading={isLoading}
-        isEmpty={!data || data.length === 0}
+        // Trailing SectionAddCard covers the cold-start visually,
+        // so we bypass SectionShell's empty-state branch and
+        // always render the grid.
+        isEmpty={false}
         emptyMessage="No MDM/EDR providers configured. Click Add provider to connect Intune, SentinelOne, Huntress, or CrowdStrike Falcon."
       >
         {data?.map((row) => (
           <MDMCard key={row.id} row={row} onEdit={() => openEdit(row)} />
         ))}
+        <SectionAddCard
+          label="Add provider"
+          description="Connect an MDM or EDR vendor for posture compliance"
+          onClick={openCreate}
+        />
       </SectionShell>
 
       <MDMProviderModal

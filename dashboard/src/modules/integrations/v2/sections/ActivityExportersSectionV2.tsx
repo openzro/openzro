@@ -14,6 +14,7 @@ import {
 import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
 import ActivityExporterModal from "@/modules/activity-exporters/ActivityExporterModal";
 import IntegrationCard from "@/modules/integrations/v2/sections/IntegrationCard";
+import SectionAddCard from "@/modules/integrations/v2/sections/SectionAddCard";
 import SectionShell from "@/modules/integrations/v2/sections/SectionShell";
 
 // ActivityExportersSectionV2 — v2 card-grid version of the legacy
@@ -87,7 +88,10 @@ export default function ActivityExportersSectionV2() {
           </>
         }
         isLoading={isLoading}
-        isEmpty={!data || data.length === 0}
+        // Trailing SectionAddCard covers the cold-start visually,
+        // so we bypass SectionShell's empty-state branch and
+        // always render the grid.
+        isEmpty={false}
         emptyMessage="No activity exporters configured. Click Add exporter to start streaming the audit log to Datadog, Elastic, or any HTTP receiver."
       >
         {data?.map((row) => (
@@ -97,6 +101,11 @@ export default function ActivityExportersSectionV2() {
             onEdit={() => openEdit(row)}
           />
         ))}
+        <SectionAddCard
+          label="Add exporter"
+          description="Stream the audit log to a new SIEM or HTTP receiver"
+          onClick={openCreate}
+        />
       </SectionShell>
 
       <ActivityExporterModal
