@@ -210,6 +210,9 @@ function breadcrumbForPath(path: string | null): OzBreadcrumbSegment[] {
   if (path === "/setup-keys" || path.startsWith("/setup-keys/")) {
     return [{ label: "Workspace" }, { label: "Setup Keys" }];
   }
+  if (path === "/access-control" || path.startsWith("/access-control/")) {
+    return [{ label: "Workspace" }, { label: "Access Control" }];
+  }
   return [];
 }
 
