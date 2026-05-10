@@ -56,7 +56,7 @@ const OzThemeToggle = ({ theme, onToggle, className }: OzThemeToggleProps) => {
         aria-hidden="true"
         className={classNames(
           "absolute top-[2px] h-[20px] w-[22px] rounded-full bg-white shadow-md ring-1 ring-black/5 transition-[left] duration-200 ease-out",
-          isDark ? "left-[28px]" : "left-[2px]",
+          isDark ? "left-[26px]" : "left-[2px]",
         )}
       />
 
@@ -90,12 +90,12 @@ const OzThemeToggle = ({ theme, onToggle, className }: OzThemeToggleProps) => {
         </svg>
       </span>
 
-      {/* Moon — pinned to the DARK thumb's footprint (left-[28px]
+      {/* Moon — pinned to the DARK thumb's footprint (left-[26px]
           top-[2px] w-[22px] h-[20px]). Same alignment story as sun. */}
       <span
         aria-hidden="true"
         className={classNames(
-          "pointer-events-none absolute left-[28px] top-[2px] grid h-[20px] w-[22px] place-items-center transition-colors",
+          "pointer-events-none absolute left-[26px] top-[2px] grid h-[20px] w-[22px] place-items-center transition-colors",
           isDark ? "text-zinc-700" : "text-oz2-text-faint",
         )}
       >
