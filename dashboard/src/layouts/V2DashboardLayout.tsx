@@ -3,7 +3,7 @@
 import { useTheme } from "next-themes";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import openzroIcon from "@/assets/openzro.svg";
 import UserDropdown from "@/components/ui/UserDropdown";
 import OzShell from "@/components/v2/OzShell";
@@ -94,8 +94,18 @@ function V2DashboardChrome({ children }: { children: React.ReactNode }) {
   const sections = buildSidebarSections(pathname, (href) => router.push(href));
   const breadcrumb = breadcrumbForPath(pathname);
 
+  // Stabilize the context value — wrapping in an object literal at
+  // the JSX boundary creates a new identity on every render, which
+  // would re-fire useV2TopbarRight's effect every time and infinite-
+  // loop the layout. setTopbarRight from useState is reference-stable
+  // so memoizing with empty deps is safe.
+  const topbarSlotValue = useMemo<TopbarSlotValue>(
+    () => ({ setRight: setTopbarRight }),
+    [],
+  );
+
   return (
-    <TopbarSlotContext.Provider value={{ setRight: setTopbarRight }}>
+    <TopbarSlotContext.Provider value={topbarSlotValue}>
       <OzShell
         sidebar={
           <OzSidebar
