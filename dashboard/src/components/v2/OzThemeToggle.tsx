@@ -60,17 +60,18 @@ const OzThemeToggle = ({ theme, onToggle, className }: OzThemeToggleProps) => {
         )}
       />
 
-      {/* Sun — left half. Active (light mode) uses a fixed zinc-700
-          because the white thumb sits underneath in both modes and
-          oz2-text inverts (dark→light) across themes, which would
-          fail in dark when the sun were ever active. Inactive
-          state uses oz2-text-faint which is theme-adaptive (gray-
-          violet in light, lifted violet in dark) — both readable
-          against the warm-beige and violet-lifted track. */}
+      {/* Sun — pinned to the LIGHT thumb's footprint (left-[2px]
+          top-[2px] w-[22px] h-[20px]) so the glyph sits exactly on
+          the thumb when light mode is active and exactly mirrored
+          on the track when dark mode is active. Identical x/y to the
+          thumb means no centering drift. Active glyph uses a fixed
+          zinc-700 (oz2-text inverts across themes and would go
+          near-white on a white thumb in dark mode); inactive uses
+          oz2-text-faint which is theme-adaptive. */}
       <span
         aria-hidden="true"
         className={classNames(
-          "pointer-events-none absolute left-0 top-0 grid h-[26px] w-[24px] place-items-center transition-colors",
+          "pointer-events-none absolute left-[2px] top-[2px] grid h-[20px] w-[22px] place-items-center transition-colors",
           isDark ? "text-oz2-text-faint" : "text-zinc-700",
         )}
       >
@@ -89,14 +90,12 @@ const OzThemeToggle = ({ theme, onToggle, className }: OzThemeToggleProps) => {
         </svg>
       </span>
 
-      {/* Moon — right half. Same active/inactive split as the sun:
-          fixed zinc-700 when sitting on the white thumb (dark mode
-          active), oz2-text-faint when sitting on the warm-beige
-          track (light mode, inactive). */}
+      {/* Moon — pinned to the DARK thumb's footprint (left-[28px]
+          top-[2px] w-[22px] h-[20px]). Same alignment story as sun. */}
       <span
         aria-hidden="true"
         className={classNames(
-          "pointer-events-none absolute right-0 top-0 grid h-[26px] w-[24px] place-items-center transition-colors",
+          "pointer-events-none absolute left-[28px] top-[2px] grid h-[20px] w-[22px] place-items-center transition-colors",
           isDark ? "text-zinc-700" : "text-oz2-text-faint",
         )}
       >
