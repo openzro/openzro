@@ -423,17 +423,25 @@ function RowCells({
           />
         )}
       </div>
-      <div role="cell" className={`${cellCls} flex justify-end`}>
+      <div role="cell" className={`${cellCls} flex items-center justify-end`}>
         {isFirst && <TrafficCell flow={row.group} />}
       </div>
-      <div role="cell" className={`${cellCls} flex justify-end pr-4`}>
+      <div
+        role="cell"
+        className={`${cellCls} flex items-center justify-end pr-4`}
+      >
         {isFirst && (
-          <OzPill variant={status.variant}>
-            <span className="inline-flex items-center gap-1.5">
-              <span aria-hidden>{status.icon}</span>
-              {status.label}
-            </span>
-          </OzPill>
+          // Inline-flex wrapper around the pill keeps it from
+          // stretching to fill the cell height — flex children default
+          // to align-items:stretch otherwise.
+          <span className="inline-flex">
+            <OzPill variant={status.variant}>
+              <span className="inline-flex items-center gap-1.5">
+                <span aria-hidden>{status.icon}</span>
+                {status.label}
+              </span>
+            </OzPill>
+          </span>
         )}
       </div>
     </>
@@ -484,7 +492,6 @@ function EventCell({ row }: { row: Row }) {
         <span
           aria-label={meta.label}
           className={`relative z-10 grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 bg-oz2-surface ${dotToneClasses[meta.tone]}`}
-          style={{ boxShadow: "0 0 0 4px var(--ozv2-bg-elev)" }}
         >
           {meta.icon}
         </span>
