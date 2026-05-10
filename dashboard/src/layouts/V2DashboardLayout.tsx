@@ -243,6 +243,16 @@ function breadcrumbForPath(path: string | null): OzBreadcrumbSegment[] {
   ) {
     return [{ label: "Identity" }, { label: "Activity" }];
   }
+  // /dns/* (Nameservers + Settings + bare /dns redirect) collapses
+  // under the umbrella "DNS" crumb so all sub-routes share the same
+  // header crumb regardless of which DnsTabs tab is active.
+  if (
+    path === "/dns" ||
+    path === "/dns/nameservers" ||
+    path === "/dns/settings"
+  ) {
+    return [{ label: "Workspace" }, { label: "DNS" }];
+  }
   return [];
 }
 
@@ -297,6 +307,12 @@ const NAV_ICONS = {
     </>,
   ),
   activity: navIcon(<path d="M22 12h-4l-3 9L9 3l-3 9H2" />),
+  dns: navIcon(
+    <>
+      <circle cx={12} cy={12} r={9} />
+      <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+    </>,
+  ),
   settings: navIcon(
     <>
       <circle cx={12} cy={12} r={3} />
@@ -341,6 +357,16 @@ function buildSidebarSections(
           icon: NAV_ICONS.network,
           active: matches("/networks", "/network", "/network-routes"),
           onClick: () => go("/networks"),
+        },
+        {
+          id: "dns",
+          label: "DNS",
+          icon: NAV_ICONS.dns,
+          active: matches("/dns"),
+          // Land on /dns/nameservers — /dns itself just redirects
+          // there, and the DnsTabs sub-nav inside the v2 body will
+          // expose Settings as the second tab.
+          onClick: () => go("/dns/nameservers"),
         },
       ],
     },
