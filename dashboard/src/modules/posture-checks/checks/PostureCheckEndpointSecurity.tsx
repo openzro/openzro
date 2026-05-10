@@ -1,19 +1,19 @@
 import Button from "@components/Button";
+import FancyToggleSwitch from "@components/FancyToggleSwitch";
 import HelpText from "@components/HelpText";
 import InlineLink from "@components/InlineLink";
 import { Label } from "@components/Label";
 import { ModalClose, ModalFooter } from "@components/modal/Modal";
 import Paragraph from "@components/Paragraph";
 import { SelectDropdown } from "@components/select/SelectDropdown";
-import FancyToggleSwitch from "@components/FancyToggleSwitch";
 import useFetchApi from "@utils/api";
 import { ExternalLinkIcon, ShieldHalf } from "lucide-react";
 import * as React from "react";
 import { useState } from "react";
+import { MDMProvider } from "@/interfaces/MDMProvider";
 import {
   EndpointSecurityCheck,
 } from "@/interfaces/PostureCheck";
-import { MDMProvider } from "@/interfaces/MDMProvider";
 import { PostureCheckCard } from "@/modules/posture-checks/ui/PostureCheckCard";
 
 type Props = {
