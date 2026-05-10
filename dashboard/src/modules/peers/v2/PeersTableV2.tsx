@@ -330,6 +330,14 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
       .finally(() => setRefreshing(false));
   };
 
+  // Cold-start: no peers registered yet. Skip the table entirely and
+  // show a centered "get started" card with the Add peer trigger so
+  // operators don't see an empty grid before they've connected
+  // anything. Mirrors the legacy GetStartedTest at /peers.
+  if (!isLoading && all.length === 0) {
+    return <PeersEmptyState peerCount={0} />;
+  }
+
   return (
     // Single TooltipProvider wraps the whole page so skipDelayDuration
     // works cross-cell — the address tooltip waits 250ms on first
@@ -860,6 +868,63 @@ function VersionCell({ peer }: { peer: Peer }) {
       <span className="font-mono text-[12.5px] text-oz2-text-faint">
         {display}
       </span>
+    </div>
+  );
+}
+
+// PeersEmptyState — cold-start screen shown when no peers have
+// registered yet. Mirrors the legacy GetStartedTest card at /peers
+// (icon + title + body + Add peer trigger + docs link) but in v2
+// paint. The Add peer button reuses AddPeerButtonV2 so first-run
+// onboarding wiring (useLocalStorage flags) stays consistent.
+function PeersEmptyState({ peerCount }: { peerCount: number }) {
+  return (
+    <div className="flex min-h-full items-center justify-center px-8 py-16">
+      <div className="w-full max-w-[480px] rounded-oz2-card border border-oz2-border bg-oz2-surface p-8 text-center shadow-oz2-sm">
+        <div
+          aria-hidden="true"
+          className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-[14px] text-white shadow-oz2-acc"
+          style={{
+            background: "linear-gradient(135deg, #8b5cf6 0%, #4c1d95 100%)",
+          }}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width={26}
+            height={26}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x={3} y={4} width={18} height={12} rx={2} />
+            <path d="M8 20h8M12 16v4" />
+          </svg>
+        </div>
+        <h2 className="text-[20px] font-semibold tracking-tight text-oz2-text">
+          Get Started with Openzro
+        </h2>
+        <p className="mx-auto mt-2 max-w-[360px] text-[13.5px] leading-[1.55] text-oz2-text-muted">
+          It looks like you don&apos;t have any connected machines. Get started
+          by adding one to your network.
+        </p>
+        <div className="mt-6 flex items-center justify-center">
+          <AddPeerButtonV2 peerCount={peerCount} />
+        </div>
+        <p className="mt-6 text-[12.5px] text-oz2-text-faint">
+          Learn more in our{" "}
+          <a
+            href="https://docs.openzro.io/how-to/getting-started"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-oz2-acc-text underline-offset-2 hover:underline"
+          >
+            Getting Started Guide
+          </a>
+          .
+        </p>
+      </div>
     </div>
   );
 }
