@@ -1,113 +1,74 @@
 "use client";
 
-import Breadcrumbs from "@components/Breadcrumbs";
 import InlineLink from "@components/InlineLink";
 import Paragraph from "@components/Paragraph";
-import SkeletonTable from "@components/skeletons/SkeletonTable";
-import { usePortalElement } from "@hooks/usePortalElement";
 import { ExternalLinkIcon } from "lucide-react";
-import React, { lazy, Suspense } from "react";
-import PeerIcon from "@/assets/icons/PeerIcon";
+import React from "react";
 import PeersProvider, { usePeers } from "@/contexts/PeersProvider";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { useUsers } from "@/contexts/UsersProvider";
-import PageContainer from "@/layouts/PageContainer";
+import PeersTableV2 from "@/modules/peers/v2/PeersTableV2";
 import { SetupModalContent } from "@/modules/setup-openzro-modal/SetupModal";
 
-const PeersTable = lazy(() => import("@/modules/peers/PeersTable"));
+// Peers — phase-4.2 entry point. The wrapping chrome (OzShell +
+// OzSidebar + OzTopbar) lives in (v2-dashboard)/layout.tsx →
+// V2DashboardLayout. This component owns the page-body composition
+// and the permissions / restricted-view branching.
 
 export default function Peers() {
   const { isRestricted } = usePermissions();
 
-  return (
-    <PageContainer>
-      {isRestricted ? (
-        <PeersBlockedView />
-      ) : (
-        <PeersProvider>
-          <PeersView />
-        </PeersProvider>
-      )}
-    </PageContainer>
+  return isRestricted ? (
+    <PeersBlockedView />
+  ) : (
+    <PeersProvider>
+      <PeersView />
+    </PeersProvider>
   );
 }
 
 function PeersView() {
   const { peers, isLoading } = usePeers();
   const { users } = useUsers();
-  const { ref: headingRef, portalTarget } =
-    usePortalElement<HTMLHeadingElement>();
 
+  // Mirror the legacy enrichment so user-related cells (Name, search)
+  // can read peer.user.email/name without an extra round-trip.
   const peersWithUser = peers?.map((peer) => {
     if (!users) return peer;
     return {
       ...peer,
-      user: users?.find((user) => user.id === peer.user_id),
+      user: users.find((u) => u.id === peer.user_id),
     };
   });
 
-  return (
-    <>
-      <div className={"p-default py-6"}>
-        <Breadcrumbs>
-          <Breadcrumbs.Item
-            href={"/peers"}
-            label={"Peers"}
-            icon={<PeerIcon size={13} />}
-          />
-        </Breadcrumbs>
-        <h1 ref={headingRef}>Peers</h1>
-        <Paragraph>
-          A list of all machines and devices connected to your private network.
-          Use this view to manage peers.
-        </Paragraph>
-        <Paragraph>
-          Learn more about{" "}
-          <InlineLink
-            href={"https://docs.openzro.io/how-to/add-machines-to-your-network"}
-            target={"_blank"}
-          >
-            Peers
-            <ExternalLinkIcon size={12} />
-          </InlineLink>
-          in our documentation.
-        </Paragraph>
-      </div>
-      <Suspense fallback={<SkeletonTable />}>
-        <PeersTable
-          isLoading={isLoading}
-          peers={peersWithUser}
-          headingTarget={portalTarget}
-        />
-      </Suspense>
-    </>
-  );
+  return <PeersTableV2 peers={peersWithUser} isLoading={isLoading} />;
 }
 
+// PeersBlockedView is intentionally kept on the legacy primitives
+// (Paragraph, InlineLink, SetupModalContent) for this commit — it's
+// an empty-state fallback shown when usePermissions().isRestricted is
+// true, which is rare. Phase 4.3 (or later) re-paints it in v2 once
+// every other Peers surface is migrated.
 function PeersBlockedView() {
   return (
-    <div className={"flex items-center justify-center flex-col"}>
-      <div className={"p-default py-6 max-w-3xl text-center"}>
+    <div className="flex flex-col items-center justify-center">
+      <div className="p-default py-6 max-w-3xl text-center">
         <h1>Add new device to your network</h1>
-        <Paragraph className={"inline"}>
+        <Paragraph className="inline">
           To get started, install Openzro and log in using your email account.
           After that you should be connected. If you have further questions
           check out our{" "}
           <InlineLink
-            href={"https://docs.openzro.io/how-to/getting-started#installation"}
-            target={"_blank"}
+            href="https://docs.openzro.io/how-to/getting-started#installation"
+            target="_blank"
           >
             Installation Guide
             <ExternalLinkIcon size={12} />
           </InlineLink>
         </Paragraph>
       </div>
-      <div className={"px-3 pt-1 pb-8 max-w-3xl w-full"}>
-        <div
-          className={
-            "rounded-md border border-nb-gray-900/70 grid w-full bg-nb-gray-930/40"
-          }
-        >
+      <div className="px-3 pt-1 pb-8 max-w-3xl w-full">
+        <div className="rounded-md border border-nb-gray-900/70 grid w-full bg-nb-gray-930/40">
           <SetupModalContent header={false} footer={false} />
         </div>
       </div>
