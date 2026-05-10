@@ -11,7 +11,6 @@ import {
 import ModalHeader from "@components/modal/ModalHeader";
 import { notify } from "@components/Notification";
 import { PeerGroupSelector } from "@components/PeerGroupSelector";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/Tabs";
 import FullScreenLoading from "@components/ui/FullScreenLoading";
 import LoginExpiredBadge from "@components/ui/LoginExpiredBadge";
 import { PageNotFound } from "@components/ui/PageNotFound";
@@ -42,11 +41,17 @@ import React, { useMemo, useState } from "react";
 import Skeleton from "react-loading-skeleton";
 import { useSWRConfig } from "swr";
 import RoundedFlag from "@/assets/countries/RoundedFlag";
-import CircleIcon from "@/assets/icons/CircleIcon";
 import OpenzroIcon from "@/assets/icons/OpenzroIcon";
+import PeerIcon from "@/assets/icons/PeerIcon";
 import OzButton from "@/components/v2/OzButton";
 import OzCard from "@/components/v2/OzCard";
 import OzInput from "@/components/v2/OzInput";
+import {
+  OzTabs,
+  OzTabsContent,
+  OzTabsList,
+  OzTabsTrigger,
+} from "@/components/v2/OzTabs";
 import { useCountries } from "@/contexts/CountryProvider";
 import PeerProvider, { usePeer } from "@/contexts/PeerProvider";
 import { usePermissions } from "@/contexts/PermissionsProvider";
@@ -119,10 +124,7 @@ function PeerOverview() {
 
   return (
     <RoutesProvider>
-      <div className="space-y-5 p-8 pb-0">
-        <PeerGeneralInformation />
-      </div>
-      <PeerOverviewTabs />
+      <PeerGeneralInformation />
     </RoutesProvider>
   );
 }
@@ -187,208 +189,241 @@ const PeerGeneralInformation = () => {
     });
   };
 
+  // Default tab: Details. If the operator opens a peer page with no
+  // permission to edit (groups + peers), every Details widget is
+  // disabled anyway — they still see the same overview, so Details
+  // stays the right default.
+  const [tab, setTab] = useState("details");
+
+  const lastSeenLabel = peer.connected
+    ? "just now"
+    : dayjs(peer.last_seen).fromNow();
+
   return (
     <>
-      <div className="flex max-w-6xl items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-3">
-            <h1 className="flex items-center gap-3 text-[24px] font-semibold tracking-tight">
-              <CircleIcon
-                active={peer.connected}
-                size={12}
-                className="mb-[3px] shrink-0"
+      {/* Hero — handoff PeerDetailScreen shape. Status orb +
+          identity block on the left; Save / Cancel CTAs on the right.
+          A hairline border below separates the hero from the tabs
+          band. */}
+      <div className="border-b border-oz2-border-soft px-8 pb-5 pt-8">
+        <div className="flex max-w-6xl flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-4">
+            <div
+              aria-hidden
+              className="relative grid h-12 w-12 shrink-0 place-items-center rounded-[12px] border border-oz2-border-soft bg-oz2-bg-sunken text-oz2-text-2"
+            >
+              <PeerIcon size={20} />
+              <span
+                className={
+                  "absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-oz2-bg " +
+                  (peer.connected ? "bg-oz2-ok" : "bg-oz2-text-faint")
+                }
               />
-              <TextWithTooltip text={name} maxChars={30} />
-
-              {permission.peers.update && (
-                <Modal
-                  open={showEditNameModal}
-                  onOpenChange={setShowEditNameModal}
-                >
-                  <ModalTrigger>
-                    <span
-                      aria-label="Edit peer name"
-                      className="inline-grid h-8 w-8 cursor-pointer place-items-center rounded-[8px] border border-oz2-border bg-oz2-surface text-oz2-text-2 transition-colors hover:border-oz2-border-strong hover:bg-oz2-hover hover:text-oz2-text"
-                    >
-                      <PencilIcon size={14} />
-                    </span>
-                  </ModalTrigger>
-                  <EditNameModal
-                    onSuccess={(newName) => {
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-[24px] font-semibold tracking-tight text-oz2-text">
+                  <TextWithTooltip text={name} maxChars={30} />
+                </h1>
+                <LoginExpiredBadge loginExpired={peer.login_expired} />
+                {permission.peers.update && (
+                  <Modal
+                    open={showEditNameModal}
+                    onOpenChange={setShowEditNameModal}
+                  >
+                    <ModalTrigger>
+                      <span
+                        aria-label="Edit peer name"
+                        className="inline-grid h-7 w-7 cursor-pointer place-items-center rounded-[8px] border border-oz2-border bg-oz2-surface text-oz2-text-2 transition-colors hover:border-oz2-border-strong hover:bg-oz2-hover hover:text-oz2-text"
+                      >
+                        <PencilIcon size={13} />
+                      </span>
+                    </ModalTrigger>
+                    <EditNameModal
+                      onSuccess={(newName) => {
                       updatePeer(newName).then(() => {
                         setName(newName);
                         setShowEditNameModal(false);
                       });
-                    }}
-                    peer={peer}
-                    initialName={name}
-                    key={showEditNameModal ? 1 : 0}
-                  />
-                </Modal>
-              )}
-            </h1>
-            <LoginExpiredBadge loginExpired={peer.login_expired} />
-          </div>
-          {user?.email && (
-            <p className="mt-1 text-[13px] text-oz2-text-muted">{user.email}</p>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <OzButton
-            variant="default"
-            type="button"
-            onClick={() => router.push("/peers")}
-          >
-            Cancel
-          </OzButton>
-          <OzButton
-            variant="primary"
-            type="button"
-            onClick={() => updatePeer()}
-            disabled={
-              !hasChanges || !permission.peers.read || !permission.groups.update
-            }
-          >
-            Save Changes
-          </OzButton>
-        </div>
-      </div>
-
-      <div className="mt-5 flex w-full max-w-6xl flex-wrap items-start gap-10 xl:flex-nowrap">
-        <PeerInformationCard peer={peer} />
-
-        <div className="flex flex-col gap-5 transition-all lg:w-1/2">
-          <OzSettingsCard
-            title={
-              <span className="inline-flex items-center gap-2">
-                <TimerResetIcon size={14} />
-                Session Expiration
-              </span>
-            }
-            sub="Force this peer to re-authenticate through SSO when its session expires. Setup-key peers can't be expired (no user to sign in)."
-          >
-            <PeerExpirationToggle
-              peer={peer}
-              value={loginExpiration}
-              onChange={(state) => {
-                setLoginExpiration(state);
-                if (!state) setInactivityExpiration(false);
-              }}
-            />
-
-            {permission.peers.update && !!peer?.user_id && loginExpiration && (
-              <div className="flex flex-col gap-4 rounded-oz2-card border border-oz2-border-soft bg-oz2-bg-sunken p-4">
-                <PeerExpirationToggle
-                  peer={peer}
-                  value={inactivityExpiration}
-                  onChange={setInactivityExpiration}
-                  title="Require login after disconnect"
-                  description="Enable to require authentication after users disconnect from management for 10 minutes."
-                  nested
-                />
+                      }}
+                      peer={peer}
+                      initialName={name}
+                      key={showEditNameModal ? 1 : 0}
+                    />
+                  </Modal>
+                )}
               </div>
-            )}
-          </OzSettingsCard>
-
-          <OzSettingsCard
-            title={
-              <span className="inline-flex items-center gap-2">
-                <TerminalSquare size={14} />
-                SSH Access
-              </span>
-            }
-            sub="Run an SSH server on this peer so operators can reach the machine through the mesh with a standard shell."
-          >
-            <FullTooltip
-              content={
-                <div className="flex items-center gap-2 !text-nb-gray-300 text-xs">
-                  <LockIcon size={14} />
-                  <span>
-                    {`You don't have the required permissions to update this setting.`}
-                  </span>
-                </div>
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-oz2-text-muted">
+                <span className="font-mono text-oz2-text-2">{peer.ip}</span>
+                <span className="text-oz2-text-faint">·</span>
+                <span>{peer.os}</span>
+                {user?.email && (
+                  <>
+                    <span className="text-oz2-text-faint">·</span>
+                    <span>
+                      Owned by{" "}
+                      <span className="text-oz2-text-2">{user.email}</span>
+                    </span>
+                  </>
+                )}
+                <span className="text-oz2-text-faint">·</span>
+                <span>Last seen {lastSeenLabel}</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <OzButton
+              variant="default"
+              type="button"
+              onClick={() => router.push("/peers")}
+            >
+              Cancel
+            </OzButton>
+            <OzButton
+              variant="primary"
+              type="button"
+              onClick={() => updatePeer()}
+              disabled={
+                !hasChanges ||
+                !permission.peers.read ||
+                !permission.groups.update
               }
-              interactive={false}
-              className="w-full block"
-              disabled={!permission.peers.update}
             >
-              <OzSettingsToggle
-                value={ssh}
-                disabled={!permission.peers.update}
-                onChange={(set) =>
-                  !set
-                    ? setSsh(false)
-                    : openSSHDialog().then((confirm) => setSsh(confirm))
-                }
-                label="Enable SSH server"
-                desc="The openZro client opens an SSH listener bound to its mesh IP."
-              />
-            </FullTooltip>
-          </OzSettingsCard>
-
-          {permission.groups.read && (
-            <OzSettingsCard
-              title="Assigned Groups"
-              sub="Groups control what this peer can reach across the mesh. A peer inherits every policy that targets one of its groups."
-            >
-              <PeerGroupSelector
-                disabled={!permission.groups.update}
-                onChange={setSelectedGroups}
-                values={selectedGroups}
-                hideAllGroup={true}
-                peer={peer}
-              />
-            </OzSettingsCard>
-          )}
+              Save Changes
+            </OzButton>
+          </div>
         </div>
       </div>
-    </>
-  );
-};
 
-const PeerOverviewTabs = () => {
-  const { peer } = usePeer();
-  const { permission } = usePermissions();
+      {/* Tabs — Details holds the edit form; the other two tabs host
+          their respective list sections. */}
+      <OzTabs value={tab} onValueChange={setTab}>
+        <div className="px-8">
+          <OzTabsList>
+            <OzTabsTrigger value="details">Details</OzTabsTrigger>
+            {permission.routes.read && (
+              <OzTabsTrigger value="network-routes">
+                Network Routes
+              </OzTabsTrigger>
+            )}
+            {peer?.id && permission.peers.read && (
+              <OzTabsTrigger value="accessible-peers">
+                Accessible Peers
+              </OzTabsTrigger>
+            )}
+          </OzTabsList>
+        </div>
 
-  const [tab, setTab] = useState(
-    permission.routes.read ? "network-routes" : "accessible-peers",
-  );
+        <OzTabsContent value="details">
+          <div className="px-8 py-6">
+            <div className="flex w-full max-w-6xl flex-wrap items-start gap-10 xl:flex-nowrap">
+              <PeerInformationCard peer={peer} />
 
-  return (
-    <Tabs
-      defaultValue={tab}
-      onValueChange={(v) => setTab(v)}
-      value={tab}
-      className={"pt-10 pb-0 mb-0"}
-    >
-      <TabsList justify={"start"} className={"px-8"}>
+              <div className="flex flex-col gap-5 transition-all lg:w-1/2">
+                <OzSettingsCard
+                  title={
+                    <span className="inline-flex items-center gap-2">
+                      <TimerResetIcon size={14} />
+                      Session Expiration
+                    </span>
+                  }
+                  sub="Force this peer to re-authenticate through SSO when its session expires. Setup-key peers can't be expired (no user to sign in)."
+                >
+                  <PeerExpirationToggle
+                    peer={peer}
+                    value={loginExpiration}
+                    onChange={(state) => {
+                      setLoginExpiration(state);
+                      if (!state) setInactivityExpiration(false);
+                    }}
+                  />
+
+                  {permission.peers.update &&
+                    !!peer?.user_id &&
+                    loginExpiration && (
+                      <div className="flex flex-col gap-4 rounded-oz2-card border border-oz2-border-soft bg-oz2-bg-sunken p-4">
+                        <PeerExpirationToggle
+                          peer={peer}
+                          value={inactivityExpiration}
+                          onChange={setInactivityExpiration}
+                          title="Require login after disconnect"
+                          description="Enable to require authentication after users disconnect from management for 10 minutes."
+                          nested
+                        />
+                      </div>
+                    )}
+                </OzSettingsCard>
+
+                <OzSettingsCard
+                  title={
+                    <span className="inline-flex items-center gap-2">
+                      <TerminalSquare size={14} />
+                      SSH Access
+                    </span>
+                  }
+                  sub="Run an SSH server on this peer so operators can reach the machine through the mesh with a standard shell."
+                >
+                  <FullTooltip
+                    content={
+                      <div className="flex items-center gap-2 !text-nb-gray-300 text-xs">
+                        <LockIcon size={14} />
+                        <span>
+                          {`You don't have the required permissions to update this setting.`}
+                        </span>
+                      </div>
+                    }
+                    interactive={false}
+                    className="w-full block"
+                    disabled={!permission.peers.update}
+                  >
+                    <OzSettingsToggle
+                      value={ssh}
+                      disabled={!permission.peers.update}
+                      onChange={(set) =>
+                        !set
+                          ? setSsh(false)
+                          : openSSHDialog().then((confirm) =>
+                              setSsh(confirm),
+                            )
+                      }
+                      label="Enable SSH server"
+                      desc="The openZro client opens an SSH listener bound to its mesh IP."
+                    />
+                  </FullTooltip>
+                </OzSettingsCard>
+
+                {permission.groups.read && (
+                  <OzSettingsCard
+                    title="Assigned Groups"
+                    sub="Groups control what this peer can reach across the mesh. A peer inherits every policy that targets one of its groups."
+                  >
+                    <PeerGroupSelector
+                      disabled={!permission.groups.update}
+                      onChange={setSelectedGroups}
+                      values={selectedGroups}
+                      hideAllGroup={true}
+                      peer={peer}
+                    />
+                  </OzSettingsCard>
+                )}
+              </div>
+            </div>
+          </div>
+        </OzTabsContent>
+
         {permission.routes.read && (
-          <TabsTrigger value={"network-routes"}>
-            <NetworkIcon size={16} />
-            Network Routes
-          </TabsTrigger>
+          <OzTabsContent value="network-routes">
+            <PeerNetworkRoutesSection peer={peer} />
+          </OzTabsContent>
         )}
 
         {peer?.id && permission.peers.read && (
-          <TabsTrigger value={"accessible-peers"}>
-            <MonitorSmartphoneIcon size={16} />
-            Accessible Peers
-          </TabsTrigger>
+          <OzTabsContent value="accessible-peers">
+            <AccessiblePeersSection peerID={peer.id} />
+          </OzTabsContent>
         )}
-      </TabsList>
-
-      {permission.routes.read && (
-        <TabsContent value={"network-routes"} className={"pb-8"}>
-          <PeerNetworkRoutesSection peer={peer} />
-        </TabsContent>
-      )}
-
-      {peer?.id && permission.peers.read && (
-        <TabsContent value={"accessible-peers"} className={"pb-8"}>
-          <AccessiblePeersSection peerID={peer.id} />
-        </TabsContent>
-      )}
-    </Tabs>
+      </OzTabs>
+    </>
   );
 };
 
