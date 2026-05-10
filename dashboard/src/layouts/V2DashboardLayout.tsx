@@ -9,9 +9,9 @@ import {
   DropdownMenuTrigger,
 } from "@components/DropdownMenu";
 import { LogOutIcon, User2 } from "lucide-react";
-import { useTheme } from "next-themes";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
 import React, { useEffect, useMemo, useState } from "react";
 import openzroIcon from "@/assets/openzro.svg";
 import OzShell from "@/components/v2/OzShell";
@@ -213,17 +213,25 @@ function breadcrumbForPath(path: string | null): OzBreadcrumbSegment[] {
   if (path === "/access-control" || path.startsWith("/access-control/")) {
     return [{ label: "Workspace" }, { label: "Access Control" }];
   }
-  if (path === "/team" || path === "/team/users") {
-    return [{ label: "Identity" }, { label: "Users" }];
-  }
-  if (path === "/team/groups") {
-    return [{ label: "Identity" }, { label: "Groups" }];
-  }
-  if (path === "/team/service-users") {
-    return [{ label: "Identity" }, { label: "Service Users" }];
+  // /team/users, /team/groups and /team/service-users all sit under the
+  // single conceptual "Users & Groups" screen (the page H1 + the
+  // TeamTabs sub-nav present the three views as siblings). The
+  // breadcrumb is unified here so it stays consistent with the H1
+  // regardless of which tab is active.
+  if (
+    path === "/team" ||
+    path === "/team/users" ||
+    path === "/team/groups" ||
+    path === "/team/service-users"
+  ) {
+    return [{ label: "Identity" }, { label: "Users & Groups" }];
   }
   if (path === "/team/user" || path.startsWith("/team/user?")) {
-    return [{ label: "Identity" }, { label: "Users" }, { label: "User" }];
+    return [
+      { label: "Identity" },
+      { label: "Users & Groups" },
+      { label: "User" },
+    ];
   }
   return [];
 }

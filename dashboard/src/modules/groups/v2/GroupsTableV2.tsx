@@ -53,6 +53,7 @@ import GroupsActionCell from "@/modules/groups/GroupsActionCell";
 import GroupsCountCell from "@/modules/groups/GroupsCountCell";
 import GroupsNameCell from "@/modules/groups/GroupsNameCell";
 import useGroupsUsage, { GroupUsage } from "@/modules/groups/useGroupsUsage";
+import TeamTabs from "@/modules/team/v2/TeamTabs";
 
 // GroupsTableV2 — phase-5.9 v2 paint over /api/groups (with usage
 // aggregation via useGroupsUsage). Mirrors the standard scaffold
@@ -263,7 +264,9 @@ export default function GroupsTableV2({ isLoading }: Props) {
     <TooltipProvider delayDuration={250} skipDelayDuration={100}>
       <div className="space-y-6 p-8">
         <header>
-          <h1 className="text-[24px] font-semibold tracking-tight">Groups</h1>
+          <h1 className="text-[24px] font-semibold tracking-tight">
+            Users &amp; Groups
+          </h1>
           <p className="mt-1 max-w-2xl text-[14px] text-oz2-text-muted">
             Groups bundle peers, resources and users so policies, routes and
             setup keys can target them by name. Groups synced from your IdP
@@ -279,6 +282,8 @@ export default function GroupsTableV2({ isLoading }: Props) {
             .
           </p>
         </header>
+
+        <TeamTabs />
 
         {/* Create modal — controlled, opened from the topbar CTA or
             the cold-start hero CTA. */}
