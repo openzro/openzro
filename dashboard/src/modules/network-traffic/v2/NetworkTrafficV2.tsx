@@ -478,16 +478,21 @@ function EventCell({ row }: { row: Row }) {
       <div className="relative flex w-6 shrink-0 flex-col items-center justify-center">
         {/* Single solid rail per cell. The rail's parent (this dot
             column wrapper) sits inside the cell's vertical padding,
-            so a naive top:0 / bottom:0 leaves a visible gap equal to
-            cellN.bottomPadding + cellN+1.topPadding (12px between
-            two `py-1.5` middle rows). Negative top / bottom values
-            extend the rail UP / DOWN through the cell padding so it
-            visually meets the adjacent cell's rail without a break.
-            top / bottom pinned based on whether this step has prior
-            / next steps in the flow:
+            so a naive top:0 / bottom:0 leaves a 12px gap between
+            the rails of adjacent flow steps (6px bottom padding of
+            cell N + 6px top padding of cell N+1). Negative -6px
+            top / bottom extends the rail through HALF of that gap
+            on each side, so two adjacent rails meet exactly at the
+            cell boundary — no gap, no overlap.
 
-              first event → top=50% (rail starts at dot's middle)
-              middle      → top=-12, bottom=-12 (extend through padding)
+            -6 (instead of -12) matters in dark mode where
+            oz2-border-strong is rgba(196,181,253,0.18); any overlap
+            between cells doubles the alpha and reads as a visible
+            seam. Light mode tokens are opaque so the overlap was
+            invisible, but -6 looks correct in both themes.
+
+              first event → top=50%   (rail starts at dot's middle)
+              middle      → top=-6, bottom=-6 (meet adjacent rails)
               last event  → bottom=50% (rail ends at dot's middle)
         */}
         {(railUp || railDown) && (
@@ -495,8 +500,8 @@ function EventCell({ row }: { row: Row }) {
             aria-hidden
             className="absolute left-1/2 w-[2px] -translate-x-1/2 bg-oz2-border-strong"
             style={{
-              top: railUp ? -12 : "50%",
-              bottom: railDown ? -12 : "50%",
+              top: railUp ? -6 : "50%",
+              bottom: railDown ? -6 : "50%",
             }}
           />
         )}
