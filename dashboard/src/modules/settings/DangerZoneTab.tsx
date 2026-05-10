@@ -1,24 +1,26 @@
-import Breadcrumbs from "@components/Breadcrumbs";
-import Button from "@components/Button";
-import Card from "@components/Card";
+"use client";
+
 import { notify } from "@components/Notification";
 import * as Tabs from "@radix-ui/react-tabs";
 import { useApiCall } from "@utils/api";
-import loadConfig from "@utils/config";
-import { cn } from "@utils/helpers";
-import { AlertOctagonIcon } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import React from "react";
-import SettingsIcon from "@/assets/icons/SettingsIcon";
 import { useDialog } from "@/contexts/DialogProvider";
 import { useLoggedInUser } from "@/contexts/UsersProvider";
 import { Account } from "@/interfaces/Account";
+import OzSettingsCard from "@/modules/settings/v2/OzSettingsCard";
+
+// DangerZoneTab — settings sub-page body for /settings/danger-zone.
+// Functionality preserved verbatim: confirm dialog → DELETE
+// /accounts/{id} → clear browser storage → logout. Only paint changes
+// — the legacy hand-rolled red card becomes a danger-variant
+// OzSettingsCard containing one DangerRow.
 
 type Props = {
   account: Account;
 };
-const config = loadConfig();
 
-export default function DangerZoneTab({ account }: Props) {
+export default function DangerZoneTab({ account }: Readonly<Props>) {
   const { confirm } = useDialog();
   const deleteRequest = useApiCall<Account>("/accounts/" + account.id);
   const { logout } = useLoggedInUser();
@@ -29,12 +31,9 @@ export default function DangerZoneTab({ account }: Props) {
         .del()
         .catch((error) => reject(error))
         .then(() => {
-          // Clear browser storage after account deletion
           if (typeof window !== "undefined") {
             localStorage.clear();
             sessionStorage.clear();
-            // Optionally, clear cookies if needed
-            // document.cookie = ... (set cookies to expire)
           }
           logout().then();
           resolve();
@@ -42,8 +41,8 @@ export default function DangerZoneTab({ account }: Props) {
     });
 
     notify({
-      title: "Delete Openzro account",
-      description: "Openzro account was successfully deleted.",
+      title: "Delete openZro account",
+      description: "openZro account was successfully deleted.",
       promise: deletePromise,
       loadingMessage: "Deleting the account...",
     });
@@ -51,9 +50,9 @@ export default function DangerZoneTab({ account }: Props) {
 
   const handleConfirm = async () => {
     const choice = await confirm({
-      title: "Delete Openzro account",
+      title: "Delete openZro account",
       description:
-        "Are you sure you want to delete your Openzro account? This action cannot be undone.",
+        "Are you sure you want to delete your openZro account? This action cannot be undone.",
       confirmText: "Delete",
       cancelText: "Cancel",
       type: "danger",
@@ -63,58 +62,65 @@ export default function DangerZoneTab({ account }: Props) {
   };
 
   return (
-    <Tabs.Content value={"danger-zone"}>
-      <div className={"p-default py-6"}>
-        <Breadcrumbs>
-          <Breadcrumbs.Item
-            href={"/settings"}
-            label={"Settings"}
-            icon={<SettingsIcon size={13} />}
-          />
-          <Breadcrumbs.Item
-            href={"/settings"}
-            label={"Danger Zone"}
-            icon={<AlertOctagonIcon size={14} />}
-            active
-          />
-        </Breadcrumbs>
-        <h1>Danger Zone</h1>
-        <div className={"gap-6 mt-6 max-w-lg"}>
-          <Card
-            className={cn(
-              "w-full flex flex-col gap-2 border",
-              // Light: a soft pinkish-white surface with a red border —
-              // the red is the warning signal, the surface stays
-              // legible. Saturated red bg works in dark because the
-              // page itself is near-black; on a white page the same
-              // saturation overpowers the text.
-              "border-red-300 bg-red-50",
-              "dark:border-red-600 dark:bg-red-950/50",
-            )}
-          >
-            <div className={"px-8 py-6"}>
-              <p
-                className={
-                  "text-xl font-medium mb-2 !text-red-700 dark:!text-red-50"
-                }
-              >
-                Delete Openzro account
-              </p>
-              <p className={"!text-red-700/80 dark:!text-red-50/80"}>
-                Before proceeding to delete your Openzro account, please be
-                aware that this action is irreversible. Once your account is
-                deleted, you will permanently lose access to all associated
-                data, including your peers, users, groups, policies, and routes.
-              </p>
-              <div className={"mt-6"}>
-                <Button variant={"danger"} onClick={handleConfirm} size={"xs"}>
-                  Delete Account
-                </Button>
-              </div>
-            </div>
-          </Card>
-        </div>
-      </div>
+    <Tabs.Content value="danger-zone" className="flex flex-col gap-5">
+      <header>
+        <h2 className="text-[18px] font-semibold tracking-tight text-oz2-err">
+          Danger Zone
+        </h2>
+        <p className="mt-1 max-w-2xl text-[13px] leading-[1.55] text-oz2-text-muted">
+          Irreversible operations. Read the description twice and only proceed
+          if you know exactly what you&apos;re doing.
+        </p>
+      </header>
+
+      <OzSettingsCard
+        title="Destructive operations"
+        sub="These actions cannot be undone. Backups, exports, and audit history will be removed alongside the data they describe."
+        danger
+      >
+        <DangerRow
+          title="Delete openZro account"
+          desc="Permanently delete your openZro account, all associated peers, users, groups, policies, and routes. You will be signed out immediately."
+          ctaLabel="Delete Account"
+          onClick={handleConfirm}
+        />
+      </OzSettingsCard>
     </Tabs.Content>
+  );
+}
+
+// DangerRow — inline within DangerZoneTab. Splits a destructive
+// operation into a title + description on the left and a danger
+// button on the right. Matches the handoff's `DangerRow` (screens-5.jsx,
+// SettingsGeneral) shape; only used here for now, so it stays
+// co-located.
+function DangerRow({
+  title,
+  desc,
+  ctaLabel,
+  onClick,
+}: {
+  title: string;
+  desc: string;
+  ctaLabel: string;
+  onClick: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0 flex-1">
+        <div className="text-[13.5px] font-semibold text-oz2-err">{title}</div>
+        <p className="mt-[2px] text-[12.5px] leading-[1.5] text-oz2-text-muted">
+          {desc}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onClick}
+        className="inline-flex h-[34px] shrink-0 items-center gap-2 whitespace-nowrap rounded-oz2-input border border-oz2-err bg-transparent px-3.5 text-[13px] font-medium text-oz2-err transition-colors hover:bg-oz2-err hover:text-oz2-text-on-acc"
+      >
+        <Trash2 size={13} />
+        {ctaLabel}
+      </button>
+    </div>
   );
 }

@@ -1,20 +1,23 @@
-import Breadcrumbs from "@components/Breadcrumbs";
-import FancyToggleSwitch from "@components/FancyToggleSwitch";
+"use client";
+
 import InlineLink from "@components/InlineLink";
 import { notify } from "@components/Notification";
 import * as Tabs from "@radix-ui/react-tabs";
 import { useApiCall } from "@utils/api";
-import {
-  ClockFadingIcon,
-  ExternalLinkIcon,
-  FlaskConicalIcon,
-  MonitorSmartphoneIcon,
-} from "lucide-react";
+import { ExternalLinkIcon, FlaskConical } from "lucide-react";
 import React, { useState } from "react";
 import { useSWRConfig } from "swr";
-import SettingsIcon from "@/assets/icons/SettingsIcon";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { Account } from "@/interfaces/Account";
+import OzSettingsCard from "@/modules/settings/v2/OzSettingsCard";
+import OzSettingsToggle from "@/modules/settings/v2/OzSettingsToggle";
+
+// ClientSettingsTab — settings sub-page body for /settings/clients.
+// Functionality preserved verbatim: lazy_connection_enabled toggled
+// directly (no Save button, the change applies immediately through
+// /accounts/{id}). Only paint changes — the toggle moves into an
+// OzSettingsCard whose title carries the "experimental" badge so the
+// caveat reads at a glance without a separate H2 above.
 
 type Props = {
   account: Account;
@@ -22,7 +25,6 @@ type Props = {
 
 export default function ClientSettingsTab({ account }: Readonly<Props>) {
   const { permission } = usePermissions();
-
   const { mutate } = useSWRConfig();
   const saveRequest = useApiCall<Account>("/accounts/" + account.id, true);
 
@@ -53,67 +55,50 @@ export default function ClientSettingsTab({ account }: Readonly<Props>) {
   };
 
   return (
-    <Tabs.Content value={"clients"}>
-      <div className={"p-default py-6 max-w-xl"}>
-        <Breadcrumbs>
-          <Breadcrumbs.Item
-            href={"/settings"}
-            label={"Settings"}
-            icon={<SettingsIcon size={13} />}
-          />
-          <Breadcrumbs.Item
-            href={"/settings?tab=clients"}
-            label={"Clients"}
-            icon={<MonitorSmartphoneIcon size={14} />}
-            active
-          />
-        </Breadcrumbs>
-        <div className={"flex items-start justify-between"}>
-          <h1>Clients</h1>
-        </div>
+    <Tabs.Content value="clients" className="flex flex-col gap-5">
+      <header>
+        <h2 className="text-[18px] font-semibold tracking-tight text-oz2-text">
+          Clients
+        </h2>
+        <p className="mt-1 max-w-2xl text-[13px] leading-[1.55] text-oz2-text-muted">
+          Behavior of the openZro client running on every peer. Defaults here
+          flow to the next time a client reconnects to management.
+        </p>
+      </header>
 
-        <div className={"flex flex-col gap-6 w-full mt-8"}>
-          <div className={"mt-0"}>
-            <h2 className={"text-lg font-medium"}>
-              Experimental
-              <FlaskConicalIcon
-                size={16}
-                className={"inline ml-1.5 relative -top-[2px]"}
-              />
-            </h2>
-            <div className={"text-sm text-gray-400"}>
-              Lazy connections are an experimental feature. Functionality and
-              behavior may evolve. Instead of maintaining always-on connections,
-              Openzro activates them on-demand based on activity or signaling.{" "}
-              <InlineLink
-                href={"https://docs.openzro.io/how-to/lazy-connection"}
-                target={"_blank"}
-              >
-                Learn more
-                <ExternalLinkIcon size={12} />
-              </InlineLink>
-            </div>
-          </div>
-          <FancyToggleSwitch
-            value={lazyConnection}
-            onChange={toggleLazyConnection}
-            label={
-              <>
-                <ClockFadingIcon size={15} />
-                Enable Lazy Connections
-              </>
-            }
-            helpText={
-              <>
-                Allow to establish connections between peers only when required.
-                This requires Openzro client v0.45 or higher. Changes will only
-                take effect after restarting the clients.
-              </>
-            }
-            disabled={!permission.settings.update}
-          />
-        </div>
-      </div>
+      <OzSettingsCard
+        title={
+          <span className="inline-flex items-center gap-2">
+            Experimental
+            <span className="inline-flex items-center gap-1 rounded-full border border-oz2-warn-bg bg-oz2-warn-bg/40 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-oz2-warn">
+              <FlaskConical size={10} />
+              Beta
+            </span>
+          </span>
+        }
+        sub={
+          <>
+            Lazy connections are experimental. Functionality and behavior may
+            evolve. Instead of maintaining always-on connections, openZro
+            activates them on-demand based on activity or signaling.{" "}
+            <InlineLink
+              href="https://docs.openzro.io/how-to/lazy-connection"
+              target="_blank"
+            >
+              Learn more
+              <ExternalLinkIcon size={11} />
+            </InlineLink>
+          </>
+        }
+      >
+        <OzSettingsToggle
+          value={lazyConnection}
+          onChange={toggleLazyConnection}
+          disabled={!permission.settings.update}
+          label="Enable lazy connections"
+          desc="Establish peer-to-peer connections only when required. Requires openZro client v0.45 or higher; changes apply after each client restarts."
+        />
+      </OzSettingsCard>
     </Tabs.Content>
   );
 }
