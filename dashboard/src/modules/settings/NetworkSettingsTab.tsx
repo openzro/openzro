@@ -1,7 +1,6 @@
 "use client";
 
 import InlineLink from "@components/InlineLink";
-import { Input } from "@components/Input";
 import { notify } from "@components/Notification";
 import { PeerGroupSelector } from "@components/PeerGroupSelector";
 import { useHasChanges } from "@hooks/useHasChanges";
@@ -14,6 +13,7 @@ import { ExternalLinkIcon, Filter } from "lucide-react";
 import React, { useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
 import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { Account } from "@/interfaces/Account";
 import useGroupHelper from "@/modules/groups/useGroupHelper";
@@ -238,12 +238,10 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
           label="DNS Domain"
           hint="Must not overlap with the management server's own hostname, or peers will lose access to the control plane on every reconnect."
         >
-          <Input
+          <OzInput
             placeholder={
               isOpenzroHosted() ? "openzro.cloud" : "openzro.selfhosted"
             }
-            errorTooltip={true}
-            errorTooltipPosition="top"
             error={domainError}
             value={customDNSDomain}
             disabled={editDisabled}
