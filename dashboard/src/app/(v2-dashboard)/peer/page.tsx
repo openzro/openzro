@@ -27,6 +27,7 @@ import {
   FlagIcon,
   Globe,
   History,
+  Info,
   LockIcon,
   MapPin,
   MonitorSmartphoneIcon,
@@ -307,14 +308,19 @@ const PeerGeneralInformation = () => {
       <OzTabs value={tab} onValueChange={setTab}>
         <div className="px-8">
           <OzTabsList>
-            <OzTabsTrigger value="details">Details</OzTabsTrigger>
+            <OzTabsTrigger value="details">
+              <Info size={13} />
+              Details
+            </OzTabsTrigger>
             {permission.routes.read && (
               <OzTabsTrigger value="network-routes">
+                <NetworkIcon size={13} />
                 Network Routes
               </OzTabsTrigger>
             )}
             {peer?.id && permission.peers.read && (
               <OzTabsTrigger value="accessible-peers">
+                <MonitorSmartphoneIcon size={13} />
                 Accessible Peers
               </OzTabsTrigger>
             )}
