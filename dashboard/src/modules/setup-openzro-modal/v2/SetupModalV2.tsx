@@ -1,22 +1,28 @@
 "use client";
 
 import { ModalContent } from "@components/modal/Modal";
-import { getOpenzroUpCommand } from "@utils/openzro";
+import { getOpenzroUpCommand, GRPC_API_ORIGIN } from "@utils/openzro";
 import classNames from "classnames";
-import { ExternalLinkIcon, TerminalSquareIcon } from "lucide-react";
+import {
+  DownloadIcon,
+  ExternalLinkIcon,
+  TerminalSquareIcon,
+} from "lucide-react";
 import { usePathname } from "next/navigation";
 import React, { useMemo, useState } from "react";
 import useCopyToClipboard from "@/hooks/useCopyToClipboard";
+import { useLatestRelease } from "@/hooks/useLatestRelease";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import useOperatingSystem from "@/hooks/useOperatingSystem";
 import { OperatingSystem } from "@/interfaces/OperatingSystem";
 
 // SetupModalV2 — Notion/Arc-flavored install modal matching the
 // Claude Design handoff (`install-modal-v1.bundle.html`). Replaces
-// the legacy SetupModal's chrome with v2 paint and a focused
-// step-list + copy pattern. OS-specific install commands come
-// from the same `getOpenzroUpCommand` util the legacy tabs use,
-// so the truth-of-record stays in one place.
+// the legacy SetupModal's chrome (Tabs + Accordion + Steps + Modal-
+// Footer) with v2 paint. Step-by-step copy and the OS-specific
+// commands are kept verbatim from the legacy LinuxTab / MacOSTab /
+// WindowsTab / DockerTab so the install flow stays identical — only
+// the chrome is repainted.
 
 type OS = "linux" | "windows" | "macos" | "docker";
 
@@ -26,6 +32,9 @@ const OS_LABEL: Record<OS, string> = {
   macos: "macOS",
   docker: "Docker",
 };
+
+const MACOS_PKG_URL = "https://pkg.openzro.io/macos/openzro.pkg";
+const WINDOWS_MSI_URL = "https://pkg.openzro.io/windows/openzro.msi";
 
 interface OidcUserInfo {
   given_name?: string;
@@ -55,13 +64,13 @@ export default function SetupModalV2({ user, setupKey, hostname }: Props) {
   return (
     <ModalContent
       showClose
-      maxWidthClass="sm:max-w-[540px]"
+      maxWidthClass="sm:max-w-[640px]"
       className="overflow-hidden rounded-[18px] border border-oz2-border bg-oz2-surface p-0 shadow-oz2-lg"
     >
       <Hero title={title} setupKey={!!setupKey} />
       <OSTabs value={os} onChange={setOs} />
-      <Steps os={os} setupKey={setupKey} hostname={hostname} />
-      <ManualHint os={os} />
+      <PrimarySteps os={os} setupKey={setupKey} hostname={hostname} />
+      <ManualAccordion os={os} setupKey={setupKey} hostname={hostname} />
       <Footer />
     </ModalContent>
   );
@@ -96,7 +105,7 @@ function Hero({ title, setupKey }: { title: string; setupKey: boolean }) {
       <h2 className="text-[22px] font-semibold tracking-tight text-oz2-text">
         {title}
       </h2>
-      <p className="mx-auto mt-1.5 max-w-[380px] text-[13.5px] leading-[1.5] text-oz2-text-muted">
+      <p className="mx-auto mt-1.5 max-w-[420px] text-[13.5px] leading-[1.5] text-oz2-text-muted">
         {setupKey
           ? "To get started, install and run Openzro with the setup key as a parameter."
           : "To get started, install Openzro and log in with your email account."}
@@ -141,9 +150,9 @@ function OSTabs({ value, onChange }: { value: OS; onChange: (os: OS) => void }) 
   );
 }
 
-// ─── Step list ─────────────────────────────────────────────────────────────
+// ─── Primary steps (per-OS, mirrors legacy texts) ─────────────────────────
 
-function Steps({
+function PrimarySteps({
   os,
   setupKey,
   hostname,
@@ -152,43 +161,462 @@ function Steps({
   setupKey?: string;
   hostname?: string;
 }) {
-  const steps = buildSteps(os, setupKey, hostname);
   return (
     <div className="px-8 pb-1 pt-5">
-      <p className="mb-4 flex items-center gap-2.5 text-[13.5px] font-semibold text-oz2-text">
-        <span className="grid h-[26px] w-[26px] place-items-center rounded-[7px] bg-oz2-acc-soft text-oz2-acc-text">
-          <TerminalSquareIcon size={14} />
-        </span>
-        Install via command line
-      </p>
-      <ol className="space-y-3.5">
-        {steps.map((s, i) => (
-          <Step
-            key={i}
-            n={i + 1}
-            isLast={i === steps.length - 1}
-            label={s.label}
-            command={s.command}
-            message={s.message}
-          />
-        ))}
-      </ol>
+      <SectionTitle
+        icon={<TerminalSquareIcon size={14} />}
+        label={primaryHeading(os)}
+      />
+      <StepsList>
+        {os === "linux" && <LinuxPrimary setupKey={setupKey} hostname={hostname} />}
+        {os === "macos" && <MacOSPrimary setupKey={setupKey} hostname={hostname} />}
+        {os === "windows" && <WindowsPrimary setupKey={setupKey} hostname={hostname} />}
+        {os === "docker" && <DockerPrimary setupKey={setupKey} hostname={hostname} />}
+      </StepsList>
     </div>
+  );
+}
+
+function primaryHeading(os: OS): string {
+  if (os === "linux") return "Install with Command-line";
+  if (os === "docker") return "Install on Ubuntu";
+  return `Install on ${OS_LABEL[os]}`;
+}
+
+// ─── Per-OS primary step content ──────────────────────────────────────────
+
+function LinuxPrimary({
+  setupKey,
+  hostname,
+}: {
+  setupKey?: string;
+  hostname?: string;
+}) {
+  return (
+    <>
+      <Step n={1}>
+        <CodeBlock
+          lines={[
+            <>
+              curl <span className="text-oz2-acc-text">-fsSL</span>{" "}
+              <span className="text-oz2-warn">
+                https://pkg.openzro.io/install.sh
+              </span>{" "}
+              <span className="text-oz2-text-faint">|</span> sh
+            </>,
+          ]}
+          copyText="curl -fsSL https://pkg.openzro.io/install.sh | sh"
+          message="Install command copied to your clipboard"
+        />
+      </Step>
+      <Step n={2} isLast>
+        <StepLabel>
+          Run Openzro {!setupKey && "and log in the browser"}
+        </StepLabel>
+        <UpCommand setupKey={setupKey} hostname={hostname} />
+      </Step>
+    </>
+  );
+}
+
+function MacOSPrimary({
+  setupKey,
+  hostname,
+}: {
+  setupKey?: string;
+  hostname?: string;
+}) {
+  const release = useLatestRelease().data;
+  const downloadLabel =
+    release?.tag_name ? `${release.tag_name} (Installer)` : "Installer";
+  const stepsAfterDownload = setupKey ? 1 : 2;
+  const lastStepIndex = (GRPC_API_ORIGIN ? 3 : 2) + (setupKey ? 0 : 1);
+
+  return (
+    <>
+      <Step n={1}>
+        <StepLabel>Download the latest macOS build</StepLabel>
+        <DownloadButtonRow href={MACOS_PKG_URL} label={`Download openZro ${downloadLabel}`} />
+        <StepNote>
+          Universal installer — works on both Intel and Apple Silicon. Double-click
+          the .pkg, follow the prompts, and the daemon registers as a LaunchDaemon
+          while the openZro UI lands in <Code>/Applications/openZro UI.app</Code>.
+          On first run macOS may show a Gatekeeper warning (&quot;cannot be opened
+          because Apple cannot check it&quot;) — right-click → <em>Open</em> to
+          bypass once, or run{" "}
+          <Code>xattr -d com.apple.quarantine ~/Downloads/openzro.pkg</Code>. Apple
+          Developer ID notarization is coming soon and will eliminate the warning.
+        </StepNote>
+      </Step>
+
+      {GRPC_API_ORIGIN && (
+        <Step n={2}>
+          <StepLabel>
+            Click on &quot;Settings&quot; then &quot;Advanced Settings&quot; from the
+            Openzro icon in your system tray and enter the following &quot;Management
+            URL&quot;
+          </StepLabel>
+          <CodeBlock
+            lines={[GRPC_API_ORIGIN]}
+            copyText={GRPC_API_ORIGIN}
+            message="Management URL copied to your clipboard"
+          />
+        </Step>
+      )}
+
+      {setupKey ? (
+        <Step n={GRPC_API_ORIGIN ? 3 : 2} isLast>
+          <StepLabel>Open Terminal and run Openzro</StepLabel>
+          <UpCommand setupKey={setupKey} hostname={hostname} />
+        </Step>
+      ) : (
+        <>
+          <Step n={GRPC_API_ORIGIN ? 3 : 2}>
+            <StepLabel>
+              Click on &quot;Connect&quot; from the Openzro icon in your system tray
+            </StepLabel>
+          </Step>
+          <Step n={lastStepIndex} isLast>
+            <StepLabel>Sign up using your email address</StepLabel>
+          </Step>
+        </>
+      )}
+    </>
+  );
+}
+
+function WindowsPrimary({
+  setupKey,
+  hostname,
+}: {
+  setupKey?: string;
+  hostname?: string;
+}) {
+  const release = useLatestRelease().data;
+  const versionLabel = release?.tag_name ? ` ${release.tag_name}` : "";
+  const lastStepIndex = (GRPC_API_ORIGIN ? 3 : 2) + (setupKey ? 0 : 1);
+
+  return (
+    <>
+      <Step n={1}>
+        <StepLabel>Download the latest Windows build</StepLabel>
+        <DownloadButtonRow
+          href={WINDOWS_MSI_URL}
+          label={`Download openZro${versionLabel} (Installer)`}
+        />
+        <StepNote>
+          The .msi bundles the daemon, the system-tray UI, and the wintun driver —
+          one click installs everything. Windows may show a SmartScreen warning on
+          first run (click <em>More info → Run anyway</em>); EV code-signing via
+          SignPath is on the way and will eliminate the prompt.
+        </StepNote>
+      </Step>
+
+      {GRPC_API_ORIGIN && (
+        <Step n={2}>
+          <StepLabel>
+            Click on &quot;Settings&quot; then &quot;Advanced Settings&quot; from the
+            Openzro icon in your system tray and enter the following &quot;Management
+            URL&quot;
+          </StepLabel>
+          <CodeBlock
+            lines={[GRPC_API_ORIGIN]}
+            copyText={GRPC_API_ORIGIN}
+            message="Management URL copied to your clipboard"
+          />
+        </Step>
+      )}
+
+      {setupKey ? (
+        <Step n={GRPC_API_ORIGIN ? 3 : 2} isLast>
+          <StepLabel>Open Command-line and run Openzro</StepLabel>
+          <UpCommand setupKey={setupKey} hostname={hostname} />
+        </Step>
+      ) : (
+        <>
+          <Step n={GRPC_API_ORIGIN ? 3 : 2}>
+            <StepLabel>
+              Click on &quot;Connect&quot; from the Openzro icon in your system tray
+            </StepLabel>
+          </Step>
+          <Step n={lastStepIndex} isLast>
+            <StepLabel>Sign up using your email address</StepLabel>
+          </Step>
+        </>
+      )}
+    </>
+  );
+}
+
+function DockerPrimary({
+  setupKey,
+  hostname,
+}: {
+  setupKey?: string;
+  hostname?: string;
+}) {
+  const dockerLines: React.ReactNode[] = [
+    <>docker run --rm -d \</>,
+    <> --cap-add=NET_ADMIN \</>,
+    <>
+      {" "}-e OZ_SETUP_KEY=
+      <span className="text-oz2-warn">{setupKey ?? "SETUP_KEY"}</span> \
+    </>,
+  ];
+  if (hostname) {
+    dockerLines.push(
+      <>
+        {" "}-e OZ_HOSTNAME=
+        <span className="text-oz2-warn">{`'${hostname}'`}</span> \
+      </>,
+    );
+  }
+  dockerLines.push(<> -v openzro-client:/var/lib/openzro \</>);
+  if (GRPC_API_ORIGIN) {
+    dockerLines.push(
+      <>
+        {" "}-e OZ_MANAGEMENT_URL=
+        <span className="text-oz2-warn">{GRPC_API_ORIGIN}</span> \
+      </>,
+    );
+  }
+  dockerLines.push(<> openzro/openzro:latest</>);
+
+  const copyText = [
+    "docker run --rm -d \\",
+    "  --cap-add=NET_ADMIN \\",
+    `  -e OZ_SETUP_KEY=${setupKey ?? "SETUP_KEY"} \\`,
+    ...(hostname ? [`  -e OZ_HOSTNAME='${hostname}' \\`] : []),
+    "  -v openzro-client:/var/lib/openzro \\",
+    ...(GRPC_API_ORIGIN ? [`  -e OZ_MANAGEMENT_URL=${GRPC_API_ORIGIN} \\`] : []),
+    "  openzro/openzro:latest",
+  ].join("\n");
+
+  return (
+    <>
+      <Step n={1}>
+        <StepLabel>Install Docker</StepLabel>
+        <ExternalButton
+          href="https://docs.docker.com/engine/install/"
+          label="Official Docker Installation Guide"
+        />
+      </Step>
+      <Step n={2}>
+        <StepLabel>Run Openzro container</StepLabel>
+        <CodeBlock
+          lines={dockerLines}
+          copyText={copyText}
+          message="Docker run command copied to your clipboard"
+        />
+      </Step>
+      <Step n={3} isLast>
+        <StepLabel>Read our documentation</StepLabel>
+        <a
+          href="https://docs.openzro.io/how-to/installation/docker"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-oz2-acc-text underline-offset-2 hover:underline"
+        >
+          Running Openzro in Docker
+          <ExternalLinkIcon size={11} />
+        </a>
+      </Step>
+    </>
+  );
+}
+
+// ─── Manual install accordion ─────────────────────────────────────────────
+
+function ManualAccordion({
+  os,
+  setupKey,
+  hostname,
+}: {
+  os: OS;
+  setupKey?: string;
+  hostname?: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  // Legacy: only Linux + macOS expose a manual-install accordion.
+  // Windows + Docker have no advanced manual section in the legacy
+  // SetupModal, so we hide the row for those tabs.
+  const labels: Partial<Record<OS, string>> = {
+    linux: "Install manually on Ubuntu",
+    macos: "Install manually with Homebrew",
+  };
+  const label = labels[os];
+  if (!label) return null;
+
+  return (
+    <div className="mx-8 mt-3 border-t border-oz2-border">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full cursor-pointer items-center gap-3 py-4 text-left"
+      >
+        <span
+          className={classNames(
+            "grid h-[22px] w-[22px] place-items-center text-oz2-text-muted transition-transform",
+            open && "rotate-90",
+          )}
+        >
+          <ChevronIcon />
+        </span>
+        <span className="grid h-[28px] w-[28px] place-items-center rounded-[8px] bg-oz2-bg-soft text-oz2-text-2">
+          <PackageIcon />
+        </span>
+        <span className="text-[13px] font-medium text-oz2-text">{label}</span>
+      </button>
+      {open && (
+        <StepsList className="pb-4 pl-[60px] pr-1">
+          {os === "linux" && (
+            <LinuxManual setupKey={setupKey} hostname={hostname} />
+          )}
+          {os === "macos" && (
+            <MacOSManualHomebrew setupKey={setupKey} hostname={hostname} />
+          )}
+        </StepsList>
+      )}
+    </div>
+  );
+}
+
+function LinuxManual({
+  setupKey,
+  hostname,
+}: {
+  setupKey?: string;
+  hostname?: string;
+}) {
+  return (
+    <>
+      <Step n={1}>
+        <StepLabel>Add our repository</StepLabel>
+        <CodeBlock
+          lines={[
+            <>sudo apt-get update</>,
+            <>sudo apt install ca-certificates curl gnupg -y</>,
+            <>
+              curl -sSL https://pkg.openzro.io/openzro-archive-key.asc | sudo gpg
+              --dearmor --output /usr/share/keyrings/openzro-archive-keyring.gpg
+            </>,
+            <>
+              {`echo 'deb [signed-by=/usr/share/keyrings/openzro-archive-keyring.gpg] https://pkg.openzro.io/apt stable main' | sudo tee /etc/apt/sources.list.d/openzro.list`}
+            </>,
+          ]}
+          copyText={[
+            "sudo apt-get update",
+            "sudo apt install ca-certificates curl gnupg -y",
+            "curl -sSL https://pkg.openzro.io/openzro-archive-key.asc | sudo gpg --dearmor --output /usr/share/keyrings/openzro-archive-keyring.gpg",
+            `echo 'deb [signed-by=/usr/share/keyrings/openzro-archive-keyring.gpg] https://pkg.openzro.io/apt stable main' | sudo tee /etc/apt/sources.list.d/openzro.list`,
+          ].join("\n")}
+          message="Repository setup commands copied to your clipboard"
+        />
+      </Step>
+      <Step n={2}>
+        <StepLabel>Install Openzro</StepLabel>
+        <CodeBlock
+          lines={[
+            <>sudo apt-get update</>,
+            <span className="text-oz2-text-faint"># for CLI only</span>,
+            <>sudo apt-get install openzro</>,
+            <span className="text-oz2-text-faint"># for GUI package</span>,
+            <>sudo apt-get install openzro-ui</>,
+          ]}
+          copyText={[
+            "sudo apt-get update",
+            "sudo apt-get install openzro",
+            "sudo apt-get install openzro-ui",
+          ].join("\n")}
+          message="Install commands copied to your clipboard"
+        />
+      </Step>
+      <Step n={3} isLast>
+        <StepLabel>
+          Run Openzro {!setupKey && "and log in the browser"}
+        </StepLabel>
+        <UpCommand setupKey={setupKey} hostname={hostname} />
+      </Step>
+    </>
+  );
+}
+
+function MacOSManualHomebrew({
+  setupKey,
+  hostname,
+}: {
+  setupKey?: string;
+  hostname?: string;
+}) {
+  return (
+    <>
+      <Step n={1}>
+        <StepLabel>Download and install HomeBrew</StepLabel>
+        <ExternalButton
+          href="https://brew.sh/"
+          label="HomeBrew Installation Guide"
+        />
+      </Step>
+      <Step n={2}>
+        <StepLabel>Install the openzro CLI</StepLabel>
+        <CodeBlock
+          lines={[<>brew install openzro/tap/openzro</>]}
+          copyText="brew install openzro/tap/openzro"
+          message="brew install command copied to your clipboard"
+        />
+        <StepNote>
+          For the system-tray GUI app, use the .pkg installer above instead — a
+          Homebrew Cask for openzro-ui will ship once we publish the macOS .app
+          bundle (tracked as part of the packaging epic).
+        </StepNote>
+      </Step>
+      <Step n={3}>
+        <StepLabel>Start Openzro daemon</StepLabel>
+        <CodeBlock
+          lines={[
+            <span className="text-oz2-text-faint">
+              # daemon needs root to manage WireGuard interfaces
+            </span>,
+            <>sudo brew services start openzro</>,
+          ]}
+          copyText="sudo brew services start openzro"
+          message="brew services command copied to your clipboard"
+        />
+      </Step>
+      <Step n={4} isLast>
+        <StepLabel>
+          Run Openzro {!setupKey && "and log in the browser"}
+        </StepLabel>
+        <UpCommand setupKey={setupKey} hostname={hostname} />
+      </Step>
+    </>
+  );
+}
+
+// ─── Step primitives ──────────────────────────────────────────────────────
+
+function StepsList({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <ol className={classNames("space-y-3.5", className)}>{children}</ol>
   );
 }
 
 function Step({
   n,
-  isLast,
-  label,
-  command,
-  message,
+  isLast = false,
+  children,
 }: {
   n: number;
-  isLast: boolean;
-  label: React.ReactNode;
-  command: React.ReactNode;
-  message: string;
+  isLast?: boolean;
+  children: React.ReactNode;
 }) {
   return (
     <li className="relative grid grid-cols-[22px_1fr] gap-3.5">
@@ -201,32 +629,90 @@ function Step({
           className="absolute left-[10px] top-[32px] bottom-[-14px] w-px bg-oz2-border"
         />
       )}
-      <div className="min-w-0">
-        <p className="mb-2 text-[13px] leading-[1.45] text-oz2-text-2">
-          {label}
-        </p>
-        <CodeBlock command={command} message={message} />
-      </div>
+      <div className="min-w-0">{children}</div>
     </li>
+  );
+}
+
+function StepLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mb-2 text-[13px] leading-[1.5] text-oz2-text-2">{children}</p>
+  );
+}
+
+function StepNote({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mt-2 text-[12px] leading-[1.5] text-oz2-text-muted">
+      {children}
+    </p>
+  );
+}
+
+function Code({ children }: { children: React.ReactNode }) {
+  return (
+    <code className="rounded-[5px] bg-oz2-bg-soft px-1.5 py-px font-mono text-[11.5px] font-medium text-oz2-acc-text">
+      {children}
+    </code>
+  );
+}
+
+function SectionTitle({
+  icon,
+  label,
+}: {
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <p className="mb-4 flex items-center gap-2.5 text-[13.5px] font-semibold text-oz2-text">
+      <span className="grid h-[26px] w-[26px] place-items-center rounded-[7px] bg-oz2-acc-soft text-oz2-acc-text">
+        {icon}
+      </span>
+      {label}
+    </p>
   );
 }
 
 // ─── Code block + copy ────────────────────────────────────────────────────
 
 function CodeBlock({
-  command,
+  lines,
+  copyText,
   message,
 }: {
-  command: React.ReactNode;
+  lines: React.ReactNode[];
+  copyText: string;
   message: string;
 }) {
-  const text = typeof command === "string" ? command : extractText(command);
-  const [, copy, copied] = useCopyToClipboard(text);
+  const [, copy, copied] = useCopyToClipboard(copyText);
+  const isMulti = lines.length > 1;
   return (
-    <div className="flex items-center gap-2.5 rounded-[10px] border border-oz2-border-soft bg-oz2-bg-soft px-3.5 py-2.5 font-mono text-[12.5px] font-medium text-oz2-text">
-      <span className="select-none text-oz2-text-faint">$</span>
-      <div className="oz-scroll flex-1 overflow-x-auto whitespace-nowrap">
-        {command}
+    <div
+      className={classNames(
+        "flex gap-2.5 rounded-[10px] border border-oz2-border-soft bg-oz2-bg-soft px-3.5 py-2.5 font-mono text-[12.5px] font-medium text-oz2-text",
+        isMulti ? "items-start" : "items-center",
+      )}
+    >
+      <span
+        className={classNames(
+          "select-none text-oz2-text-faint",
+          isMulti && "leading-[1.6]",
+        )}
+      >
+        $
+      </span>
+      <div className="oz-scroll min-w-0 flex-1 overflow-x-auto">
+        {lines.map((line, i) => (
+          <div
+            key={i}
+            className={classNames(
+              "whitespace-pre",
+              isMulti && "leading-[1.6]",
+            )}
+          >
+            {line}
+          </div>
+        ))}
       </div>
       <button
         type="button"
@@ -249,64 +735,14 @@ function CodeBlock({
   );
 }
 
-// ─── Manual hint ──────────────────────────────────────────────────────────
-
-function ManualHint({ os }: { os: OS }) {
-  const url = `https://docs.openzro.io/how-to/getting-started#${os}`;
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="mx-8 mt-3 flex items-center gap-3 border-t border-oz2-border py-4"
-    >
-      <span className="grid h-[22px] w-[22px] place-items-center text-oz2-text-muted">
-        <ChevronIcon />
-      </span>
-      <span className="grid h-[28px] w-[28px] place-items-center rounded-[8px] bg-oz2-bg-soft text-oz2-text-2">
-        <PackageIcon />
-      </span>
-      <span className="text-[13px] font-medium text-oz2-text">
-        Install manually on {OS_LABEL[os]}
-      </span>
-    </a>
-  );
-}
-
-// ─── Footer ───────────────────────────────────────────────────────────────
-
-function Footer() {
-  return (
-    <div className="border-t border-oz2-border bg-oz2-bg-soft px-8 py-4 text-[12.5px] leading-[1.55] text-oz2-text-muted">
-      Once connected you can add more devices or manage the network in the admin
-      panel. Got questions? See our{" "}
-      <a
-        href="https://docs.openzro.io/how-to/getting-started#installation"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="font-medium text-oz2-acc-text underline-offset-2 hover:underline"
-      >
-        Installation Guide <ExternalLinkIcon size={11} className="inline" />
-      </a>
-      .
-    </div>
-  );
-}
-
-// ─── Step content per OS ──────────────────────────────────────────────────
-
-interface StepDef {
-  label: React.ReactNode;
-  command: React.ReactNode;
-  message: string;
-}
-
-function buildSteps(
-  os: OS,
-  setupKey?: string,
-  hostname?: string,
-): StepDef[] {
-  const upCommand = (
+function UpCommand({
+  setupKey,
+  hostname,
+}: {
+  setupKey?: string;
+  hostname?: string;
+}) {
+  const cmd = (
     <>
       {getOpenzroUpCommand()}
       {setupKey && (
@@ -325,138 +761,81 @@ function buildSteps(
       )}
     </>
   );
-  const upPlain = `${getOpenzroUpCommand()}${
+  const plain = `${getOpenzroUpCommand()}${
     setupKey ? ` --setup-key ${setupKey}` : ""
   }${hostname ? ` --hostname '${hostname}'` : ""}`;
+  return (
+    <CodeBlock
+      lines={[cmd]}
+      copyText={plain}
+      message="openzro up command copied to your clipboard"
+    />
+  );
+}
 
-  switch (os) {
-    case "linux":
-      return [
-        {
-          label: (
-            <>
-              Paste this in your terminal — Openzro is detected and validated.
-            </>
-          ),
-          command: (
-            <>
-              curl <span className="text-oz2-acc-text">-fsSL</span>{" "}
-              <span className="text-oz2-warn">
-                https://pkg.openzro.io/install.sh
-              </span>{" "}
-              <span className="text-oz2-text-faint">|</span> sh
-            </>
-          ),
-          message: "Install command copied to your clipboard",
-        },
-        {
-          label: (
-            <>
-              <strong className="font-medium text-oz2-text">Run Openzro</strong>{" "}
-              {!setupKey && "and log in via the browser."}
-            </>
-          ),
-          command: upCommand,
-          message: `${upPlain} copied to your clipboard`,
-        },
-      ];
-    case "macos":
-      return [
-        {
-          label: <>Install via Homebrew tap.</>,
-          command: (
-            <>
-              brew install{" "}
-              <span className="text-oz2-warn">openzro/tap/openzro</span>
-            </>
-          ),
-          message: "brew install command copied to your clipboard",
-        },
-        {
-          label: (
-            <>
-              <strong className="font-medium text-oz2-text">Run Openzro</strong>{" "}
-              {!setupKey && "and log in via the browser."}
-            </>
-          ),
-          command: upCommand,
-          message: `${upPlain} copied to your clipboard`,
-        },
-      ];
-    case "windows":
-      return [
-        {
-          label: (
-            <>
-              Download the installer from{" "}
-              <a
-                href="https://pkg.openzro.io/windows/openzro.msi"
-                className="font-medium text-oz2-acc-text hover:underline"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                pkg.openzro.io/windows/openzro.msi
-              </a>{" "}
-              and run it.
-            </>
-          ),
-          command: (
-            <>
-              winget install{" "}
-              <span className="text-oz2-warn">Openzro.Openzro</span>
-            </>
-          ),
-          message: "winget install command copied to your clipboard",
-        },
-        {
-          label: (
-            <>
-              <strong className="font-medium text-oz2-text">Run Openzro</strong>{" "}
-              and log in via the browser.
-            </>
-          ),
-          command: upCommand,
-          message: `${upPlain} copied to your clipboard`,
-        },
-      ];
-    case "docker":
-      return [
-        {
-          label: (
-            <>
-              Run a containerized peer with{" "}
-              <strong className="font-medium text-oz2-text">--rm</strong> for a
-              quick test.
-            </>
-          ),
-          command: (
-            <>
-              docker run <span className="text-oz2-acc-text">--rm</span>{" "}
-              <span className="text-oz2-acc-text">--cap-add</span>{" "}
-              <span className="text-oz2-warn">NET_ADMIN</span>{" "}
-              <span className="text-oz2-acc-text">-d</span>{" "}
-              <span className="text-oz2-warn">openzro/openzro:latest</span>
-            </>
-          ),
-          message: "docker run command copied to your clipboard",
-        },
-        {
-          label: (
-            <>
-              Open a shell in the container and{" "}
-              <strong className="font-medium text-oz2-text">log in</strong>.
-            </>
-          ),
-          command: (
-            <>
-              docker exec <span className="text-oz2-acc-text">-it</span>{" "}
-              <span className="text-oz2-warn">openzro</span> {upPlain}
-            </>
-          ),
-          message: "docker exec command copied to your clipboard",
-        },
-      ];
-  }
+// ─── Buttons + footer ─────────────────────────────────────────────────────
+
+function DownloadButtonRow({
+  href,
+  label,
+}: {
+  href: string;
+  label: string;
+}) {
+  return (
+    <div className="mb-2 flex flex-wrap gap-3">
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex h-[34px] items-center gap-2 rounded-[10px] border border-transparent bg-oz2-acc px-3.5 text-[13px] font-medium text-oz2-text-on-acc shadow-oz2-acc transition-colors hover:bg-oz2-acc-hover"
+      >
+        <DownloadIcon size={14} />
+        {label}
+      </a>
+    </div>
+  );
+}
+
+function ExternalButton({
+  href,
+  label,
+}: {
+  href: string;
+  label: string;
+}) {
+  return (
+    <div className="mb-1 flex flex-wrap gap-3">
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex h-[34px] items-center gap-2 rounded-[10px] border border-transparent bg-oz2-acc px-3.5 text-[13px] font-medium text-oz2-text-on-acc shadow-oz2-acc transition-colors hover:bg-oz2-acc-hover"
+      >
+        <ExternalLinkIcon size={14} />
+        {label}
+      </a>
+    </div>
+  );
+}
+
+function Footer() {
+  return (
+    <div className="border-t border-oz2-border bg-oz2-bg-soft px-8 py-4 text-[12.5px] leading-[1.55] text-oz2-text-muted">
+      After that you should be connected. Add more devices to your network or
+      manage your existing devices in the admin panel. If you have further
+      questions check out our{" "}
+      <a
+        href="https://docs.openzro.io/how-to/getting-started#installation"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="font-medium text-oz2-acc-text underline-offset-2 hover:underline"
+      >
+        Installation Guide <ExternalLinkIcon size={11} className="inline" />
+      </a>
+      .
+    </div>
+  );
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -474,15 +853,6 @@ function initialOS(detected: OperatingSystem): OS {
     default:
       return "linux";
   }
-}
-
-function extractText(node: React.ReactNode): string {
-  if (typeof node === "string" || typeof node === "number") return String(node);
-  if (Array.isArray(node)) return node.map(extractText).join("");
-  if (React.isValidElement<{ children?: React.ReactNode }>(node)) {
-    return extractText(node.props.children);
-  }
-  return "";
 }
 
 // ─── Inline icons (kept local so the modal is self-contained) ─────────────
