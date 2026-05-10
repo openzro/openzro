@@ -7,6 +7,14 @@ import OzPill from "@/components/v2/OzPill";
 import OzShell from "@/components/v2/OzShell";
 import OzSidebar, { type OzSidebarSection } from "@/components/v2/OzSidebar";
 import OzStatusDot from "@/components/v2/OzStatusDot";
+import {
+  OzTable,
+  OzTableBody,
+  OzTableCell,
+  OzTableHead,
+  OzTableHeader,
+  OzTableRow,
+} from "@/components/v2/OzTable";
 import OzThemeToggle from "@/components/v2/OzThemeToggle";
 import OzTopbar, { OzBreadcrumb } from "@/components/v2/OzTopbar";
 import { OSLogo } from "@/modules/peers/PeerOSCell";
@@ -429,7 +437,7 @@ export default function V2PeersPreview() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<
-    "all" | "on" | "warn" | "off"
+    "all" | "on" | "warn" | "off" | "pending"
   >("all");
   const [groupFilter, setGroupFilter] = useState<string[]>([]);
   const [groupOpen, setGroupOpen] = useState(false);
@@ -460,7 +468,9 @@ export default function V2PeersPreview() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return peers.filter((p) => {
-      const statusOk = statusFilter === "all" || p.status === statusFilter;
+      const statusOk =
+        statusFilter === "all" ||
+        (statusFilter === "pending" ? !!p.approvalPending : p.status === statusFilter);
       const searchOk =
         !q ||
         p.name.toLowerCase().includes(q) ||
@@ -485,6 +495,7 @@ export default function V2PeersPreview() {
       online: peers.filter((p) => p.status === "on").length,
       idle: peers.filter((p) => p.status === "warn").length,
       offline: peers.filter((p) => p.status === "off").length,
+      pending: peers.filter((p) => p.approvalPending).length,
       total: peers.length,
     }),
     [],
@@ -547,94 +558,100 @@ export default function V2PeersPreview() {
         {/* Page title row */}
         <header>
           <h1 className="text-[22px] font-semibold tracking-tight">Peers</h1>
-          <p className="mt-1 text-[13px] text-oz2-text-muted">
-            All machines and devices connected to your private mesh.
+          <p className="mt-1 max-w-2xl text-[13px] text-oz2-text-muted">
+            A list of all machines and devices connected to your private
+            network. Use this view to manage peers. Learn more about{" "}
+            <a
+              href="https://docs.openzro.io/how-to/add-machines-to-your-network"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-oz2-acc-text underline-offset-2 hover:underline"
+            >
+              adding machines to your network
+            </a>
+            .
           </p>
         </header>
 
-        {/* KPI band */}
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <KpiCard label="Online" value={String(counts.online)} dot="on" />
-          <KpiCard label="Idle" value={String(counts.idle)} dot="warn" />
-          <KpiCard
-            label="Disconnected"
-            value={String(counts.offline)}
-            dot="off"
-          />
-          <KpiCard label="Total peers" value={String(counts.total)} />
+        {/* Stat badges — calm one-line summary */}
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12.5px] text-oz2-text-muted">
+          <span className="inline-flex items-center gap-2">
+            <OzStatusDot status="on" />
+            <span className="font-medium text-oz2-text">{counts.online}</span>
+            Online
+          </span>
+          <span className="inline-flex items-center gap-2">
+            <OzStatusDot status="warn" />
+            <span className="font-medium text-oz2-text">{counts.idle}</span>
+            Idle
+          </span>
+          <span className="inline-flex items-center gap-2">
+            <OzStatusDot status="off" />
+            <span className="font-medium text-oz2-text">{counts.offline}</span>
+            Offline
+          </span>
+          <span className="ml-1 inline-flex items-center gap-2 border-l border-oz2-border-soft pl-5">
+            <span className="font-medium text-oz2-text">{counts.total}</span>
+            Total peers
+          </span>
         </div>
 
-        {/* Status tabs (segmented) — primary axis filter */}
-        <SegmentedTabs
-          value={statusFilter}
-          onChange={(v) => {
-            setStatusFilter(v);
-            setPage(1);
-          }}
-          options={[
-            {
-              id: "all",
-              label: "All peers",
-              count: peers.length,
-            },
-            {
-              id: "on",
-              label: "Online",
-              count: counts.online,
-            },
-            {
-              id: "warn",
-              label: "Idle",
-              count: counts.idle,
-            },
-            {
-              id: "off",
-              label: "Disconnected",
-              count: counts.offline,
-            },
-          ]}
-        />
-
-        {/* Toolbar + Table card */}
-        <OzCard flush>
-          <div className="flex flex-wrap items-center gap-3 border-b border-oz2-border-soft px-[18px] py-3">
-            <div className="inline-flex h-[34px] flex-1 min-w-[220px] items-center gap-2 rounded-oz2-input border border-oz2-border bg-oz2-surface px-3">
-              <span className="text-oz2-text-faint">{icons.search}</span>
-              <input
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
-                placeholder="Search by name, DNS, IP, group…"
-                className="h-full flex-1 border-0 bg-transparent text-[13px] outline-none placeholder:text-oz2-text-faint"
-              />
-            </div>
-
-            <GroupFilter
-              value={groupFilter}
-              onChange={(v) => {
-                setGroupFilter(v);
+        {/* Toolbar — free-standing above the table card */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="inline-flex h-[34px] flex-1 min-w-[220px] items-center gap-2 rounded-oz2-input border border-oz2-border bg-oz2-surface px-3">
+            <span className="text-oz2-text-faint">{icons.search}</span>
+            <input
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
                 setPage(1);
               }}
-              open={groupOpen}
-              onOpenChange={setGroupOpen}
+              placeholder="Search by name, IP, user…"
+              className="h-full flex-1 border-0 bg-transparent text-[13px] outline-none placeholder:text-oz2-text-faint"
             />
-
-            <PageSizeCombobox value={pageSize} onChange={setPageSize} />
-
-            <button
-              type="button"
-              onClick={refreshClick}
-              aria-label="Refresh peers"
-              className="grid h-[34px] w-[34px] place-items-center rounded-oz2-input border border-oz2-border bg-oz2-surface text-oz2-text-2 hover:border-oz2-border-strong hover:bg-oz2-hover"
-            >
-              <span className={refreshing ? "animate-spin text-oz2-acc" : ""}>
-                {icons.refresh}
-              </span>
-            </button>
           </div>
 
+          <SegmentedTabs
+            value={statusFilter}
+            onChange={(v) => {
+              setStatusFilter(v);
+              setPage(1);
+            }}
+            options={[
+              { id: "all", label: "All", count: peers.length },
+              { id: "on", label: "Online", count: counts.online },
+              { id: "warn", label: "Idle", count: counts.idle },
+              { id: "off", label: "Offline", count: counts.offline },
+              { id: "pending", label: "Pending", count: counts.pending },
+            ]}
+          />
+
+          <GroupFilter
+            value={groupFilter}
+            onChange={(v) => {
+              setGroupFilter(v);
+              setPage(1);
+            }}
+            open={groupOpen}
+            onOpenChange={setGroupOpen}
+          />
+
+          <PageSizeCombobox value={pageSize} onChange={setPageSize} />
+
+          <button
+            type="button"
+            onClick={refreshClick}
+            aria-label="Refresh peers"
+            className="grid h-[34px] w-[34px] place-items-center rounded-oz2-input border border-oz2-border bg-oz2-surface text-oz2-text-2 hover:border-oz2-border-strong hover:bg-oz2-hover"
+          >
+            <span className={refreshing ? "animate-spin text-oz2-acc" : ""}>
+              {icons.refresh}
+            </span>
+          </button>
+        </div>
+
+        {/* Table card */}
+        <OzCard flush>
           {/* Bulk-action band — appears when any row is selected */}
           {selected.size > 0 && (
             <div className="flex items-center justify-between gap-3 border-b border-oz2-border-soft bg-oz2-acc-soft px-[18px] py-2.5 text-[12.5px]">
@@ -659,10 +676,10 @@ export default function V2PeersPreview() {
           )}
 
           {/* Table */}
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="bg-oz2-bg-sunken text-left">
-                <Th aria-label="Select" className="w-[44px]">
+          <OzTable>
+            <OzTableHeader>
+              <OzTableRow className="hover:bg-transparent">
+                <OzTableHead aria-label="Select" className="w-[44px]">
                   <OzCheckbox
                     checked={
                       paginated.length > 0 &&
@@ -685,79 +702,76 @@ export default function V2PeersPreview() {
                     }}
                     aria-label="Select all visible"
                   />
-                </Th>
-                <Th>Name</Th>
-                <Th>Address</Th>
-                <Th>Group</Th>
-                <Th>OS</Th>
-                <Th>Version</Th>
-                <Th>Connection</Th>
-                <Th>Last seen</Th>
-                <Th>Notice</Th>
-                <Th aria-label="Actions" className="w-[40px]">{""}</Th>
-              </tr>
-            </thead>
-            <tbody>
+                </OzTableHead>
+                <OzTableHead>Name</OzTableHead>
+                <OzTableHead>Address</OzTableHead>
+                <OzTableHead>Group</OzTableHead>
+                <OzTableHead>OS</OzTableHead>
+                <OzTableHead>Version</OzTableHead>
+                <OzTableHead>Connection</OzTableHead>
+                <OzTableHead>Last seen</OzTableHead>
+                <OzTableHead>Notice</OzTableHead>
+                <OzTableHead aria-label="Actions" className="w-[40px]" />
+              </OzTableRow>
+            </OzTableHeader>
+            <OzTableBody>
               {paginated.map((p) => (
-                <tr
+                <OzTableRow
                   key={p.id}
-                  className={
-                    "group border-t border-oz2-border-soft transition-colors " +
-                    (selected.has(p.id) ? "bg-oz2-acc-soft/40" : "hover:bg-oz2-hover")
-                  }
+                  data-state={selected.has(p.id) ? "selected" : undefined}
                 >
-                  <Td>
+                  <OzTableCell>
                     <OzCheckbox
                       checked={selected.has(p.id)}
                       onChange={() => toggleSelected(p.id)}
                       aria-label={`Select ${p.name}`}
                     />
-                  </Td>
-                  <Td>
+                  </OzTableCell>
+                  <OzTableCell>
                     <NameCell peer={p} />
-                  </Td>
-                  <Td>
+                  </OzTableCell>
+                  <OzTableCell>
                     <AddressCell peer={p} />
-                  </Td>
-                  <Td>
+                  </OzTableCell>
+                  <OzTableCell>
                     <GroupsCell peer={p} />
-                  </Td>
-                  <Td>
+                  </OzTableCell>
+                  <OzTableCell>
                     <OSCell peer={p} />
-                  </Td>
-                  <Td>
+                  </OzTableCell>
+                  <OzTableCell>
                     <span className="font-mono text-[11.5px] text-oz2-text-faint">
                       {p.version}
                     </span>
-                  </Td>
-                  <Td>
+                  </OzTableCell>
+                  <OzTableCell>
                     <ConnectionPill connection={p.connection} />
-                  </Td>
-                  <Td>
+                  </OzTableCell>
+                  <OzTableCell>
                     <span className="whitespace-nowrap text-oz2-text-muted">
                       {p.lastSeen}
                     </span>
-                  </Td>
-                  <Td>
+                  </OzTableCell>
+                  <OzTableCell>
                     <NoticeCell peer={p} />
-                  </Td>
-                  <Td>
+                  </OzTableCell>
+                  <OzTableCell>
                     <RowKebab peer={p} />
-                  </Td>
-                </tr>
+                  </OzTableCell>
+                </OzTableRow>
               ))}
               {paginated.length === 0 && (
-                <tr>
-                  <td
+                <OzTableRow className="hover:bg-transparent">
+                  <OzTableCell
                     colSpan={10}
                     className="px-[18px] py-12 text-center text-oz2-text-muted"
                   >
                     No peers match your filter.
-                  </td>
-                </tr>
+                  </OzTableCell>
+                </OzTableRow>
               )}
-            </tbody>
-          </table>
+            </OzTableBody>
+          </OzTable>
 
           {/* Pagination footer */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-oz2-border-soft bg-oz2-bg-sunken px-[18px] py-3 text-[12.5px]">
@@ -1144,13 +1158,13 @@ function GroupFilter({
         type="button"
         onClick={() => onOpenChange(!open)}
         className={
-          "inline-flex h-[34px] items-center gap-2 rounded-oz2-input border px-3 text-[13px] font-medium transition-colors " +
+          "inline-flex h-[34px] items-center gap-1.5 rounded-oz2-input border px-3 text-[13px] font-medium transition-colors " +
           (value.length > 0
             ? "border-transparent bg-oz2-acc-soft text-oz2-acc-text"
             : "border-oz2-border bg-oz2-surface text-oz2-text-2 hover:bg-oz2-hover")
         }
       >
-        <span className="text-oz2-text-faint">{icons.groupIcon}</span>
+        <span className="text-oz2-text-faint">Group:</span>
         {label}
         <span className="text-oz2-text-faint">{icons.chevDown}</span>
       </button>
@@ -1217,57 +1231,10 @@ function GroupFilter({
 
 // ─── KPI + table primitives ────────────────────────────────────────────────
 
-function KpiCard({
-  label,
-  value,
-  dot,
-}: {
-  label: string;
-  value: string;
-  dot?: "on" | "warn" | "off";
-}) {
-  return (
-    <OzCard>
-      <div className="mb-1 flex items-center gap-2">
-        {dot && <OzStatusDot status={dot} />}
-        <p className="font-mono text-[11px] uppercase tracking-widest text-oz2-text-faint">
-          {label}
-        </p>
-      </div>
-      <p className="text-[22px] font-semibold tracking-tight">{value}</p>
-    </OzCard>
-  );
-}
-
-function Th({
-  children,
-  className,
-  ...props
-}: React.ThHTMLAttributes<HTMLTableCellElement> & {
-  children: React.ReactNode;
-}) {
-  return (
-    <th
-      {...props}
-      className={
-        "whitespace-nowrap px-[14px] py-[11px] font-mono text-[10.5px] font-semibold uppercase tracking-widest text-oz2-text-muted " +
-        (className ?? "")
-      }
-    >
-      {children}
-    </th>
-  );
-}
-
-function Td({ children }: { children: React.ReactNode }) {
-  return (
-    <td className="px-[14px] py-[13px] align-middle">{children}</td>
-  );
-}
-
 // ─── SegmentedTabs ─────────────────────────────────────────────────────────
-// Border-soft underline across the strip; active tab gets a 2px acc
-// underline + heavy text. Each tab includes a count badge (mono).
+// shadcn-default segmented control: muted tray with rounded pills.
+// Active pill gets surface bg + soft shadow + heavy text. Counts
+// render as faint mono digits next to each label.
 
 function SegmentedTabs<T extends string>({
   value,
@@ -1279,31 +1246,29 @@ function SegmentedTabs<T extends string>({
   options: { id: T; label: string; count?: number }[];
 }) {
   return (
-    <div className="flex gap-6 border-b border-oz2-border-soft">
+    <div
+      role="tablist"
+      className="inline-flex h-[34px] items-center rounded-oz2-input bg-oz2-bg-sunken p-1 text-oz2-text-muted"
+    >
       {options.map((opt) => {
         const active = opt.id === value;
         return (
           <button
             key={opt.id}
             type="button"
+            role="tab"
+            aria-selected={active}
             onClick={() => onChange(opt.id)}
             className={
-              "relative -mb-px inline-flex h-9 items-center gap-2 border-b-2 px-1 text-[13px] font-medium transition-colors " +
+              "inline-flex h-full items-center gap-1.5 whitespace-nowrap rounded-[6px] px-3 text-[12.5px] font-medium transition-colors " +
               (active
-                ? "border-oz2-acc text-oz2-text"
-                : "border-transparent text-oz2-text-muted hover:text-oz2-text")
+                ? "bg-oz2-surface text-oz2-text shadow-oz2-sm"
+                : "hover:text-oz2-text")
             }
           >
             {opt.label}
             {typeof opt.count === "number" && (
-              <span
-                className={
-                  "rounded-full px-1.5 py-px font-mono text-[10.5px] font-semibold " +
-                  (active
-                    ? "bg-oz2-acc-soft text-oz2-acc-text"
-                    : "bg-oz2-bg-soft text-oz2-text-faint")
-                }
-              >
+              <span className="font-mono text-[10.5px] text-oz2-text-faint">
                 {opt.count}
               </span>
             )}
@@ -1345,8 +1310,8 @@ function PageSizeCombobox({
         onClick={() => setOpen(!open)}
         className="inline-flex h-[34px] items-center gap-1.5 rounded-oz2-input border border-oz2-border bg-oz2-surface px-3 text-[13px] font-medium text-oz2-text-2 hover:bg-oz2-hover hover:border-oz2-border-strong"
       >
+        <span className="text-oz2-text-faint">Rows:</span>
         <span className="font-mono">{value}</span>
-        <span className="text-oz2-text-faint">/ page</span>
         <span className="text-oz2-text-faint">{icons.chevDown}</span>
       </button>
       {open && (
