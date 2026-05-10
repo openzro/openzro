@@ -49,10 +49,10 @@ import {
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
 import CreateGroupModal from "@/modules/groups/CreateGroupModal";
-import GroupsActionCell from "@/modules/groups/GroupsActionCell";
 import GroupsCountCell from "@/modules/groups/GroupsCountCell";
 import GroupsNameCell from "@/modules/groups/GroupsNameCell";
 import useGroupsUsage, { GroupUsage } from "@/modules/groups/useGroupsUsage";
+import GroupsActionCellV2 from "@/modules/groups/v2/GroupsActionCellV2";
 import TeamTabs from "@/modules/team/v2/TeamTabs";
 
 // GroupsTableV2 — phase-5.9 v2 paint over /api/groups (with usage
@@ -214,11 +214,14 @@ export default function GroupsTableV2({ isLoading }: Props) {
       }),
       {
         id: "actions",
-        size: 40,
+        // Wider than other v2 tables' action columns because two row
+        // buttons sit side-by-side (Edit + Delete). Same sizing as
+        // /team/users for visual rhythm across the Identity tabs.
+        size: 200,
         enableSorting: false,
         header: () => null,
         cell: ({ row }) => (
-          <GroupsActionCell
+          <GroupsActionCellV2
             group={row.original}
             in_use={isInUse(row.original)}
           />
