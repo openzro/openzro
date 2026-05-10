@@ -43,61 +43,48 @@ const OzThemeToggle = ({ theme, onToggle, className }: OzThemeToggleProps) => {
         className,
       )}
     >
-      {/* Sun (left, visible when light) */}
+      {/* Sliding thumb with the active icon embedded inside — sun in
+          light mode, moon in dark mode. The thumb covers the track
+          area where a fixed icon would sit, so the previous design
+          (separate spans at left/right edges) hid the active icon
+          under the thumb. Putting the icon inside the thumb keeps
+          it visible on the white surface and slides together. */}
       <span
         aria-hidden="true"
         className={classNames(
-          "absolute left-[7px] top-1/2 -translate-y-1/2 text-oz2-text-muted transition-opacity",
-          isDark ? "opacity-30" : "opacity-100",
+          "absolute top-[2px] grid h-[20px] w-[22px] place-items-center rounded-full bg-white shadow-md ring-1 ring-black/5 transition-[left] duration-200 ease-out",
+          isDark ? "left-[28px] text-zinc-700" : "left-[2px] text-amber-600",
         )}
       >
-        <svg
-          width={12}
-          height={12}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={1.7}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx={12} cy={12} r={4} />
-          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
-        </svg>
-      </span>
-
-      {/* Moon (right, visible when dark) */}
-      <span
-        aria-hidden="true"
-        className={classNames(
-          "absolute right-[7px] top-1/2 -translate-y-1/2 text-oz2-text-muted transition-opacity",
-          isDark ? "opacity-100" : "opacity-30",
+        {isDark ? (
+          <svg
+            width={11}
+            height={11}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+          </svg>
+        ) : (
+          <svg
+            width={11}
+            height={11}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx={12} cy={12} r={4} />
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+          </svg>
         )}
-      >
-        <svg
-          width={12}
-          height={12}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={1.7}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-        </svg>
       </span>
-
-      {/* Sliding thumb — pure white in both modes so it pops against
-          the zinc-200 / zinc-700 track without depending on the v2
-          surface tokens (which collapse the contrast in dark mode). */}
-      <span
-        aria-hidden="true"
-        className={classNames(
-          "absolute top-[2px] h-[20px] w-[22px] rounded-full bg-white shadow-md ring-1 ring-black/5 transition-[left] duration-200 ease-out",
-          isDark ? "left-[28px]" : "left-[2px]",
-        )}
-      />
     </button>
   );
 };
