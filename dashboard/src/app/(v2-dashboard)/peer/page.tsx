@@ -30,6 +30,7 @@ import dayjs from "dayjs";
 import { isEmpty, trim } from "lodash";
 import {
   Barcode,
+  Copy,
   Cpu,
   FlagIcon,
   Globe,
@@ -51,6 +52,7 @@ import RoundedFlag from "@/assets/countries/RoundedFlag";
 import CircleIcon from "@/assets/icons/CircleIcon";
 import OpenzroIcon from "@/assets/icons/OpenzroIcon";
 import OzButton from "@/components/v2/OzButton";
+import OzCard from "@/components/v2/OzCard";
 import { useCountries } from "@/contexts/CountryProvider";
 import PeerProvider, { usePeer } from "@/contexts/PeerProvider";
 import { usePermissions } from "@/contexts/PermissionsProvider";
@@ -403,153 +405,192 @@ function PeerInformationCard({ peer }: Readonly<{ peer: Peer }>) {
     return getRegionByPeer(peer);
   }, [getRegionByPeer, peer]);
 
+  const lastSeenText = peer.connected
+    ? "just now"
+    : dayjs(peer.last_seen).format("D MMMM, YYYY [at] h:mm A") +
+      " (" +
+      dayjs().to(peer.last_seen) +
+      ")";
+
   return (
-    <Card className="w-full xl:w-1/2">
-      <Card.List>
-        <Card.ListItem
-          copy
-          copyText={"Openzro IP-Address"}
-          label={
-            <>
-              <MapPin size={16} />
-              Openzro IP-Address
-            </>
-          }
+    <OzCard flush className="w-full xl:w-1/2">
+      <ul className="divide-y divide-oz2-border-soft">
+        <PeerInfoRow
+          icon={<MapPin size={14} />}
+          label="openZro IP-Address"
           value={peer.ip}
-        />
-
-        <Card.ListItem
           copy
-          copyText={"Public IP-Address"}
-          label={
-            <>
-              <NetworkIcon size={16} />
-              Public IP-Address
-            </>
-          }
+          copyToast="openZro IP-Address"
+          mono
+        />
+        <PeerInfoRow
+          icon={<NetworkIcon size={14} />}
+          label="Public IP-Address"
           value={peer.connection_ip}
-        />
-
-        <Card.ListItem
           copy
-          copyText={"DNS label"}
-          label={
-            <>
-              <Globe size={16} />
-              Domain Name
-            </>
-          }
-          className={
-            peer?.extra_dns_labels && peer.extra_dns_labels.length > 0
-              ? "items-start"
-              : ""
-          }
+          copyToast="Public IP-Address"
+          mono
+        />
+        <PeerInfoRow
+          icon={<Globe size={14} />}
+          label="Domain Name"
           value={peer.dns_label}
-          extraText={peer?.extra_dns_labels}
-        />
-
-        <Card.ListItem
+          extraValues={peer.extra_dns_labels}
           copy
-          copyText={"Hostname"}
-          label={
-            <>
-              <MonitorSmartphoneIcon size={16} />
-              Hostname
-            </>
-          }
-          value={peer.hostname}
+          copyToast="DNS label"
+          mono
         />
-
-        <Card.ListItem
-          label={
-            <>
-              <FlagIcon size={16} />
-              Region
-            </>
-          }
-          tooltip={false}
+        <PeerInfoRow
+          icon={<MonitorSmartphoneIcon size={14} />}
+          label="Hostname"
+          value={peer.hostname}
+          copy
+          copyToast="Hostname"
+          mono
+        />
+        <PeerInfoRow
+          icon={<FlagIcon size={14} />}
+          label="Region"
           value={
             isEmpty(peer.country_code) ? (
               "Unknown"
+            ) : isLoading ? (
+              <Skeleton width={140} />
             ) : (
-              <>
-                {isLoading ? (
-                  <Skeleton width={140} />
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <div className="border-0 border-nb-gray-800 rounded-full">
-                      <RoundedFlag country={peer.country_code} size={12} />
-                    </div>
-                    {countryText}
-                  </div>
-                )}
-              </>
+              <span className="inline-flex items-center gap-2">
+                <RoundedFlag country={peer.country_code} size={12} />
+                {countryText}
+              </span>
             )
           }
         />
-
-        <Card.ListItem
-          label={
-            <>
-              <Cpu size={16} />
-              Operating System
-            </>
-          }
+        <PeerInfoRow
+          icon={<Cpu size={14} />}
+          label="Operating System"
           value={peer.os}
         />
-
         {peer.serial_number && peer.serial_number !== "" && (
-          <Card.ListItem
-            label={
-              <>
-                <Barcode size={16} />
-                Serial Number
-              </>
-            }
+          <PeerInfoRow
+            icon={<Barcode size={14} />}
+            label="Serial Number"
             value={peer.serial_number}
           />
         )}
-
-        <Card.ListItem
-          label={
-            <>
-              <History size={16} />
-              Last seen
-            </>
-          }
-          value={
-            peer.connected
-              ? "just now"
-              : dayjs(peer.last_seen).format("D MMMM, YYYY [at] h:mm A") +
-                " (" +
-                dayjs().to(peer.last_seen) +
-                ")"
-          }
+        <PeerInfoRow
+          icon={<History size={14} />}
+          label="Last seen"
+          value={lastSeenText}
         />
-
-        <Card.ListItem
-          label={
-            <>
-              <OpenzroIcon size={16} />
-              Agent Version
-            </>
-          }
+        <PeerInfoRow
+          icon={<OpenzroIcon size={14} />}
+          label="Agent Version"
           value={peer.version}
         />
-
         {peer.ui_version && (
-          <Card.ListItem
-            label={
-              <>
-                <OpenzroIcon size={16} />
-                UI Version
-              </>
-            }
+          <PeerInfoRow
+            icon={<OpenzroIcon size={14} />}
+            label="UI Version"
             value={peer.ui_version?.replace("openzro-desktop-ui/", "")}
           />
         )}
-      </Card.List>
-    </Card>
+      </ul>
+    </OzCard>
+  );
+}
+
+// PeerInfoRow — single key/value row inside PeerInformationCard's
+// divided list. `copy` turns the row into a click-to-copy target with
+// a notify toast; `mono` flips the value to the monospace font for
+// IDs/addresses. `extraValues` stacks below the primary value (used
+// for the additional DNS labels of multi-domain peers).
+function PeerInfoRow({
+  icon,
+  label,
+  value,
+  extraValues,
+  copy,
+  copyToast,
+  mono,
+}: {
+  icon: React.ReactNode;
+  label: React.ReactNode;
+  value: React.ReactNode;
+  extraValues?: string[];
+  copy?: boolean;
+  copyToast?: string;
+  mono?: boolean;
+}) {
+  const stringValue = typeof value === "string" ? value : null;
+  const canCopy = !!(copy && stringValue);
+
+  const onCopy = () => {
+    if (!canCopy || !stringValue) return;
+    navigator.clipboard?.writeText(stringValue).then(() => {
+      notify({
+        title: copyToast ?? "Copied",
+        description: `${copyToast ?? "Value"} has been copied to clipboard.`,
+        promise: Promise.resolve(),
+        loadingMessage: "",
+      });
+    });
+  };
+
+  const hasExtras = !!(extraValues && extraValues.length > 0);
+
+  return (
+    <li
+      className={
+        "flex flex-wrap gap-3 px-[18px] py-3 text-[13.5px] " +
+        (hasExtras ? "items-start" : "items-center") +
+        " " +
+        (canCopy
+          ? "cursor-pointer transition-colors hover:bg-oz2-hover/40"
+          : "")
+      }
+      onClick={canCopy ? onCopy : undefined}
+      role={canCopy ? "button" : undefined}
+      tabIndex={canCopy ? 0 : undefined}
+      onKeyDown={
+        canCopy
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onCopy();
+              }
+            }
+          : undefined
+      }
+    >
+      <span className="inline-flex min-w-[180px] items-center gap-2 text-oz2-text-muted">
+        {icon}
+        {label}
+      </span>
+      <span className="flex min-w-0 flex-1 items-center justify-end gap-2 text-right">
+        <span className="flex min-w-0 flex-col items-end gap-0.5">
+          <span
+            className={
+              "truncate text-oz2-text " + (mono ? "font-mono text-[12.5px]" : "")
+            }
+          >
+            {value}
+          </span>
+          {extraValues?.map((extra) => (
+            <span
+              key={extra}
+              className={
+                "truncate text-oz2-text-2 " +
+                (mono ? "font-mono text-[12px]" : "text-[12.5px]")
+              }
+            >
+              {extra}
+            </span>
+          ))}
+        </span>
+        {canCopy && (
+          <Copy size={13} className="shrink-0 text-oz2-text-faint" />
+        )}
+      </span>
+    </li>
   );
 }
 
