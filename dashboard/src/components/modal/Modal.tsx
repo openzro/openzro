@@ -38,9 +38,11 @@ const ModalOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed top-0 left-0 bottom-0 right-0 grid z-50  data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 ",
+      "fixed top-0 left-0 bottom-0 right-0 grid z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       "mx-auto place-items-start overflow-y-auto md:py-16",
-      "bg-black/30 dark:bg-black/40 backdrop-blur-sm",
+      // Translucent ink scrim — slightly darker on dark theme so the
+      // modal still pops on near-black surfaces.
+      "bg-black/40 backdrop-blur-sm dark:bg-black/55",
       className,
     )}
     {...props}
@@ -80,7 +82,12 @@ const ModalContent = React.forwardRef<
         <DialogPrimitive.Content
           ref={ref}
           className={cn(
-            "mx-auto relative top-0 z-[52] grid w-full focus:outline-0 border border-neutral-200 bg-white py-6 dark:shadow-lg shadow-sm duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1  data-[state=open]:slide-in-from-left-1 sm:rounded-lg md:w-full dark:border-nb-gray-900 dark:bg-nb-gray",
+            "mx-auto relative top-0 z-[52] grid w-full focus:outline-0",
+            // v2 modal frame: oz2-surface + oz2-border + rounded-oz2-card.
+            // Layered shadow lifts the panel above the scrim.
+            "border border-oz2-border bg-oz2-surface py-6 shadow-oz2-md duration-200",
+            "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1 data-[state=open]:slide-in-from-left-1",
+            "sm:rounded-oz2-card md:w-full",
             className,
             maxWidthClass,
           )}
@@ -95,7 +102,7 @@ const ModalContent = React.forwardRef<
             {showClose && (
               <DialogPrimitive.Close
                 data-cy={"modal-close"}
-                className="absolute right-4 z-10 top-4 rounded-sm opacity-70 ring-offset-white transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-neutral-950 focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-neutral-100 data-[state=open]:text-neutral-500 dark:ring-offset-neutral-950 dark:focus:ring-neutral-300 dark:data-[state=open]:bg-neutral-800 dark:data-[state=open]:text-neutral-400"
+                className="absolute right-4 top-4 z-10 grid h-7 w-7 place-items-center rounded-[8px] text-oz2-text-faint transition-colors hover:bg-oz2-hover hover:text-oz2-text focus:outline-none focus-visible:ring-2 focus-visible:ring-oz2-acc/30 disabled:pointer-events-none"
               >
                 <X className="h-4 w-4" />
                 <span className="sr-only">Close</span>
@@ -135,8 +142,10 @@ const SidebarModalContent = React.forwardRef<
           <DialogPrimitive.Content
             ref={ref}
             className={cn(
-              "ml-auto mt-auto relative bottom-0 z-[52] grid w-full border border-neutral-200 bg-white py-6 dark:shadow-lg shadow-sm duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0  data-[state=closed]:slide-out-to-left-1  data-[state=open]:slide-in-from-left-1 md:w-full dark:border-nb-gray-900 dark:bg-nb-gray",
-              "border-t-0 border-r-0 border-b-0 shadow-2xl",
+              "ml-auto mt-auto relative bottom-0 z-[52] grid w-full py-6 duration-200",
+              "border border-oz2-border bg-oz2-surface shadow-oz2-md",
+              "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:slide-out-to-left-1 data-[state=open]:slide-in-from-left-1 md:w-full",
+              "border-t-0 border-r-0 border-b-0",
               className,
               maxWidthClass,
             )}
@@ -183,7 +192,7 @@ const ModalFooter = ({
 }: React.HTMLAttributes<HTMLDivElement> & ModalFooterProps) => (
   <div
     className={cn(
-      "border-neutral-200 dark:border-nb-gray-800/70",
+      "border-oz2-border-soft",
       separator && "border-t",
     )}
   >
@@ -221,7 +230,7 @@ const ModalDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn("text-sm text-neutral-500 dark:text-neutral-400", className)}
+    className={cn("text-[13px] text-oz2-text-muted", className)}
     {...props}
   />
 ));

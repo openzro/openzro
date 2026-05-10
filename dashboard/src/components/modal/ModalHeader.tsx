@@ -1,4 +1,3 @@
-import Paragraph from "@components/Paragraph";
 import SquareIcon, { IconVariant } from "@components/SquareIcon";
 import { cn } from "@utils/helpers";
 import React from "react";
@@ -13,25 +12,30 @@ interface Props extends IconVariant {
   children?: React.ReactNode;
   center?: boolean;
 }
+
+// ModalHeader — title + description row at the top of a modal,
+// optionally prefixed by a SquareIcon glyph. Paint adopted to v2
+// tokens (oz2-text title, oz2-text-muted description).
+
 export default function ModalHeader({
   icon,
   title,
   description,
   color = "openzro",
   className = "pb-6 px-8",
-  margin = "mt-0",
+  margin = "mt-1",
   truncate = false,
   children,
   center,
 }: Props) {
   return (
     <div className={cn(className, "min-w-0 relative z-[1]")}>
-      <div className={"flex items-start gap-5 min-w-0"}>
+      <div className="flex items-start gap-4 min-w-0">
         {icon && <SquareIcon color={color} icon={icon} />}
         <div className={cn("min-w-0", center && "text-center")}>
           <h2
             className={cn(
-              "text-lg my-0 leading-[1.5]",
+              "text-[16px] font-semibold leading-[1.4] tracking-tight text-oz2-text my-0",
               center && "text-center",
             )}
           >
@@ -40,11 +44,15 @@ export default function ModalHeader({
           {children ? (
             <>{children}</>
           ) : (
-            <Paragraph
-              className={cn("text-sm", margin, truncate && "!block truncate")}
+            <p
+              className={cn(
+                "text-[13px] leading-[1.55] text-oz2-text-muted",
+                margin,
+                truncate && "truncate",
+              )}
             >
               {description}
-            </Paragraph>
+            </p>
           )}
         </div>
       </div>

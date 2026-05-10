@@ -301,7 +301,7 @@ function CustomDNSTile({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="group grid grid-cols-[56px_minmax(0,1fr)] gap-3.5 rounded-oz2-card border border-dashed border-oz2-border bg-transparent p-3.5 text-left transition-all hover:border-oz2-acc hover:bg-oz2-acc-soft/30 focus-visible:outline-none focus-visible:border-oz2-acc focus-visible:ring-2 focus-visible:ring-oz2-acc/30 md:col-span-2"
+      className="group grid grid-cols-[56px_minmax(0,1fr)] gap-3.5 rounded-oz2-card border border-dashed border-oz2-border bg-transparent p-3.5 text-left transition-all hover:border-oz2-acc hover:bg-oz2-acc-soft/30 focus-visible:outline-none focus-visible:border-oz2-acc focus-visible:ring-2 focus-visible:ring-oz2-acc/30"
     >
       <div
         aria-hidden
