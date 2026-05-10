@@ -53,10 +53,10 @@ import TeamTabs from "@/modules/team/v2/TeamTabs";
 import UserActionCell from "@/modules/users/table-cells/UserActionCell";
 import UserBlockCell from "@/modules/users/table-cells/UserBlockCell";
 import UserGroupCell from "@/modules/users/table-cells/UserGroupCell";
-import UserNameCell from "@/modules/users/table-cells/UserNameCell";
-import UserRoleCell from "@/modules/users/table-cells/UserRoleCell";
-import UserStatusCell from "@/modules/users/table-cells/UserStatusCell";
 import { UserInviteModalContent } from "@/modules/users/UserInviteModal";
+import UserNameCellV2 from "@/modules/users/v2/UserNameCellV2";
+import UserRoleCellV2 from "@/modules/users/v2/UserRoleCellV2";
+import UserStatusCellV2 from "@/modules/users/v2/UserStatusCellV2";
 
 // UsersTableV2 — phase-5.8 v2 paint over real /api/users data.
 // Mirrors AccessControlTableV2 chrome (header + stats + toolbar +
@@ -157,8 +157,8 @@ export default function UsersTableV2({ users, isLoading }: Props) {
         id: "name",
         accessorFn: (u) => `${u.name ?? ""} ${u.email ?? ""}`,
         sortingFn: "text",
-        header: ({ column }) => <SortHeader column={column} label="Name" />,
-        cell: ({ row }) => <UserNameCell user={row.original} />,
+        header: ({ column }) => <SortHeader column={column} label="User" />,
+        cell: ({ row }) => <UserNameCellV2 user={row.original} />,
       },
       {
         id: "is_current",
@@ -173,14 +173,14 @@ export default function UsersTableV2({ users, isLoading }: Props) {
         accessorFn: (u) => u.role ?? "",
         sortingFn: "text",
         header: ({ column }) => <SortHeader column={column} label="Role" />,
-        cell: ({ row }) => <UserRoleCell user={row.original} />,
+        cell: ({ row }) => <UserRoleCellV2 user={row.original} />,
       },
       {
         id: "status",
         accessorFn: (u) => u.status ?? "",
         sortingFn: "text",
         header: ({ column }) => <SortHeader column={column} label="Status" />,
-        cell: ({ row }) => <UserStatusCell user={row.original} />,
+        cell: ({ row }) => <UserStatusCellV2 user={row.original} />,
       },
       {
         id: "auto_groups",
