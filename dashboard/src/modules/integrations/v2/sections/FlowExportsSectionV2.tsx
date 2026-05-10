@@ -3,12 +3,15 @@
 import { notify } from "@components/Notification";
 import { useApiCall } from "@utils/api";
 import useFetchApi from "@utils/api";
+import { PlusCircle } from "lucide-react";
 import React, { useState } from "react";
 import { useSWRConfig } from "swr";
+import OzButton from "@/components/v2/OzButton";
 import {
   FlowExport,
   FlowExportType,
 } from "@/interfaces/FlowExport";
+import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
 import FlowExportModal from "@/modules/flow-exports/FlowExportModal";
 import IntegrationCard from "@/modules/integrations/v2/sections/IntegrationCard";
 import SectionShell from "@/modules/integrations/v2/sections/SectionShell";
@@ -69,6 +72,16 @@ export default function FlowExportsSectionV2() {
     setModalOpen(true);
   };
 
+  // Register the Add destination CTA in the V2 topbar slot. When
+  // the operator switches sub-tab, this section unmounts and the
+  // slot clears — the next section's own useV2TopbarRight kicks in.
+  useV2TopbarRight(
+    <OzButton variant="primary" type="button" onClick={openCreate}>
+      <PlusCircle size={14} />
+      Add destination
+    </OzButton>,
+  );
+
   return (
     <>
       <SectionShell
@@ -88,8 +101,6 @@ export default function FlowExportsSectionV2() {
             edit a destination and re-enter the value to rotate it.
           </>
         }
-        addLabel="Add destination"
-        onAdd={openCreate}
         isLoading={isLoading}
         isEmpty={!data || data.length === 0}
         emptyMessage="No destinations configured. Click Add destination to start streaming traffic events."
