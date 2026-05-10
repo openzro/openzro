@@ -17,6 +17,7 @@ import {
 } from "@/components/v2/OzTable";
 import { useGroups } from "@/contexts/GroupsProvider";
 import { Peer } from "@/interfaces/Peer";
+import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
 import { OSLogo } from "@/modules/peers/PeerOSCell";
 
 dayjs.extend(relativeTime);
@@ -57,6 +58,18 @@ function deriveStatus(peer: Peer): "on" | "warn" | "off" {
 
 export default function PeersTableV2({ peers, isLoading }: Props) {
   const { groups } = useGroups();
+
+  // Mount the per-page primary action into the V2 topbar's right slot.
+  // Phase 4.3 will swap this stub for the real AddPeerButton + SetupModal.
+  useV2TopbarRight(
+    <OzButton variant="primary" type="button">
+      <span className="inline-flex h-3.5 w-3.5 items-center justify-center">
+        {ICONS.plus}
+      </span>
+      Add peer
+    </OzButton>,
+  );
+
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [groupFilter, setGroupFilter] = useState<string[]>([]);
@@ -137,29 +150,21 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
 
   return (
     <div className="space-y-6 p-8">
-      <header className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-[22px] font-semibold tracking-tight">Peers</h1>
-          <p className="mt-1 max-w-2xl text-[13px] text-oz2-text-muted">
-            A list of all machines and devices connected to your private
-            network. Use this view to manage peers. Learn more about{" "}
-            <a
-              href="https://docs.openzro.io/how-to/add-machines-to-your-network"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-oz2-acc-text underline-offset-2 hover:underline"
-            >
-              adding machines to your network
-            </a>
-            .
-          </p>
-        </div>
-        <OzButton variant="primary" type="button">
-          <span className="inline-flex h-3.5 w-3.5 items-center justify-center">
-            {ICONS.plus}
-          </span>
-          Add peer
-        </OzButton>
+      <header>
+        <h1 className="text-[22px] font-semibold tracking-tight">Peers</h1>
+        <p className="mt-1 max-w-2xl text-[13px] text-oz2-text-muted">
+          A list of all machines and devices connected to your private
+          network. Use this view to manage peers. Learn more about{" "}
+          <a
+            href="https://docs.openzro.io/how-to/add-machines-to-your-network"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-oz2-acc-text underline-offset-2 hover:underline"
+          >
+            adding machines to your network
+          </a>
+          .
+        </p>
       </header>
 
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12.5px] text-oz2-text-muted">
