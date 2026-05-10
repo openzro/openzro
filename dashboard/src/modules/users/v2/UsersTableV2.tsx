@@ -347,6 +347,11 @@ export default function UsersTableV2({ users, isLoading }: Props) {
                 ]}
               />
 
+              <PageSizeCombobox
+                value={pageInfo.pageSize}
+                onChange={(n) => table.setPageSize(n)}
+              />
+
               <button
                 type="button"
                 onClick={refreshClick}
@@ -429,17 +434,11 @@ export default function UsersTableV2({ users, isLoading }: Props) {
                     ? "0 users"
                     : `Showing ${pageStart}–${pageEnd} of ${total}`}
                 </span>
-                <div className="flex items-center gap-3">
-                  <PageSizeCombobox
-                    value={pageInfo.pageSize}
-                    onChange={(n) => table.setPageSize(n)}
-                  />
-                  <Pager
-                    page={pageInfo.pageIndex + 1}
-                    totalPages={Math.max(1, table.getPageCount())}
-                    onChange={(p) => table.setPageIndex(p - 1)}
-                  />
-                </div>
+                <Pager
+                  page={pageInfo.pageIndex + 1}
+                  totalPages={Math.max(1, table.getPageCount())}
+                  onChange={(p) => table.setPageIndex(p - 1)}
+                />
               </div>
             </OzCard>
           </>
