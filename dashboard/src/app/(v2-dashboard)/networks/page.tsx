@@ -1,63 +1,23 @@
 "use client";
 
-import Breadcrumbs from "@components/Breadcrumbs";
-import InlineLink from "@components/InlineLink";
-import Paragraph from "@components/Paragraph";
-import SkeletonTable from "@components/skeletons/SkeletonTable";
 import { RestrictedAccess } from "@components/ui/RestrictedAccess";
-import { usePortalElement } from "@hooks/usePortalElement";
 import useFetchApi from "@utils/api";
-import { ExternalLinkIcon } from "lucide-react";
-import React, { Suspense } from "react";
-import NetworkRoutesIcon from "@/assets/icons/NetworkRoutesIcon";
+import React from "react";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { Network } from "@/interfaces/Network";
-import PageContainer from "@/layouts/PageContainer";
-import NetworksTable from "@/modules/networks/table/NetworksTable";
+import NetworksTableV2 from "@/modules/networks/v2/NetworksTableV2";
+
+// Networks — phase-5.2 entry point. Chrome (OzShell + sidebar +
+// topbar) lives in (v2-dashboard)/layout.tsx → V2DashboardLayout.
+// This component owns the data fetch + the read-permission gate.
 
 export default function Networks() {
   const { data: networks, isLoading } = useFetchApi<Network[]>("/networks");
   const { permission } = usePermissions();
-  const { ref: headingRef, portalTarget } =
-    usePortalElement<HTMLHeadingElement>();
 
   return (
-    <PageContainer>
-      <div className={"p-default py-6"}>
-        <Breadcrumbs>
-          <Breadcrumbs.Item
-            href={"/networks"}
-            label={"Networks"}
-            icon={<NetworkRoutesIcon size={13} />}
-          />
-        </Breadcrumbs>
-        <h1 ref={headingRef}>Networks</h1>
-        <Paragraph>
-          Networks allow you to access internal resources in LANs and VPCs
-          without installing Openzro on every machine.
-        </Paragraph>
-        <Paragraph>
-          Learn more about
-          <InlineLink
-            href={"https://docs.openzro.io/how-to/networks"}
-            target={"_blank"}
-          >
-            Networks
-            <ExternalLinkIcon size={12} />
-          </InlineLink>
-          in our documentation.
-        </Paragraph>
-      </div>
-
-      <RestrictedAccess hasAccess={permission.networks.read}>
-        <Suspense fallback={<SkeletonTable />}>
-          <NetworksTable
-            data={networks}
-            isLoading={isLoading}
-            headingTarget={portalTarget}
-          />
-        </Suspense>
-      </RestrictedAccess>
-    </PageContainer>
+    <RestrictedAccess hasAccess={permission.networks.read}>
+      <NetworksTableV2 data={networks} isLoading={isLoading} />
+    </RestrictedAccess>
   );
 }
