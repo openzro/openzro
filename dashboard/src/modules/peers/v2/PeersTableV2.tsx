@@ -1,7 +1,14 @@
 "use client";
 
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@components/Tooltip";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
+import { Barcode, CpuIcon } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import OzButton from "@/components/v2/OzButton";
 import OzCard from "@/components/v2/OzCard";
@@ -384,10 +391,14 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
 
 function NameCell({ peer }: { peer: Peer }) {
   const status = deriveStatus(peer);
-  const display =
-    peer.user?.email ||
-    peer.user?.name ||
-    (peer.user_id ? "(unknown user)" : "—");
+  // Mirror the legacy PeerNameCell fallback ladder:
+  //   user.email → user.name → "user: <id>" → "—"
+  // The seeded dev peers usually carry a user_id but no enriched user
+  // object until UsersProvider hydrates, so the user_id fallback is
+  // what the operator sees on first paint.
+  const enrichedDisplay = peer.user?.email || peer.user?.name;
+  const idFallback = peer.user_id ? `user: ${peer.user_id}` : null;
+  const display = enrichedDisplay || idFallback || "—";
   return (
     <div className="flex min-w-0 flex-col">
       <span className="flex items-center gap-2">
@@ -446,12 +457,52 @@ function GroupsCell({ peer }: { peer: Peer }) {
 }
 
 function OSCell({ peer }: { peer: Peer }) {
+  // Icon-only with hover tooltip for OS + serial. Mirrors the legacy
+  // PeerOSCell behaviour: row stays dense, full label lives in the
+  // tooltip so operators don't lose accessibility to the OS string.
   return (
-    <div className="flex items-center gap-2">
-      <span className="grid h-5 w-5 place-items-center text-oz2-text-2">
-        <OSLogo os={peer.os} />
-      </span>
-      <span className="text-[12.5px] text-oz2-text-2">{peer.os || "—"}</span>
+    <TooltipProvider>
+      <Tooltip delayDuration={1}>
+        <TooltipTrigger asChild>
+          <span className="grid h-7 w-7 cursor-default place-items-center rounded-md text-oz2-text-2 transition-colors hover:bg-oz2-hover">
+            <OSLogo os={peer.os} />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent className="!p-0">
+          <div className="min-w-[200px]">
+            <OsTooltipRow
+              icon={<CpuIcon size={14} />}
+              label="OS"
+              value={peer.os || "—"}
+            />
+            {peer.serial_number && peer.serial_number !== "" && (
+              <OsTooltipRow
+                icon={<Barcode size={14} />}
+                label="Serial number"
+                value={peer.serial_number}
+              />
+            )}
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+function OsTooltipRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center gap-2 border-b border-oz2-border-soft px-3 py-2 text-[12.5px] last:border-b-0">
+      <span className="text-oz2-text-faint">{icon}</span>
+      <span className="text-oz2-text-faint">{label}</span>
+      <span className="ml-auto truncate font-mono text-oz2-text">{value}</span>
     </div>
   );
 }

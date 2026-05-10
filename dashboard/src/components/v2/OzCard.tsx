@@ -23,7 +23,11 @@ const OzCard = forwardRef<HTMLDivElement, OzCardProps>(
         ref={ref}
         className={classNames(
           "rounded-oz2-card border border-oz2-border bg-oz2-surface shadow-oz2-sm",
-          flush ? "" : "p-[18px]",
+          // `flush` consumers stack edge-painted children (table headers,
+          // bulk-action bands, footers) that bleed past rounded corners
+          // unless we clip. Padded variants don't have this problem
+          // because the inset keeps content off the corners.
+          flush ? "overflow-hidden" : "p-[18px]",
           className,
         )}
         {...props}
