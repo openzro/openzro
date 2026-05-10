@@ -24,7 +24,8 @@ import {
 } from "@tanstack/react-table";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
-import { Barcode, CpuIcon } from "lucide-react";
+import { Barcode, Check, Copy, CpuIcon } from "lucide-react";
+import Link from "next/link";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSWRConfig } from "swr";
 import OzButton from "@/components/v2/OzButton";
@@ -45,6 +46,7 @@ import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { Peer } from "@/interfaces/Peer";
 import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
 import PeerActionCell from "@/modules/peers/PeerActionCell";
+import PeerGroupCell from "@/modules/peers/PeerGroupCell";
 import { OSLogo } from "@/modules/peers/PeerOSCell";
 import SetupModal from "@/modules/setup-openzro-modal/SetupModal";
 
@@ -222,7 +224,11 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
         accessorFn: (peer) => peer.groups?.length ?? 0,
         sortingFn: "basic",
         header: ({ column }) => <SortHeader column={column} label="Group" />,
-        cell: ({ row }) => <GroupsCell peer={row.original} />,
+        // Legacy PeerGroupCell brings the assigned-groups display +
+        // edit modal (PeerGroupSelector) for free. Renders inside the
+        // row's PeerProvider — visual is legacy paint until phase 5
+        // re-paints. Replaces the read-only v2 GroupsCell.
+        cell: () => <PeerGroupCell />,
       },
       {
         id: "os",
@@ -265,11 +271,8 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
         size: 40,
         enableSorting: false,
         header: () => null,
-        cell: ({ row }) => (
-          <PeerProvider peer={row.original}>
-            <PeerActionCell />
-          </PeerProvider>
-        ),
+        // PeerProvider is on the row — cell just consumes via usePeer().
+        cell: () => <PeerActionCell />,
       },
     ],
     [],
@@ -458,16 +461,24 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
           </OzTableHeader>
           <OzTableBody>
             {table.getRowModel().rows.map((row) => (
-              <OzTableRow
-                key={row.id}
-                data-state={row.getIsSelected() ? "selected" : undefined}
-              >
-                {row.getVisibleCells().map((cell) => (
-                  <OzTableCell key={cell.id}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </OzTableCell>
-                ))}
-              </OzTableRow>
+              // PeerProvider scopes the row so cells consuming usePeer()
+              // (PeerActionCell, PeerGroupCell) work without per-cell
+              // wrappers. Context.Provider doesn't render DOM, so it's
+              // a valid child of <tbody>.
+              <PeerProvider key={row.id} peer={row.original}>
+                <OzTableRow
+                  data-state={row.getIsSelected() ? "selected" : undefined}
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <OzTableCell key={cell.id}>
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext(),
+                      )}
+                    </OzTableCell>
+                  ))}
+                </OzTableRow>
+              </PeerProvider>
             ))}
             {table.getRowModel().rows.length === 0 && (
               <OzTableRow className="hover:bg-transparent">
@@ -511,7 +522,9 @@ function NameCell({ peer }: { peer: Peer }) {
   const enrichedDisplay = peer.user?.email || peer.user?.name;
   const idFallback = peer.user_id ? `user: ${peer.user_id}` : null;
   const display = enrichedDisplay || idFallback || "—";
-  return (
+  const detailsHref = peer.id ? `/peer?id=${peer.id}` : null;
+
+  const body = (
     <div className="flex min-w-0 flex-col">
       <span className="flex items-center gap-2">
         <OzStatusDot status={status} />
@@ -521,6 +534,17 @@ function NameCell({ peer }: { peer: Peer }) {
         {display}
       </span>
     </div>
+  );
+
+  if (!detailsHref) return body;
+  return (
+    <Link
+      href={detailsHref}
+      aria-label={`View details for peer ${peer.name}`}
+      className="-m-2 block min-w-0 cursor-pointer rounded-md p-2 transition-colors hover:bg-oz2-hover"
+    >
+      {body}
+    </Link>
   );
 }
 
@@ -554,11 +578,13 @@ function AddressCell({ peer }: { peer: Peer }) {
               icon={ICONS.pin}
               label="Openzro IP"
               value={peer.ip || "—"}
+              copyable
             />
             <InfoTooltipRow
               icon={ICONS.network}
               label="Public IP"
               value={peer.connection_ip || "—"}
+              copyable
             />
             <InfoTooltipRow
               icon={ICONS.globe}
@@ -576,53 +602,6 @@ function AddressCell({ peer }: { peer: Peer }) {
               value={region || "—"}
               mono={false}
             />
-          </div>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-}
-
-function GroupsCell({ peer }: { peer: Peer }) {
-  // Mirror production density: only the first chip is visible; the
-  // rest collapse into a "+N" pill. Hover tooltip lists the full set.
-  // Edit / add-group flow lives in the row kebab and lands in phase
-  // 4.3 alongside PeerActionCell.
-  const groups = (peer.groups ?? []).map((g) => g.name).filter(Boolean);
-  if (groups.length === 0) {
-    return <span className="text-[12.5px] text-oz2-text-faint">—</span>;
-  }
-  const visible = groups.slice(0, 1);
-  const overflow = groups.length - visible.length;
-  return (
-    <TooltipProvider>
-      <Tooltip delayDuration={1}>
-        <TooltipTrigger asChild>
-          <div className="inline-flex cursor-pointer items-center gap-1.5">
-            {visible.map((g) => (
-              <OzPill key={g} variant="default">
-                {g}
-              </OzPill>
-            ))}
-            {overflow > 0 && <OzPill variant="default">+{overflow}</OzPill>}
-          </div>
-        </TooltipTrigger>
-        <TooltipContent className="!p-0">
-          <div className="min-w-[200px]">
-            <p className="px-3 pt-3 pb-2 font-mono text-[10.5px] uppercase tracking-widest text-oz2-text-faint">
-              Assigned groups
-            </p>
-            <ul className="space-y-1 px-3 pb-3">
-              {groups.map((g) => (
-                <li
-                  key={g}
-                  className="flex items-center gap-2 text-[12px] text-oz2-text"
-                >
-                  <span className="text-oz2-text-faint">{ICONS.groupIcon}</span>
-                  {g}
-                </li>
-              ))}
-            </ul>
           </div>
         </TooltipContent>
       </Tooltip>
@@ -668,12 +647,32 @@ function InfoTooltipRow({
   label,
   value,
   mono = true,
+  copyable = false,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   mono?: boolean;
+  copyable?: boolean;
 }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!navigator.clipboard) return;
+    navigator.clipboard.writeText(value).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1400);
+      },
+      () => {
+        // Clipboard write can be blocked (HTTP context, permissions).
+        // Silent fail keeps the tooltip stable.
+      },
+    );
+  };
+
   return (
     <div className="flex items-center gap-2 border-b border-oz2-border-soft px-3 py-2 text-[12.5px] last:border-b-0">
       <span className="text-oz2-text-faint">{icon}</span>
@@ -686,6 +685,16 @@ function InfoTooltipRow({
       >
         {value}
       </span>
+      {copyable && value && value !== "—" && (
+        <button
+          type="button"
+          aria-label={copied ? "Copied" : `Copy ${label}`}
+          onClick={handleCopy}
+          className="grid h-5 w-5 shrink-0 cursor-pointer place-items-center rounded text-oz2-text-faint transition-colors hover:bg-oz2-hover hover:text-oz2-text"
+        >
+          {copied ? <Check size={11} /> : <Copy size={11} />}
+        </button>
+      )}
     </div>
   );
 }
