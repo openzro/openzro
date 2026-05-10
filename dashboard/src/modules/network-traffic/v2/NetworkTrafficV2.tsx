@@ -3,7 +3,6 @@
 import useFetchApi from "@utils/api";
 import dayjs from "dayjs";
 import {
-  ActivityIcon,
   ArrowDown,
   ArrowUp,
   Ban,
@@ -34,20 +33,25 @@ import PeerFilterV2, {
 import { OSLogo } from "@/modules/peers/PeerOSCell";
 
 // NetworkTrafficV2 — phase-5.12 v2 paint over /network-traffic-events.
-// Each FLOW gets one row; inside that row a vertical mini-timeline
-// reads top-to-bottom with the start / policy / stop sequence (each
-// event a tonal-bordered dot connected by a rail), borrowing the
-// handoff TrafficScreen's start/stop/policy iconography. The right
-// half of the row condenses the flow's headline data — peer pair,
-// protocol, total rx/tx with a tiny rx-vs-tx ratio bar and packet
-// count, plus the overall flow status pill — using the handoff's
-// "make the row pull its weight" approach.
+// Table-shaped grid: one row per event, with same-flow events sharing
+// a continuous rail in the Event column. Subsequent events of a flow
+// elide the repeated Source / Protocol / Destination / Traffic /
+// Status cells so the operator visually anchors to the first event of
+// each flow. Rail terminates at the LAST event of each flow — no edge
+// dangles past stop or drop.
 //
-// Behavior preserved verbatim from the legacy NetworkTrafficTimeline:
-// same SWR endpoint, same groupFlows logic, same search / peer
-// filter / date range, same RestrictedAccess + PeersProvider gates.
+// Each event's dot uses the audit-style tonal border + lucide icon:
+// Play (start, ok), Square (stop, ok), Ban (drop, err), ShieldCheck
+// (policy allow, acc), Ban (policy block, err).
+//
+// Behavior preserved verbatim from the legacy NetworkTrafficTimeline.
 
 const PAGE_SIZE = 25;
+
+// Grid template echoes the legacy table layout — wide Event column
+// for the timeline narrative + four right-side columns plus Status.
+const GRID_COLS =
+  "minmax(0, 4fr) minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 2fr) minmax(0, 1.6fr) auto";
 
 type FlowGroup = {
   flowID: string;
@@ -66,8 +70,6 @@ type FlowGroup = {
   startedAt: string;
 };
 
-type FlowStatus = "active" | "ended" | "dropped";
-
 type EventTone = "ok" | "err" | "acc";
 
 interface DotMeta {
@@ -75,6 +77,21 @@ interface DotMeta {
   tone: EventTone;
   label: string;
 }
+
+type Row =
+  | {
+      kind: "event";
+      event: NetworkTrafficEvent;
+      group: FlowGroup;
+      isFirstInFlow: boolean;
+      isLastInFlow: boolean;
+    }
+  | {
+      kind: "policy";
+      group: FlowGroup;
+      isFirstInFlow: false;
+      isLastInFlow: boolean;
+    };
 
 function eventDot(e: NetworkTrafficEvent): DotMeta {
   switch (e.type) {
@@ -95,18 +112,27 @@ function policyDot(blocked: boolean): DotMeta {
     : { icon: <ShieldCheckIcon size={11} />, tone: "acc", label: "Policy" };
 }
 
-function flowStatus(flow: FlowGroup): {
-  status: FlowStatus;
+function isPolicyBlocked(policy: Policy | undefined): boolean {
+  if (!policy) return false;
+  const action = policy.rules?.[0]?.action;
+  return action === "drop" || action === "deny";
+}
+
+function flowStatusPill(flow: FlowGroup): {
   variant: OzPillVariants["variant"];
   label: string;
+  icon: React.ReactNode;
 } {
-  // "drop" wins regardless of order; otherwise an "end" marks the
-  // flow as ended; default to active.
   const hasDrop = flow.events.some((e) => e.type === "drop");
-  if (hasDrop) return { status: "dropped", variant: "err", label: "blocked" };
+  const blocked = hasDrop || isPolicyBlocked(flow.policy);
+  if (blocked) {
+    return { variant: "err", label: "Blocked", icon: <Ban size={11} /> };
+  }
   const hasEnd = flow.events.some((e) => e.type === "end");
-  if (hasEnd) return { status: "ended", variant: "ok", label: "ended" };
-  return { status: "active", variant: "acc", label: "active" };
+  if (hasEnd) {
+    return { variant: "ok", label: "Ended", icon: <Square size={11} /> };
+  }
+  return { variant: "acc", label: "Active", icon: <Play size={11} /> };
 }
 
 export default function NetworkTrafficV2() {
@@ -168,10 +194,12 @@ export default function NetworkTrafficV2() {
     });
   }, [groups, search, peerFilter]);
 
-  const visible = useMemo(
+  const visibleGroups = useMemo(
     () => filteredGroups.slice(0, pageSize),
     [filteredGroups, pageSize],
   );
+
+  const rows = useMemo(() => flattenRows(visibleGroups), [visibleGroups]);
 
   const peerOptions = useMemo<PeerFilterOption[]>(
     () =>
@@ -212,7 +240,7 @@ export default function NetworkTrafficV2() {
       {isColdStart ? (
         <OzEmptyState
           title="No network traffic events yet"
-          description="Once peers start reporting, every TCP / UDP / ICMP connection shows up here. Each row is one flow with its lifecycle inside."
+          description="Once peers start reporting, every TCP / UDP / ICMP connection shows up here. Each flow's events stitch together via a shared timeline rail."
           learnMore={
             <>
               Learn more about{" "}
@@ -268,7 +296,7 @@ export default function NetworkTrafficV2() {
             </span>
           </div>
 
-          {visible.length === 0 ? (
+          {rows.length === 0 ? (
             <OzCard className="px-6 py-10 text-center text-[13.5px] text-oz2-text-muted">
               {isLoading
                 ? "Loading network traffic…"
@@ -276,19 +304,25 @@ export default function NetworkTrafficV2() {
             </OzCard>
           ) : (
             <OzCard flush>
-              <ol className="m-0 list-none p-0">
-                {visible.map((flow, idx) => (
-                  <FlowRow
-                    key={flow.flowID}
-                    flow={flow}
-                    isLast={idx === visible.length - 1}
+              <div
+                role="table"
+                aria-label="Network traffic events"
+                className="grid"
+                style={{ gridTemplateColumns: GRID_COLS }}
+              >
+                <HeaderRow />
+                {rows.map((r, i) => (
+                  <RowCells
+                    key={rowKey(r, i)}
+                    row={r}
+                    isLastInTable={i === rows.length - 1}
                   />
                 ))}
-              </ol>
+              </div>
             </OzCard>
           )}
 
-          {filteredGroups.length > visible.length && (
+          {filteredGroups.length > visibleGroups.length && (
             <div className="flex justify-center pt-2">
               <button
                 type="button"
@@ -305,126 +339,104 @@ export default function NetworkTrafficV2() {
   );
 }
 
-// FlowRow — one flow per row. Two visually-distinct columns:
-//
-//   LEFT (timeline): vertical mini-timeline of the flow's lifecycle
-//   events (start → optional matched policy → end | drop). Each event
-//   is its own dot+icon row connected by a rail; `subsequent rows of
-//   the same flow share that rail` was a request from the user, and
-//   the icons follow the handoff start/stop/policy mapping.
-//
-//   RIGHT (summary): the handoff TrafficScreen's "row carries weight"
-//   slot — peer pair (source → destination) over a small protocol /
-//   port chip, then a packed traffic readout (mono total bytes, a tiny
-//   rx-vs-tx ratio bar, and the packet tally) topped by the flow's
-//   overall status pill. This block makes the row useful at a glance
-//   without expanding into the timeline detail.
-function FlowRow({ flow, isLast }: { flow: FlowGroup; isLast: boolean }) {
-  const ordered = useMemo(
-    () =>
-      [...flow.events].sort((a, b) =>
-        a.occurred_at.localeCompare(b.occurred_at),
-      ),
-    [flow.events],
+function HeaderRow() {
+  const cell =
+    "flex h-10 items-center bg-oz2-bg-sunken px-4 font-mono text-[10.5px] font-medium uppercase tracking-[0.06em] text-oz2-text-muted border-b border-oz2-border-soft";
+  return (
+    <>
+      <div role="columnheader" className={cell}>
+        Event
+      </div>
+      <div role="columnheader" className={cell}>
+        Source
+      </div>
+      <div role="columnheader" className={cell}>
+        Protocol & Port
+      </div>
+      <div role="columnheader" className={cell}>
+        Destination
+      </div>
+      <div role="columnheader" className={`${cell} justify-end`}>
+        Traffic
+      </div>
+      <div role="columnheader" className={`${cell} justify-end pr-4`}>
+        Status
+      </div>
+    </>
   );
+}
 
-  type Step =
-    | { kind: "event"; event: NetworkTrafficEvent }
-    | { kind: "policy" };
-  const steps: Step[] = useMemo(() => {
-    const out: Step[] = [];
-    for (let i = 0; i < ordered.length; i++) {
-      out.push({ kind: "event", event: ordered[i] });
-      // Splice the synthetic policy line in right after the start so
-      // the lifecycle reads start → policy → stop.
-      if (i === 0 && flow.policy && ordered.length > 1) {
-        out.push({ kind: "policy" });
-      }
-    }
-    if (flow.policy && ordered.length === 1) out.push({ kind: "policy" });
-    return out;
-  }, [ordered, flow.policy]);
+function RowCells({
+  row,
+  isLastInTable,
+}: {
+  row: Row;
+  isLastInTable: boolean;
+}) {
+  // The first event in a flow carries the repeated context (peer pair,
+  // protocol, traffic totals, status). Later events / synthetic policy
+  // rows leave those cells blank so the row visually attaches to the
+  // flow's anchor row.
+  const isFirst = row.kind === "event" && row.isFirstInFlow;
+  const flowBorder =
+    row.isLastInFlow && !isLastInTable
+      ? "border-b border-oz2-border-soft"
+      : "";
 
-  const status = flowStatus(flow);
-  const firstEvent = ordered[0];
+  // Padding collapses inside a flow so events of the same flow read
+  // as one block. First / last get the standard padding.
+  const paddingY = (() => {
+    if (row.kind === "event" && row.isFirstInFlow && row.isLastInFlow)
+      return "py-3";
+    if (row.kind === "event" && row.isFirstInFlow) return "pt-3 pb-1.5";
+    if (row.isLastInFlow) return "pt-1.5 pb-3";
+    return "py-1.5";
+  })();
+
+  const cellCls = `px-4 ${paddingY} ${flowBorder}`;
+  const firstEvent = row.group.events[0];
+  const status = flowStatusPill(row.group);
 
   return (
-    <li
-      className={`grid grid-cols-1 gap-6 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] ${
-        isLast ? "" : "border-b border-oz2-border-soft"
-      }`}
-    >
-      {/* LEFT — vertical mini-timeline */}
-      <div className="relative">
-        {/* Rail spans the dot column from first to last dot. */}
-        <span
-          aria-hidden
-          className="absolute bottom-3 left-[11px] top-3 w-px bg-oz2-border-soft"
-        />
-        <ol className="m-0 flex list-none flex-col gap-1.5 p-0">
-          {steps.map((step, i) => {
-            if (step.kind === "policy") {
-              return (
-                <PolicyStep
-                  key={`p-${i}`}
-                  policy={flow.policy as Policy}
-                />
-              );
-            }
-            return (
-              <EventStep
-                key={`e-${step.event.event_id}`}
-                event={step.event}
-                flow={flow}
-                showFullDate={i === 0}
-              />
-            );
-          })}
-        </ol>
+    <>
+      <div role="cell" className={cellCls}>
+        <EventCell row={row} />
       </div>
-
-      {/* RIGHT — peer pair + traffic summary */}
-      <div className="flex flex-col items-stretch gap-3">
-        <div className="flex items-start justify-between gap-3">
-          <span className="font-mono text-[10.5px] uppercase tracking-wider text-oz2-text-faint">
-            {dayjs(flow.startedAt).format("MMM D")}
-          </span>
+      <div role="cell" className={cellCls}>
+        {isFirst && (
+          <PeerCell
+            peer={row.group.sourcePeer}
+            resource={row.group.sourceResource}
+            ip={firstEvent.source_ip}
+          />
+        )}
+      </div>
+      <div role="cell" className={cellCls}>
+        {isFirst && <ProtoCell event={firstEvent} />}
+      </div>
+      <div role="cell" className={cellCls}>
+        {isFirst && (
+          <PeerCell
+            peer={row.group.destPeer}
+            resource={row.group.destResource}
+            ip={firstEvent.dest_ip}
+          />
+        )}
+      </div>
+      <div role="cell" className={`${cellCls} flex justify-end`}>
+        {isFirst && <TrafficCell flow={row.group} />}
+      </div>
+      <div role="cell" className={`${cellCls} flex justify-end pr-4`}>
+        {isFirst && (
           <OzPill variant={status.variant}>
-            <span className="font-mono">{status.label}</span>
-          </OzPill>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <PeerChip
-            peer={flow.sourcePeer}
-            resource={flow.sourceResource}
-            ip={firstEvent?.source_ip ?? ""}
-          />
-          <span aria-hidden className="text-oz2-text-faint">
-            →
-          </span>
-          <PeerChip
-            peer={flow.destPeer}
-            resource={flow.destResource}
-            ip={firstEvent?.dest_ip ?? ""}
-          />
-        </div>
-
-        <div className="flex items-center gap-2 text-[11.5px] text-oz2-text-muted">
-          {firstEvent && (
-            <ProtoChip event={firstEvent} />
-          )}
-          {flow.reportingPeer && (
-            <span className="inline-flex items-center gap-1 font-mono text-[10.5px] text-oz2-text-faint">
-              <ActivityIcon size={11} />
-              reporter: {flow.reportingPeer.name}
+            <span className="inline-flex items-center gap-1.5">
+              <span aria-hidden>{status.icon}</span>
+              {status.label}
             </span>
-          )}
-        </div>
-
-        <TrafficSummary flow={flow} status={status.status} />
+          </OzPill>
+        )}
       </div>
-    </li>
+    </>
   );
 }
 
@@ -434,74 +446,95 @@ const dotToneClasses: Record<EventTone, string> = {
   acc: "border-oz2-acc text-oz2-acc",
 };
 
-function StepDot({ meta }: { meta: DotMeta }) {
+// EventCell renders the dot column + the event's own narrative line.
+// Rail segments hang off the dot above and below ONLY when another
+// step of the same flow follows; that's what makes the rail
+// terminate at the last dot ("no edge after stop") and stay broken
+// between flows. Rail uses oz2-border (not border-soft) and is 1.5px
+// wide so the connection between dots is unambiguously visible.
+function EventCell({ row }: { row: Row }) {
+  const meta =
+    row.kind === "event"
+      ? eventDot(row.event)
+      : policyDot(isPolicyBlocked(row.group.policy));
+  const railUp = row.kind === "event" ? !row.isFirstInFlow : true;
+  const railDown = !row.isLastInFlow;
+
+  const time =
+    row.kind === "event"
+      ? dayjs(row.event.occurred_at).format("MMM D · HH:mm:ss")
+      : null;
+
   return (
-    <span
-      aria-label={meta.label}
-      className={`relative z-10 grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 bg-oz2-surface ${dotToneClasses[meta.tone]}`}
-      // The shadow ring blends the dot into the page background
-      // wherever the rail passes behind it. Uses --ozv2-bg so it
-      // tracks the theme.
-      style={{ boxShadow: "0 0 0 4px var(--ozv2-bg)" }}
-    >
-      {meta.icon}
+    <div className="flex items-stretch gap-3">
+      <div className="relative flex w-6 shrink-0 flex-col items-center">
+        {/* Rail going UP — present only when this is not the first
+            step of its flow. min-height keeps the segment visible
+            at small line heights. */}
+        <span
+          aria-hidden
+          className={
+            railUp
+              ? "w-[1.5px] flex-1 bg-oz2-border"
+              : "w-[1.5px] flex-1 bg-transparent"
+          }
+          style={{ minHeight: 6 }}
+        />
+        <span
+          aria-label={meta.label}
+          className={`relative z-10 grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 bg-oz2-surface ${dotToneClasses[meta.tone]}`}
+          style={{ boxShadow: "0 0 0 4px var(--ozv2-bg-elev)" }}
+        >
+          {meta.icon}
+        </span>
+        {/* Rail going DOWN — present only when there's a next step. */}
+        <span
+          aria-hidden
+          className={
+            railDown
+              ? "w-[1.5px] flex-1 bg-oz2-border"
+              : "w-[1.5px] flex-1 bg-transparent"
+          }
+          style={{ minHeight: 6 }}
+        />
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
+        {row.kind === "event" ? (
+          <>
+            <span className="text-[13px] text-oz2-text">
+              {narrativeFor(row.event, row.group)}
+            </span>
+            <span className="font-mono text-[11px] tabular-nums text-oz2-text-faint">
+              {time}
+            </span>
+          </>
+        ) : (
+          <PolicyContent policy={row.group.policy as Policy} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PolicyContent({ policy }: { policy: Policy }) {
+  const blocked = isPolicyBlocked(policy);
+  return (
+    <span className="text-[13px] text-oz2-text">
+      Policy{" "}
+      <a
+        href="/access-control"
+        className="font-medium text-oz2-acc-text underline-offset-2 hover:underline"
+      >
+        {policy.name}
+      </a>{" "}
+      <span className="text-oz2-text-muted">
+        {blocked ? "blocked the connection" : "allowed the connection"}
+      </span>
     </span>
   );
 }
 
-function EventStep({
-  event,
-  flow,
-  showFullDate,
-}: {
-  event: NetworkTrafficEvent;
-  flow: FlowGroup;
-  showFullDate: boolean;
-}) {
-  const meta = eventDot(event);
-  return (
-    <li className="flex items-start gap-3">
-      <StepDot meta={meta} />
-      <div className="min-w-0 flex-1 pt-0.5">
-        <div className="text-[13px] text-oz2-text">
-          {narrativeFor(event, flow)}
-        </div>
-        <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[11px] text-oz2-text-faint tabular-nums">
-          <span>
-            {showFullDate
-              ? dayjs(event.occurred_at).format("MMM D · HH:mm:ss")
-              : dayjs(event.occurred_at).format("HH:mm:ss")}
-          </span>
-        </div>
-      </div>
-    </li>
-  );
-}
-
-function PolicyStep({ policy }: { policy: Policy }) {
-  const action = policy.rules?.[0]?.action;
-  const blocked = action === "drop" || action === "deny";
-  const meta = policyDot(blocked);
-  return (
-    <li className="flex items-start gap-3">
-      <StepDot meta={meta} />
-      <div className="min-w-0 flex-1 pt-0.5 text-[13px] text-oz2-text">
-        Policy{" "}
-        <a
-          href="/access-control"
-          className="font-medium text-oz2-acc-text underline-offset-2 hover:underline"
-        >
-          {policy.name}
-        </a>{" "}
-        <span className="text-oz2-text-muted">
-          {blocked ? "blocked the connection" : "allowed the connection"}
-        </span>
-      </div>
-    </li>
-  );
-}
-
-function PeerChip({
+function PeerCell({
   peer,
   resource,
   ip,
@@ -513,90 +546,131 @@ function PeerChip({
   const fallback = resource?.address ?? (peer ? undefined : "external");
   const label = peer?.name ?? fallback ?? ip;
   return (
-    <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-oz2-border bg-oz2-bg-sunken px-2 py-1 text-[12px] text-oz2-text-2">
-      <span className="relative grid h-4 w-4 shrink-0 place-items-center text-oz2-text-faint">
-        {peer ? <OSLogo os={peer.os} /> : <GlobeIcon size={11} />}
+    <div className="flex min-w-0 items-center gap-2">
+      <span className="relative grid h-7 w-7 shrink-0 place-items-center rounded-md border border-oz2-border bg-oz2-bg-sunken">
+        <span className="grid h-4 w-4 place-items-center text-oz2-text-faint">
+          {peer ? <OSLogo os={peer.os} /> : <GlobeIcon size={12} />}
+        </span>
         {peer?.country_code && (
           <span className="absolute -bottom-1 -right-1">
-            <RoundedFlag country={peer.country_code} size={9} />
+            <RoundedFlag country={peer.country_code} size={11} />
           </span>
         )}
       </span>
-      <span className="truncate font-medium text-oz2-text">{label}</span>
-      <span className="font-mono text-[10.5px] text-oz2-text-faint">{ip}</span>
-    </span>
-  );
-}
-
-function ProtoChip({ event }: { event: NetworkTrafficEvent }) {
-  const port = portChipFor(event);
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-md border border-oz2-border bg-oz2-surface px-2 py-0.5 font-mono text-[11px] uppercase tracking-wide text-oz2-text-2">
-      {protocolName(event.protocol)}
-      {port && (
-        <>
-          <span className="text-oz2-text-faint">:</span>
-          {port.label}
-        </>
-      )}
-    </span>
-  );
-}
-
-// TrafficSummary — handoff-flavored "row pulls its weight" block.
-// Top: rx ↓ vs tx ↑ in mono with arrows, sized large enough to read
-// at a glance. Middle: a 2-segment proportion bar (cyan rx, violet
-// tx) so the operator can eyeball whether the flow leaned upload or
-// download without parsing two byte values. Bottom: packet tally
-// in mono.
-function TrafficSummary({
-  flow,
-  status,
-}: {
-  flow: FlowGroup;
-  status: FlowStatus;
-}) {
-  const { totalRx, totalTx, totalRxPkts, totalTxPkts } = flow;
-  const total = totalRx + totalTx;
-  const rxPct = total > 0 ? (totalRx / total) * 100 : 50;
-  const txPct = total > 0 ? (totalTx / total) * 100 : 50;
-  const empty = total === 0 && status === "dropped";
-  return (
-    <div className="rounded-oz2-input border border-oz2-border-soft bg-oz2-bg-sunken px-3 py-2.5">
-      <div className="flex items-center justify-between gap-3 font-mono text-[13px] tabular-nums">
-        <span className="inline-flex items-center gap-1 text-oz2-text">
-          <ArrowDown size={12} className="text-oz2-acc" />
-          {formatBytes(totalRx)}
-        </span>
-        <span className="inline-flex items-center gap-1 text-oz2-text">
-          <ArrowUp size={12} className="text-oz2-acc" />
-          {formatBytes(totalTx)}
-        </span>
-      </div>
-      <div
-        aria-hidden
-        className="mt-1.5 flex h-1 overflow-hidden rounded-full bg-oz2-border-soft"
-      >
-        <span
-          className="bg-oz2-acc"
-          style={{ width: `${empty ? 0 : rxPct}%` }}
-        />
-        <span
-          className="bg-oz2-acc-soft-2"
-          style={{ width: `${empty ? 0 : txPct}%` }}
-        />
-      </div>
-      <div className="mt-1.5 flex items-center justify-between font-mono text-[10.5px] text-oz2-text-faint">
-        <span>{totalRxPkts + totalTxPkts} pkts</span>
-        <span>
-          {totalRxPkts}↓ · {totalTxPkts}↑
-        </span>
+      <div className="flex min-w-0 flex-col">
+        <span className="truncate text-[13px] text-oz2-text">{label}</span>
+        <span className="font-mono text-[11px] text-oz2-text-faint">{ip}</span>
       </div>
     </div>
   );
 }
 
-// ─── Helpers ports from legacy NetworkTrafficTimeline ─────────────────
+function ProtoCell({ event }: { event: NetworkTrafficEvent }) {
+  const port = portChipFor(event);
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="inline-flex items-center gap-1 rounded-md border border-oz2-border bg-oz2-bg-sunken px-2 py-0.5 font-mono text-[11px] uppercase tracking-wide text-oz2-text">
+        {protocolName(event.protocol)}
+      </span>
+      {port && (
+        <span className="inline-flex items-center rounded-md border border-oz2-border-soft bg-oz2-surface px-2 py-0.5 font-mono text-[11px] uppercase tracking-wide text-oz2-text-2">
+          {port.label}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// TrafficCell — handoff-flavored "row carries weight" block: mono
+// totals on top, a 2-segment rx-vs-tx ratio bar below, with the
+// packet tally beneath. Rendered right-aligned per the table grid.
+function TrafficCell({ flow }: { flow: FlowGroup }) {
+  const total = flow.totalRx + flow.totalTx;
+  const rxPct = total > 0 ? (flow.totalRx / total) * 100 : 0;
+  const txPct = total > 0 ? (flow.totalTx / total) * 100 : 0;
+  return (
+    <div className="flex w-full flex-col items-end gap-1">
+      <div className="flex items-center gap-3 font-mono text-[12px] tabular-nums text-oz2-text">
+        <span className="inline-flex items-center gap-1">
+          <ArrowDown size={11} className="text-oz2-acc" />
+          {formatBytes(flow.totalRx)}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <ArrowUp size={11} className="text-oz2-acc" />
+          {formatBytes(flow.totalTx)}
+        </span>
+      </div>
+      {total > 0 && (
+        <div
+          aria-hidden
+          className="flex h-1 w-[120px] overflow-hidden rounded-full bg-oz2-border-soft"
+        >
+          <span className="bg-oz2-acc" style={{ width: `${rxPct}%` }} />
+          <span
+            className="bg-oz2-acc-soft-2"
+            style={{ width: `${txPct}%` }}
+          />
+        </div>
+      )}
+      <span className="font-mono text-[10.5px] text-oz2-text-faint">
+        {flow.totalRxPkts + flow.totalTxPkts} pkts
+      </span>
+    </div>
+  );
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────
+
+// flattenRows expands each FlowGroup into its rows (one per event,
+// plus a synthetic policy row spliced after the first event when we
+// know which policy matched).
+function flattenRows(groups: FlowGroup[]): Row[] {
+  const out: Row[] = [];
+  for (const g of groups) {
+    const events = [...g.events].sort((a, b) =>
+      a.occurred_at.localeCompare(b.occurred_at),
+    );
+    const totalSteps = events.length + (g.policy ? 1 : 0);
+    let stepIdx = 0;
+    for (let i = 0; i < events.length; i++) {
+      const e = events[i];
+      const isFirstInFlow = stepIdx === 0;
+      const isLastInFlow = stepIdx === totalSteps - 1;
+      out.push({
+        kind: "event",
+        event: e,
+        group: g,
+        isFirstInFlow,
+        isLastInFlow,
+      });
+      stepIdx++;
+      if (i === 0 && g.policy && events.length > 1) {
+        const isLastInFlowP = stepIdx === totalSteps - 1;
+        out.push({
+          kind: "policy",
+          group: g,
+          isFirstInFlow: false,
+          isLastInFlow: isLastInFlowP,
+        });
+        stepIdx++;
+      }
+    }
+    if (g.policy && events.length === 1) {
+      out.push({
+        kind: "policy",
+        group: g,
+        isFirstInFlow: false,
+        isLastInFlow: true,
+      });
+    }
+  }
+  return out;
+}
+
+function rowKey(r: Row, idx: number): string {
+  if (r.kind === "event") return `${r.group.flowID}:e:${r.event.event_id}`;
+  return `${r.group.flowID}:p:${idx}`;
+}
 
 function groupFlows(
   events: NetworkTrafficEvent[],
