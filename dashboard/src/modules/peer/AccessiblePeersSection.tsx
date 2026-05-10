@@ -1,4 +1,5 @@
-import Paragraph from "@components/Paragraph";
+"use client";
+
 import SkeletonTable, {
   SkeletonTableHeader,
 } from "@components/skeletons/SkeletonTable";
@@ -16,6 +17,13 @@ const AccessiblePeersTable = lazy(
 type Props = {
   peerID: string;
 };
+
+// AccessiblePeersSection — v2 chrome around AccessiblePeersTable.
+// The table itself still renders legacy DataTable paint; a v2 paint
+// pass is tracked separately. Section just enriches peers with their
+// owning user (so the table cells can render the user info inline)
+// and forwards the data + portal headingTarget.
+
 export const AccessiblePeersSection = ({ peerID }: Props) => {
   const { data: peers, isLoading } = useFetchApi<Peer[]>(
     `/peers/${peerID}/accessible-peers`,
@@ -33,23 +41,26 @@ export const AccessiblePeersSection = ({ peerID }: Props) => {
   });
 
   return (
-    <div className={"pb-10 px-8"}>
-      <div className={"max-w-6xl"}>
-        <div className={"flex justify-between items-center mb-5"}>
-          <div>
-            <h2 ref={headingRef}>Accessible Peers</h2>
-            <Paragraph>
-              This peer can connect to the following peers within the Openzro
-              network.
-            </Paragraph>
-          </div>
-        </div>
+    <section className="space-y-4 px-8 pb-10">
+      <header className="max-w-6xl">
+        <h2
+          ref={headingRef}
+          className="text-[18px] font-semibold tracking-tight text-oz2-text"
+        >
+          Accessible Peers
+        </h2>
+        <p className="mt-1 max-w-2xl text-[13px] leading-[1.55] text-oz2-text-muted">
+          Every peer this one is allowed to reach across the mesh, resolved
+          against the active access-control policies.
+        </p>
+      </header>
 
+      <div className="max-w-6xl">
         <Suspense
           fallback={
             <div>
-              <SkeletonTableHeader className={"!p-0"} />
-              <div className={"mt-8 w-full"}>
+              <SkeletonTableHeader className="!p-0" />
+              <div className="mt-8 w-full">
                 <SkeletonTable withHeader={false} />
               </div>
             </div>
@@ -63,6 +74,6 @@ export const AccessiblePeersSection = ({ peerID }: Props) => {
           />
         </Suspense>
       </div>
-    </div>
+    </section>
   );
 };
