@@ -1,7 +1,5 @@
 "use client";
 
-import Breadcrumbs from "@components/Breadcrumbs";
-import Button from "@components/Button";
 import Card from "@components/Card";
 import FancyToggleSwitch from "@components/FancyToggleSwitch";
 import FullTooltip from "@components/FullTooltip";
@@ -52,18 +50,25 @@ import { useSWRConfig } from "swr";
 import RoundedFlag from "@/assets/countries/RoundedFlag";
 import CircleIcon from "@/assets/icons/CircleIcon";
 import OpenzroIcon from "@/assets/icons/OpenzroIcon";
-import PeerIcon from "@/assets/icons/PeerIcon";
+import OzButton from "@/components/v2/OzButton";
 import { useCountries } from "@/contexts/CountryProvider";
 import PeerProvider, { usePeer } from "@/contexts/PeerProvider";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import RoutesProvider from "@/contexts/RoutesProvider";
 import { useHasChanges } from "@/hooks/useHasChanges";
 import type { Peer } from "@/interfaces/Peer";
-import PageContainer from "@/layouts/PageContainer";
 import useGroupHelper from "@/modules/groups/useGroupHelper";
 import { AccessiblePeersSection } from "@/modules/peer/AccessiblePeersSection";
 import { PeerExpirationToggle } from "@/modules/peer/PeerExpirationToggle";
 import { PeerNetworkRoutesSection } from "@/modules/peer/PeerNetworkRoutesSection";
+
+// /peer — v2 chrome entry. Body keeps the legacy widgets unchanged
+// (PeerExpirationToggle, FancyToggleSwitch, PeerInformationCard,
+// EditNameModal, the Tabs nav for Network Routes / Accessible Peers).
+// Only the wrapping page chrome flips: PageContainer + Breadcrumbs
+// drop out (handled by V2DashboardLayout); legacy Buttons become
+// OzButton. A deeper v2 paint of the per-peer widgets is tracked
+// separately — too much surface to flip in one commit.
 
 export default function PeerPage() {
   const queryParameter = useSearchParams();
@@ -78,17 +83,17 @@ export default function PeerPage() {
   useRedirect("/peers", false, !peerId || isRestricted);
 
   const peerKey = useMemo(() => {
-    let id = peer?.id ?? "";
-    let ssh = peer?.ssh_enabled ? "1" : "0";
-    let expiration = peer?.login_expiration_enabled ? "1" : "0";
+    const id = peer?.id ?? "";
+    const ssh = peer?.ssh_enabled ? "1" : "0";
+    const expiration = peer?.login_expiration_enabled ? "1" : "0";
     return `${id}-${ssh}-${expiration}`;
   }, [peer]);
 
   if (isRestricted) {
     return (
-      <PageContainer>
+      <div className="space-y-6 p-8">
         <RestrictedAccess page={"Peer Information"} />
-      </PageContainer>
+      </div>
     );
   }
 
@@ -115,22 +120,12 @@ function PeerOverview() {
   const { peer } = usePeer();
 
   return (
-    <PageContainer>
-      <RoutesProvider>
-        <div className={"p-default py-6 pb-0"}>
-          <Breadcrumbs>
-            <Breadcrumbs.Item
-              href={"/peers"}
-              label={"Peers"}
-              icon={<PeerIcon size={13} />}
-            />
-            <Breadcrumbs.Item label={peer.ip} active />
-          </Breadcrumbs>
-          <PeerGeneralInformation />
-        </div>
-        <PeerOverviewTabs />
-      </RoutesProvider>
-    </PageContainer>
+    <RoutesProvider>
+      <div className="space-y-5 p-8 pb-0">
+        <PeerGeneralInformation />
+      </div>
+      <PeerOverviewTabs />
+    </RoutesProvider>
   );
 }
 
@@ -138,6 +133,7 @@ const PeerGeneralInformation = () => {
   const router = useRouter();
   const { mutate } = useSWRConfig();
   const { peer, user, peerGroups, openSSHDialog, update } = usePeer();
+  const { permission } = usePermissions();
   const [ssh, setSsh] = useState(peer.ssh_enabled);
   const [name, setName] = useState(peer.name);
   const [showEditNameModal, setShowEditNameModal] = useState(false);
@@ -153,9 +149,6 @@ const PeerGeneralInformation = () => {
       peer,
     });
 
-  /**
-   * Detect if there are changes in the peer information, if there are changes, then enable the save button.
-   */
   const { hasChanges, updateRef: updateHasChangedRef } = useHasChanges([
     ssh,
     selectedGroups,
@@ -196,18 +189,16 @@ const PeerGeneralInformation = () => {
     });
   };
 
-  const { permission } = usePermissions();
-
   return (
     <>
-      <div className={"flex justify-between max-w-6xl items-start"}>
-        <div>
-          <div className={"flex items-center gap-3"}>
-            <h1 className={"flex items-center gap-3"}>
+      <div className="flex max-w-6xl items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-3">
+            <h1 className="flex items-center gap-3 text-[24px] font-semibold tracking-tight">
               <CircleIcon
                 active={peer.connected}
                 size={12}
-                className={"mb-[3px] shrink-0"}
+                className="mb-[3px] shrink-0"
               />
               <TextWithTooltip text={name} maxChars={30} />
 
@@ -217,13 +208,12 @@ const PeerGeneralInformation = () => {
                   onOpenChange={setShowEditNameModal}
                 >
                   <ModalTrigger>
-                    <div
-                      className={
-                        "flex items-center gap-2 dark:text-neutral-300 text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 transition-all hover:bg-neutral-100 dark:hover:bg-nb-gray-800/60 py-2 px-3 rounded-md cursor-pointer"
-                      }
+                    <span
+                      aria-label="Edit peer name"
+                      className="inline-grid h-8 w-8 cursor-pointer place-items-center rounded-[8px] border border-oz2-border bg-oz2-surface text-oz2-text-2 transition-colors hover:border-oz2-border-strong hover:bg-oz2-hover hover:text-oz2-text"
                     >
-                      <PencilIcon size={16} />
-                    </div>
+                      <PencilIcon size={14} />
+                    </span>
                   </ModalTrigger>
                   <EditNameModal
                     onSuccess={(newName) => {
@@ -241,39 +231,35 @@ const PeerGeneralInformation = () => {
             </h1>
             <LoginExpiredBadge loginExpired={peer.login_expired} />
           </div>
-          <div className={"flex items-center gap-8"}>
-            <Paragraph className={"flex items-center"}>{user?.email}</Paragraph>
-          </div>
+          {user?.email && (
+            <p className="mt-1 text-[13px] text-oz2-text-muted">{user.email}</p>
+          )}
         </div>
-        <div className={"flex gap-4"}>
-          <Button
-            variant={"default"}
-            className={"w-full"}
+        <div className="flex items-center gap-2">
+          <OzButton
+            variant="default"
+            type="button"
             onClick={() => router.push("/peers")}
           >
             Cancel
-          </Button>
-          <Button
-            variant={"primary"}
-            className={"w-full"}
+          </OzButton>
+          <OzButton
+            variant="primary"
+            type="button"
             onClick={() => updatePeer()}
             disabled={
               !hasChanges || !permission.peers.read || !permission.groups.update
             }
           >
             Save Changes
-          </Button>
+          </OzButton>
         </div>
       </div>
 
-      <div
-        className={
-          "flex-wrap xl:flex-nowrap flex gap-10 w-full mt-5 max-w-6xl items-start"
-        }
-      >
+      <div className="mt-5 flex w-full max-w-6xl flex-wrap items-start gap-10 xl:flex-nowrap">
         <PeerInformationCard peer={peer} />
 
-        <div className={"flex flex-col gap-6 lg:w-1/2 transition-all"}>
+        <div className="flex flex-col gap-6 transition-all lg:w-1/2">
           <div>
             <PeerExpirationToggle
               peer={peer}
@@ -281,7 +267,7 @@ const PeerGeneralInformation = () => {
               icon={<TimerResetIcon size={16} />}
               onChange={(state) => {
                 setLoginExpiration(state);
-                !state && setInactivityExpiration(false);
+                if (!state) setInactivityExpiration(false);
               }}
             />
             {permission.peers.update && !!peer?.user_id && (
@@ -312,18 +298,15 @@ const PeerGeneralInformation = () => {
 
           <FullTooltip
             content={
-              <div
-                className={"flex gap-2 items-center !text-nb-gray-300 text-xs"}
-              >
+              <div className="flex items-center gap-2 !text-nb-gray-300 text-xs">
                 <LockIcon size={14} />
                 <span>
-                  {`You don't have the required permissions to update this
-                          setting.`}
+                  {`You don't have the required permissions to update this setting.`}
                 </span>
               </div>
             }
             interactive={false}
-            className={"w-full block"}
+            className="w-full block"
             disabled={!permission.peers.update}
           >
             <FancyToggleSwitch
@@ -421,7 +404,7 @@ function PeerInformationCard({ peer }: Readonly<{ peer: Peer }>) {
   }, [getRegionByPeer, peer]);
 
   return (
-    <Card className={"w-full xl:w-1/2"}>
+    <Card className="w-full xl:w-1/2">
       <Card.List>
         <Card.ListItem
           copy
@@ -493,8 +476,8 @@ function PeerInformationCard({ peer }: Readonly<{ peer: Peer }>) {
                 {isLoading ? (
                   <Skeleton width={140} />
                 ) : (
-                  <div className={"flex gap-2 items-center"}>
-                    <div className={"border-0 border-nb-gray-800 rounded-full"}>
+                  <div className="flex items-center gap-2">
+                    <div className="border-0 border-nb-gray-800 rounded-full">
                       <RoundedFlag country={peer.country_code} size={12} />
                     </div>
                     {countryText}
@@ -608,7 +591,7 @@ function EditNameModal({ onSuccess, peer, initialName }: Readonly<ModalProps>) {
           color={"blue"}
         />
 
-        <div className={"p-default flex flex-col gap-4"}>
+        <div className="p-default flex flex-col gap-4">
           <div>
             <Input
               placeholder={"e.g., AWS Servers"}
@@ -616,38 +599,37 @@ function EditNameModal({ onSuccess, peer, initialName }: Readonly<ModalProps>) {
               onChange={(e) => setName(e.target.value)}
             />
           </div>
-          <Card className={"w-full px-6 pt-5 pb-4"}>
+          <Card className="w-full px-6 pt-5 pb-4">
             <Label>
               <Globe size={15} />
               Domain Name Preview
             </Label>
-            <HelpText className={"mt-2"}>
+            <HelpText className="mt-2">
               If the domain name already exists, we add an increment number
               suffix to it.
             </HelpText>
-            <div className={"text-openzro text-sm break-all whitespace-normal"}>
+            <Paragraph className="text-openzro text-sm break-all whitespace-normal">
               {domainNamePreview}
-            </div>
+            </Paragraph>
           </Card>
         </div>
 
-        <ModalFooter className={"items-center"} separator={false}>
-          <div className={"flex gap-3 w-full justify-end"}>
-            <ModalClose asChild={true}>
-              <Button variant={"secondary"} className={"w-full"}>
+        <ModalFooter className="items-center" separator={false}>
+          <div className="flex gap-3 w-full justify-end">
+            <ModalClose asChild>
+              <OzButton variant="default" type="button">
                 Cancel
-              </Button>
+              </OzButton>
             </ModalClose>
 
-            <Button
-              variant={"primary"}
-              className={"w-full"}
+            <OzButton
+              variant="primary"
+              type="submit"
               onClick={() => onSuccess(name)}
               disabled={isDisabled}
-              type={"submit"}
             >
               Save
-            </Button>
+            </OzButton>
           </div>
         </ModalFooter>
       </form>
