@@ -1,8 +1,10 @@
 "use client";
 
 import { useTheme } from "next-themes";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import React, { useEffect, useState } from "react";
+import openzroIcon from "@/assets/openzro.svg";
 import UserDropdown from "@/components/ui/UserDropdown";
 import OzShell from "@/components/v2/OzShell";
 import OzSidebar, { type OzSidebarSection } from "@/components/v2/OzSidebar";
@@ -16,6 +18,33 @@ import ApplicationProvider from "@/contexts/ApplicationProvider";
 import CountryProvider from "@/contexts/CountryProvider";
 import GroupsProvider from "@/contexts/GroupsProvider";
 import UsersProvider, { useLoggedInUser } from "@/contexts/UsersProvider";
+
+// Slot context for the v2 topbar's right side. Pages call
+// useV2TopbarRight(<MyAction />) once on mount to inject a per-page
+// action (e.g. "Add peer", "Save policy") that renders to the left of
+// the persistent ThemeToggle + UserDropdown block. The setter from
+// useState is reference-stable, so the effect dep [setRight] yields a
+// run-once registration with a clean unmount.
+
+interface TopbarSlotValue {
+  setRight: (node: React.ReactNode) => void;
+}
+
+const TopbarSlotContext = React.createContext<TopbarSlotValue | null>(null);
+
+export function useV2TopbarRight(node: React.ReactNode) {
+  const ctx = React.useContext(TopbarSlotContext);
+  useEffect(() => {
+    if (!ctx) return;
+    ctx.setRight(node);
+    return () => ctx.setRight(null);
+    // node is intentionally NOT a dep — pages pass static JSX once;
+    // re-renders that produce a new JSX object would otherwise churn
+    // the layout. If a page needs dynamic topbar content, refactor
+    // the action body to read from its own context instead.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctx]);
+}
 
 // V2DashboardLayout — Notion/Arc-flavored chrome introduced by ADR-0016.
 // Composes OzShell + OzSidebar + OzTopbar around children. Wraps the
@@ -53,6 +82,7 @@ function V2DashboardChrome({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { setTheme, resolvedTheme } = useTheme();
+  const [topbarRight, setTopbarRight] = useState<React.ReactNode>(null);
 
   // Gate the toggle on `mounted` so SSR/CSR markup match —
   // next-themes' resolvedTheme is undefined during SSR.
@@ -65,41 +95,53 @@ function V2DashboardChrome({ children }: { children: React.ReactNode }) {
   const breadcrumb = breadcrumbForPath(pathname);
 
   return (
-    <OzShell
-      sidebar={
-        <OzSidebar
-          brand={
-            <span className="font-sans text-[17px] font-semibold tracking-tight text-oz2-text">
-              open<span className="font-bold text-oz2-acc">Z</span>ro
-            </span>
-          }
-          sections={sections}
-          footer={<UserFooter />}
-        />
-      }
-      topbar={
-        <OzTopbar
-          left={
-            breadcrumb.length > 0 ? (
-              <OzBreadcrumb segments={breadcrumb} />
-            ) : null
-          }
-          right={
-            <>
-              <OzThemeToggle
-                theme={currentTheme}
-                onToggle={() =>
-                  setTheme(currentTheme === "dark" ? "light" : "dark")
-                }
-              />
-              <UserDropdown />
-            </>
-          }
-        />
-      }
-    >
-      {children}
-    </OzShell>
+    <TopbarSlotContext.Provider value={{ setRight: setTopbarRight }}>
+      <OzShell
+        sidebar={
+          <OzSidebar
+            brand={
+              <div className="flex items-center gap-2">
+                <Image
+                  src={openzroIcon}
+                  alt=""
+                  width={22}
+                  height={22}
+                  priority
+                />
+                <span className="font-sans text-[17px] font-semibold tracking-tight text-oz2-text">
+                  open<span className="font-bold text-oz2-acc">Z</span>ro
+                </span>
+              </div>
+            }
+            sections={sections}
+            footer={<UserFooter />}
+          />
+        }
+        topbar={
+          <OzTopbar
+            left={
+              breadcrumb.length > 0 ? (
+                <OzBreadcrumb segments={breadcrumb} />
+              ) : null
+            }
+            right={
+              <>
+                {topbarRight}
+                <OzThemeToggle
+                  theme={currentTheme}
+                  onToggle={() =>
+                    setTheme(currentTheme === "dark" ? "light" : "dark")
+                  }
+                />
+                <UserDropdown />
+              </>
+            }
+          />
+        }
+      >
+        {children}
+      </OzShell>
+    </TopbarSlotContext.Provider>
   );
 }
 

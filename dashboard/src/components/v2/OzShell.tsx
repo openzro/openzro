@@ -27,19 +27,21 @@ const OzShell = ({
   return (
     <div
       className={classNames(
-        "flex min-h-screen w-full bg-oz2-bg font-sans text-oz2-text",
+        "flex h-screen w-full overflow-hidden bg-oz2-bg font-sans text-oz2-text",
         className,
       )}
       {...props}
     >
-      <aside className="w-60 shrink-0 border-r border-oz2-border-soft bg-oz2-bg-soft">
+      <aside className="flex h-full w-60 shrink-0 flex-col border-r border-oz2-border-soft bg-oz2-bg-soft">
         {sidebar}
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 h-14 border-b border-oz2-border-soft bg-oz2-bg/95 backdrop-blur-md">
+        <header className="h-14 shrink-0 border-b border-oz2-border-soft bg-oz2-bg/95 backdrop-blur-md">
           {topbar}
         </header>
-        <main className="flex-1 overflow-x-hidden">{children}</main>
+        <main className="flex-1 overflow-y-auto overflow-x-hidden">
+          {children}
+        </main>
       </div>
     </div>
   );
