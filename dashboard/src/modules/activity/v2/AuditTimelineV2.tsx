@@ -18,7 +18,6 @@ import { getColorFromCode } from "@/modules/activity/utils";
 import DateRangePickerV2 from "@/modules/activity/v2/DateRangePickerV2";
 import EventCodeSelectorV2 from "@/modules/activity/v2/EventCodeSelectorV2";
 import InitiatorSelectorV2 from "@/modules/activity/v2/InitiatorSelectorV2";
-import EventsTabs from "@/modules/events/v2/EventsTabs";
 
 // AuditTimelineV2 — phase-5.11 v2 paint over /events/audit.
 // Replaces the legacy ActivityTable's flat row layout with the
@@ -205,8 +204,6 @@ export default function AuditTimelineV2({ events, isLoading }: Props) {
           lifecycle. Grouped by day, newest first.
         </p>
       </header>
-
-      <EventsTabs />
 
       {isColdStart ? (
         <OzEmptyState

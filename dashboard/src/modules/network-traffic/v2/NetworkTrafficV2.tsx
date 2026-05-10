@@ -26,7 +26,6 @@ import {
 import { Peer } from "@/interfaces/Peer";
 import { Policy } from "@/interfaces/Policy";
 import DateRangePickerV2 from "@/modules/activity/v2/DateRangePickerV2";
-import EventsTabs from "@/modules/events/v2/EventsTabs";
 import PeerFilterV2, {
   type PeerFilterOption,
 } from "@/modules/network-traffic/v2/PeerFilterV2";
@@ -225,15 +224,15 @@ export default function NetworkTrafficV2() {
   return (
     <div className="space-y-6 p-8">
       <header>
-        <h1 className="text-[24px] font-semibold tracking-tight">Activity</h1>
+        <h1 className="text-[24px] font-semibold tracking-tight">
+          Flow Traffic
+        </h1>
         <p className="mt-1 max-w-2xl text-[14px] text-oz2-text-muted">
           Per-flow records reported by your peers — connection starts, ends,
           and drops. Useful for forensics, capacity planning, and validating
           that your access policies match traffic in the wild.
         </p>
       </header>
-
-      <EventsTabs />
 
       {isColdStart ? (
         <OzEmptyState

@@ -233,15 +233,15 @@ function breadcrumbForPath(path: string | null): OzBreadcrumbSegment[] {
       { label: "User" },
     ];
   }
-  // /events/* sits under the Identity > Activity sub-screen. Both
-  // sub-routes share the umbrella "Activity" crumb so the topbar
-  // matches the H1 across tabs.
-  if (
-    path === "/events" ||
-    path === "/events/audit" ||
-    path === "/events/network-traffic"
-  ) {
+  // /events/* split into two top-level Identity items per the
+  // handoff: Activity (audit trail) and Flow Traffic (network
+  // observability). Each gets its own crumb so the topbar matches
+  // the per-screen H1.
+  if (path === "/events" || path === "/events/audit") {
     return [{ label: "Identity" }, { label: "Activity" }];
+  }
+  if (path === "/events/network-traffic") {
+    return [{ label: "Identity" }, { label: "Flow Traffic" }];
   }
   // /dns/* (Nameservers + Settings + bare /dns redirect) collapses
   // under the umbrella "DNS" crumb so all sub-routes share the same
@@ -307,6 +307,12 @@ const NAV_ICONS = {
     </>,
   ),
   activity: navIcon(<path d="M22 12h-4l-3 9L9 3l-3 9H2" />),
+  flowTraffic: navIcon(
+    <>
+      <path d="M3 7h13M16 7l-3-3m3 3-3 3" />
+      <path d="M21 17H8M8 17l3-3m-3 3 3 3" />
+    </>,
+  ),
   dns: navIcon(
     <>
       <circle cx={12} cy={12} r={9} />
@@ -405,13 +411,22 @@ function buildSidebarSections(
           id: "activity",
           label: "Activity",
           icon: NAV_ICONS.activity,
-          active: matches("/events"),
-          // Land on /events/audit so the operator hits the ported v2
-          // body first; from there the EventsTabs sub-nav exposes
-          // Network Traffic. Legacy was /events/network-traffic which
-          // was fine when both bodies were on the same paint, but
-          // /network-traffic still ships legacy paint until phase 5.12.
+          // Activity = audit trail only. Flow Traffic split into its
+          // own item below per the handoff (TrafficScreen breadcrumb
+          // is "Acme Mesh > Flow Traffic", standalone). They're
+          // semantically different surfaces — admin trail vs network
+          // observability — so the sidebar reflects that.
+          active:
+            !!pathname &&
+            (pathname === "/events" || pathname === "/events/audit"),
           onClick: () => go("/events/audit"),
+        },
+        {
+          id: "flow-traffic",
+          label: "Flow Traffic",
+          icon: NAV_ICONS.flowTraffic,
+          active: matches("/events/network-traffic"),
+          onClick: () => go("/events/network-traffic"),
         },
       ],
     },
