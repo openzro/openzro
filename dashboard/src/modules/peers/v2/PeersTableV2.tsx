@@ -1,5 +1,7 @@
 "use client";
 
+import { useOidcUser } from "@axa-fr/react-oidc";
+import { Modal, ModalTrigger } from "@components/modal/Modal";
 import {
   Tooltip,
   TooltipContent,
@@ -10,6 +12,7 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { Barcode, CpuIcon } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useSWRConfig } from "swr";
 import OzButton from "@/components/v2/OzButton";
 import OzCard from "@/components/v2/OzCard";
 import OzPill from "@/components/v2/OzPill";
@@ -23,9 +26,11 @@ import {
   OzTableRow,
 } from "@/components/v2/OzTable";
 import { useGroups } from "@/contexts/GroupsProvider";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { Peer } from "@/interfaces/Peer";
 import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
 import { OSLogo } from "@/modules/peers/PeerOSCell";
+import SetupModal from "@/modules/setup-openzro-modal/SetupModal";
 
 dayjs.extend(relativeTime);
 
@@ -65,17 +70,12 @@ function deriveStatus(peer: Peer): "on" | "warn" | "off" {
 
 export default function PeersTableV2({ peers, isLoading }: Props) {
   const { groups } = useGroups();
+  const { mutate } = useSWRConfig();
 
-  // Mount the per-page primary action into the V2 topbar's right slot.
-  // Phase 4.3 will swap this stub for the real AddPeerButton + SetupModal.
-  useV2TopbarRight(
-    <OzButton variant="primary" type="button">
-      <span className="inline-flex h-3.5 w-3.5 items-center justify-center">
-        {ICONS.plus}
-      </span>
-      Add peer
-    </OzButton>,
-  );
+  // Mount the real Add peer trigger into the V2 topbar's right slot.
+  // AddPeerButtonV2 owns its own Modal + SetupModal; the trigger
+  // renders as an OzButton primary so it inherits the v2 paint.
+  useV2TopbarRight(<AddPeerButtonV2 peerCount={peers?.length ?? 0} />);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -142,9 +142,14 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
   const paginated = filtered.slice(pageStart, pageStart + pageSize);
 
   const refreshClick = () => {
-    // Phase 4.3 wires this to useSWRConfig().mutate("/peers").
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 600);
+    Promise.all([mutate("/peers"), mutate("/groups"), mutate("/users")])
+      .catch(() => {
+        // SWR surfaces fetch errors via its own error state; we don't
+        // need to alert from the refresh button. Keep the button
+        // ready for retry on transient failures.
+      })
+      .finally(() => setRefreshing(false));
   };
 
   const toggleSelected = (id: string) =>
@@ -632,6 +637,49 @@ function RowKebab() {
     >
       {ICONS.more}
     </button>
+  );
+}
+
+// AddPeerButtonV2 — v2 paint over the legacy AddPeerButton modal flow.
+// Mirrors components/ui/AddPeerButton: same first-run / onboarding /
+// SetupModal wiring, just renders OzButton as the trigger so it
+// inherits the v2 paint inside the topbar slot.
+function AddPeerButtonV2({ peerCount }: { peerCount: number }) {
+  const { oidcUser: user } = useOidcUser();
+
+  const [hasOnboardingFormCompleted] = useLocalStorage(
+    "openzro-onboarding-modal",
+    false,
+  );
+  const [isFirstRun, setIsFirstRun] = useLocalStorage<boolean>(
+    "openzro-first-run",
+    peerCount === 0,
+  );
+  const [open, setOpen] = useState(
+    !hasOnboardingFormCompleted
+      ? process.env.APP_ENV !== "test"
+        ? false
+        : isFirstRun
+      : isFirstRun,
+  );
+
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    setIsFirstRun(false);
+  };
+
+  return (
+    <Modal open={open} onOpenChange={handleOpenChange}>
+      <ModalTrigger asChild>
+        <OzButton variant="primary" type="button">
+          <span className="inline-flex h-3.5 w-3.5 items-center justify-center">
+            {ICONS.plus}
+          </span>
+          Add peer
+        </OzButton>
+      </ModalTrigger>
+      <SetupModal user={user} />
+    </Modal>
   );
 }
 
