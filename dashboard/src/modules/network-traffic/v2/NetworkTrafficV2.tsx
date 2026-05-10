@@ -410,7 +410,7 @@ function FlowBlock({
         />
       )}
       {rows.map((r, i) => (
-        <RowCells key={rowKey(r, i)} row={r} isLastInFlow={i === rows.length - 1} />
+        <RowCells key={rowKey(r, i)} row={r} />
       ))}
     </div>
   );
@@ -456,32 +456,20 @@ function flattenSingleFlow(g: FlowGroup): Row[] {
   return out;
 }
 
-function RowCells({
-  row,
-  isLastInFlow,
-}: {
-  row: Row;
-  isLastInFlow: boolean;
-}) {
+function RowCells({ row }: { row: Row }) {
   // The first event in a flow carries the repeated context (peer pair,
   // protocol, traffic totals, status). Later events / synthetic policy
   // rows leave those cells blank so the row visually attaches to the
   // flow's anchor row.
   const isFirst = row.kind === "event" && row.isFirstInFlow;
 
-  // Padding collapses inside a flow so events of the same flow read
-  // as one block. First / last get the standard padding. No flow
-  // border here — FlowBlock owns the inter-flow border so it lines
-  // up with the sub-grid as a whole.
-  const paddingY = (() => {
-    if (row.kind === "event" && row.isFirstInFlow && row.isLastInFlow)
-      return "py-3";
-    if (row.kind === "event" && row.isFirstInFlow) return "pt-3 pb-1.5";
-    if (isLastInFlow) return "pt-1.5 pb-3";
-    return "py-1.5";
-  })();
-
-  const cellCls = `px-4 ${paddingY}`;
+  // Uniform padding + min-height so every row in a flow has the
+  // same vertical real estate regardless of content density. Without
+  // this, a 1-line policy step + 2-line event steps produced
+  // different row heights, which slid the dot's vertical center
+  // around and made the rail's start→policy gap visibly larger
+  // than the policy→end gap.
+  const cellCls = "px-4 py-2.5 min-h-[44px]";
   const firstEvent = row.group.events[0];
   const status = flowStatusPill(row.group);
 
