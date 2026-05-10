@@ -94,53 +94,49 @@ export default function Notification<T>({
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -50 }}
           className={cn(
-            "max-w-md w-full justify-between bg-white dark:bg-nb-gray-940 shadow-lg rounded-md px-4 py-2.5 pointer-events-auto flex border dark:border-nb-gray-900",
+            // v2 toast frame: bg-elev surface + soft border + md shadow.
+            // 14px corner radius (rounded-oz2-card) lines up with the
+            // rest of the v2 surfaces; max-w-md keeps the card legible
+            // without dominating the viewport.
+            "pointer-events-auto flex w-full max-w-md items-center justify-between gap-3 rounded-oz2-card border border-oz2-border bg-oz2-bg-elev px-3.5 py-3 text-oz2-text shadow-oz2-md",
           )}
         >
-          <div className={"flex items-center gap-4"}>
+          <div className="flex items-center gap-3">
             <div
               className={classNames(
-                "h-8 w-8  shadow-sm text-white flex items-center justify-center rounded-md shrink-0",
+                "grid h-8 w-8 shrink-0 place-items-center rounded-[10px] text-oz2-text-on-acc",
                 loading
-                  ? "bg-nb-gray-900"
+                  ? "bg-oz2-bg-sunken text-oz2-text-2"
                   : error
-                  ? "bg-red-500"
-                  : backgroundColor || "bg-green-500",
+                    ? "bg-oz2-err"
+                    : backgroundColor || "bg-oz2-ok",
               )}
             >
               {loading ? (
-                <Loader2 size={14} className={"animate-spin"} />
+                <Loader2 size={14} className="animate-spin" />
               ) : error ? (
-                <IconCircleX size={24} />
+                <IconCircleX size={18} />
               ) : (
                 icon || <CheckIcon size={14} />
               )}
             </div>
-            <div className={"flex flex-col text-sm"}>
-              <p>
-                <span className={"font-semibold"}>
-                  {loading ? loadingTitle || title : title}
-                </span>
+            <div className="flex min-w-0 flex-col">
+              <p className="text-[13.5px] font-semibold leading-[1.35] text-oz2-text">
+                {loading ? loadingTitle || title : title}
               </p>
-              <p
-                className={"text-xs dark:text-nb-gray-300 text-gray-600 mt-0.5"}
-              >
+              <p className="mt-0.5 text-[12px] leading-[1.4] text-oz2-text-muted">
                 {loading ? loadingMessage : error ? error : description}
               </p>
             </div>
           </div>
 
           <button
-            className="flex dark:border-nb-gray-900 items-center cursor-pointer group"
+            type="button"
             onClick={() => toast.dismiss(t.id)}
+            aria-label="Dismiss notification"
+            className="grid h-7 w-7 shrink-0 place-items-center rounded-[8px] text-oz2-text-faint transition-colors hover:bg-oz2-hover hover:text-oz2-text"
           >
-            <div
-              className={
-                "p-2 hover:bg-nb-gray-900 rounded-md opacity-50 group-hover:opacity-100"
-              }
-            >
-              <XIcon size={16} />
-            </div>
+            <XIcon size={14} />
           </button>
         </motion.div>
       )}
