@@ -52,7 +52,7 @@ import PeerActionCell from "@/modules/peers/PeerActionCell";
 import PeerGroupCell from "@/modules/peers/PeerGroupCell";
 import { PeerMultiSelect } from "@/modules/peers/PeerMultiSelect";
 import { OSLogo } from "@/modules/peers/PeerOSCell";
-import SetupModal from "@/modules/setup-openzro-modal/SetupModal";
+import SetupModalV2 from "@/modules/setup-openzro-modal/v2/SetupModalV2";
 
 dayjs.extend(relativeTime);
 
@@ -902,7 +902,7 @@ function AddPeerButtonV2({ peerCount }: { peerCount: number }) {
           Add peer
         </OzButton>
       </ModalTrigger>
-      <SetupModal user={user} />
+      <SetupModalV2 user={user ?? undefined} />
     </Modal>
   );
 }
