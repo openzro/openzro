@@ -29,7 +29,12 @@ const OzThemeToggle = ({ theme, onToggle, className }: OzThemeToggleProps) => {
       aria-label={`Switch to ${isDark ? "light" : "dark"} theme`}
       onClick={onToggle}
       className={classNames(
-        "relative inline-flex h-[26px] w-[52px] items-center rounded-full border border-oz2-border bg-oz2-bg-soft transition-colors",
+        // Track: use bg-sunken + border-strong so the toggle reads
+        // clearly against both warm-paper light bg and the dark
+        // bg-soft. Previously bg-soft + border was too close to
+        // the topbar's own bg in both themes (light #f3f1ec vs
+        // #fbfaf7, dark #100c22 vs #0d091a).
+        "relative inline-flex h-[26px] w-[52px] items-center rounded-full border border-oz2-border-strong bg-oz2-bg-sunken transition-colors",
         "hover:border-oz2-border-strong",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-oz2-acc focus-visible:ring-offset-2 focus-visible:ring-offset-oz2-bg",
         className,
@@ -80,11 +85,13 @@ const OzThemeToggle = ({ theme, onToggle, className }: OzThemeToggleProps) => {
         </svg>
       </span>
 
-      {/* Sliding thumb */}
+      {/* Sliding thumb — explicit border + shadow-md gives it a clear
+          edge on both modes since track and thumb tokens (bg-sunken vs
+          surface) are intentionally close in hue. */}
       <span
         aria-hidden="true"
         className={classNames(
-          "absolute top-[2px] h-[20px] w-[22px] rounded-full bg-oz2-surface shadow-oz2-sm transition-[left] duration-200 ease-out",
+          "absolute top-[2px] h-[20px] w-[22px] rounded-full border border-oz2-border-strong bg-oz2-surface shadow-oz2-md transition-[left] duration-200 ease-out",
           isDark ? "left-[28px]" : "left-[2px]",
         )}
       />
