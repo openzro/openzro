@@ -1,21 +1,18 @@
 "use client";
 
-import Breadcrumbs from "@components/Breadcrumbs";
-import InlineLink from "@components/InlineLink";
-import Paragraph from "@components/Paragraph";
-import SkeletonTable from "@components/skeletons/SkeletonTable";
 import { RestrictedAccess } from "@components/ui/RestrictedAccess";
-import { usePortalElement } from "@hooks/usePortalElement";
 import useFetchApi from "@utils/api";
-import { ExternalLinkIcon, User2 } from "lucide-react";
-import React, { lazy, Suspense } from "react";
-import TeamIcon from "@/assets/icons/TeamIcon";
+import React from "react";
 import { useGroups } from "@/contexts/GroupsProvider";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { User } from "@/interfaces/User";
-import PageContainer from "@/layouts/PageContainer";
+import UsersTableV2 from "@/modules/users/v2/UsersTableV2";
 
-const UsersTable = lazy(() => import("@/modules/users/UsersTable"));
+// /team/users — phase-5.8 entry point. Chrome (OzShell + sidebar +
+// topbar) lives in (v2-dashboard)/layout.tsx → V2DashboardLayout,
+// which already wraps the page in GroupsProvider so the cells'
+// useGroups() resolves naturally. This component just owns the data
+// fetch + the read-permission gate.
 
 export default function TeamUsers() {
   const { isLoading: isGroupsLoading } = useGroups();
@@ -24,51 +21,9 @@ export default function TeamUsers() {
     "/users?service_user=false",
   );
 
-  const { ref: headingRef, portalTarget } =
-    usePortalElement<HTMLHeadingElement>();
-
   return (
-    <PageContainer>
-      <div className={"p-default py-6"}>
-        <Breadcrumbs>
-          <Breadcrumbs.Item
-            href={"/team"}
-            label={"Team"}
-            icon={<TeamIcon size={13} />}
-          />
-          <Breadcrumbs.Item
-            href={"/team/users"}
-            label={"Users"}
-            active
-            icon={<User2 size={16} />}
-          />
-        </Breadcrumbs>
-        <h1 ref={headingRef}>Users</h1>
-        <Paragraph>
-          Manage users and their permissions. Same-domain email users are added
-          automatically on first sign-in.
-        </Paragraph>
-        <Paragraph>
-          Learn more about
-          <InlineLink
-            href={"https://docs.openzro.io/how-to/add-users-to-your-network"}
-            target={"_blank"}
-          >
-            Users
-            <ExternalLinkIcon size={12} />
-          </InlineLink>
-          in our documentation.
-        </Paragraph>
-      </div>
-      <RestrictedAccess page={"Users"} hasAccess={permission.users.read}>
-        <Suspense fallback={<SkeletonTable />}>
-          <UsersTable
-            users={users}
-            isLoading={isLoading || isGroupsLoading}
-            headingTarget={portalTarget}
-          />
-        </Suspense>
-      </RestrictedAccess>
-    </PageContainer>
+    <RestrictedAccess hasAccess={permission.users.read}>
+      <UsersTableV2 users={users} isLoading={isLoading || isGroupsLoading} />
+    </RestrictedAccess>
   );
 }
