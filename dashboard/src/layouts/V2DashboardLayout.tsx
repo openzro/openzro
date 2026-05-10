@@ -207,6 +207,9 @@ function breadcrumbForPath(path: string | null): OzBreadcrumbSegment[] {
   if (path === "/networks" || path.startsWith("/networks/")) {
     return [{ label: "Workspace" }, { label: "Networks" }];
   }
+  if (path === "/network-routes" || path.startsWith("/network-routes/")) {
+    return [{ label: "Workspace" }, { label: "Network Routes" }];
+  }
   if (path === "/setup-keys" || path.startsWith("/setup-keys/")) {
     return [{ label: "Workspace" }, { label: "Setup Keys" }];
   }
@@ -399,8 +402,15 @@ function buildSidebarSections(
           id: "networks",
           label: "Networks",
           icon: NAV_ICONS.network,
-          active: matches("/networks", "/network", "/network-routes"),
+          active: matches("/networks", "/network"),
           onClick: () => go("/networks"),
+        },
+        {
+          id: "network-routes",
+          label: "Network Routes",
+          icon: NAV_ICONS.network,
+          active: matches("/network-routes"),
+          onClick: () => go("/network-routes"),
         },
         {
           id: "dns",
