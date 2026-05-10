@@ -207,6 +207,9 @@ function breadcrumbForPath(path: string | null): OzBreadcrumbSegment[] {
   if (path === "/networks" || path.startsWith("/networks/")) {
     return [{ label: "Workspace" }, { label: "Networks" }];
   }
+  if (path === "/setup-keys" || path.startsWith("/setup-keys/")) {
+    return [{ label: "Workspace" }, { label: "Setup Keys" }];
+  }
   return [];
 }
 
