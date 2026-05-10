@@ -42,11 +42,11 @@ import React, { useMemo, useState } from "react";
 import { DateRange } from "react-day-picker";
 import RoundedFlag from "@/assets/countries/RoundedFlag";
 import { usePeers } from "@/contexts/PeersProvider";
+import { NetworkResource } from "@/interfaces/Network";
 import {
   NetworkTrafficEvent,
   NetworkTrafficEventsResponse,
 } from "@/interfaces/NetworkTrafficEvent";
-import { NetworkResource } from "@/interfaces/Network";
 import { Peer } from "@/interfaces/Peer";
 import { Policy } from "@/interfaces/Policy";
 import { OSLogo } from "@/modules/peers/PeerOSCell";

@@ -34,8 +34,8 @@ import {
 import * as React from "react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import Skeleton from "react-loading-skeleton";
-import { useGroups } from "@/contexts/GroupsProvider";
 import OzCheckbox from "@/components/v2/OzCheckbox";
+import { useGroups } from "@/contexts/GroupsProvider";
 import { useElementSize } from "@/hooks/useElementSize";
 import type { Group, GroupPeer, GroupResource } from "@/interfaces/Group";
 import { NetworkResource } from "@/interfaces/Network";

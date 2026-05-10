@@ -1,6 +1,5 @@
 "use client";
 
-import OzCheckbox from "@/components/v2/OzCheckbox";
 import InlineLink from "@components/InlineLink";
 import { notify } from "@components/Notification";
 import { useHasChanges } from "@hooks/useHasChanges";
@@ -11,6 +10,7 @@ import { Download, ExternalLinkIcon } from "lucide-react";
 import React, { useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
 import OzButton from "@/components/v2/OzButton";
+import OzCheckbox from "@/components/v2/OzCheckbox";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { Account } from "@/interfaces/Account";
 import { Group } from "@/interfaces/Group";

@@ -22,8 +22,8 @@ import React, { useState } from "react";
 import { useSWRConfig } from "swr";
 import { usePeer } from "@/contexts/PeerProvider";
 import { usePermissions } from "@/contexts/PermissionsProvider";
-import AdmissionBypassModal from "@/modules/peers/AdmissionBypassModal";
 import { ExitNodeDropdownButton } from "@/modules/exit-node/ExitNodeDropdownButton";
+import AdmissionBypassModal from "@/modules/peers/AdmissionBypassModal";
 
 export default function PeerActionCell() {
   const { peer, deletePeer, update, openSSHDialog } = usePeer();

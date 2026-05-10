@@ -14,6 +14,7 @@ import {
 } from "@tanstack/react-table";
 import * as React from "react";
 import { useMemo, useState } from "react";
+import PeerIcon from "@/assets/icons/PeerIcon";
 import OzCard from "@/components/v2/OzCard";
 import {
   OzTable,
@@ -23,7 +24,6 @@ import {
   OzTableHeader,
   OzTableRow,
 } from "@/components/v2/OzTable";
-import PeerIcon from "@/assets/icons/PeerIcon";
 import { NetworkRouter } from "@/interfaces/Network";
 import { NetworkRoutingPeerName } from "@/modules/networks/routing-peers/NetworkRoutingPeerName";
 import { RoutingPeersActionCell } from "@/modules/networks/routing-peers/RoutingPeersActionCell";
