@@ -79,6 +79,16 @@ func main() {
 		log.Fatalf("resolve account id: %v", err)
 	}
 
+	// Find the operator user to attach the seeded peers to. Without
+	// this the /peers Name cell shows "—" instead of the user's email
+	// because PeersTableV2 enriches each peer via useUsers().find(u.id ===
+	// peer.user_id). Fall through gracefully if no user is logged in
+	// yet — peers still seed, just unattached.
+	operatorUserID, err := resolveOperatorUserID(accountID)
+	if err != nil {
+		log.Printf("dev seed: %v — peers will land without an owning user", err)
+	}
+
 	now := time.Now().UTC()
 	peers := buildPeers(now)
 	groups := buildGroups()
@@ -86,8 +96,16 @@ func main() {
 	if err := insertGroups(accountID, groups, peers); err != nil {
 		log.Fatalf("seed groups: %v", err)
 	}
-	if err := insertPeers(accountID, peers); err != nil {
+	if err := insertPeers(accountID, operatorUserID, peers); err != nil {
 		log.Fatalf("seed peers: %v", err)
+	}
+	// On re-runs, INSERT OR IGNORE leaves existing peers untouched —
+	// patch their user_id explicitly so prior runs (which seeded with
+	// empty user_id) get backfilled to the operator.
+	if operatorUserID != "" {
+		if err := backfillPeerUserID(accountID, operatorUserID); err != nil {
+			log.Printf("dev seed: backfill user_id failed: %v", err)
+		}
 	}
 
 	fmt.Printf("✓ seeded %d peers and %d groups under account %s\n", len(peers), len(groups), accountID)
@@ -229,6 +247,45 @@ func buildPeers(now time.Time) []seedPeer {
 	}
 }
 
+// resolveOperatorUserID picks a real human user under the given
+// account so seeded peers can be attached as if registered by them.
+// Preference order: owner → admin → first non-service user → empty.
+// An empty return is non-fatal: peers still seed, but the /peers
+// Name cell shows "user: <id>" (raw) until UsersProvider catches up
+// or the operator logs in.
+func resolveOperatorUserID(accountID string) (string, error) {
+	db, err := openMgmtStore()
+	if err != nil {
+		return "", fmt.Errorf("open management store: %w", err)
+	}
+	defer db.Close()
+
+	// is_service_user is a numeric flag (sqlite has no bool); the
+	// management's own seed sets blocked / non_deletable but real
+	// owner accounts come back with is_service_user=0.
+	row := db.QueryRow(`
+		SELECT id FROM users
+		WHERE account_id = ?
+		  AND COALESCE(is_service_user, 0) = 0
+		  AND COALESCE(blocked, 0) = 0
+		ORDER BY
+			CASE role
+				WHEN 'owner' THEN 0
+				WHEN 'admin' THEN 1
+				ELSE 2
+			END,
+			created_at
+		LIMIT 1`, accountID)
+	var id string
+	if err := row.Scan(&id); err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("no eligible user under account %s", accountID)
+		}
+		return "", fmt.Errorf("query users: %w", err)
+	}
+	return id, nil
+}
+
 // resolveAccountID reads the management daemon's sqlite data store
 // and returns the first (single-account dev mode) account.
 func resolveAccountID() (string, error) {
@@ -269,7 +326,11 @@ func openMgmtStore() (*sql.DB, error) {
 // (ip, location_connection_ip, network_addresses, environment,
 // flags, files, extra_dns_labels) are pre-encoded so the GORM
 // json serializer round-trips cleanly through /api/peers.
-func insertPeers(accountID string, peers []seedPeer) error {
+//
+// userID is attached as the owning user. Empty string is allowed —
+// the schema has no FK on user_id, but the dashboard's user-cell
+// enrichment then falls back to "user: <id>".
+func insertPeers(accountID, userID string, peers []seedPeer) error {
 	db, err := openMgmtStore()
 	if err != nil {
 		return fmt.Errorf("open management store: %w", err)
@@ -277,7 +338,7 @@ func insertPeers(accountID string, peers []seedPeer) error {
 	defer db.Close()
 
 	stmt := `INSERT OR IGNORE INTO peers (
-		id, account_id, key, ip, name, dns_label,
+		id, account_id, key, ip, name, dns_label, user_id,
 		meta_hostname, meta_go_os, meta_os, meta_os_version, meta_kernel,
 		meta_core, meta_platform, meta_kernel_version,
 		meta_wt_version, meta_ui_version,
@@ -290,7 +351,7 @@ func insertPeers(accountID string, peers []seedPeer) error {
 		login_expiration_enabled, inactivity_expiration_enabled,
 		last_login, created_at,
 		ephemeral, allow_extra_dns_labels, extra_dns_labels
-	) VALUES (?, ?, ?, ?, ?, ?,  ?, ?, ?, ?, ?,  ?, ?, ?,  ?, ?,  ?, ?, ?,  ?, ?, ?, ?,  ?, ?, ?,  ?, ?,  ?, ?,  ?, ?,  ?, ?,  ?, ?,  ?, ?, ?)`
+	) VALUES (?, ?, ?, ?, ?, ?, ?,  ?, ?, ?, ?, ?,  ?, ?, ?,  ?, ?,  ?, ?, ?,  ?, ?, ?, ?,  ?, ?, ?,  ?, ?,  ?, ?,  ?, ?,  ?, ?,  ?, ?,  ?, ?, ?)`
 
 	const tsLayout = "2006-01-02 15:04:05.000-07:00"
 	emptyArr := "[]"
@@ -311,7 +372,7 @@ func insertPeers(accountID string, peers []seedPeer) error {
 			productName = "Workstation (dev)"
 		}
 		res, err := db.Exec(stmt,
-			p.id, accountID, key, ipJSON, p.name, p.name,
+			p.id, accountID, key, ipJSON, p.name, p.name, userID,
 			p.name, p.osLabel, p.osLabel, p.osVersion, p.kernel,
 			"", p.osLabel, p.osVersion,
 			p.version, p.version,
@@ -386,6 +447,36 @@ func insertGroups(accountID string, groups []seedGroup, peers []seedPeer) error 
 		fmt.Printf("✓ %d groups already present\n", len(groups))
 	} else {
 		fmt.Printf("✓ inserted %d groups\n", created)
+	}
+	return nil
+}
+
+// backfillPeerUserID patches existing dev-seeded peers (id LIKE
+// 'dev-peer-%') whose user_id is empty so the /peers Name cell shows
+// the operator's email instead of "—". Runs after insertPeers because
+// INSERT OR IGNORE leaves prior rows untouched. Scoped by account_id
+// + the dev-peer- id prefix to avoid clobbering real peers that
+// happen to have an empty user_id during a registration race.
+func backfillPeerUserID(accountID, userID string) error {
+	db, err := openMgmtStore()
+	if err != nil {
+		return fmt.Errorf("open management store: %w", err)
+	}
+	defer db.Close()
+
+	res, err := db.Exec(
+		`UPDATE peers SET user_id = ?
+		  WHERE account_id = ?
+		    AND (user_id IS NULL OR user_id = '')
+		    AND id LIKE 'dev-peer-%'`,
+		userID, accountID,
+	)
+	if err != nil {
+		return fmt.Errorf("update user_id: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n > 0 {
+		fmt.Printf("✓ backfilled user_id on %d existing dev peers\n", n)
 	}
 	return nil
 }
