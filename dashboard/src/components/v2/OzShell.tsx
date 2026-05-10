@@ -15,6 +15,12 @@ import React from "react";
 export interface OzShellProps extends React.HTMLAttributes<HTMLDivElement> {
   sidebar: React.ReactNode;
   topbar: React.ReactNode;
+  /**
+   * When true the aside collapses to icon-only width (56px). The
+   * sidebar consumer is responsible for hiding labels — OzShell
+   * only animates the width.
+   */
+  sidebarCollapsed?: boolean;
 }
 
 const OzShell = ({
@@ -22,6 +28,7 @@ const OzShell = ({
   topbar,
   children,
   className,
+  sidebarCollapsed = false,
   ...props
 }: OzShellProps) => {
   return (
@@ -32,7 +39,12 @@ const OzShell = ({
       )}
       {...props}
     >
-      <aside className="flex h-full w-60 shrink-0 flex-col border-r border-oz2-border-soft bg-oz2-bg-soft">
+      <aside
+        className={classNames(
+          "flex h-full shrink-0 flex-col overflow-hidden border-r border-oz2-border-soft bg-oz2-bg-soft transition-[width] duration-200 ease-out",
+          sidebarCollapsed ? "w-14" : "w-60",
+        )}
+      >
         {sidebar}
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">

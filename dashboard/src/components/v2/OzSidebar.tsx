@@ -37,33 +37,62 @@ export interface OzSidebarProps {
   sections: OzSidebarSection[];
   /** Avatar / footer block. */
   footer?: React.ReactNode;
+  /**
+   * Icon-only mode (shadcn pattern). Hides section labels, item
+   * labels, and badges; centers icons. Brand + footer are still
+   * rendered but expected to render their own collapsed variants.
+   */
+  collapsed?: boolean;
 }
 
-const OzSidebar = ({ brand, search, sections, footer }: OzSidebarProps) => {
+const OzSidebar = ({
+  brand,
+  search,
+  sections,
+  footer,
+  collapsed = false,
+}: OzSidebarProps) => {
   return (
     <nav className="flex h-full flex-col">
       {brand && (
-        <div className="px-4 pt-4 pb-3">{brand}</div>
+        <div
+          className={classNames(
+            "pt-4 pb-3",
+            collapsed ? "grid place-items-center px-2" : "px-4",
+          )}
+        >
+          {brand}
+        </div>
       )}
-      {search && (
-        <div className="px-3 pb-3">{search}</div>
-      )}
-      <div className="flex-1 overflow-y-auto px-3">
+      {search && !collapsed && <div className="px-3 pb-3">{search}</div>}
+      <div
+        className={classNames(
+          "flex-1 overflow-y-auto",
+          collapsed ? "px-2" : "px-3",
+        )}
+      >
         {sections.map((section) => (
           <div key={section.id} className="mb-5">
-            <p className="mb-2 px-3 font-mono text-[11px] uppercase tracking-widest text-oz2-text-faint">
-              {section.label}
-            </p>
+            {!collapsed && (
+              <p className="mb-2 px-3 font-mono text-[11px] uppercase tracking-widest text-oz2-text-faint">
+                {section.label}
+              </p>
+            )}
             <ul className="space-y-0.5">
               {section.items.map((item) => (
                 <li key={item.id}>
                   <button
                     type="button"
                     onClick={item.onClick}
+                    title={collapsed ? item.label : undefined}
+                    aria-label={collapsed ? item.label : undefined}
                     className={classNames(
-                      "flex h-8 w-full items-center gap-2.5 rounded-lg px-3 text-[13px] font-medium transition-colors",
+                      "flex h-8 items-center rounded-lg text-[13px] font-medium transition-colors",
+                      collapsed
+                        ? "w-full justify-center"
+                        : "w-full gap-2.5 px-3",
                       item.active
-                        ? "bg-oz2-surface text-oz2-text shadow-oz2-sm border border-oz2-border-soft"
+                        ? "border border-oz2-border-soft bg-oz2-surface text-oz2-text shadow-oz2-sm"
                         : "text-oz2-text-2 hover:bg-oz2-hover",
                     )}
                   >
@@ -73,9 +102,13 @@ const OzSidebar = ({ brand, search, sections, footer }: OzSidebarProps) => {
                     >
                       {item.icon}
                     </span>
-                    <span className="truncate">{item.label}</span>
-                    {item.badge && (
-                      <span className="ml-auto">{item.badge}</span>
+                    {!collapsed && (
+                      <>
+                        <span className="truncate">{item.label}</span>
+                        {item.badge && (
+                          <span className="ml-auto">{item.badge}</span>
+                        )}
+                      </>
                     )}
                   </button>
                 </li>
@@ -85,7 +118,14 @@ const OzSidebar = ({ brand, search, sections, footer }: OzSidebarProps) => {
         ))}
       </div>
       {footer && (
-        <div className="border-t border-oz2-border-soft p-3">{footer}</div>
+        <div
+          className={classNames(
+            "border-t border-oz2-border-soft",
+            collapsed ? "p-2" : "p-3",
+          )}
+        >
+          {footer}
+        </div>
       )}
     </nav>
   );
