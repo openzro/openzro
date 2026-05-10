@@ -1,39 +1,50 @@
 "use client";
 
-import Breadcrumbs from "@components/Breadcrumbs";
-import Button from "@components/Button";
-import Card from "@components/Card";
-import HelpText from "@components/HelpText";
-import { Label } from "@components/Label";
 import { notify } from "@components/Notification";
-import Paragraph from "@components/Paragraph";
 import { PeerGroupSelector } from "@components/PeerGroupSelector";
-import Separator from "@components/Separator";
 import FullScreenLoading from "@components/ui/FullScreenLoading";
 import { RestrictedAccess } from "@components/ui/RestrictedAccess";
 import useRedirect from "@hooks/useRedirect";
-import { IconCirclePlus, IconSettings2 } from "@tabler/icons-react";
 import useFetchApi, { useApiCall } from "@utils/api";
 import { generateColorFromString } from "@utils/helpers";
 import dayjs from "dayjs";
-import { Ban, GalleryHorizontalEnd, History, Mail, User2 } from "lucide-react";
+import {
+  Ban,
+  Clock,
+  Cog,
+  GalleryHorizontalEnd,
+  History,
+  Mail,
+  PlusCircle,
+  User2,
+} from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import React, { useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
-import TeamIcon from "@/assets/icons/TeamIcon";
+import OzButton from "@/components/v2/OzButton";
+import OzCard from "@/components/v2/OzCard";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { useLoggedInUser } from "@/contexts/UsersProvider";
 import { useHasChanges } from "@/hooks/useHasChanges";
 import { Group } from "@/interfaces/Group";
 import { Role, User } from "@/interfaces/User";
-import PageContainer from "@/layouts/PageContainer";
 import AccessTokensTable from "@/modules/access-tokens/AccessTokensTable";
 import CreateAccessTokenModal from "@/modules/access-tokens/CreateAccessTokenModal";
 import useGroupHelper from "@/modules/groups/useGroupHelper";
 import { useGroupIdsToGroups } from "@/modules/groups/useGroupIdsToGroups";
 import UserBlockCell from "@/modules/users/table-cells/UserBlockCell";
-import UserStatusCell from "@/modules/users/table-cells/UserStatusCell";
 import { UserRoleSelector } from "@/modules/users/UserRoleSelector";
+import UserStatusCellV2 from "@/modules/users/v2/UserStatusCellV2";
+
+// /team/user — v2 paint over the legacy User detail page. Chrome
+// (OzShell + sidebar + topbar with breadcrumbs) lives in
+// (v2-dashboard)/layout.tsx; this page renders the body only. Page
+// header (avatar + name + Cancel/Save buttons) sits inline near the
+// top because Save's disabled state is state-dependent and the topbar
+// slot captures children once on mount. Form widgets (PeerGroupSelector
+// + UserRoleSelector + UserBlockCell) remain on legacy paint pending a
+// Phase 5 cleanup — wrapping them in OzCards keeps the surface uniform
+// in the meantime.
 
 export default function UserPage() {
   const queryParameter = useSearchParams();
@@ -55,9 +66,9 @@ export default function UserPage() {
 
   if (!permission.users.read) {
     return (
-      <PageContainer>
+      <div className="space-y-6 p-8">
         <RestrictedAccess page={"User Information"} />
-      </PageContainer>
+      </div>
     );
   }
 
@@ -121,168 +132,183 @@ function UserOverview({ user, initialGroups }: Readonly<Props>) {
     });
   };
 
+  const cancel = () => {
+    user.is_service_user
+      ? router.push("/team/service-users")
+      : router.push("/team/users");
+  };
+
+  const showAccessTokens =
+    (user.is_current || user.is_service_user) && permission.pats.read;
+
   return (
-    <PageContainer>
-      <div className={"p-default py-6 mb-4"}>
-        <Breadcrumbs>
-          <Breadcrumbs.Item
-            href={"/team"}
-            label={"Team"}
-            disabled={!permission.users.read}
-            icon={<TeamIcon size={13} />}
-          />
-
-          {user.is_service_user ? (
-            <Breadcrumbs.Item
-              href={"/team/service-users"}
-              label={"Service Users"}
-              icon={<IconSettings2 size={17} />}
-            />
-          ) : (
-            <Breadcrumbs.Item
-              href={"/team/users"}
-              label={"Users"}
-              disabled={!permission.users.read}
-              icon={<User2 size={16} />}
-            />
-          )}
-
-          <Breadcrumbs.Item label={user.name || user.id} active />
-        </Breadcrumbs>
-
-        <div className={"flex justify-between max-w-6xl"}>
-          <div>
-            <div className={"flex items-center gap-3"}>
-              <div
-                className={
-                  "w-10 h-10 rounded-full relative flex items-center justify-center uppercase text-md font-medium " +
-                  "bg-neutral-200 dark:bg-nb-gray-900"
-                }
-                style={
-                  user.is_service_user
-                    ? {
-                        color: "white",
-                      }
-                    : {
-                        color: user?.name
-                          ? generateColorFromString(
-                              user?.name || user?.id || "System User",
-                            )
-                          : "#808080",
-                      }
-                }
-              >
-                {user.is_service_user ? (
-                  <IconSettings2 size={16} />
-                ) : (
-                  user?.name?.charAt(0) || user?.id?.charAt(0)
-                )}
-              </div>
-              <h1 className={"flex items-center gap-3"}>
-                {user.name || user.id}
-              </h1>
-            </div>
-          </div>
-          {!isUser && (
-            <div className={"flex gap-4"}>
-              <Button
-                variant={"default"}
-                className={"w-full"}
-                onClick={() => {
-                  user.is_service_user
-                    ? router.push("/team/service-users")
-                    : router.push("/team/users");
-                }}
-              >
-                Cancel
-              </Button>
-
-              <Button
-                variant={"primary"}
-                className={"w-full"}
-                disabled={!hasChanges || !permission.users.update}
-                onClick={save}
-                data-cy={"save-changes"}
-              >
-                Save Changes
-              </Button>
-            </div>
-          )}
+    <div className="space-y-6 p-8">
+      {/* Page header — avatar + name on the left, Cancel/Save on the
+          right. Save is gated on hasChanges + update permission. */}
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <UserAvatar user={user} />
+          <h1 className="text-[24px] font-semibold tracking-tight">
+            {user.name || user.id}
+          </h1>
         </div>
-
-        <div className={"flex gap-10 w-full mt-8 max-w-6xl items-start"}>
-          <UserInformationCard user={user} />
-          <div className={"flex flex-col gap-8 w-1/2 "}>
-            {!user.is_service_user && isOwnerOrAdmin && (
-              <div>
-                <Label>Auto-assigned groups</Label>
-                <HelpText>
-                  Groups will be assigned to peers added by this user.
-                </HelpText>
-                <PeerGroupSelector
-                  disabled={isUser}
-                  onChange={setSelectedGroups}
-                  values={selectedGroups}
-                  hideAllGroup={true}
-                  dataCy={"user-group-selector"}
-                />
-              </div>
-            )}
-            <div className={"flex items-start"}>
-              <div className={"w-2/3"}>
-                <Label>User Role</Label>
-                <HelpText>
-                  Set a role for the user to assign access permissions.
-                </HelpText>
-              </div>
-              <div className={"w-1/3"}>
-                <UserRoleSelector
-                  value={role}
-                  onChange={setRole}
-                  hideOwner={user.is_service_user}
-                  currentUser={user}
-                  disabled={isLoggedInUser || !permission.users.update}
-                />
-              </div>
-            </div>
+        {!isUser && (
+          <div className="flex items-center gap-2">
+            <OzButton variant="default" type="button" onClick={cancel}>
+              Cancel
+            </OzButton>
+            <OzButton
+              variant="primary"
+              type="button"
+              onClick={save}
+              disabled={!hasChanges || !permission.users.update}
+              data-cy="save-changes"
+            >
+              Save Changes
+            </OzButton>
           </div>
+        )}
+      </header>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <UserInformationCard user={user} />
+
+        <div className="space-y-6">
+          {!user.is_service_user && isOwnerOrAdmin && (
+            <OzCard className="space-y-3">
+              <div>
+                <label className="text-[13px] font-semibold text-oz2-text">
+                  Auto-assigned groups
+                </label>
+                <p className="mt-1 text-[12.5px] text-oz2-text-muted">
+                  Groups will be assigned to peers added by this user.
+                </p>
+              </div>
+              <PeerGroupSelector
+                disabled={isUser}
+                onChange={setSelectedGroups}
+                values={selectedGroups}
+                hideAllGroup={true}
+                dataCy="user-group-selector"
+              />
+            </OzCard>
+          )}
+
+          <OzCard className="space-y-3">
+            <div>
+              <label className="text-[13px] font-semibold text-oz2-text">
+                User Role
+              </label>
+              <p className="mt-1 text-[12.5px] text-oz2-text-muted">
+                Set a role for the user to assign access permissions.
+              </p>
+            </div>
+            <UserRoleSelector
+              value={role}
+              onChange={setRole}
+              hideOwner={user.is_service_user}
+              currentUser={user}
+              disabled={isLoggedInUser || !permission.users.update}
+            />
+          </OzCard>
         </div>
       </div>
 
-      {(user.is_current || user.is_service_user) && permission.pats.read && (
-        <>
-          <Separator />
-          <div className={"px-8 py-6"}>
-            <div className={"max-w-6xl"}>
-              <div className={"flex justify-between items-center"}>
-                <div>
-                  <h2>Access Tokens</h2>
-                  <Paragraph>
-                    Access tokens give access to Openzro API.
-                  </Paragraph>
-                </div>
-                <div className={"inline-flex gap-4 justify-end"}>
-                  <div>
-                    <CreateAccessTokenModal user={user}>
-                      <Button
-                        variant={"primary"}
-                        data-cy={"access-token-open-modal"}
-                        disabled={!permission.pats.create}
-                      >
-                        <IconCirclePlus size={16} />
-                        Create Access Token
-                      </Button>
-                    </CreateAccessTokenModal>
-                  </div>
-                </div>
-              </div>
-              <AccessTokensTable user={user} />
+      {showAccessTokens && (
+        <section className="space-y-4">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-[18px] font-semibold tracking-tight">
+                Access Tokens
+              </h2>
+              <p className="mt-1 max-w-2xl text-[13.5px] text-oz2-text-muted">
+                Access tokens give programmatic access to the openZro API. Keep
+                them secret — anyone with a token can act on this user&apos;s
+                behalf.
+              </p>
             </div>
+            <CreateAccessTokenModal user={user}>
+              <OzButton
+                variant="primary"
+                type="button"
+                disabled={!permission.pats.create}
+                data-cy="access-token-open-modal"
+              >
+                <PlusCircle size={14} />
+                Create Access Token
+              </OzButton>
+            </CreateAccessTokenModal>
           </div>
-        </>
+          <AccessTokensTable user={user} />
+        </section>
       )}
-    </PageContainer>
+    </div>
   );
+}
+
+// UserAvatar — 40×40 v2-paint avatar mirroring the bubble in
+// UserNameCellV2 but a touch larger to match the H1. Service users get
+// the neutral surface; humans get the gradient with status overlay.
+function UserAvatar({ user }: { user: User }) {
+  const isService = Boolean(user.is_service_user);
+  const status = user.status;
+
+  if (isService) {
+    return (
+      <div
+        className="relative grid h-10 w-10 place-items-center rounded-full border border-oz2-border bg-oz2-bg-sunken text-oz2-text-2"
+        style={{ color: "white" }}
+      >
+        <Cog size={16} />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="relative grid h-10 w-10 place-items-center rounded-full text-[13px] font-semibold uppercase text-white"
+      style={{ background: "linear-gradient(135deg,#a78bfa,#f472b6)" }}
+    >
+      {initialsFor(user) || (
+        <span
+          style={{
+            color: user?.name
+              ? generateColorFromString(user?.name || user?.id || "System User")
+              : "#808080",
+          }}
+        >
+          {user?.name?.charAt(0) || user?.id?.charAt(0)}
+        </span>
+      )}
+      {(status === "invited" || status === "blocked") && (
+        <span
+          aria-hidden
+          className={
+            "absolute -bottom-0.5 -right-0.5 grid h-4 w-4 place-items-center rounded-full border-2 border-oz2-surface " +
+            (status === "invited"
+              ? "bg-oz2-warn text-oz2-text-on-acc"
+              : "bg-oz2-err text-oz2-text-on-acc")
+          }
+        >
+          {status === "invited" ? <Clock size={10} /> : <Ban size={10} />}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function initialsFor(user: User): string {
+  const name = user.name?.trim();
+  if (name) {
+    const parts = name.split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  }
+  if (user.email) return user.email.slice(0, 2).toUpperCase();
+  if (user.id) return user.id.slice(0, 2).toUpperCase();
+  return "";
 }
 
 function UserInformationCard({ user }: Readonly<{ user: User }>) {
@@ -291,76 +317,89 @@ function UserInformationCard({ user }: Readonly<{ user: User }>) {
     dayjs().subtract(1000, "years"),
   );
 
-  return (
-    <Card>
-      <Card.List>
-        <Card.ListItem
-          label={
-            <>
-              <User2 size={16} />
-              {user.name ? "Name" : "User ID"}
-            </>
-          }
-          value={user.name || user.id}
-        />
+  const rows: { label: React.ReactNode; value: React.ReactNode }[] = [
+    {
+      label: (
+        <>
+          <User2 size={14} />
+          {user.name ? "Name" : "User ID"}
+        </>
+      ),
+      value: <span className="text-oz2-text">{user.name || user.id}</span>,
+    },
+  ];
 
-        {!isServiceUser && (
-          <Card.ListItem
-            label={
-              <>
-                <Mail size={16} />
-                E-Mail
-              </>
-            }
-            value={user.email || "-"}
-          />
-        )}
+  if (!isServiceUser) {
+    rows.push({
+      label: (
+        <>
+          <Mail size={14} />
+          E-Mail
+        </>
+      ),
+      value: (
+        <span className="text-oz2-text">{user.email || "—"}</span>
+      ),
+    });
+  }
 
-        <Card.ListItem
-          tooltip={false}
-          label={
-            <>
-              <GalleryHorizontalEnd size={16} />
-              Status
-            </>
-          }
-          value={<UserStatusCell user={user} />}
-        />
+  rows.push({
+    label: (
+      <>
+        <GalleryHorizontalEnd size={14} />
+        Status
+      </>
+    ),
+    value: <UserStatusCellV2 user={user} />,
+  });
 
-        {!isServiceUser && (
+  if (!isServiceUser) {
+    if (!user.is_current && user.role !== Role.Owner) {
+      rows.push({
+        label: (
           <>
-            {!user.is_current && user.role != Role.Owner && (
-              <Card.ListItem
-                tooltip={false}
-                label={
-                  <>
-                    <Ban size={16} />
-                    Block User
-                  </>
-                }
-                value={<UserBlockCell user={user} isUserPage={true} />}
-              />
-            )}
-
-            <Card.ListItem
-              label={
-                <>
-                  <History size={16} />
-                  Last login
-                </>
-              }
-              value={
-                neverLoggedIn
-                  ? "Never"
-                  : dayjs(user.last_login).format("D MMMM, YYYY [at] h:mm A") +
-                    " (" +
-                    dayjs().to(user.last_login) +
-                    ")"
-              }
-            />
+            <Ban size={14} />
+            Block User
           </>
-        )}
-      </Card.List>
-    </Card>
+        ),
+        value: <UserBlockCell user={user} isUserPage={true} />,
+      });
+    }
+    rows.push({
+      label: (
+        <>
+          <History size={14} />
+          Last login
+        </>
+      ),
+      value: (
+        <span className="text-oz2-text">
+          {neverLoggedIn
+            ? "Never"
+            : dayjs(user.last_login).format("D MMMM, YYYY [at] h:mm A") +
+              " (" +
+              dayjs().to(user.last_login) +
+              ")"}
+        </span>
+      ),
+    });
+  }
+
+  return (
+    <OzCard flush>
+      <ul className="divide-y divide-oz2-border-soft">
+        {rows.map((row, i) => (
+          <li
+            key={i}
+            className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-3.5 text-[13.5px]"
+          >
+            <span className="inline-flex items-center gap-2 text-oz2-text-muted">
+              {row.label}
+            </span>
+            <span className="text-right">{row.value}</span>
+          </li>
+        ))}
+      </ul>
+    </OzCard>
   );
 }
