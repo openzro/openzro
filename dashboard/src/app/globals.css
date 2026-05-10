@@ -405,6 +405,14 @@ p {
 .animate-bg-scroll {
     animation: bg-scroll 4s linear infinite;
 }
+
+/* Slow rotation used by OzEmptyState's dashed mesh rings — the v2 paint
+   wants the motion barely-perceptible, so the rings are tied to one
+   shared keyframe spinning at different durations/directions. */
+@keyframes ozspin {
+    to { transform: rotate(360deg); }
+}
+
 .animate-bg-scroll-faster {
     animation: bg-scroll 1.8s linear infinite;
 }

@@ -2,7 +2,6 @@
 
 import { useOidcUser } from "@axa-fr/react-oidc";
 import { Modal, ModalTrigger } from "@components/modal/Modal";
-import TextWithTooltip from "@components/ui/TextWithTooltip";
 import {
   Tooltip,
   TooltipContent,
@@ -10,6 +9,7 @@ import {
   TooltipTrigger,
 } from "@components/Tooltip";
 import MemoizedOpenzroIcon from "@components/ui/MemoizedOpenzroIcon";
+import TextWithTooltip from "@components/ui/TextWithTooltip";
 import {
   Column,
   ColumnDef,
@@ -26,12 +26,13 @@ import {
 } from "@tanstack/react-table";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
-import { Barcode, Check, Copy, CpuIcon } from "lucide-react";
+import { Barcode, BookOpen, Check, Copy, CpuIcon, KeyRound, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSWRConfig } from "swr";
 import OzButton from "@/components/v2/OzButton";
 import OzCard from "@/components/v2/OzCard";
+import OzEmptyState from "@/components/v2/OzEmptyState";
 import OzPill from "@/components/v2/OzPill";
 import OzStatusDot from "@/components/v2/OzStatusDot";
 import {
@@ -330,13 +331,12 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
       .finally(() => setRefreshing(false));
   };
 
-  // Cold-start: no peers registered yet. Skip the table entirely and
-  // show a centered "get started" card with the Add peer trigger so
-  // operators don't see an empty grid before they've connected
-  // anything. Mirrors the legacy GetStartedTest at /peers.
-  if (!isLoading && all.length === 0) {
-    return <PeersEmptyState peerCount={0} />;
-  }
+  // Cold-start: no peers registered yet. We keep the page header +
+  // description visible so the operator still gets the orientation
+  // copy, but swap the stat badges + filter toolbar + table block for
+  // a centered "get started" hero (OzEmptyState + AddPeerButtonV2).
+  // Mirrors the legacy GetStartedTest at /peers.
+  const isColdStart = !isLoading && all.length === 0;
 
   return (
     // Single TooltipProvider wraps the whole page so skipDelayDuration
@@ -363,6 +363,10 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
         </p>
       </header>
 
+      {isColdStart ? (
+        <PeersEmptyState peerCount={0} />
+      ) : (
+      <>
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[13.5px] text-oz2-text-muted">
         <span className="inline-flex items-center gap-2">
           <OzStatusDot status="on" />
@@ -509,6 +513,8 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
           />
         </div>
       </OzCard>
+      </>
+      )}
       </div>
     </TooltipProvider>
   );
@@ -871,47 +877,26 @@ function VersionCell({ peer }: { peer: Peer }) {
   );
 }
 
-// PeersEmptyState — cold-start screen shown when no peers have
-// registered yet. Mirrors the legacy GetStartedTest card at /peers
-// (icon + title + body + Add peer trigger + docs link) but in v2
-// paint. The Add peer button reuses AddPeerButtonV2 so first-run
-// onboarding wiring (useLocalStorage flags) stays consistent.
+// PeersEmptyState — cold-start surface shown when no peers have
+// registered yet. Delegates the visual (mesh emblem + dotted-grid
+// card + helper-card row) to OzEmptyState so /networks and any
+// future v2 page reuses the exact same paint. Copy is preserved
+// verbatim from the legacy GetStartedTest at /peers; the Add peer
+// CTA reuses AddPeerButtonV2 so first-run onboarding wiring
+// (useLocalStorage flags) stays consistent.
 function PeersEmptyState({ peerCount }: { peerCount: number }) {
   return (
-    <div className="flex min-h-full items-center justify-center px-8 py-16">
-      <div className="w-full max-w-[480px] rounded-oz2-card border border-oz2-border bg-oz2-surface p-8 text-center shadow-oz2-sm">
-        <div
-          aria-hidden="true"
-          className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-[14px] text-white shadow-oz2-acc"
-          style={{
-            background: "linear-gradient(135deg, #8b5cf6 0%, #4c1d95 100%)",
-          }}
-        >
-          <svg
-            viewBox="0 0 24 24"
-            width={26}
-            height={26}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <rect x={3} y={4} width={18} height={12} rx={2} />
-            <path d="M8 20h8M12 16v4" />
-          </svg>
-        </div>
-        <h2 className="text-[20px] font-semibold tracking-tight text-oz2-text">
-          Get Started with Openzro
-        </h2>
-        <p className="mx-auto mt-2 max-w-[360px] text-[13.5px] leading-[1.55] text-oz2-text-muted">
+    <OzEmptyState
+      title="Get Started with Openzro"
+      description={
+        <>
           It looks like you don&apos;t have any connected machines. Get started
           by adding one to your network.
-        </p>
-        <div className="mt-6 flex items-center justify-center">
-          <AddPeerButtonV2 peerCount={peerCount} />
-        </div>
-        <p className="mt-6 text-[12.5px] text-oz2-text-faint">
+        </>
+      }
+      primaryAction={<AddPeerButtonV2 peerCount={peerCount} />}
+      learnMore={
+        <>
           Learn more in our{" "}
           <a
             href="https://docs.openzro.io/how-to/getting-started"
@@ -922,9 +907,30 @@ function PeersEmptyState({ peerCount }: { peerCount: number }) {
             Getting Started Guide
           </a>
           .
-        </p>
-      </div>
-    </div>
+        </>
+      }
+      helperCards={[
+        {
+          icon: <BookOpen size={16} />,
+          title: "Install guide",
+          description:
+            "Step-by-step setup for Linux, macOS, Windows and Docker.",
+          href: "https://docs.openzro.io/how-to/installation",
+        },
+        {
+          icon: <KeyRound size={16} />,
+          title: "Setup keys",
+          description: "Pre-shared keys for automation, CI and bulk enrollment.",
+          href: "https://docs.openzro.io/how-to/register-machines-using-setup-keys",
+        },
+        {
+          icon: <ShieldCheck size={16} />,
+          title: "What is a peer?",
+          description: "Concepts: peers, networks and access policies.",
+          href: "https://docs.openzro.io/how-to/getting-started",
+        },
+      ]}
+    />
   );
 }
 
