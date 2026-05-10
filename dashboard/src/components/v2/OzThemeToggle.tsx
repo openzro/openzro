@@ -34,11 +34,18 @@ const OzThemeToggle = ({ theme, onToggle, className }: OzThemeToggleProps) => {
       aria-label={`Switch to ${isDark ? "light" : "dark"} theme`}
       onClick={onToggle}
       className={classNames(
-        // Track: zinc-200 light / zinc-700 dark — high contrast against
-        // both warm-paper and dark-violet topbar bg.
-        "relative inline-flex h-[26px] w-[52px] items-center rounded-full border transition-colors",
-        "border-zinc-300 bg-zinc-200 dark:border-zinc-600 dark:bg-zinc-700",
-        "hover:border-zinc-400 dark:hover:border-zinc-500",
+        // Track palette comes from v2 tokens so it sits naturally in
+        // both surfaces:
+        //   light → bg-oz2-bg-soft (#f3f1ec, warm beige tan from the
+        //           sidebar palette) on top of warm-paper topbar
+        //   dark  → bg-oz2-surface-2 (#1a1538, violet-lifted) against
+        //           the very dark #0d091a topbar bg.
+        // Border-strong gives the edge enough definition in both
+        // modes (warmer beige in light, soft violet glow in dark).
+        // The previous zinc-200/zinc-700 was high-contrast but cool
+        // gray, which clashed with the warm + violet v2 palettes.
+        "relative inline-flex h-[26px] w-[52px] items-center rounded-full border bg-oz2-bg-soft transition-colors dark:bg-oz2-surface-2",
+        "border-oz2-border-strong hover:border-oz2-border-strong",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-oz2-acc focus-visible:ring-offset-2 focus-visible:ring-offset-oz2-bg",
         className,
       )}
@@ -53,14 +60,18 @@ const OzThemeToggle = ({ theme, onToggle, className }: OzThemeToggleProps) => {
         )}
       />
 
-      {/* Sun — left half. Dark glyph on the white thumb when light
-          mode is active; muted glyph against the zinc-700 track when
-          dark mode is active. */}
+      {/* Sun — left half. Active (light mode) uses a fixed zinc-700
+          because the white thumb sits underneath in both modes and
+          oz2-text inverts (dark→light) across themes, which would
+          fail in dark when the sun were ever active. Inactive
+          state uses oz2-text-faint which is theme-adaptive (gray-
+          violet in light, lifted violet in dark) — both readable
+          against the warm-beige and violet-lifted track. */}
       <span
         aria-hidden="true"
         className={classNames(
           "pointer-events-none absolute left-0 top-0 grid h-[26px] w-[24px] place-items-center transition-colors",
-          isDark ? "text-zinc-400" : "text-zinc-700",
+          isDark ? "text-oz2-text-faint" : "text-zinc-700",
         )}
       >
         <svg
@@ -78,14 +89,15 @@ const OzThemeToggle = ({ theme, onToggle, className }: OzThemeToggleProps) => {
         </svg>
       </span>
 
-      {/* Moon — right half. Dark glyph on the white thumb when dark
-          mode is active; muted glyph against the zinc-200 track when
-          light mode is active. */}
+      {/* Moon — right half. Same active/inactive split as the sun:
+          fixed zinc-700 when sitting on the white thumb (dark mode
+          active), oz2-text-faint when sitting on the warm-beige
+          track (light mode, inactive). */}
       <span
         aria-hidden="true"
         className={classNames(
           "pointer-events-none absolute right-0 top-0 grid h-[26px] w-[24px] place-items-center transition-colors",
-          isDark ? "text-zinc-700" : "text-zinc-500",
+          isDark ? "text-zinc-700" : "text-oz2-text-faint",
         )}
       >
         <svg
