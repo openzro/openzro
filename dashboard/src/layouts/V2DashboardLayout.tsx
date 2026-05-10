@@ -233,6 +233,16 @@ function breadcrumbForPath(path: string | null): OzBreadcrumbSegment[] {
       { label: "User" },
     ];
   }
+  // /events/* sits under the Identity > Activity sub-screen. Both
+  // sub-routes share the umbrella "Activity" crumb so the topbar
+  // matches the H1 across tabs.
+  if (
+    path === "/events" ||
+    path === "/events/audit" ||
+    path === "/events/network-traffic"
+  ) {
+    return [{ label: "Identity" }, { label: "Activity" }];
+  }
   return [];
 }
 
