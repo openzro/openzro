@@ -1,64 +1,26 @@
 "use client";
 
-import Breadcrumbs from "@components/Breadcrumbs";
-import InlineLink from "@components/InlineLink";
-import Paragraph from "@components/Paragraph";
 import { RestrictedAccess } from "@components/ui/RestrictedAccess";
-import { usePortalElement } from "@hooks/usePortalElement";
 import useFetchApi from "@utils/api";
-import { ExternalLinkIcon, LogsIcon } from "lucide-react";
 import React from "react";
-import ActivityIcon from "@/assets/icons/ActivityIcon";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { ActivityEvent } from "@/interfaces/ActivityEvent";
-import PageContainer from "@/layouts/PageContainer";
-import ActivityTable from "@/modules/activity/ActivityTable";
+import AuditTimelineV2 from "@/modules/activity/v2/AuditTimelineV2";
+
+// /events/audit — phase-5.11 entry point. Chrome (OzShell + sidebar
+// + topbar) lives in (v2-dashboard)/layout.tsx → V2DashboardLayout,
+// which already wraps the page in UsersProvider so the timeline's
+// initiator-name resolution works without extra wiring. This
+// component just owns the data fetch + the read-permission gate.
 
 export default function Activity() {
   const { permission } = usePermissions();
-
   const { data: events, isLoading } =
     useFetchApi<ActivityEvent[]>("/events/audit");
 
-  const { ref: headingRef, portalTarget } =
-    usePortalElement<HTMLHeadingElement>();
-
   return (
-    <PageContainer>
-      <div className={"p-default py-6"}>
-        <Breadcrumbs>
-          <Breadcrumbs.Item
-            label={"Activity"}
-            disabled={true}
-            icon={<ActivityIcon size={13} />}
-          />
-          <Breadcrumbs.Item
-            href={"/events/audit"}
-            label={"Audit Events"}
-            icon={<LogsIcon size={18} />}
-          />
-        </Breadcrumbs>
-        <h1 ref={headingRef}>Audit Events</h1>
-        <Paragraph>Here you can see all the audit activity events.</Paragraph>
-        <Paragraph>
-          Learn more about{" "}
-          <InlineLink
-            href={"https://docs.openzro.io/how-to/audit-events-logging"}
-            target={"_blank"}
-          >
-            Audit Events
-            <ExternalLinkIcon size={12} />
-          </InlineLink>
-          in our documentation.
-        </Paragraph>
-      </div>
-      <RestrictedAccess page={"Activity"} hasAccess={permission.events.read}>
-        <ActivityTable
-          events={events}
-          isLoading={isLoading}
-          headingTarget={portalTarget}
-        />
-      </RestrictedAccess>
-    </PageContainer>
+    <RestrictedAccess hasAccess={permission.events.read}>
+      <AuditTimelineV2 events={events} isLoading={isLoading} />
+    </RestrictedAccess>
   );
 }
