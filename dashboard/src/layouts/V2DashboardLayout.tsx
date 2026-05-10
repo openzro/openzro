@@ -216,6 +216,13 @@ function breadcrumbForPath(path: string | null): OzBreadcrumbSegment[] {
   if (path === "/access-control" || path.startsWith("/access-control/")) {
     return [{ label: "Workspace" }, { label: "Access Control" }];
   }
+  if (path === "/posture-checks" || path.startsWith("/posture-checks/")) {
+    return [
+      { label: "Workspace" },
+      { label: "Access Control" },
+      { label: "Posture Checks" },
+    ];
+  }
   // /team/users, /team/groups and /team/service-users all sit under the
   // single conceptual "Users & Groups" screen (the page H1 + the
   // TeamTabs sub-nav present the three views as siblings). The

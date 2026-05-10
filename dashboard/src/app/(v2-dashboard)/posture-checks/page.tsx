@@ -1,24 +1,26 @@
 "use client";
 
-import Breadcrumbs from "@components/Breadcrumbs";
 import InlineLink from "@components/InlineLink";
-import Paragraph from "@components/Paragraph";
 import SkeletonTable from "@components/skeletons/SkeletonTable";
 import { RestrictedAccess } from "@components/ui/RestrictedAccess";
 import { usePortalElement } from "@hooks/usePortalElement";
 import useFetchApi from "@utils/api";
-import { ExternalLinkIcon, ShieldCheck } from "lucide-react";
+import { ExternalLinkIcon } from "lucide-react";
 import React, { lazy, Suspense } from "react";
-import AccessControlIcon from "@/assets/icons/AccessControlIcon";
 import GroupsProvider from "@/contexts/GroupsProvider";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import PoliciesProvider from "@/contexts/PoliciesProvider";
 import { PostureCheck } from "@/interfaces/PostureCheck";
-import PageContainer from "@/layouts/PageContainer";
+
+// /posture-checks — v2 chrome entry. Body still renders the legacy
+// PostureCheckTable; a deeper v2 paint of the table itself is
+// deferred. Wrapper strips PageContainer + Breadcrumbs (V2 chrome
+// handles both) and renders the page header in v2 paint.
 
 const PostureCheckTable = lazy(
   () => import("@/modules/posture-checks/table/PostureCheckTable"),
 );
+
 export default function PostureChecksPage() {
   const { permission } = usePermissions();
   const { data: postureChecks, isLoading } =
@@ -28,38 +30,28 @@ export default function PostureChecksPage() {
     usePortalElement<HTMLHeadingElement>();
 
   return (
-    <PageContainer>
-      <GroupsProvider>
-        <div className={"p-default py-6"}>
-          <Breadcrumbs>
-            <Breadcrumbs.Item
-              href={"/access-control"}
-              label={"Access Control"}
-              icon={<AccessControlIcon size={14} />}
-            />
-            <Breadcrumbs.Item
-              href={"/posture-checks"}
-              label={"Posture Checks"}
-              active
-              icon={<ShieldCheck size={15} />}
-            />
-          </Breadcrumbs>
-          <h1 ref={headingRef}>Posture Checks</h1>
-          <Paragraph>
-            Use posture checks to further restrict access in your network.
-          </Paragraph>
-          <Paragraph>
-            Learn more about
+    <GroupsProvider>
+      <div className="space-y-6 p-8">
+        <header>
+          <h1
+            ref={headingRef}
+            className="text-[24px] font-semibold tracking-tight"
+          >
+            Posture Checks
+          </h1>
+          <p className="mt-1 max-w-2xl text-[14px] text-oz2-text-muted">
+            Layer device-state requirements on top of access policies — block
+            connections from non-compliant peers (OS version, geo, MDM/EDR
+            posture, etc.) before they reach the data plane.{" "}
             <InlineLink
-              href={"https://docs.openzro.io/how-to/manage-posture-checks"}
-              target={"_blank"}
+              href="https://docs.openzro.io/how-to/manage-posture-checks"
+              target="_blank"
             >
-              Posture Checks
-              <ExternalLinkIcon size={12} />
+              Learn more
+              <ExternalLinkIcon size={11} />
             </InlineLink>
-            in our documentation.
-          </Paragraph>
-        </div>
+          </p>
+        </header>
 
         <RestrictedAccess
           page={"Posture Checks"}
@@ -75,7 +67,7 @@ export default function PostureChecksPage() {
             </Suspense>
           </PoliciesProvider>
         </RestrictedAccess>
-      </GroupsProvider>
-    </PageContainer>
+      </div>
+    </GroupsProvider>
   );
 }
