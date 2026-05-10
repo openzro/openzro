@@ -233,7 +233,7 @@ const PeerGeneralInformation = () => {
           identity block on the left; Save / Cancel CTAs on the right.
           A hairline border below separates the hero from the tabs
           band. */}
-      <div className="border-b border-oz2-border-soft px-8 pb-5 pt-8">
+      <div className="px-8 pb-5 pt-8">
         <div className="flex max-w-6xl flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-4">
             <div
