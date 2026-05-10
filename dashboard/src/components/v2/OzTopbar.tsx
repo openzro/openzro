@@ -22,9 +22,14 @@ export interface OzTopbarProps {
   right?: React.ReactNode;
 }
 
+// pl-3 / pr-6 — asymmetric padding so the sidebar trigger sits
+// 12px from the sidebar's right edge (matching the gap-3 between
+// trigger / separator / breadcrumb). The previous symmetric px-6
+// left a 24px gap before the trigger that read as off-balance
+// against the 12px gap between trigger and the separator.
 const OzTopbar = ({ left, right }: OzTopbarProps) => {
   return (
-    <div className="flex h-full items-center justify-between gap-4 px-6">
+    <div className="flex h-full items-center justify-between gap-4 pl-3 pr-6">
       <div className="min-w-0 flex-1">{left}</div>
       <div className="flex shrink-0 items-center gap-3">{right}</div>
     </div>
