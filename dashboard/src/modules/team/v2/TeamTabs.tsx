@@ -1,6 +1,7 @@
 "use client";
 
 import classNames from "classnames";
+import { Bot, FolderGit2, User2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React from "react";
@@ -19,6 +20,7 @@ import { usePermissions } from "@/contexts/PermissionsProvider";
 
 interface TeamTabDef {
   label: string;
+  icon: React.ReactNode;
   href: string;
   /**
    * Pathname matcher. Active when current pathname equals href OR
@@ -32,15 +34,21 @@ export default function TeamTabs() {
   const pathname = usePathname();
   const { permission } = usePermissions();
 
+  // Iconography:
+  //   Users         → User2     (single human silhouette)
+  //   Service Users → Bot       (automation / API actor)
+  //   Groups        → FolderGit2 (matches the legacy NoResults icon)
   const tabs: TeamTabDef[] = [
     {
       label: "Users",
+      icon: <User2 size={14} />,
       href: "/team/users",
       match: (p) => p === "/team/users" || p === "/team",
       visible: permission.users.read,
     },
     {
       label: "Service Users",
+      icon: <Bot size={14} />,
       href: "/team/service-users",
       // /team/service-users keeps legacy paint until that body is
       // ported; the tab still navigates there so operators can reach
@@ -50,6 +58,7 @@ export default function TeamTabs() {
     },
     {
       label: "Groups",
+      icon: <FolderGit2 size={14} />,
       href: "/team/groups",
       match: (p) => p === "/team/groups",
       visible: permission.groups.read,
@@ -74,12 +83,15 @@ export default function TeamTabs() {
             role="tab"
             aria-selected={active}
             className={classNames(
-              "inline-flex h-full items-center whitespace-nowrap rounded-[6px] px-3 text-[13.5px] font-medium transition-colors",
+              "inline-flex h-full items-center gap-2 whitespace-nowrap rounded-[6px] px-3 text-[13.5px] font-medium transition-colors",
               active
                 ? "bg-oz2-surface text-oz2-text shadow-oz2-sm"
                 : "hover:text-oz2-text",
             )}
           >
+            <span aria-hidden className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+              {tab.icon}
+            </span>
             {tab.label}
           </Link>
         );
