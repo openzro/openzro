@@ -26,7 +26,7 @@ const OzTopbar = ({ left, right }: OzTopbarProps) => {
   return (
     <div className="flex h-full items-center justify-between gap-4 px-6">
       <div className="min-w-0 flex-1">{left}</div>
-      <div className="flex shrink-0 items-center gap-2">{right}</div>
+      <div className="flex shrink-0 items-center gap-3">{right}</div>
     </div>
   );
 };

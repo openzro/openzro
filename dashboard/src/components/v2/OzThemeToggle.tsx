@@ -29,13 +29,16 @@ const OzThemeToggle = ({ theme, onToggle, className }: OzThemeToggleProps) => {
       aria-label={`Switch to ${isDark ? "light" : "dark"} theme`}
       onClick={onToggle}
       className={classNames(
-        // Track: use bg-sunken + border-strong so the toggle reads
-        // clearly against both warm-paper light bg and the dark
-        // bg-soft. Previously bg-soft + border was too close to
-        // the topbar's own bg in both themes (light #f3f1ec vs
-        // #fbfaf7, dark #100c22 vs #0d091a).
-        "relative inline-flex h-[26px] w-[52px] items-center rounded-full border border-oz2-border-strong bg-oz2-bg-sunken transition-colors",
-        "hover:border-oz2-border-strong",
+        // Track: zinc utilities give clear contrast against both
+        // warm-paper light (#fbfaf7) and dark-violet (#0d091a) topbar
+        // bg. The v2 surface tokens (bg-soft / bg-sunken / surface)
+        // are intentionally close in hue for the calm-palette feel,
+        // which left the toggle visually mushy in both themes. zinc
+        // breaks out of that for this small but high-frequency
+        // affordance only.
+        "relative inline-flex h-[26px] w-[52px] items-center rounded-full border border-zinc-300 bg-zinc-200 transition-colors",
+        "dark:border-zinc-600 dark:bg-zinc-700",
+        "hover:border-zinc-400 dark:hover:border-zinc-500",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-oz2-acc focus-visible:ring-offset-2 focus-visible:ring-offset-oz2-bg",
         className,
       )}
@@ -85,13 +88,13 @@ const OzThemeToggle = ({ theme, onToggle, className }: OzThemeToggleProps) => {
         </svg>
       </span>
 
-      {/* Sliding thumb — explicit border + shadow-md gives it a clear
-          edge on both modes since track and thumb tokens (bg-sunken vs
-          surface) are intentionally close in hue. */}
+      {/* Sliding thumb — pure white in both modes so it pops against
+          the zinc-200 / zinc-700 track without depending on the v2
+          surface tokens (which collapse the contrast in dark mode). */}
       <span
         aria-hidden="true"
         className={classNames(
-          "absolute top-[2px] h-[20px] w-[22px] rounded-full border border-oz2-border-strong bg-oz2-surface shadow-oz2-md transition-[left] duration-200 ease-out",
+          "absolute top-[2px] h-[20px] w-[22px] rounded-full bg-white shadow-md ring-1 ring-black/5 transition-[left] duration-200 ease-out",
           isDark ? "left-[28px]" : "left-[2px]",
         )}
       />
