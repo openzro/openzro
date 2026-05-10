@@ -108,6 +108,12 @@ export default function FlowExportsSectionV2() {
         {data?.map((row) => (
           <FlowExportCard key={row.id} row={row} onEdit={() => openEdit(row)} />
         ))}
+        {/* Trailing "+ Add destination" card — handoff-flavored
+            secondary entry point right inside the grid. Same
+            dimensions as the populated cards so the grid alignment
+            holds; dashed border + ghost paint signals it's the
+            "create" affordance instead of an existing destination. */}
+        <AddDestinationCard onClick={openCreate} />
       </SectionShell>
 
       <FlowExportModal
@@ -152,5 +158,30 @@ function FlowExportCard({
       onEdit={onEdit}
       onDelete={onDelete}
     />
+  );
+}
+
+// Trailing "create new" card — dashed border, centered icon + label,
+// stretches to match the IntegrationCard's height in the same grid
+// row. Click triggers the same openCreate flow the topbar Add
+// button uses. Pointer-cursor + hover paint signals it's interactive.
+function AddDestinationCard({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex min-h-[120px] flex-col items-center justify-center gap-2 rounded-oz2-card border-2 border-dashed border-oz2-border bg-transparent p-4 text-oz2-text-muted transition-colors hover:border-oz2-acc hover:bg-oz2-acc-soft hover:text-oz2-acc-text"
+    >
+      <span
+        aria-hidden
+        className="grid h-10 w-10 place-items-center rounded-[10px] border border-dashed border-oz2-border-strong text-oz2-text-faint transition-colors group-hover:border-oz2-acc group-hover:text-oz2-acc-text"
+      >
+        <PlusCircle size={18} />
+      </span>
+      <span className="text-[13.5px] font-medium">Add destination</span>
+      <span className="text-[11.5px] text-oz2-text-faint">
+        Stream or archive traffic events to a new destination
+      </span>
+    </button>
   );
 }
