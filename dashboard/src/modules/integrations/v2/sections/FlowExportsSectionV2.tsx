@@ -102,7 +102,11 @@ export default function FlowExportsSectionV2() {
           </>
         }
         isLoading={isLoading}
-        isEmpty={!data || data.length === 0}
+        // Always render the grid — the trailing AddDestinationCard
+        // covers the cold-start case visually, so we don't need a
+        // separate empty-state OzCard. The grid degrades gracefully
+        // when data is empty (just the Add card alone).
+        isEmpty={false}
         emptyMessage="No destinations configured. Click Add destination to start streaming traffic events."
       >
         {data?.map((row) => (
