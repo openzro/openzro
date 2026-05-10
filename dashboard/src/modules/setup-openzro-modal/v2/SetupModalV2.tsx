@@ -470,7 +470,7 @@ function ManualAccordion({
         <span className="text-[13px] font-medium text-oz2-text">{label}</span>
       </button>
       {open && (
-        <StepsList className="pb-4 pl-[60px] pr-1">
+        <StepsList className="pb-4 pt-1">
           {os === "linux" && (
             <LinuxManual setupKey={setupKey} hostname={hostname} />
           )}
