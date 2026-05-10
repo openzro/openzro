@@ -15,7 +15,7 @@ export const ozButtonVariants = cva(
   [
     // Base — handoff: 34px height, 10px radius, gap-2 (8px), 13px/500.
     "inline-flex h-[34px] items-center justify-center gap-2 whitespace-nowrap",
-    "rounded-oz2-input border px-[14px] text-[15px] font-medium",
+    "rounded-oz2-input border px-[14px] text-[14px] font-medium",
     "transition-all duration-150 ease-out",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-oz2-acc focus-visible:ring-offset-2 focus-visible:ring-offset-oz2-bg",
     "disabled:cursor-not-allowed disabled:opacity-50",
