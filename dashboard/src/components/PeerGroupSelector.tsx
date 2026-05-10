@@ -270,10 +270,14 @@ export function PeerGroupSelector({
         ) : (
           <button
             className={cn(
-              "min-h-[46px] w-full relative items-center group",
-              "border border-neutral-200 dark:border-nb-gray-700 justify-between py-2 px-3",
-              "rounded-md bg-white text-sm dark:bg-nb-gray-900/40 flex dark:text-neutral-400/70 text-neutral-500 cursor-pointer hover:dark:bg-nb-gray-900/50",
-              "disabled:pointer-events-none disabled:opacity-30 transition-all",
+              // Trigger paint adopted from OzSelect for visual unity
+              // across v2 forms. Min-height stays generous so multiple
+              // group chips wrap without crushing — chips run ~22-26px
+              // tall, so 38px floor + py-1.5 gives them room.
+              "group relative flex w-full min-h-[38px] items-center justify-between gap-2 rounded-oz2-input border border-oz2-border bg-oz2-surface px-3 py-1.5 text-[13px] text-oz2-text-faint transition-colors",
+              "hover:border-oz2-border-strong hover:bg-oz2-hover",
+              "focus:outline-none focus:border-oz2-acc focus:ring-2 focus:ring-oz2-acc/30",
+              "disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-60",
             )}
             disabled={disabled}
             data-cy={dataCy}
@@ -344,12 +348,10 @@ export function PeerGroupSelector({
               )}
             </div>
 
-            <div className={"pl-2"} data-cy={"group-selector-open-close"}>
+            <div className="pl-2" data-cy="group-selector-open-close">
               <ChevronsUpDown
-                size={18}
-                className={
-                  "shrink-0 group-hover:text-nb-gray-300 transition-all"
-                }
+                size={14}
+                className="shrink-0 text-oz2-text-faint transition-colors group-hover:text-oz2-text-2"
               />
             </div>
           </button>
