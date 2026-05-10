@@ -1,7 +1,6 @@
 "use client";
 
 import Card from "@components/Card";
-import FancyToggleSwitch from "@components/FancyToggleSwitch";
 import FullTooltip from "@components/FullTooltip";
 import HelpText from "@components/HelpText";
 import { Input } from "@components/Input";
@@ -25,7 +24,6 @@ import { RestrictedAccess } from "@components/ui/RestrictedAccess";
 import TextWithTooltip from "@components/ui/TextWithTooltip";
 import useRedirect from "@hooks/useRedirect";
 import useFetchApi from "@utils/api";
-import { cn } from "@utils/helpers";
 import dayjs from "dayjs";
 import { isEmpty, trim } from "lodash";
 import {
@@ -63,6 +61,8 @@ import useGroupHelper from "@/modules/groups/useGroupHelper";
 import { AccessiblePeersSection } from "@/modules/peer/AccessiblePeersSection";
 import { PeerExpirationToggle } from "@/modules/peer/PeerExpirationToggle";
 import { PeerNetworkRoutesSection } from "@/modules/peer/PeerNetworkRoutesSection";
+import OzSettingsCard from "@/modules/settings/v2/OzSettingsCard";
+import OzSettingsToggle from "@/modules/settings/v2/OzSettingsToggle";
 
 // /peer — v2 chrome entry. Body keeps the legacy widgets unchanged
 // (PeerExpirationToggle, FancyToggleSwitch, PeerInformationCard,
@@ -261,82 +261,80 @@ const PeerGeneralInformation = () => {
       <div className="mt-5 flex w-full max-w-6xl flex-wrap items-start gap-10 xl:flex-nowrap">
         <PeerInformationCard peer={peer} />
 
-        <div className="flex flex-col gap-6 transition-all lg:w-1/2">
-          <div>
+        <div className="flex flex-col gap-5 transition-all lg:w-1/2">
+          <OzSettingsCard
+            title={
+              <span className="inline-flex items-center gap-2">
+                <TimerResetIcon size={14} />
+                Session Expiration
+              </span>
+            }
+            sub="Force this peer to re-authenticate through SSO when its session expires. Setup-key peers can't be expired (no user to sign in)."
+          >
             <PeerExpirationToggle
               peer={peer}
               value={loginExpiration}
-              icon={<TimerResetIcon size={16} />}
               onChange={(state) => {
                 setLoginExpiration(state);
                 if (!state) setInactivityExpiration(false);
               }}
             />
-            {permission.peers.update && !!peer?.user_id && (
-              <div
-                className={cn(
-                  "border border-nb-gray-900 border-t-0 rounded-b-md bg-nb-gray-940 px-[1.28rem] pt-3 pb-5 flex flex-col gap-4 mx-[0.25rem]",
-                  !loginExpiration
-                    ? "opacity-50 pointer-events-none"
-                    : "bg-nb-gray-930/80",
-                )}
-              >
+
+            {permission.peers.update && !!peer?.user_id && loginExpiration && (
+              <div className="flex flex-col gap-4 rounded-oz2-card border border-oz2-border-soft bg-oz2-bg-sunken p-4">
                 <PeerExpirationToggle
                   peer={peer}
-                  variant={"blank"}
                   value={inactivityExpiration}
                   onChange={setInactivityExpiration}
-                  title={"Require login after disconnect"}
-                  description={
-                    "Enable to require authentication after users disconnect from management for 10 minutes."
-                  }
-                  className={
-                    !loginExpiration ? "opacity-40 pointer-events-none" : ""
-                  }
+                  title="Require login after disconnect"
+                  description="Enable to require authentication after users disconnect from management for 10 minutes."
+                  nested
                 />
               </div>
             )}
-          </div>
+          </OzSettingsCard>
 
-          <FullTooltip
-            content={
-              <div className="flex items-center gap-2 !text-nb-gray-300 text-xs">
-                <LockIcon size={14} />
-                <span>
-                  {`You don't have the required permissions to update this setting.`}
-                </span>
-              </div>
+          <OzSettingsCard
+            title={
+              <span className="inline-flex items-center gap-2">
+                <TerminalSquare size={14} />
+                SSH Access
+              </span>
             }
-            interactive={false}
-            className="w-full block"
-            disabled={!permission.peers.update}
+            sub="Run an SSH server on this peer so operators can reach the machine through the mesh with a standard shell."
           >
-            <FancyToggleSwitch
-              value={ssh}
+            <FullTooltip
+              content={
+                <div className="flex items-center gap-2 !text-nb-gray-300 text-xs">
+                  <LockIcon size={14} />
+                  <span>
+                    {`You don't have the required permissions to update this setting.`}
+                  </span>
+                </div>
+              }
+              interactive={false}
+              className="w-full block"
               disabled={!permission.peers.update}
-              onChange={(set) =>
-                !set
-                  ? setSsh(false)
-                  : openSSHDialog().then((confirm) => setSsh(confirm))
-              }
-              label={
-                <>
-                  <TerminalSquare size={16} />
-                  SSH Access
-                </>
-              }
-              helpText={
-                "Enable the SSH server on this peer to access the machine via an secure shell."
-              }
-            />
-          </FullTooltip>
+            >
+              <OzSettingsToggle
+                value={ssh}
+                disabled={!permission.peers.update}
+                onChange={(set) =>
+                  !set
+                    ? setSsh(false)
+                    : openSSHDialog().then((confirm) => setSsh(confirm))
+                }
+                label="Enable SSH server"
+                desc="The openZro client opens an SSH listener bound to its mesh IP."
+              />
+            </FullTooltip>
+          </OzSettingsCard>
 
           {permission.groups.read && (
-            <div>
-              <Label>Assigned Groups</Label>
-              <HelpText>
-                Use groups to control what this peer can access.
-              </HelpText>
+            <OzSettingsCard
+              title="Assigned Groups"
+              sub="Groups control what this peer can reach across the mesh. A peer inherits every policy that targets one of its groups."
+            >
               <PeerGroupSelector
                 disabled={!permission.groups.update}
                 onChange={setSelectedGroups}
@@ -344,7 +342,7 @@ const PeerGeneralInformation = () => {
                 hideAllGroup={true}
                 peer={peer}
               />
-            </div>
+            </OzSettingsCard>
           )}
         </div>
       </div>
