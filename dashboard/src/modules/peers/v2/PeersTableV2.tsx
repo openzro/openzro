@@ -229,10 +229,16 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
         sortingFn: "basic",
         header: ({ column }) => <SortHeader column={column} label="Group" />,
         // Legacy PeerGroupCell brings the assigned-groups display +
-        // edit modal (PeerGroupSelector) for free. Renders inside the
-        // row's PeerProvider — visual is legacy paint until phase 5
-        // re-paints. Replaces the read-only v2 GroupsCell.
-        cell: () => <PeerGroupCell />,
+        // edit modal (PeerGroupSelector) for free. PeerProvider wraps
+        // here per-cell (instead of around the whole row) because its
+        // loading-state fallback renders a <SkeletonPeerDetail> div,
+        // which is invalid HTML inside <tbody> — a per-cell wrap puts
+        // the skeleton inside <td> instead, which is valid.
+        cell: ({ row }) => (
+          <PeerProvider peer={row.original}>
+            <PeerGroupCell />
+          </PeerProvider>
+        ),
       },
       {
         id: "os",
@@ -273,8 +279,11 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
         size: 40,
         enableSorting: false,
         header: () => null,
-        // PeerProvider is on the row — cell just consumes via usePeer().
-        cell: () => <PeerActionCell />,
+        cell: ({ row }) => (
+          <PeerProvider peer={row.original}>
+            <PeerActionCell />
+          </PeerProvider>
+        ),
       },
     ],
     [],
@@ -456,24 +465,16 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
           </OzTableHeader>
           <OzTableBody>
             {table.getRowModel().rows.map((row) => (
-              // PeerProvider scopes the row so cells consuming usePeer()
-              // (PeerActionCell, PeerGroupCell) work without per-cell
-              // wrappers. Context.Provider doesn't render DOM, so it's
-              // a valid child of <tbody>.
-              <PeerProvider key={row.id} peer={row.original}>
-                <OzTableRow
-                  data-state={row.getIsSelected() ? "selected" : undefined}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <OzTableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext(),
-                      )}
-                    </OzTableCell>
-                  ))}
-                </OzTableRow>
-              </PeerProvider>
+              <OzTableRow
+                key={row.id}
+                data-state={row.getIsSelected() ? "selected" : undefined}
+              >
+                {row.getVisibleCells().map((cell) => (
+                  <OzTableCell key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </OzTableCell>
+                ))}
+              </OzTableRow>
             ))}
             {table.getRowModel().rows.length === 0 && (
               <OzTableRow className="hover:bg-transparent">
