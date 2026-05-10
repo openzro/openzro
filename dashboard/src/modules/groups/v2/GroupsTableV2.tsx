@@ -268,9 +268,8 @@ export default function GroupsTableV2({ isLoading }: Props) {
             Users &amp; Groups
           </h1>
           <p className="mt-1 max-w-2xl text-[14px] text-oz2-text-muted">
-            Groups bundle peers, resources and users so policies, routes and
-            setup keys can target them by name. Groups synced from your IdP
-            (SCIM/JWT) are read-only. Learn more about{" "}
+            Identity drives policy. Groups are how peers and users get scoped.
+            Learn more about{" "}
             <a
               href="https://docs.openzro.io/how-to/manage-network-access"
               target="_blank"
@@ -295,32 +294,30 @@ export default function GroupsTableV2({ isLoading }: Props) {
             onCreate={() => setCreateOpen(true)}
           />
         ) : (
-          <>
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[13.5px] text-oz2-text-muted">
-              <span className="inline-flex items-center gap-2">
-                <span className="font-medium text-oz2-text">{counts.total}</span>
-                Groups
-              </span>
-              <span className="inline-flex items-center gap-2 border-l border-oz2-border-soft pl-5">
-                <span className="font-medium text-oz2-text">{counts.used}</span>
-                Used
-              </span>
-              <span className="inline-flex items-center gap-2 border-l border-oz2-border-soft pl-5">
-                <span className="font-medium text-oz2-text">
-                  {counts.unused}
+          <OzCard flush>
+            {/* Internal card header — handoff (screens-2.jsx, TeamScreen):
+                title + count on the left, compact search + segmented
+                Used/Unused filter + refresh icon on the right. The
+                external stats row is dropped since the count rides
+                inline with the title and the segmented filter exposes
+                the used/unused split. */}
+            <div className="flex flex-wrap items-center gap-3 border-b border-oz2-border-soft px-[18px] py-3.5">
+              <div className="mr-auto inline-flex items-baseline gap-2">
+                <span className="text-[14px] font-semibold text-oz2-text">
+                  Groups
                 </span>
-                Unused
-              </span>
-            </div>
+                <span className="font-mono text-[12px] font-medium text-oz2-text-faint">
+                  {counts.total}
+                </span>
+              </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="inline-flex h-[34px] flex-1 min-w-[220px] items-center gap-2 rounded-oz2-input border border-oz2-border bg-oz2-surface px-3">
+              <div className="inline-flex h-[28px] w-[200px] items-center gap-2 rounded-oz2-input border border-oz2-border bg-oz2-surface px-2.5">
                 <span className="text-oz2-text-faint">{ICONS.search}</span>
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search group…"
-                  className="h-full flex-1 border-0 bg-transparent text-[14px] outline-none placeholder:text-oz2-text-faint"
+                  placeholder="Search groups…"
+                  className="h-full flex-1 border-0 bg-transparent text-[12.5px] outline-none placeholder:text-oz2-text-faint"
                 />
               </div>
 
@@ -334,16 +331,11 @@ export default function GroupsTableV2({ isLoading }: Props) {
                 ]}
               />
 
-              <PageSizeCombobox
-                value={pageInfo.pageSize}
-                onChange={(n) => table.setPageSize(n)}
-              />
-
               <button
                 type="button"
                 onClick={refreshClick}
                 aria-label="Refresh groups"
-                className="grid h-[34px] w-[34px] place-items-center rounded-oz2-input border border-oz2-border bg-oz2-surface text-oz2-text-2 hover:border-oz2-border-strong hover:bg-oz2-hover"
+                className="grid h-[28px] w-[28px] place-items-center rounded-oz2-input border border-oz2-border bg-oz2-surface text-oz2-text-2 hover:border-oz2-border-strong hover:bg-oz2-hover"
               >
                 <span className={refreshing ? "animate-spin text-oz2-acc" : ""}>
                   {ICONS.refresh}
@@ -351,8 +343,7 @@ export default function GroupsTableV2({ isLoading }: Props) {
               </button>
             </div>
 
-            <OzCard flush>
-              <OzTable>
+            <OzTable>
                 <OzTableHeader>
                   {table.getHeaderGroups().map((headerGroup) => (
                     <OzTableRow
@@ -407,20 +398,25 @@ export default function GroupsTableV2({ isLoading }: Props) {
                 </OzTableBody>
               </OzTable>
 
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-oz2-border-soft bg-oz2-bg-sunken px-[18px] py-3 text-[13.5px]">
-                <span className="text-oz2-text-muted">
-                  {total === 0
-                    ? "0 groups"
-                    : `Showing ${pageStart}–${pageEnd} of ${total}`}
-                </span>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-oz2-border-soft bg-oz2-bg-sunken px-[18px] py-3 text-[13.5px]">
+              <span className="text-oz2-text-muted">
+                {total === 0
+                  ? "0 groups"
+                  : `Showing ${pageStart}–${pageEnd} of ${total}`}
+              </span>
+              <div className="flex items-center gap-3">
+                <PageSizeCombobox
+                  value={pageInfo.pageSize}
+                  onChange={(n) => table.setPageSize(n)}
+                />
                 <Pager
                   page={pageInfo.pageIndex + 1}
                   totalPages={Math.max(1, table.getPageCount())}
                   onChange={(p) => table.setPageIndex(p - 1)}
                 />
               </div>
-            </OzCard>
-          </>
+            </div>
+          </OzCard>
         )}
       </div>
     </TooltipProvider>
