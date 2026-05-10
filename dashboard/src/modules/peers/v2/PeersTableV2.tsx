@@ -125,7 +125,7 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
-    pageSize: 20,
+    pageSize: 10,
   });
 
   const all = useMemo(() => peers ?? [], [peers]);
@@ -1119,7 +1119,7 @@ function PageSizeCombobox({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const choices = [10, 20, 50, 100];
+  const choices = [10, 25, 50, 100, 1000];
 
   useEffect(() => {
     if (!open) return;
