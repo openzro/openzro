@@ -6,7 +6,12 @@ import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { cn } from "@utils/helpers";
 import { X } from "lucide-react";
 import * as React from "react";
-import { headerHeight } from "@/layouts/Header";
+
+// Legacy header height — used to compute the scroll-region height for
+// long-content modals. The legacy Header is gone but the modal still
+// reserves the same chunk of viewport at the top to keep the visual
+// rhythm consistent on screens where the v2 topbar lives.
+const headerHeight = 75;
 
 const Modal = DialogPrimitive.Root;
 
