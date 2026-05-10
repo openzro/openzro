@@ -615,6 +615,7 @@ function AddressCell({ peer }: { peer: Peer }) {
               label="Region"
               value={region || "—"}
               mono={false}
+              copyable
             />
           </div>
         </TooltipContent>
