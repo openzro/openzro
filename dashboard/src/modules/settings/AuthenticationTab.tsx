@@ -1,12 +1,10 @@
-import Breadcrumbs from "@components/Breadcrumbs";
-import Button from "@components/Button";
-import FancyToggleSwitch from "@components/FancyToggleSwitch";
+"use client";
+
 import HelpText from "@components/HelpText";
 import InlineLink from "@components/InlineLink";
 import { Input } from "@components/Input";
 import { Label } from "@components/Label";
 import { notify } from "@components/Notification";
-import Paragraph from "@components/Paragraph";
 import {
   Select,
   SelectContent,
@@ -18,20 +16,25 @@ import { useExpirationState } from "@hooks/useExpirationState";
 import { convertToSeconds } from "@hooks/useTimeFormatter";
 import * as Tabs from "@radix-ui/react-tabs";
 import { useApiCall } from "@utils/api";
-import { cn } from "@utils/helpers";
-import {
-  CalendarClock,
-  ExternalLinkIcon,
-  ShieldCheckIcon,
-  ShieldIcon,
-  TimerResetIcon,
-} from "lucide-react";
+import { CalendarClock, ExternalLinkIcon } from "lucide-react";
 import React, { useState } from "react";
 import { useSWRConfig } from "swr";
-import SettingsIcon from "@/assets/icons/SettingsIcon";
+import OzButton from "@/components/v2/OzButton";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { useHasChanges } from "@/hooks/useHasChanges";
 import { Account } from "@/interfaces/Account";
+import OzSettingsCard from "@/modules/settings/v2/OzSettingsCard";
+import OzSettingsField from "@/modules/settings/v2/OzSettingsField";
+import OzSettingsToggle from "@/modules/settings/v2/OzSettingsToggle";
+
+// AuthenticationTab — settings sub-page body for /settings/authentication.
+// Functionality preserved verbatim from the pre-phase-5 legacy:
+// `useExpirationState` for peer login + inactivity expiration, peer
+// approval boolean, save flow through /accounts/{id}. Only the paint
+// changes — sections move into OzSettingsCard blocks; toggles into
+// OzSettingsToggle rows; the session-expiration form into an
+// OzSettingsField row inside the expansion area. Input + Select stay
+// on legacy paint pending dedicated v2 form primitives.
 
 type Props = {
   account: Account;
@@ -39,12 +42,8 @@ type Props = {
 
 export default function AuthenticationTab({ account }: Readonly<Props>) {
   const { permission } = usePermissions();
-
   const { mutate } = useSWRConfig();
 
-  /**
-   * Peer approval enabled
-   */
   const [peerApproval, setPeerApproval] = useState<boolean>(() => {
     try {
       return account?.settings?.extra?.peer_approval_enabled || false;
@@ -53,7 +52,6 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
     }
   });
 
-  // Peer Expiration
   const [
     loginExpiration,
     setLoginExpiration,
@@ -66,7 +64,6 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
     expirationInSeconds: account.settings.peer_login_expiration || 86400,
   });
 
-  // Peer Inactivity Expiration
   const [
     peerInactivityExpirationEnabled,
     setPeerInactivityExpirationEnabled,
@@ -80,9 +77,6 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
     timeRange: ["minutes", "hours", "days"],
   });
 
-  /**
-   * Save changes
-   */
   const saveRequest = useApiCall<Account>("/accounts/" + account.id);
 
   const { hasChanges, updateRef } = useHasChanges([
@@ -97,10 +91,6 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
 
   const saveChanges = async () => {
     const expiration = convertToSeconds(expiresIn, expireInterval);
-    const peerInactivityExpiration = convertToSeconds(
-      peerInactivityExpiresIn,
-      peerInactivityExpireInterval,
-    );
 
     notify({
       title: "Save Authentication Settings",
@@ -138,183 +128,141 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
     });
   };
 
+  const editDisabled = !permission.settings.update;
+
   return (
-    <Tabs.Content value={"authentication"}>
-      <div className={"p-default py-6 max-w-2xl"}>
-        <Breadcrumbs>
-          <Breadcrumbs.Item
-            href={"/settings"}
-            label={"Settings"}
-            icon={<SettingsIcon size={13} />}
-          />
-          <Breadcrumbs.Item
-            href={"/settings"}
-            label={"Authentication"}
-            icon={<ShieldIcon size={14} />}
-            active
-          />
-        </Breadcrumbs>
-        <div className={"flex items-start justify-between"}>
-          <div>
-            <h1>Authentication</h1>
-            <Paragraph>
-              Learn more about
-              <InlineLink
-                href={
-                  "https://docs.openzro.io/how-to/enforce-periodic-user-authentication"
-                }
-                target={"_blank"}
-              >
-                Authentication
-                <ExternalLinkIcon size={12} />
-              </InlineLink>
-            </Paragraph>
-          </div>
-
-          <Button
-            variant={"primary"}
-            disabled={!hasChanges || !permission.settings.update}
-            onClick={saveChanges}
-            data-cy={"save-authentication-settings"}
-          >
-            Save Changes
-          </Button>
-        </div>
-
-        <div className={"flex flex-col gap-6 w-full mt-8 mb-3"}>
-          <FancyToggleSwitch
-            value={peerApproval}
-            onChange={setPeerApproval}
-            label={
-              <>
-                <ShieldCheckIcon size={15} />
-                Require Peer Approval
-              </>
-            }
-            helpText={
-              <>
-                When enabled, every new peer that registers must be approved
-                by an administrator from the Peers list before it can join
-                the mesh. Existing peers are unaffected. Use this for
-                regulated environments where the admission audit trail
-                matters; combine with{" "}
-                <InlineLink href="/settings?tab=device-admission">
-                  Device Admission
-                </InlineLink>{" "}
-                to gate by posture (MDM/EDR) instead of/in addition to
-                manual review.
-              </>
-            }
-            disabled={!permission.settings.update}
-            data-cy={"peer-approval-toggle"}
-          />
-
-          <div className={"flex flex-col"}>
-            <FancyToggleSwitch
-              value={loginExpiration}
-              onChange={(state) => {
-                setLoginExpiration(state);
-                !state && setPeerInactivityExpirationEnabled(false);
-              }}
-              dataCy={"peer-login-expiration"}
-              label={
-                <>
-                  <TimerResetIcon size={15} />
-                  Peer Session Expiration
-                </>
-              }
-              helpText={
-                <>
-                  Request periodic re-authentication of peers <br />
-                  registered with SSO.
-                </>
-              }
-              disabled={!permission.settings.update}
-              // Square the toggle's bottom corners so it merges with
-              // the Session Expiration expansion panel below — same
-              // pattern NetworkSettings uses for its flow-groups
-              // expansion. Toggle off → standalone rounded card.
-              className={loginExpiration ? "!rounded-b-none" : undefined}
-            />
-
-            <div
-              className={cn(
-                "border border-t-0 rounded-b-md px-[1.28rem] pt-3 pb-5 flex flex-col gap-4 mx-[0.25rem]",
-                "border-neutral-200 bg-neutral-50",
-                "dark:border-nb-gray-900 dark:bg-nb-gray-940",
-                !loginExpiration || !permission.settings.update
-                  ? "opacity-50 pointer-events-none"
-                  : "bg-neutral-100 dark:bg-nb-gray-930/80",
-              )}
+    <Tabs.Content value="authentication" className="flex flex-col gap-5">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-[18px] font-semibold tracking-tight text-oz2-text">
+            Authentication
+          </h2>
+          <p className="mt-1 max-w-2xl text-[13px] leading-[1.55] text-oz2-text-muted">
+            Control how peers and humans prove who they are.{" "}
+            <InlineLink
+              href="https://docs.openzro.io/how-to/enforce-periodic-user-authentication"
+              target="_blank"
             >
-              <div className={cn("flex justify-between gap-10 mt-2")}>
-                <div className={"w-full"}>
-                  <Label>Session Expiration</Label>
-                  <HelpText>
-                    Time after which every peer added with SSO login will
-                    require re-authentication.
-                  </HelpText>
-                </div>
-                <div className={"w-full flex gap-3"}>
-                  <Input
-                    placeholder={"7"}
-                    maxWidthClass={"min-w-[100px]"}
-                    min={1}
-                    disabled={!loginExpiration || !permission.settings.update}
-                    data-cy={"peer-login-expiration-input"}
-                    max={180}
-                    className={"w-full"}
-                    value={expiresIn}
-                    type={"number"}
-                    onChange={(e) => setExpiresIn(e.target.value)}
-                  />
-                  <Select
-                    disabled={!loginExpiration || !permission.settings.update}
-                    value={expireInterval}
-                    onValueChange={(v) => setExpireInterval(v)}
-                  >
-                    <SelectTrigger
-                      className="w-full"
-                      data-cy={"peer-login-expiration-select"}
-                    >
-                      <div className={"flex items-center gap-3"}>
-                        <CalendarClock
-                          size={15}
-                          className={"text-neutral-600 dark:text-nb-gray-300"}
-                        />
-                        <SelectValue
-                          placeholder="Select interval..."
-                          data-cy={"peer-login-expiration-select-value"}
-                        />
-                      </div>
-                    </SelectTrigger>
-                    <SelectContent
-                      data-cy={"peer-login-expiration-select-content"}
-                    >
-                      <SelectItem value="days">Days</SelectItem>
-                      <SelectItem value="hours">Hours</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <FancyToggleSwitch
-                variant={"blank"}
-                value={peerInactivityExpirationEnabled}
-                onChange={setPeerInactivityExpirationEnabled}
-                dataCy={"peer-inactivity-expiration"}
-                label={<>Require login after disconnect</>}
-                disabled={!permission.settings.update}
-                helpText={
-                  <>
-                    Enable to require authentication after users disconnect from
-                    management for 10 minutes.
-                  </>
-                }
-              />
-            </div>
-          </div>
+              Learn more
+              <ExternalLinkIcon size={11} />
+            </InlineLink>
+          </p>
         </div>
-      </div>
+        <OzButton
+          variant="primary"
+          type="button"
+          disabled={!hasChanges || editDisabled}
+          onClick={saveChanges}
+          data-cy="save-authentication-settings"
+        >
+          Save Changes
+        </OzButton>
+      </header>
+
+      <OzSettingsCard
+        title="Peer approval"
+        sub="Hold every new peer until an administrator admits it from the Peers list. Existing peers are unaffected."
+      >
+        <OzSettingsToggle
+          value={peerApproval}
+          onChange={setPeerApproval}
+          disabled={editDisabled}
+          dataCy="peer-approval-toggle"
+          label="Require peer approval"
+          desc={
+            <>
+              Use this for regulated environments where the admission audit
+              trail matters; combine with{" "}
+              <InlineLink href="/settings/device-admission">
+                Device Admission
+              </InlineLink>{" "}
+              to gate by posture (MDM/EDR) instead of/in addition to manual
+              review.
+            </>
+          }
+        />
+      </OzSettingsCard>
+
+      <OzSettingsCard
+        title="Peer session expiration"
+        sub="Force peers registered with SSO to periodically re-authenticate, so a stolen device's access stops at the next interval."
+      >
+        <OzSettingsToggle
+          value={loginExpiration}
+          onChange={(state) => {
+            setLoginExpiration(state);
+            if (!state) setPeerInactivityExpirationEnabled(false);
+          }}
+          disabled={editDisabled}
+          dataCy="peer-login-expiration"
+          label="Peer session expiration"
+          desc="Request periodic re-authentication of peers registered with SSO."
+        />
+
+        {loginExpiration && (
+          <div className="flex flex-col gap-5 rounded-oz2-card border border-oz2-border-soft bg-oz2-bg-sunken p-4">
+            <OzSettingsField
+              label={<Label className="mb-0">Session expiration</Label>}
+              hint={
+                <HelpText className="mt-0 text-[11.5px]">
+                  Time after which every peer added with SSO login will require
+                  re-authentication.
+                </HelpText>
+              }
+            >
+              <div className="flex gap-3">
+                <Input
+                  placeholder="7"
+                  maxWidthClass="min-w-[100px]"
+                  min={1}
+                  max={180}
+                  className="w-full"
+                  value={expiresIn}
+                  type="number"
+                  disabled={editDisabled}
+                  data-cy="peer-login-expiration-input"
+                  onChange={(e) => setExpiresIn(e.target.value)}
+                />
+                <Select
+                  disabled={editDisabled}
+                  value={expireInterval}
+                  onValueChange={(v) => setExpireInterval(v)}
+                >
+                  <SelectTrigger
+                    className="w-full"
+                    data-cy="peer-login-expiration-select"
+                  >
+                    <div className="flex items-center gap-3">
+                      <CalendarClock
+                        size={15}
+                        className="text-neutral-600 dark:text-nb-gray-300"
+                      />
+                      <SelectValue
+                        placeholder="Select interval..."
+                        data-cy="peer-login-expiration-select-value"
+                      />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent data-cy="peer-login-expiration-select-content">
+                    <SelectItem value="days">Days</SelectItem>
+                    <SelectItem value="hours">Hours</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </OzSettingsField>
+
+            <OzSettingsToggle
+              value={peerInactivityExpirationEnabled}
+              onChange={setPeerInactivityExpirationEnabled}
+              disabled={editDisabled}
+              dataCy="peer-inactivity-expiration"
+              label="Require login after disconnect"
+              desc="Force re-authentication when a peer disconnects from management for more than 10 minutes."
+              nested
+            />
+          </div>
+        )}
+      </OzSettingsCard>
     </Tabs.Content>
   );
 }
