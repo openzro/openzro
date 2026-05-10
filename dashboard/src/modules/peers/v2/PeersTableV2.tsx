@@ -2,6 +2,7 @@
 
 import { useOidcUser } from "@axa-fr/react-oidc";
 import { Modal, ModalTrigger } from "@components/modal/Modal";
+import TextWithTooltip from "@components/ui/TextWithTooltip";
 import {
   Tooltip,
   TooltipContent,
@@ -519,14 +520,19 @@ function NameCell({ peer }: { peer: Peer }) {
   const display = enrichedDisplay || idFallback || "—";
   const detailsHref = peer.id ? `/peer?id=${peer.id}` : null;
 
+  // Long peer names + emails get truncated with an ellipsis after the
+  // ch threshold and reveal the full string on hover. Mirrors the
+  // legacy TextWithTooltip pattern.
   const body = (
     <div className="flex min-w-0 flex-col">
       <span className="flex items-center gap-2">
         <OzStatusDot status={status} />
-        <span className="truncate font-medium text-oz2-text">{peer.name}</span>
+        <span className="font-medium text-oz2-text">
+          <TextWithTooltip text={peer.name} maxChars={24} />
+        </span>
       </span>
-      <span className="truncate pl-[16px] text-[11.5px] text-oz2-text-muted">
-        {display}
+      <span className="block pl-[16px] text-[11.5px] text-oz2-text-muted">
+        <TextWithTooltip text={display} maxChars={28} />
       </span>
     </div>
   );
@@ -920,7 +926,11 @@ function SortHeader({
     <button
       type="button"
       onClick={() => column.toggleSorting()}
-      className="-mx-1 inline-flex h-5 items-center gap-1.5 rounded px-1 text-left transition-colors hover:text-oz2-text"
+      // Explicit `uppercase` because user-agent button defaults can
+      // reset text-transform from the parent <th>'s uppercase. Same
+      // for `font-mono` and the small caps style — keeps headers
+      // visually identical regardless of sortable vs static.
+      className="-mx-1 inline-flex h-5 items-center gap-1.5 rounded px-1 text-left font-mono text-[10.5px] font-semibold uppercase tracking-widest text-oz2-text-muted transition-colors hover:text-oz2-text"
     >
       {label}
       <span
