@@ -1,10 +1,6 @@
 "use client";
 
-import Card from "@components/Card";
 import FullTooltip from "@components/FullTooltip";
-import HelpText from "@components/HelpText";
-import { Input } from "@components/Input";
-import { Label } from "@components/Label";
 import {
   Modal,
   ModalClose,
@@ -14,7 +10,6 @@ import {
 } from "@components/modal/Modal";
 import ModalHeader from "@components/modal/ModalHeader";
 import { notify } from "@components/Notification";
-import Paragraph from "@components/Paragraph";
 import { PeerGroupSelector } from "@components/PeerGroupSelector";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/Tabs";
 import FullScreenLoading from "@components/ui/FullScreenLoading";
@@ -51,6 +46,7 @@ import CircleIcon from "@/assets/icons/CircleIcon";
 import OpenzroIcon from "@/assets/icons/OpenzroIcon";
 import OzButton from "@/components/v2/OzButton";
 import OzCard from "@/components/v2/OzCard";
+import OzInput from "@/components/v2/OzInput";
 import { useCountries } from "@/contexts/CountryProvider";
 import PeerProvider, { usePeer } from "@/contexts/PeerProvider";
 import { usePermissions } from "@/contexts/PermissionsProvider";
@@ -630,31 +626,30 @@ function EditNameModal({ onSuccess, peer, initialName }: Readonly<ModalProps>) {
           color={"blue"}
         />
 
-        <div className="p-default flex flex-col gap-4">
-          <div>
-            <Input
-              placeholder={"e.g., AWS Servers"}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
-          <Card className="w-full px-6 pt-5 pb-4">
-            <Label>
-              <Globe size={15} />
+        <div className="flex flex-col gap-4 p-6">
+          <OzInput
+            placeholder="e.g., AWS Servers"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoFocus
+          />
+          <div className="rounded-oz2-card border border-oz2-border-soft bg-oz2-bg-sunken px-4 py-3">
+            <div className="inline-flex items-center gap-2 text-[12.5px] font-medium text-oz2-text-2">
+              <Globe size={13} />
               Domain Name Preview
-            </Label>
-            <HelpText className="mt-2">
-              If the domain name already exists, we add an increment number
-              suffix to it.
-            </HelpText>
-            <Paragraph className="text-openzro text-sm break-all whitespace-normal">
+            </div>
+            <p className="mt-1 text-[11.5px] leading-[1.45] text-oz2-text-faint">
+              If the domain name already exists, an increment-number suffix is
+              appended.
+            </p>
+            <p className="mt-2 break-all font-mono text-[13px] text-oz2-acc-text">
               {domainNamePreview}
-            </Paragraph>
-          </Card>
+            </p>
+          </div>
         </div>
 
         <ModalFooter className="items-center" separator={false}>
-          <div className="flex gap-3 w-full justify-end">
+          <div className="flex w-full justify-end gap-3">
             <ModalClose asChild>
               <OzButton variant="default" type="button">
                 Cancel
