@@ -199,8 +199,6 @@ export default function NetworkTrafficV2() {
     [filteredGroups, pageSize],
   );
 
-  const rows = useMemo(() => flattenRows(visibleGroups), [visibleGroups]);
-
   const peerOptions = useMemo<PeerFilterOption[]>(
     () =>
       (peers ?? [])
@@ -296,7 +294,7 @@ export default function NetworkTrafficV2() {
             </span>
           </div>
 
-          {rows.length === 0 ? (
+          {visibleGroups.length === 0 ? (
             <OzCard className="px-6 py-10 text-center text-[13.5px] text-oz2-text-muted">
               {isLoading
                 ? "Loading network traffic…"
@@ -304,21 +302,29 @@ export default function NetworkTrafficV2() {
             </OzCard>
           ) : (
             <OzCard flush>
+              {/* Header gets its own grid so its column widths are
+                  authoritative for the table. */}
               <div
-                role="table"
-                aria-label="Network traffic events"
+                role="rowgroup"
                 className="grid"
                 style={{ gridTemplateColumns: GRID_COLS }}
               >
                 <HeaderRow />
-                {rows.map((r, i) => (
-                  <RowCells
-                    key={rowKey(r, i)}
-                    row={r}
-                    isLastInTable={i === rows.length - 1}
-                  />
-                ))}
               </div>
+              {/* Each flow renders as a separate sub-grid (same
+                  template) wrapped in a relative container that
+                  hosts ONE continuous rail across all the flow's
+                  events. This mirrors AuditTimelineV2's pattern of
+                  putting the rail on the parent <ol> rather than
+                  per-row, and avoids the boundary cuts a per-cell
+                  rail produced. */}
+              {visibleGroups.map((flow, fi) => (
+                <FlowBlock
+                  key={flow.flowID}
+                  flow={flow}
+                  isLastFlow={fi === visibleGroups.length - 1}
+                />
+              ))}
             </OzCard>
           )}
 
@@ -366,34 +372,116 @@ function HeaderRow() {
   );
 }
 
+// FlowBlock wraps the events of one flow in a sub-grid so the rail
+// can sit absolutely above ALL of them in one piece — no per-cell
+// rail breaks. The sub-grid uses the same gridTemplateColumns as the
+// header, so column widths line up despite the nested grids.
+function FlowBlock({
+  flow,
+  isLastFlow,
+}: {
+  flow: FlowGroup;
+  isLastFlow: boolean;
+}) {
+  const rows = useMemo(() => flattenSingleFlow(flow), [flow]);
+  const hasMultipleSteps = rows.length > 1;
+  return (
+    <div
+      role="rowgroup"
+      className={`relative grid ${
+        isLastFlow ? "" : "border-b border-oz2-border-soft"
+      }`}
+      style={{ gridTemplateColumns: GRID_COLS }}
+    >
+      {/* Continuous rail: one element per flow. Aligned to the dot
+          column's vertical center across all event rows. The dot's
+          opaque bg-oz2-surface (z-10) covers the rail in its 24px
+          disc, so the rail visually "passes through" each step's
+          dot without breaks. Only renders when the flow has more
+          than one step (otherwise there's nothing to connect). */}
+      {hasMultipleSteps && (
+        <span
+          aria-hidden
+          // left:28px = px-4 (16) + half of dot column (12) = dot center
+          // top/bottom: ~24-30px so the rail starts inside the first
+          //   dot and ends inside the last (the dot's surface fill
+          //   masks the overshoot in its disc).
+          className="pointer-events-none absolute left-[28px] top-7 bottom-7 z-0 w-[2px] -translate-x-1/2 bg-oz2-border-strong"
+        />
+      )}
+      {rows.map((r, i) => (
+        <RowCells key={rowKey(r, i)} row={r} isLastInFlow={i === rows.length - 1} />
+      ))}
+    </div>
+  );
+}
+
+// flattenSingleFlow expands ONE FlowGroup into its rows. Same logic
+// as the prior flattenRows but operating on a single flow.
+function flattenSingleFlow(g: FlowGroup): Row[] {
+  const out: Row[] = [];
+  const events = [...g.events].sort((a, b) =>
+    a.occurred_at.localeCompare(b.occurred_at),
+  );
+  const totalSteps = events.length + (g.policy ? 1 : 0);
+  let stepIdx = 0;
+  for (let i = 0; i < events.length; i++) {
+    const e = events[i];
+    out.push({
+      kind: "event",
+      event: e,
+      group: g,
+      isFirstInFlow: stepIdx === 0,
+      isLastInFlow: stepIdx === totalSteps - 1,
+    });
+    stepIdx++;
+    if (i === 0 && g.policy && events.length > 1) {
+      out.push({
+        kind: "policy",
+        group: g,
+        isFirstInFlow: false,
+        isLastInFlow: stepIdx === totalSteps - 1,
+      });
+      stepIdx++;
+    }
+  }
+  if (g.policy && events.length === 1) {
+    out.push({
+      kind: "policy",
+      group: g,
+      isFirstInFlow: false,
+      isLastInFlow: true,
+    });
+  }
+  return out;
+}
+
 function RowCells({
   row,
-  isLastInTable,
+  isLastInFlow,
 }: {
   row: Row;
-  isLastInTable: boolean;
+  isLastInFlow: boolean;
 }) {
   // The first event in a flow carries the repeated context (peer pair,
   // protocol, traffic totals, status). Later events / synthetic policy
   // rows leave those cells blank so the row visually attaches to the
   // flow's anchor row.
   const isFirst = row.kind === "event" && row.isFirstInFlow;
-  const flowBorder =
-    row.isLastInFlow && !isLastInTable
-      ? "border-b border-oz2-border-soft"
-      : "";
 
   // Padding collapses inside a flow so events of the same flow read
-  // as one block. First / last get the standard padding.
+  // as one block. First / last get the standard padding. No flow
+  // border here — FlowBlock owns the inter-flow border so it lines
+  // up with the sub-grid as a whole.
   const paddingY = (() => {
     if (row.kind === "event" && row.isFirstInFlow && row.isLastInFlow)
       return "py-3";
     if (row.kind === "event" && row.isFirstInFlow) return "pt-3 pb-1.5";
-    if (row.isLastInFlow) return "pt-1.5 pb-3";
+    if (isLastInFlow) return "pt-1.5 pb-3";
     return "py-1.5";
   })();
 
-  const cellCls = `px-4 ${paddingY} ${flowBorder}`;
+  const cellCls = `px-4 ${paddingY}`;
   const firstEvent = row.group.events[0];
   const status = flowStatusPill(row.group);
 
@@ -455,18 +543,16 @@ const dotToneClasses: Record<EventTone, string> = {
 };
 
 // EventCell renders the dot column + the event's own narrative line.
-// Rail segments hang off the dot above and below ONLY when another
-// step of the same flow follows; that's what makes the rail
-// terminate at the last dot ("no edge after stop") and stay broken
-// between flows. Rail uses oz2-border (not border-soft) and is 1.5px
-// wide so the connection between dots is unambiguously visible.
+// The rail itself lives on the FlowBlock parent (one continuous
+// element across all events of the flow), mirroring how
+// AuditTimelineV2 hangs its rail off the <ol> rather than per-row.
+// Each EventCell only renders the dot — its solid bg-oz2-surface
+// fill (z-10) masks the rail in its 24px disc.
 function EventCell({ row }: { row: Row }) {
   const meta =
     row.kind === "event"
       ? eventDot(row.event)
       : policyDot(isPolicyBlocked(row.group.policy));
-  const railUp = row.kind === "event" ? !row.isFirstInFlow : true;
-  const railDown = !row.isLastInFlow;
 
   const time =
     row.kind === "event"
@@ -476,35 +562,6 @@ function EventCell({ row }: { row: Row }) {
   return (
     <div className="flex items-stretch gap-3">
       <div className="relative flex w-6 shrink-0 flex-col items-center justify-center">
-        {/* Single solid rail per cell. The rail's parent (this dot
-            column wrapper) sits inside the cell's vertical padding,
-            so a naive top:0 / bottom:0 leaves a 12px gap between
-            the rails of adjacent flow steps (6px bottom padding of
-            cell N + 6px top padding of cell N+1). Negative -6px
-            top / bottom extends the rail through HALF of that gap
-            on each side, so two adjacent rails meet exactly at the
-            cell boundary — no gap, no overlap.
-
-            -6 (instead of -12) matters in dark mode where
-            oz2-border-strong is rgba(196,181,253,0.18); any overlap
-            between cells doubles the alpha and reads as a visible
-            seam. Light mode tokens are opaque so the overlap was
-            invisible, but -6 looks correct in both themes.
-
-              first event → top=50%   (rail starts at dot's middle)
-              middle      → top=-6, bottom=-6 (meet adjacent rails)
-              last event  → bottom=50% (rail ends at dot's middle)
-        */}
-        {(railUp || railDown) && (
-          <span
-            aria-hidden
-            className="absolute left-1/2 w-[2px] -translate-x-1/2 bg-oz2-border-strong"
-            style={{
-              top: railUp ? -6 : "50%",
-              bottom: railDown ? -6 : "50%",
-            }}
-          />
-        )}
         <span
           aria-label={meta.label}
           className={`relative z-10 grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 bg-oz2-surface ${dotToneClasses[meta.tone]}`}
@@ -634,52 +691,6 @@ function TrafficCell({ flow }: { flow: FlowGroup }) {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
-
-// flattenRows expands each FlowGroup into its rows (one per event,
-// plus a synthetic policy row spliced after the first event when we
-// know which policy matched).
-function flattenRows(groups: FlowGroup[]): Row[] {
-  const out: Row[] = [];
-  for (const g of groups) {
-    const events = [...g.events].sort((a, b) =>
-      a.occurred_at.localeCompare(b.occurred_at),
-    );
-    const totalSteps = events.length + (g.policy ? 1 : 0);
-    let stepIdx = 0;
-    for (let i = 0; i < events.length; i++) {
-      const e = events[i];
-      const isFirstInFlow = stepIdx === 0;
-      const isLastInFlow = stepIdx === totalSteps - 1;
-      out.push({
-        kind: "event",
-        event: e,
-        group: g,
-        isFirstInFlow,
-        isLastInFlow,
-      });
-      stepIdx++;
-      if (i === 0 && g.policy && events.length > 1) {
-        const isLastInFlowP = stepIdx === totalSteps - 1;
-        out.push({
-          kind: "policy",
-          group: g,
-          isFirstInFlow: false,
-          isLastInFlow: isLastInFlowP,
-        });
-        stepIdx++;
-      }
-    }
-    if (g.policy && events.length === 1) {
-      out.push({
-        kind: "policy",
-        group: g,
-        isFirstInFlow: false,
-        isLastInFlow: true,
-      });
-    }
-  }
-  return out;
-}
 
 function rowKey(r: Row, idx: number): string {
   if (r.kind === "event") return `${r.group.flowID}:e:${r.event.event_id}`;
