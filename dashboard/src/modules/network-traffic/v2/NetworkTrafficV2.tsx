@@ -475,37 +475,36 @@ function EventCell({ row }: { row: Row }) {
 
   return (
     <div className="flex items-stretch gap-3">
-      <div className="relative flex w-6 shrink-0 flex-col items-center">
-        {/* Rail going UP — present only when this is not the first
-            step of its flow. min-height keeps the segment visible
-            at small line heights. */}
-        <span
-          aria-hidden
-          className="w-[2px] flex-1"
-          style={{
-            minHeight: 6,
-            background: railUp
-              ? "repeating-linear-gradient(to bottom, var(--ozv2-border-strong) 0 2px, transparent 2px 3.5px)"
-              : "transparent",
-          }}
-        />
+      <div className="relative flex w-6 shrink-0 flex-col items-center justify-center">
+        {/* Single rail span per cell — dashes run continuously within
+            the cell's vertical extent without resetting at the dot.
+            The dot floats over the rail with its solid surface fill
+            covering the rail in its 24px disc, so the rail visually
+            "passes through" the dot. top / bottom are pinned based
+            on whether this step has prior / next steps in the flow:
+
+              first event → top=50% (rail starts at dot's middle)
+              middle      → top=0, bottom=0 (full cell)
+              last event  → bottom=50% (rail ends at dot's middle)
+        */}
+        {(railUp || railDown) && (
+          <span
+            aria-hidden
+            className="absolute left-1/2 w-[2px] -translate-x-1/2"
+            style={{
+              top: railUp ? 0 : "50%",
+              bottom: railDown ? 0 : "50%",
+              background:
+                "repeating-linear-gradient(to bottom, var(--ozv2-border-strong) 0 2px, transparent 2px 3.5px)",
+            }}
+          />
+        )}
         <span
           aria-label={meta.label}
           className={`relative z-10 grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 bg-oz2-surface ${dotToneClasses[meta.tone]}`}
         >
           {meta.icon}
         </span>
-        {/* Rail going DOWN — present only when there's a next step. */}
-        <span
-          aria-hidden
-          className="w-[2px] flex-1"
-          style={{
-            minHeight: 6,
-            background: railDown
-              ? "repeating-linear-gradient(to bottom, var(--ozv2-border-strong) 0 2px, transparent 2px 3.5px)"
-              : "transparent",
-          }}
-        />
       </div>
       <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
         {row.kind === "event" ? (
