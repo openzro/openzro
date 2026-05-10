@@ -50,8 +50,8 @@ import { Peer } from "@/interfaces/Peer";
 import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
 import PeerActionCell from "@/modules/peers/PeerActionCell";
 import PeerGroupCell from "@/modules/peers/PeerGroupCell";
-import { PeerMultiSelect } from "@/modules/peers/PeerMultiSelect";
 import { OSLogo } from "@/modules/peers/PeerOSCell";
+import PeerBulkActionsV2 from "@/modules/peers/v2/PeerBulkActionsV2";
 import SetupModalV2 from "@/modules/setup-openzro-modal/v2/SetupModalV2";
 
 dayjs.extend(relativeTime);
@@ -433,17 +433,16 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
         </button>
       </div>
 
-      {/* Floating bulk-action bar from the legacy module — wires
-          Add-to-group (with replace-vs-merge toggle), block, delete,
-          and a cancel button against the operator's selection. The
-          shape (RowSelectionState) is exactly what TanStack hands us,
-          so no adapter needed. Visual paint is legacy until phase 5. */}
-      <PeerMultiSelect
-        selectedPeers={rowSelection}
-        onCanceled={() => table.resetRowSelection()}
-      />
-
       <OzCard flush>
+        {/* Inline bulk-action bar (v2 paint). Renders only when
+            rowSelection has entries; reuses the legacy assignment
+            logic so add-to-group keeps the merge-or-replace flow
+            and delete keeps the confirm dialog. */}
+        <PeerBulkActionsV2
+          selectedPeers={rowSelection}
+          onCanceled={() => table.resetRowSelection()}
+        />
+
         <OzTable>
           <OzTableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
