@@ -58,6 +58,7 @@ import { usePermissions } from "@/contexts/PermissionsProvider";
 import RoutesProvider from "@/contexts/RoutesProvider";
 import { useHasChanges } from "@/hooks/useHasChanges";
 import type { Peer } from "@/interfaces/Peer";
+import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
 import useGroupHelper from "@/modules/groups/useGroupHelper";
 import { AccessiblePeersSection } from "@/modules/peer/AccessiblePeersSection";
 import { PeerExpirationToggle } from "@/modules/peer/PeerExpirationToggle";
@@ -189,6 +190,33 @@ const PeerGeneralInformation = () => {
     });
   };
 
+  // Cancel / Save move into the v2 topbar slot so every page exposes
+  // its primary action in the same place. Save's disabled state is
+  // bound to hasChanges, so the slot re-registers on every render
+  // that flips the dirty bit — useV2TopbarRight is reactive to its
+  // node argument.
+  useV2TopbarRight(
+    <div className="flex items-center gap-2">
+      <OzButton
+        variant="default"
+        type="button"
+        onClick={() => router.push("/peers")}
+      >
+        Cancel
+      </OzButton>
+      <OzButton
+        variant="primary"
+        type="button"
+        onClick={() => updatePeer()}
+        disabled={
+          !hasChanges || !permission.peers.read || !permission.groups.update
+        }
+      >
+        Save Changes
+      </OzButton>
+    </div>,
+  );
+
   // Default tab: Details. If the operator opens a peer page with no
   // permission to edit (groups + peers), every Details widget is
   // disabled anyway — they still see the same overview, so Details
@@ -270,27 +298,6 @@ const PeerGeneralInformation = () => {
                 <span>Last seen {lastSeenLabel}</span>
               </div>
             </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <OzButton
-              variant="default"
-              type="button"
-              onClick={() => router.push("/peers")}
-            >
-              Cancel
-            </OzButton>
-            <OzButton
-              variant="primary"
-              type="button"
-              onClick={() => updatePeer()}
-              disabled={
-                !hasChanges ||
-                !permission.peers.read ||
-                !permission.groups.update
-              }
-            >
-              Save Changes
-            </OzButton>
           </div>
         </div>
       </div>
