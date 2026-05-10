@@ -3,11 +3,14 @@
 import useFetchApi from "@utils/api";
 import dayjs from "dayjs";
 import {
+  ActivityIcon,
+  ArrowDown,
+  ArrowUp,
   Ban,
-  CheckCircle2,
   GlobeIcon,
-  MoreHorizontal,
+  Play,
   ShieldCheckIcon,
+  Square,
 } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { DateRange } from "react-day-picker";
@@ -31,26 +34,20 @@ import PeerFilterV2, {
 import { OSLogo } from "@/modules/peers/PeerOSCell";
 
 // NetworkTrafficV2 — phase-5.12 v2 paint over /network-traffic-events.
-// Pixel-aligned with the handoff TrafficScreen (extracted screens
-// module of openzro-dashboard.bundle.html → TrafficScreen + FlowRow):
-// one flow per row, the row's Path cell stitches Source → Policy →
-// Destination as connected pill nodes with arrowed segments. Status,
-// time, and size each have their own column so a list of flows
-// scans cleanly.
+// Each FLOW gets one row; inside that row a vertical mini-timeline
+// reads top-to-bottom with the start / policy / stop sequence (each
+// event a tonal-bordered dot connected by a rail), borrowing the
+// handoff TrafficScreen's start/stop/policy iconography. The right
+// half of the row condenses the flow's headline data — peer pair,
+// protocol, total rx/tx with a tiny rx-vs-tx ratio bar and packet
+// count, plus the overall flow status pill — using the handoff's
+// "make the row pull its weight" approach.
 //
-// Path color tracks the flow's status:
-//   allowed → solid violet line + acc-tinted policy pill
-//   blocked → dashed red line + err-tinted policy pill ("— no match —")
-//
-// Behavior preserved verbatim from the legacy NetworkTrafficTimeline
-// (groupFlows, search, peer filter, date range, refresh, perms).
+// Behavior preserved verbatim from the legacy NetworkTrafficTimeline:
+// same SWR endpoint, same groupFlows logic, same search / peer
+// filter / date range, same RestrictedAccess + PeersProvider gates.
 
 const PAGE_SIZE = 25;
-
-// Column widths echo the handoff: tight time + status + size, with
-// the rest of the row going to the path cell.
-const GRID_COLS =
-  "92px minmax(0, 1fr) 130px 110px 32px";
 
 type FlowGroup = {
   flowID: string;
@@ -69,54 +66,47 @@ type FlowGroup = {
   startedAt: string;
 };
 
-type FlowStatus = "allowed" | "blocked";
+type FlowStatus = "active" | "ended" | "dropped";
 
-interface StatusMeta {
-  status: FlowStatus;
-  variant: OzPillVariants["variant"];
+type EventTone = "ok" | "err" | "acc";
+
+interface DotMeta {
   icon: React.ReactNode;
+  tone: EventTone;
   label: string;
-  // Path arrow color (solid for allowed, dashed pattern for blocked).
-  arrowColor: string;
-  // Policy node paint.
-  policyBg: string;
-  policyBorder: string;
-  policyText: string;
-  policyIcon: React.ReactNode;
 }
 
-function statusFor(flow: FlowGroup): StatusMeta {
-  const action = flow.policy?.rules?.[0]?.action;
-  const policyBlocks = action === "drop" || action === "deny";
-  const hasDrop = flow.events.some((e) => e.type === "drop");
-  const blocked = hasDrop || policyBlocks;
-  if (blocked) {
-    return {
-      status: "blocked",
-      variant: "err",
-      icon: <Ban size={11} />,
-      label: "Blocked",
-      arrowColor: "var(--ozv2-err)",
-      policyBg: "var(--ozv2-err-bg)",
-      policyBorder:
-        "color-mix(in oklab, var(--ozv2-err) 35%, var(--ozv2-border))",
-      policyText: "var(--ozv2-err)",
-      policyIcon: <Ban size={11} />,
-    };
+function eventDot(e: NetworkTrafficEvent): DotMeta {
+  switch (e.type) {
+    case "start":
+      return { icon: <Play size={11} />, tone: "ok", label: "Start" };
+    case "end":
+      return { icon: <Square size={11} />, tone: "ok", label: "Stop" };
+    case "drop":
+      return { icon: <Ban size={11} />, tone: "err", label: "Drop" };
+    default:
+      return { icon: <Play size={11} />, tone: "ok", label: "Event" };
   }
-  return {
-    status: "allowed",
-    variant: "ok",
-    icon: <CheckCircle2 size={11} />,
-    label: "Allowed",
-    arrowColor: "var(--ozv2-acc)",
-    policyBg:
-      "color-mix(in oklab, var(--ozv2-ok) 12%, var(--ozv2-surface))",
-    policyBorder:
-      "color-mix(in oklab, var(--ozv2-ok) 35%, var(--ozv2-border))",
-    policyText: "var(--ozv2-ok)",
-    policyIcon: <ShieldCheckIcon size={11} />,
-  };
+}
+
+function policyDot(blocked: boolean): DotMeta {
+  return blocked
+    ? { icon: <Ban size={11} />, tone: "err", label: "Block" }
+    : { icon: <ShieldCheckIcon size={11} />, tone: "acc", label: "Policy" };
+}
+
+function flowStatus(flow: FlowGroup): {
+  status: FlowStatus;
+  variant: OzPillVariants["variant"];
+  label: string;
+} {
+  // "drop" wins regardless of order; otherwise an "end" marks the
+  // flow as ended; default to active.
+  const hasDrop = flow.events.some((e) => e.type === "drop");
+  if (hasDrop) return { status: "dropped", variant: "err", label: "blocked" };
+  const hasEnd = flow.events.some((e) => e.type === "end");
+  if (hasEnd) return { status: "ended", variant: "ok", label: "ended" };
+  return { status: "active", variant: "acc", label: "active" };
 }
 
 export default function NetworkTrafficV2() {
@@ -222,7 +212,7 @@ export default function NetworkTrafficV2() {
       {isColdStart ? (
         <OzEmptyState
           title="No network traffic events yet"
-          description="Once peers start reporting, every TCP / UDP / ICMP connection shows up here. Each row stitches the source → policy → destination path."
+          description="Once peers start reporting, every TCP / UDP / ICMP connection shows up here. Each row is one flow with its lifecycle inside."
           learnMore={
             <>
               Learn more about{" "}
@@ -286,21 +276,15 @@ export default function NetworkTrafficV2() {
             </OzCard>
           ) : (
             <OzCard flush>
-              <div
-                role="table"
-                aria-label="Network traffic events"
-                className="grid items-stretch"
-                style={{ gridTemplateColumns: GRID_COLS }}
-              >
-                <HeaderRow />
-                {visible.map((flow, i) => (
+              <ol className="m-0 list-none p-0">
+                {visible.map((flow, idx) => (
                   <FlowRow
                     key={flow.flowID}
                     flow={flow}
-                    isLast={i === visible.length - 1}
+                    isLast={idx === visible.length - 1}
                   />
                 ))}
-              </div>
+              </ol>
             </OzCard>
           )}
 
@@ -321,320 +305,298 @@ export default function NetworkTrafficV2() {
   );
 }
 
-function HeaderRow() {
-  const cell =
-    "flex h-10 items-center bg-oz2-bg-sunken px-4 font-mono text-[10.5px] font-medium uppercase tracking-[0.06em] text-oz2-text-muted border-b border-oz2-border-soft";
+// FlowRow — one flow per row. Two visually-distinct columns:
+//
+//   LEFT (timeline): vertical mini-timeline of the flow's lifecycle
+//   events (start → optional matched policy → end | drop). Each event
+//   is its own dot+icon row connected by a rail; `subsequent rows of
+//   the same flow share that rail` was a request from the user, and
+//   the icons follow the handoff start/stop/policy mapping.
+//
+//   RIGHT (summary): the handoff TrafficScreen's "row carries weight"
+//   slot — peer pair (source → destination) over a small protocol /
+//   port chip, then a packed traffic readout (mono total bytes, a tiny
+//   rx-vs-tx ratio bar, and the packet tally) topped by the flow's
+//   overall status pill. This block makes the row useful at a glance
+//   without expanding into the timeline detail.
+function FlowRow({ flow, isLast }: { flow: FlowGroup; isLast: boolean }) {
+  const ordered = useMemo(
+    () =>
+      [...flow.events].sort((a, b) =>
+        a.occurred_at.localeCompare(b.occurred_at),
+      ),
+    [flow.events],
+  );
+
+  type Step =
+    | { kind: "event"; event: NetworkTrafficEvent }
+    | { kind: "policy" };
+  const steps: Step[] = useMemo(() => {
+    const out: Step[] = [];
+    for (let i = 0; i < ordered.length; i++) {
+      out.push({ kind: "event", event: ordered[i] });
+      // Splice the synthetic policy line in right after the start so
+      // the lifecycle reads start → policy → stop.
+      if (i === 0 && flow.policy && ordered.length > 1) {
+        out.push({ kind: "policy" });
+      }
+    }
+    if (flow.policy && ordered.length === 1) out.push({ kind: "policy" });
+    return out;
+  }, [ordered, flow.policy]);
+
+  const status = flowStatus(flow);
+  const firstEvent = ordered[0];
+
   return (
-    <>
-      <div role="columnheader" className={cell}>
-        Time
+    <li
+      className={`grid grid-cols-1 gap-6 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] ${
+        isLast ? "" : "border-b border-oz2-border-soft"
+      }`}
+    >
+      {/* LEFT — vertical mini-timeline */}
+      <div className="relative">
+        {/* Rail spans the dot column from first to last dot. */}
+        <span
+          aria-hidden
+          className="absolute bottom-3 left-[11px] top-3 w-px bg-oz2-border-soft"
+        />
+        <ol className="m-0 flex list-none flex-col gap-1.5 p-0">
+          {steps.map((step, i) => {
+            if (step.kind === "policy") {
+              return (
+                <PolicyStep
+                  key={`p-${i}`}
+                  policy={flow.policy as Policy}
+                />
+              );
+            }
+            return (
+              <EventStep
+                key={`e-${step.event.event_id}`}
+                event={step.event}
+                flow={flow}
+                showFullDate={i === 0}
+              />
+            );
+          })}
+        </ol>
       </div>
-      <div role="columnheader" className={cell}>
-        Path · Source → Policy → Destination
+
+      {/* RIGHT — peer pair + traffic summary */}
+      <div className="flex flex-col items-stretch gap-3">
+        <div className="flex items-start justify-between gap-3">
+          <span className="font-mono text-[10.5px] uppercase tracking-wider text-oz2-text-faint">
+            {dayjs(flow.startedAt).format("MMM D")}
+          </span>
+          <OzPill variant={status.variant}>
+            <span className="font-mono">{status.label}</span>
+          </OzPill>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <PeerChip
+            peer={flow.sourcePeer}
+            resource={flow.sourceResource}
+            ip={firstEvent?.source_ip ?? ""}
+          />
+          <span aria-hidden className="text-oz2-text-faint">
+            →
+          </span>
+          <PeerChip
+            peer={flow.destPeer}
+            resource={flow.destResource}
+            ip={firstEvent?.dest_ip ?? ""}
+          />
+        </div>
+
+        <div className="flex items-center gap-2 text-[11.5px] text-oz2-text-muted">
+          {firstEvent && (
+            <ProtoChip event={firstEvent} />
+          )}
+          {flow.reportingPeer && (
+            <span className="inline-flex items-center gap-1 font-mono text-[10.5px] text-oz2-text-faint">
+              <ActivityIcon size={11} />
+              reporter: {flow.reportingPeer.name}
+            </span>
+          )}
+        </div>
+
+        <TrafficSummary flow={flow} status={status.status} />
       </div>
-      <div role="columnheader" className={`${cell} justify-end`}>
-        Size
-      </div>
-      <div role="columnheader" className={cell}>
-        Status
-      </div>
-      <div role="columnheader" className={cell} aria-label="Actions" />
-    </>
+    </li>
   );
 }
 
-// FlowRow — one flow per row. Five cells: Time, Path (the headline
-// FlowNode mini-timeline), Size, Status, kebab.
-function FlowRow({ flow, isLast }: { flow: FlowGroup; isLast: boolean }) {
-  const meta = statusFor(flow);
-  const firstEvent = flow.events[0];
-  const time = dayjs(flow.startedAt).format("HH:mm:ss");
+const dotToneClasses: Record<EventTone, string> = {
+  ok: "border-oz2-ok text-oz2-ok",
+  err: "border-oz2-err text-oz2-err",
+  acc: "border-oz2-acc text-oz2-acc",
+};
 
-  const cell = `flex items-center px-4 py-3 ${
-    isLast ? "" : "border-b border-oz2-border-soft"
-  }`;
-
+function StepDot({ meta }: { meta: DotMeta }) {
   return (
-    <>
-      <div role="cell" className={cell}>
-        <span className="font-mono text-[12px] tabular-nums text-oz2-text-muted">
-          {time}
+    <span
+      aria-label={meta.label}
+      className={`relative z-10 grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 bg-oz2-surface ${dotToneClasses[meta.tone]}`}
+      // The shadow ring blends the dot into the page background
+      // wherever the rail passes behind it. Uses --ozv2-bg so it
+      // tracks the theme.
+      style={{ boxShadow: "0 0 0 4px var(--ozv2-bg)" }}
+    >
+      {meta.icon}
+    </span>
+  );
+}
+
+function EventStep({
+  event,
+  flow,
+  showFullDate,
+}: {
+  event: NetworkTrafficEvent;
+  flow: FlowGroup;
+  showFullDate: boolean;
+}) {
+  const meta = eventDot(event);
+  return (
+    <li className="flex items-start gap-3">
+      <StepDot meta={meta} />
+      <div className="min-w-0 flex-1 pt-0.5">
+        <div className="text-[13px] text-oz2-text">
+          {narrativeFor(event, flow)}
+        </div>
+        <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[11px] text-oz2-text-faint tabular-nums">
+          <span>
+            {showFullDate
+              ? dayjs(event.occurred_at).format("MMM D · HH:mm:ss")
+              : dayjs(event.occurred_at).format("HH:mm:ss")}
+          </span>
+        </div>
+      </div>
+    </li>
+  );
+}
+
+function PolicyStep({ policy }: { policy: Policy }) {
+  const action = policy.rules?.[0]?.action;
+  const blocked = action === "drop" || action === "deny";
+  const meta = policyDot(blocked);
+  return (
+    <li className="flex items-start gap-3">
+      <StepDot meta={meta} />
+      <div className="min-w-0 flex-1 pt-0.5 text-[13px] text-oz2-text">
+        Policy{" "}
+        <a
+          href="/access-control"
+          className="font-medium text-oz2-acc-text underline-offset-2 hover:underline"
+        >
+          {policy.name}
+        </a>{" "}
+        <span className="text-oz2-text-muted">
+          {blocked ? "blocked the connection" : "allowed the connection"}
         </span>
       </div>
-
-      <div role="cell" className={cell}>
-        <PathCell flow={flow} firstEvent={firstEvent} meta={meta} />
-      </div>
-
-      <div role="cell" className={`${cell} justify-end`}>
-        <SizeCell flow={flow} meta={meta} />
-      </div>
-
-      <div role="cell" className={cell}>
-        <OzPill variant={meta.variant}>
-          <span className="inline-flex items-center gap-1.5">
-            <span aria-hidden>{meta.icon}</span>
-            {meta.label}
-          </span>
-        </OzPill>
-      </div>
-
-      <div role="cell" className={cell}>
-        <button
-          type="button"
-          aria-label="Flow actions"
-          className="grid h-7 w-7 place-items-center rounded-oz2-input text-oz2-text-faint transition-colors hover:bg-oz2-hover hover:text-oz2-text"
-        >
-          <MoreHorizontal size={14} />
-        </button>
-      </div>
-    </>
+    </li>
   );
 }
 
-// PathCell — Source pill → arrow segment → Policy pill → arrow
-// segment → Destination pill. Each pill renders OS-icon avatar +
-// stacked label/sublabel; the policy pill is tonally tinted by
-// status (green for allowed, red for blocked) with a "— no match —"
-// fallback when we don't know which policy fired (a drop event
-// without a rule_id).
-function PathCell({
-  flow,
-  firstEvent,
-  meta,
-}: {
-  flow: FlowGroup;
-  firstEvent: NetworkTrafficEvent | undefined;
-  meta: StatusMeta;
-}) {
-  const policyName =
-    flow.policy?.name ?? (meta.status === "blocked" ? "— no match —" : "—");
-  const protoLabel = firstEvent ? protoCellLabel(firstEvent) : "—";
-  return (
-    <div className="flex min-w-0 items-center gap-0">
-      <PeerNode
-        peer={flow.sourcePeer}
-        resource={flow.sourceResource}
-        ip={firstEvent?.source_ip ?? ""}
-        sublabel={
-          flow.sourcePeer?.dns_label ||
-          flow.sourcePeer?.hostname ||
-          flow.sourceResource?.type
-        }
-      />
-      <PathSegment color={meta.arrowColor} dashed={meta.status === "blocked"} />
-      <PolicyNode meta={meta} name={policyName} sublabel={protoLabel} />
-      <PathSegment color={meta.arrowColor} dashed={meta.status === "blocked"} />
-      <PeerNode
-        peer={flow.destPeer}
-        resource={flow.destResource}
-        ip={firstEvent?.dest_ip ?? ""}
-        sublabel={
-          flow.destPeer?.dns_label ||
-          flow.destPeer?.hostname ||
-          flow.destResource?.type
-        }
-      />
-    </div>
-  );
-}
-
-// PeerNode — rounded pill with OS-icon avatar on the left and a
-// 2-line label / sublabel block. Uses OSLogo + RoundedFlag from the
-// peer module so the iconography matches the rest of the v2
-// dashboard. Falls through to the bare IP when neither a peer nor a
-// resource is known.
-function PeerNode({
+function PeerChip({
   peer,
   resource,
   ip,
-  sublabel,
 }: {
   peer?: Peer;
   resource?: NetworkResource;
   ip: string;
-  sublabel?: string;
 }) {
   const fallback = resource?.address ?? (peer ? undefined : "external");
   const label = peer?.name ?? fallback ?? ip;
-  const sub = sublabel ?? (peer ? undefined : ip);
   return (
-    <span className="inline-flex max-w-[200px] min-w-0 shrink-0 items-center gap-2 rounded-full border border-oz2-border bg-oz2-surface py-1 pl-1 pr-3 shadow-oz2-sm">
-      <span className="relative grid h-7 w-7 shrink-0 place-items-center rounded-full bg-oz2-bg-sunken text-oz2-text-faint">
-        <span className="grid h-4 w-4 place-items-center">
-          {peer ? <OSLogo os={peer.os} /> : <GlobeIcon size={12} />}
-        </span>
+    <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-oz2-border bg-oz2-bg-sunken px-2 py-1 text-[12px] text-oz2-text-2">
+      <span className="relative grid h-4 w-4 shrink-0 place-items-center text-oz2-text-faint">
+        {peer ? <OSLogo os={peer.os} /> : <GlobeIcon size={11} />}
         {peer?.country_code && (
           <span className="absolute -bottom-1 -right-1">
-            <RoundedFlag country={peer.country_code} size={11} />
+            <RoundedFlag country={peer.country_code} size={9} />
           </span>
         )}
       </span>
-      <span className="flex min-w-0 flex-col leading-tight">
-        <span className="truncate text-[12.5px] font-semibold text-oz2-text">
-          {label}
-        </span>
-        {sub && (
-          <span className="truncate text-[10.5px] text-oz2-text-muted">
-            {sub}
-          </span>
-        )}
-      </span>
+      <span className="truncate font-medium text-oz2-text">{label}</span>
+      <span className="font-mono text-[10.5px] text-oz2-text-faint">{ip}</span>
     </span>
   );
 }
 
-// PolicyNode — middle pill of the path. Background + border + icon
-// switch on flow status (acc-tinted ok for allowed, err-tinted for
-// blocked). Two-line label so the policy name and protocol/port
-// stack like the handoff.
-function PolicyNode({
-  meta,
-  name,
-  sublabel,
+function ProtoChip({ event }: { event: NetworkTrafficEvent }) {
+  const port = portChipFor(event);
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-md border border-oz2-border bg-oz2-surface px-2 py-0.5 font-mono text-[11px] uppercase tracking-wide text-oz2-text-2">
+      {protocolName(event.protocol)}
+      {port && (
+        <>
+          <span className="text-oz2-text-faint">:</span>
+          {port.label}
+        </>
+      )}
+    </span>
+  );
+}
+
+// TrafficSummary — handoff-flavored "row pulls its weight" block.
+// Top: rx ↓ vs tx ↑ in mono with arrows, sized large enough to read
+// at a glance. Middle: a 2-segment proportion bar (cyan rx, violet
+// tx) so the operator can eyeball whether the flow leaned upload or
+// download without parsing two byte values. Bottom: packet tally
+// in mono.
+function TrafficSummary({
+  flow,
+  status,
 }: {
-  meta: StatusMeta;
-  name: string;
-  sublabel: string;
+  flow: FlowGroup;
+  status: FlowStatus;
 }) {
+  const { totalRx, totalTx, totalRxPkts, totalTxPkts } = flow;
+  const total = totalRx + totalTx;
+  const rxPct = total > 0 ? (totalRx / total) * 100 : 50;
+  const txPct = total > 0 ? (totalTx / total) * 100 : 50;
+  const empty = total === 0 && status === "dropped";
   return (
-    <span
-      className="inline-flex max-w-[220px] min-w-0 shrink-0 items-center gap-2 rounded-full py-1 pl-1 pr-3"
-      style={{
-        background: meta.policyBg,
-        border: `1px solid ${meta.policyBorder}`,
-      }}
-    >
-      <span
-        className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-oz2-text-on-acc"
-        style={{ background: meta.policyText }}
-      >
-        {meta.policyIcon}
-      </span>
-      <span className="flex min-w-0 flex-col leading-tight">
-        <span
-          className="truncate text-[12.5px] font-semibold"
-          style={{ color: meta.policyText }}
-        >
-          {name}
+    <div className="rounded-oz2-input border border-oz2-border-soft bg-oz2-bg-sunken px-3 py-2.5">
+      <div className="flex items-center justify-between gap-3 font-mono text-[13px] tabular-nums">
+        <span className="inline-flex items-center gap-1 text-oz2-text">
+          <ArrowDown size={12} className="text-oz2-acc" />
+          {formatBytes(totalRx)}
         </span>
-        <span className="truncate font-mono text-[10.5px] text-oz2-text-muted">
-          {sublabel}
+        <span className="inline-flex items-center gap-1 text-oz2-text">
+          <ArrowUp size={12} className="text-oz2-acc" />
+          {formatBytes(totalTx)}
         </span>
-      </span>
-    </span>
-  );
-}
-
-// PathSegment — horizontal connector between path nodes. Solid line
-// + chevron tip for allowed; dashed pattern for blocked. Sized so
-// the line carries weight at the row's reading distance and the
-// arrow tip is unambiguously visible.
-function PathSegment({
-  color,
-  dashed,
-}: {
-  color: string;
-  dashed: boolean;
-}) {
-  return (
-    <span className="relative inline-block h-5 w-9 shrink-0">
-      <span
-        aria-hidden
-        className="absolute left-0 right-[10px] top-1/2 h-[3px] -translate-y-1/2 rounded-sm"
-        style={
-          dashed
-            ? {
-                background: `repeating-linear-gradient(90deg, ${color} 0 6px, transparent 6px 11px)`,
-              }
-            : { background: color }
-        }
-      />
-      <span
-        aria-hidden
-        className="absolute right-0 top-1/2 -translate-y-1/2"
-        style={{
-          width: 0,
-          height: 0,
-          borderTop: "5px solid transparent",
-          borderBottom: "5px solid transparent",
-          borderLeft: `8px solid ${color}`,
-        }}
-      />
-    </span>
-  );
-}
-
-// SizeCell — total bytes mono on top, a tiny event-by-event
-// sparkline below (each bar = one event's tx+rx bytes), and pkts ·
-// approx duration in mono at the bottom. Sparkline color tracks
-// flow status so the readout reads at a glance.
-function SizeCell({ flow, meta }: { flow: FlowGroup; meta: StatusMeta }) {
-  const total = flow.totalRx + flow.totalTx;
-  const pkts = flow.totalRxPkts + flow.totalTxPkts;
-  // Synthesize a 6-bar sparkline from the event stream. Each bar's
-  // height is proportional to that event's byte total. For flows
-  // with fewer than 6 events, we left-pad with zero-height bars so
-  // the sparkline always occupies the same width.
-  const bars = useMemo(() => {
-    const sorted = [...flow.events].sort((a, b) =>
-      a.occurred_at.localeCompare(b.occurred_at),
-    );
-    const series = sorted.map((e) => e.rx_bytes + e.tx_bytes);
-    const max = Math.max(...series, 1);
-    const target = 8;
-    const padded =
-      series.length < target
-        ? Array(target - series.length)
-            .fill(0)
-            .concat(series)
-        : series.slice(-target);
-    return padded.map((v) => (v / max) * 100);
-  }, [flow.events]);
-
-  // Approximate flow duration. When start ≠ latest, the window
-  // gives a rough wall-clock; otherwise show the dash.
-  const durationMs = useMemo(() => {
-    const s = dayjs(flow.startedAt).valueOf();
-    const e = dayjs(flow.latestAt).valueOf();
-    return Math.max(0, e - s);
-  }, [flow.startedAt, flow.latestAt]);
-
-  return (
-    <div className="flex flex-col items-end gap-1">
-      <span className="font-mono text-[13px] font-medium tabular-nums text-oz2-text">
-        {formatBytes(total)}
-      </span>
+      </div>
       <div
         aria-hidden
-        className="flex h-3 items-end gap-[2px]"
+        className="mt-1.5 flex h-1 overflow-hidden rounded-full bg-oz2-border-soft"
       >
-        {bars.map((h, i) => (
-          <span
-            key={i}
-            className="w-[3px] rounded-[1px]"
-            style={{
-              height: `${Math.max(15, h)}%`,
-              background: meta.arrowColor,
-              opacity: 0.35 + (h / 100) * 0.55,
-            }}
-          />
-        ))}
+        <span
+          className="bg-oz2-acc"
+          style={{ width: `${empty ? 0 : rxPct}%` }}
+        />
+        <span
+          className="bg-oz2-acc-soft-2"
+          style={{ width: `${empty ? 0 : txPct}%` }}
+        />
       </div>
-      <span className="font-mono text-[10.5px] text-oz2-text-muted">
-        {formatPkts(pkts)} · {formatDuration(durationMs)}
-      </span>
+      <div className="mt-1.5 flex items-center justify-between font-mono text-[10.5px] text-oz2-text-faint">
+        <span>{totalRxPkts + totalTxPkts} pkts</span>
+        <span>
+          {totalRxPkts}↓ · {totalTxPkts}↑
+        </span>
+      </div>
     </div>
   );
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────
-
-function protoCellLabel(e: NetworkTrafficEvent): string {
-  const port = portChipFor(e);
-  const p = protocolName(e.protocol).toUpperCase();
-  return port ? `${p}:${port.label}` : p;
-}
+// ─── Helpers ports from legacy NetworkTrafficTimeline ─────────────────
 
 function groupFlows(
   events: NetworkTrafficEvent[],
@@ -731,6 +693,27 @@ function matchesSearch(g: FlowGroup, q: string): boolean {
   return haystack.some((v) => !!v && v.toLowerCase().includes(q));
 }
 
+function narrativeFor(e: NetworkTrafficEvent, g: FlowGroup): string {
+  const dest = g.destPeer?.name ?? g.destResource?.address ?? e.dest_ip;
+  const src = g.sourcePeer?.name ?? g.sourceResource?.address ?? e.source_ip;
+  switch (e.type) {
+    case "start":
+      if (e.direction === "egress") {
+        return `${src} requested P2P connection to ${dest}`;
+      }
+      return `${dest} received P2P connection from ${src}`;
+    case "end":
+      if (e.direction === "egress") {
+        return `${src} stopped P2P connection to ${dest}`;
+      }
+      return `${dest} stopped P2P connection from ${src}`;
+    case "drop":
+      return `${dest} blocked connection from ${src}`;
+    default:
+      return `Event between ${dest} and ${src}`;
+  }
+}
+
 function portChipFor(e: NetworkTrafficEvent): { label: string } | null {
   if (e.protocol === 6 || e.protocol === 17) {
     if (e.dest_port) return { label: String(e.dest_port) };
@@ -768,21 +751,6 @@ function formatBytes(b: number): string {
   if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
   if (b < 1024 * 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
   return `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`;
-}
-
-function formatPkts(n: number): string {
-  if (n < 1000) return `${n}`;
-  if (n < 10_000) return `${(n / 1000).toFixed(1)}k`;
-  if (n < 1_000_000) return `${Math.round(n / 1000)}k`;
-  return `${(n / 1_000_000).toFixed(1)}m`;
-}
-
-function formatDuration(ms: number): string {
-  if (ms <= 0) return "—";
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m`;
-  return `${Math.round(ms / 3_600_000)}h`;
 }
 
 // ─── PageSizeCombobox + icons (same shape as AuditTimelineV2) ──────────
