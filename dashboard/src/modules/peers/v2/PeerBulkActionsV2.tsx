@@ -209,7 +209,7 @@ export default function PeerBulkActionsV2({
             onClick={() => setShowGroupModal(true)}
           >
             <FolderGit2 size={14} />
-            Add to group
+            Assign groups
           </OzButton>
           <OzButton
             type="button"
