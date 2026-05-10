@@ -9,12 +9,10 @@ import {
 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { useEffect, useState } from "react";
-import {
-  ActivityExportersSection,
-  FlowExportsSection,
-  MDMProvidersSection,
-  SCIMSetupSection,
-} from "@/modules/integrations/IntegrationsPage";
+import ActivityExportersSectionV2 from "@/modules/integrations/v2/sections/ActivityExportersSectionV2";
+import FlowExportsSectionV2 from "@/modules/integrations/v2/sections/FlowExportsSectionV2";
+import MDMProvidersSectionV2 from "@/modules/integrations/v2/sections/MDMProvidersSectionV2";
+import SCIMSetupSectionV2 from "@/modules/integrations/v2/sections/SCIMSetupSectionV2";
 
 // IntegrationsV2 — phase-5.17 v2 chrome over the legacy
 // IntegrationsPage's four sub-sections (Flow Exports / Activity
@@ -133,10 +131,10 @@ export default function IntegrationsV2() {
       </nav>
 
       <div className="min-w-0">
-        {active === "flow" && <FlowExportsSection />}
-        {active === "activity" && <ActivityExportersSection />}
-        {active === "mdm" && <MDMProvidersSection />}
-        {active === "idp-sync" && <SCIMSetupSection />}
+        {active === "flow" && <FlowExportsSectionV2 />}
+        {active === "activity" && <ActivityExportersSectionV2 />}
+        {active === "mdm" && <MDMProvidersSectionV2 />}
+        {active === "idp-sync" && <SCIMSetupSectionV2 />}
       </div>
     </div>
   );
