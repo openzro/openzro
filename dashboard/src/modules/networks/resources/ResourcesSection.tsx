@@ -1,4 +1,5 @@
-import Paragraph from "@components/Paragraph";
+"use client";
+
 import SkeletonTable, {
   SkeletonTableHeader,
 } from "@components/skeletons/SkeletonTable";
@@ -13,6 +14,11 @@ type ResourcesSectionProps = {
   network: Network;
 };
 
+// ResourcesSection — wraps ResourcesTable with the v2 section chrome
+// (h2 + intro paragraph). Top padding pulls the section off the
+// header card above so the spacing reads as a distinct row of the
+// /network detail page.
+
 export const ResourcesSection = ({ network }: ResourcesSectionProps) => {
   const { data: resources, isLoading } = useFetchApi<NetworkResource[]>(
     `/networks/${network.id}/resources`,
@@ -21,20 +27,26 @@ export const ResourcesSection = ({ network }: ResourcesSectionProps) => {
     usePortalElement<HTMLHeadingElement>();
 
   return (
-    <div className={"py-7 px-8"}>
-      <div className={"max-w-6xl"}>
-        <div className={"flex justify-between items-center mb-6"}>
-          <div>
-            <h2 ref={headingRef}>Resources</h2>
-            <Paragraph>Add and manage resources for this network.</Paragraph>
-          </div>
-        </div>
+    <section className="space-y-4 px-8 py-7">
+      <header className="max-w-6xl">
+        <h2
+          ref={headingRef}
+          className="text-[18px] font-semibold tracking-tight text-oz2-text"
+        >
+          Resources
+        </h2>
+        <p className="mt-1 max-w-2xl text-[13px] leading-[1.55] text-oz2-text-muted">
+          Add and manage the addresses (single IP, subnet, or domain) that
+          peers in this network are allowed to reach.
+        </p>
+      </header>
 
+      <div className="max-w-6xl">
         <Suspense
           fallback={
             <div>
-              <SkeletonTableHeader className={"!p-0"} />
-              <div className={"mt-8 w-full"}>
+              <SkeletonTableHeader className="!p-0" />
+              <div className="mt-8 w-full">
                 <SkeletonTable withHeader={false} />
               </div>
             </div>
@@ -47,6 +59,6 @@ export const ResourcesSection = ({ network }: ResourcesSectionProps) => {
           />
         </Suspense>
       </div>
-    </div>
+    </section>
   );
 };
