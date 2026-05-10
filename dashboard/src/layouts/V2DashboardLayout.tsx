@@ -334,11 +334,11 @@ function buildSidebarSections(
   ];
 }
 
-// UserFooter — sidebar bottom block. Click opens a dropdown with
-// Profile Settings (when permitted) and Log out. Mirrors the legacy
-// UserDropdown actions; trigger surface is the v2 avatar+name+role
-// row, so the chrome reads natively v2 and the menu items inherit
-// the project's existing DropdownMenu styling.
+// UserFooter — sidebar bottom card matching the Claude Design handoff
+// pattern (design/shell.jsx "User card"): bordered surface with a
+// gradient avatar, name + role lines, and a separate ghost-style
+// kebab trigger on the right. The whole card is informational; only
+// the kebab opens the dropdown — same affordance the design specifies.
 function UserFooter() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
@@ -350,61 +350,88 @@ function UserFooter() {
   const role = loggedInUser?.role || "user";
 
   return (
-    <DropdownMenu modal={false} open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg p-1 text-left transition-colors hover:bg-oz2-hover"
-        >
-          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-oz2-acc-soft text-[12px] font-semibold text-oz2-acc-text">
-            {computeInitials(loggedInUser?.name || loggedInUser?.email)}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[12.5px] font-medium text-oz2-text">
-              {display}
-            </p>
-            <p className="truncate text-[11px] text-oz2-text-muted">{role}</p>
-          </div>
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        side="top"
-        align="start"
-        className="w-56"
-        forceMount
+    <div className="flex items-center gap-2.5 rounded-[10px] border border-oz2-border-soft bg-oz2-surface px-2.5 py-2">
+      <span
+        aria-hidden="true"
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[11px] font-semibold leading-none text-white"
+        // Pink → violet gradient from the design handoff. Inline style
+        // because Tailwind doesn't expose these exact hex stops.
+        style={{
+          background: "linear-gradient(135deg, #f472b6, #a78bfa)",
+        }}
       >
-        <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col space-y-1">
-            <div className="truncate text-sm font-medium leading-none">
-              {user?.name}
-            </div>
-            <div className="truncate text-xs leading-none text-neutral-500 dark:text-nb-gray-400">
-              {user?.email}
-            </div>
-          </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {!isRestricted && loggedInUser && (
-          <DropdownMenuItem
-            onClick={() => {
-              setOpen(false);
-              router.push(`/team/user?id=${loggedInUser.id}`);
-            }}
+        {computeInitials(loggedInUser?.name || loggedInUser?.email)}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[12.5px] font-semibold leading-tight text-oz2-text">
+          {display}
+        </p>
+        <p className="mt-0.5 truncate text-[11px] leading-tight text-oz2-text-muted">
+          {role}
+        </p>
+      </div>
+      <DropdownMenu modal={false} open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label="Profile menu"
+            className="grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-md border border-transparent text-oz2-text-muted transition-colors hover:bg-oz2-hover hover:text-oz2-text"
           >
+            <svg
+              viewBox="0 0 24 24"
+              width={14}
+              height={14}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx={5} cy={12} r={1.4} />
+              <circle cx={12} cy={12} r={1.4} />
+              <circle cx={19} cy={12} r={1.4} />
+            </svg>
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          side="top"
+          align="end"
+          className="w-56"
+          forceMount
+        >
+          <DropdownMenuLabel className="font-normal">
+            <div className="flex flex-col space-y-1">
+              <div className="truncate text-sm font-medium leading-none">
+                {user?.name}
+              </div>
+              <div className="truncate text-xs leading-none text-neutral-500 dark:text-nb-gray-400">
+                {user?.email}
+              </div>
+            </div>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {!isRestricted && loggedInUser && (
+            <DropdownMenuItem
+              onClick={() => {
+                setOpen(false);
+                router.push(`/team/user?id=${loggedInUser.id}`);
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <User2 size={14} />
+                Profile Settings
+              </div>
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onClick={() => logout()}>
             <div className="flex items-center gap-3">
-              <User2 size={14} />
-              Profile Settings
+              <LogOutIcon size={14} />
+              Log out
             </div>
           </DropdownMenuItem>
-        )}
-        <DropdownMenuItem onClick={() => logout()}>
-          <div className="flex items-center gap-3">
-            <LogOutIcon size={14} />
-            Log out
-          </div>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
 
