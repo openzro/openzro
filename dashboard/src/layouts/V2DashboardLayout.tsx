@@ -29,6 +29,7 @@ import CountryProvider from "@/contexts/CountryProvider";
 import GroupsProvider from "@/contexts/GroupsProvider";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import UsersProvider, { useLoggedInUser } from "@/contexts/UsersProvider";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 // Slot context for the v2 topbar's right side. Pages call
 // useV2TopbarRight(<MyAction />) once on mount to inject a per-page
@@ -94,6 +95,10 @@ function V2DashboardChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { setTheme, resolvedTheme } = useTheme();
   const [topbarRight, setTopbarRight] = useState<React.ReactNode>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useLocalStorage<boolean>(
+    "ozv2-sidebar-collapsed",
+    false,
+  );
 
   // Gate the toggle on `mounted` so SSR/CSR markup match —
   // next-themes' resolvedTheme is undefined during SSR.
@@ -118,32 +123,54 @@ function V2DashboardChrome({ children }: { children: React.ReactNode }) {
   return (
     <TopbarSlotContext.Provider value={topbarSlotValue}>
       <OzShell
+        sidebarCollapsed={sidebarCollapsed}
         sidebar={
           <OzSidebar
+            collapsed={sidebarCollapsed}
             brand={
-              <div className="flex items-center gap-2">
+              sidebarCollapsed ? (
                 <Image
                   src={openzroIcon}
-                  alt=""
+                  alt="openZro"
                   width={22}
                   height={22}
                   priority
                 />
-                <span className="font-sans text-[17px] font-semibold tracking-tight text-oz2-text">
-                  open<span className="font-bold text-oz2-acc">Z</span>ro
-                </span>
-              </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Image
+                    src={openzroIcon}
+                    alt=""
+                    width={22}
+                    height={22}
+                    priority
+                  />
+                  <span className="font-sans text-[17px] font-semibold tracking-tight text-oz2-text">
+                    open<span className="font-bold text-oz2-acc">Z</span>ro
+                  </span>
+                </div>
+              )
             }
             sections={sections}
-            footer={<UserFooter />}
+            footer={<UserFooter collapsed={sidebarCollapsed} />}
           />
         }
         topbar={
           <OzTopbar
             left={
-              breadcrumb.length > 0 ? (
-                <OzBreadcrumb segments={breadcrumb} />
-              ) : null
+              <div className="flex items-center gap-3">
+                <SidebarTrigger
+                  collapsed={sidebarCollapsed}
+                  onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+                />
+                <span
+                  aria-hidden="true"
+                  className="h-5 w-px bg-oz2-border"
+                />
+                {breadcrumb.length > 0 && (
+                  <OzBreadcrumb segments={breadcrumb} />
+                )}
+              </div>
             }
             right={
               <>
@@ -339,7 +366,43 @@ function buildSidebarSections(
 // gradient avatar, name + role lines, and a separate ghost-style
 // kebab trigger on the right. The whole card is informational; only
 // the kebab opens the dropdown — same affordance the design specifies.
-function UserFooter() {
+// SidebarTrigger — shadcn-style hamburger that toggles the icon-only
+// collapsed sidebar. The aria-label flips between "Expand"/"Collapse"
+// based on current state so screen-reader users hear the action they're
+// about to take, not the current state.
+function SidebarTrigger({
+  collapsed,
+  onToggle,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      aria-expanded={!collapsed}
+      className="grid h-7 w-7 cursor-pointer place-items-center rounded-md text-oz2-text-muted transition-colors hover:bg-oz2-hover hover:text-oz2-text"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        width={15}
+        height={15}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <rect x={3} y={4} width={18} height={16} rx={2} />
+        <path d="M9 4v16" />
+      </svg>
+    </button>
+  );
+}
+
+function UserFooter({ collapsed = false }: { collapsed?: boolean }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const { loggedInUser, logout } = useLoggedInUser();
@@ -348,6 +411,36 @@ function UserFooter() {
 
   const display = loggedInUser?.name || loggedInUser?.email || "—";
   const role = loggedInUser?.role || "user";
+  const initials = computeInitials(loggedInUser?.name || loggedInUser?.email);
+
+  // Collapsed footer: just the gradient avatar centered, clicking it
+  // opens the same dropdown as the expanded version.
+  if (collapsed) {
+    return (
+      <DropdownMenu modal={false} open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label="Profile menu"
+            className="grid h-9 w-9 cursor-pointer place-items-center rounded-full text-[11px] font-semibold leading-none text-white shadow-oz2-sm transition-transform hover:scale-105"
+            style={{
+              background: "linear-gradient(135deg, #f472b6, #a78bfa)",
+            }}
+          >
+            {initials}
+          </button>
+        </DropdownMenuTrigger>
+        <UserMenuContent
+          loggedInUser={loggedInUser}
+          user={user}
+          isRestricted={isRestricted}
+          onClose={() => setOpen(false)}
+          logout={logout}
+          router={router}
+        />
+      </DropdownMenu>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2.5 rounded-[10px] border border-oz2-border-soft bg-oz2-surface px-2.5 py-2">
@@ -360,7 +453,7 @@ function UserFooter() {
           background: "linear-gradient(135deg, #f472b6, #a78bfa)",
         }}
       >
-        {computeInitials(loggedInUser?.name || loggedInUser?.email)}
+        {initials}
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-[12.5px] font-semibold leading-tight text-oz2-text">
@@ -393,46 +486,74 @@ function UserFooter() {
             </svg>
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent
-          side="right"
-          align="end"
-          sideOffset={6}
-          className="w-56"
-          forceMount
-        >
-          <DropdownMenuLabel className="font-normal">
-            <div className="flex flex-col space-y-1">
-              <div className="truncate text-sm font-medium leading-none">
-                {user?.name}
-              </div>
-              <div className="truncate text-xs leading-none text-neutral-500 dark:text-nb-gray-400">
-                {user?.email}
-              </div>
-            </div>
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          {!isRestricted && loggedInUser && (
-            <DropdownMenuItem
-              onClick={() => {
-                setOpen(false);
-                router.push(`/team/user?id=${loggedInUser.id}`);
-              }}
-            >
-              <div className="flex items-center gap-3">
-                <User2 size={14} />
-                Profile Settings
-              </div>
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuItem onClick={() => logout()}>
-            <div className="flex items-center gap-3">
-              <LogOutIcon size={14} />
-              Log out
-            </div>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
+        <UserMenuContent
+          loggedInUser={loggedInUser}
+          user={user}
+          isRestricted={isRestricted}
+          onClose={() => setOpen(false)}
+          logout={logout}
+          router={router}
+        />
       </DropdownMenu>
     </div>
+  );
+}
+
+// Shared menu used by both expanded and collapsed UserFooter triggers.
+function UserMenuContent({
+  loggedInUser,
+  user,
+  isRestricted,
+  onClose,
+  logout,
+  router,
+}: {
+  loggedInUser: ReturnType<typeof useLoggedInUser>["loggedInUser"];
+  user: ReturnType<typeof useApplicationContext>["user"];
+  isRestricted: boolean;
+  onClose: () => void;
+  logout: () => Promise<void>;
+  router: ReturnType<typeof useRouter>;
+}) {
+  return (
+    <DropdownMenuContent
+      side="right"
+      align="end"
+      sideOffset={6}
+      className="w-56"
+      forceMount
+    >
+      <DropdownMenuLabel className="font-normal">
+        <div className="flex flex-col space-y-1">
+          <div className="truncate text-sm font-medium leading-none">
+            {user?.name}
+          </div>
+          <div className="truncate text-xs leading-none text-neutral-500 dark:text-nb-gray-400">
+            {user?.email}
+          </div>
+        </div>
+      </DropdownMenuLabel>
+      <DropdownMenuSeparator />
+      {!isRestricted && loggedInUser && (
+        <DropdownMenuItem
+          onClick={() => {
+            onClose();
+            router.push(`/team/user?id=${loggedInUser.id}`);
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <User2 size={14} />
+            Profile Settings
+          </div>
+        </DropdownMenuItem>
+      )}
+      <DropdownMenuItem onClick={() => logout()}>
+        <div className="flex items-center gap-3">
+          <LogOutIcon size={14} />
+          Log out
+        </div>
+      </DropdownMenuItem>
+    </DropdownMenuContent>
   );
 }
 
