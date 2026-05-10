@@ -476,12 +476,13 @@ function EventCell({ row }: { row: Row }) {
   return (
     <div className="flex items-stretch gap-3">
       <div className="relative flex w-6 shrink-0 flex-col items-center justify-center">
-        {/* Single rail span per cell — dashes run continuously within
-            the cell's vertical extent without resetting at the dot.
-            The dot floats over the rail with its solid surface fill
-            covering the rail in its 24px disc, so the rail visually
-            "passes through" the dot. top / bottom are pinned based
-            on whether this step has prior / next steps in the flow:
+        {/* Single rail span per cell. Dashed gradients reset their
+            origin at each cell boundary, so a flow with several
+            events shows visible jogs between cells. Solid is the
+            pragmatic fix — 2px in oz2-border-strong reads clearly
+            and is guaranteed continuous regardless of cell heights.
+            top / bottom pinned based on whether this step has prior
+            / next steps in the flow:
 
               first event → top=50% (rail starts at dot's middle)
               middle      → top=0, bottom=0 (full cell)
@@ -490,12 +491,10 @@ function EventCell({ row }: { row: Row }) {
         {(railUp || railDown) && (
           <span
             aria-hidden
-            className="absolute left-1/2 w-[2px] -translate-x-1/2"
+            className="absolute left-1/2 w-[2px] -translate-x-1/2 bg-oz2-border-strong"
             style={{
               top: railUp ? 0 : "50%",
               bottom: railDown ? 0 : "50%",
-              background:
-                "repeating-linear-gradient(to bottom, var(--ozv2-border-strong) 0 2px, transparent 2px 3.5px)",
             }}
           />
         )}
