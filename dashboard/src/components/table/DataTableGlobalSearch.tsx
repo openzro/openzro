@@ -1,9 +1,7 @@
 import { Input } from "@components/Input";
-import Kbd from "@components/Kbd";
 import { useDebounce } from "@hooks/useDebounce";
 import { Search } from "lucide-react";
 import React, { useEffect, useState } from "react";
-import { useHotkeys } from "react-hotkeys-hook";
 
 interface Props extends React.InputHTMLAttributes<HTMLInputElement> {
   setGlobalSearch: (value: string) => void;
@@ -13,6 +11,14 @@ interface Props extends React.InputHTMLAttributes<HTMLInputElement> {
   onClick?: () => void;
 }
 
+// DataTableGlobalSearch — legacy DataTable's free-text filter input.
+// The earlier "⌘ K" kbd hint + react-hotkeys-hook binding was dropped
+// because: (a) Firefox hijacks ⌘ K for its own quick-search bar
+// regardless of preventDefault, (b) the v2 table search inputs are
+// bare (no kbd badge), so the legacy hint stood out as broken-by-
+// promise. If a real global-command palette ships later, it should
+// own the binding + visual cue and address every consumer at once.
+
 export default function DataTableGlobalSearch({
   setGlobalSearch,
   globalSearch,
@@ -21,11 +27,9 @@ export default function DataTableGlobalSearch({
   onClick,
   ...props
 }: Readonly<Props>) {
-  const ref = React.useRef<HTMLInputElement>(null);
   const [inputValue, setInputValue] = useState(globalSearch || "");
   const debouncedValue = useDebounce(inputValue, 800);
 
-  // Call setGlobalSearch when debounced value changes
   useEffect(() => {
     setGlobalSearch(debouncedValue);
   }, [debouncedValue]);
@@ -40,22 +44,9 @@ export default function DataTableGlobalSearch({
     setInputValue(e.target.value);
   };
 
-  useHotkeys(
-    "mod+k",
-    () => {
-      if (onClick) {
-        onClick?.();
-      } else {
-        ref.current?.focus();
-      }
-    },
-    [],
-  );
-
   return (
     <Input
       {...props}
-      ref={ref}
       onFocus={(e) => {
         if (onClick) {
           e.preventDefault();
@@ -64,10 +55,9 @@ export default function DataTableGlobalSearch({
         }
       }}
       icon={<Search size={15} />}
-      value={inputValue} // Shows immediate updates
+      value={inputValue}
       onChange={handleChange}
       maxWidthClass={className}
-      customSuffix={<Kbd>⌘ K</Kbd>}
       disabled={false}
     />
   );
