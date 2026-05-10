@@ -413,46 +413,108 @@ function NameCell({ peer }: { peer: Peer }) {
 }
 
 function AddressCell({ peer }: { peer: Peer }) {
+  // Hover tooltip carries the network detail (Openzro IP, Public IP,
+  // Domain, Region) so the dense cell only shows dns_label + IP.
+  const region = [peer.city_name, peer.country_code]
+    .filter(Boolean)
+    .join(", ");
   return (
-    <div className="flex min-w-0 items-center gap-3">
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-oz2-bg-sunken text-[14px] leading-none">
-        {flagEmoji(peer.country_code)}
-      </span>
-      <div className="flex min-w-0 flex-col">
-        <span className="truncate text-[13px] text-oz2-text">
-          {peer.dns_label || peer.name}
-        </span>
-        <span className="truncate font-mono text-[11.5px] text-oz2-text-muted">
-          {peer.ip}
-        </span>
-      </div>
-    </div>
+    <TooltipProvider>
+      <Tooltip delayDuration={1}>
+        <TooltipTrigger asChild>
+          <div className="flex min-w-0 cursor-pointer items-center gap-3">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-oz2-bg-sunken text-[14px] leading-none">
+              {flagEmoji(peer.country_code)}
+            </span>
+            <div className="flex min-w-0 flex-col">
+              <span className="truncate text-[13px] text-oz2-text">
+                {peer.dns_label || peer.name}
+              </span>
+              <span className="truncate font-mono text-[11.5px] text-oz2-text-muted">
+                {peer.ip}
+              </span>
+            </div>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent className="!p-0">
+          <div className="min-w-[260px]">
+            <InfoTooltipRow
+              icon={ICONS.pin}
+              label="Openzro IP"
+              value={peer.ip || "—"}
+            />
+            <InfoTooltipRow
+              icon={ICONS.network}
+              label="Public IP"
+              value={peer.connection_ip || "—"}
+            />
+            <InfoTooltipRow
+              icon={ICONS.globe}
+              label="Domain"
+              value={peer.dns_label || peer.name || "—"}
+              mono={false}
+            />
+            <InfoTooltipRow
+              icon={
+                <span className="text-[14px] leading-none">
+                  {flagEmoji(peer.country_code)}
+                </span>
+              }
+              label="Region"
+              value={region || "—"}
+              mono={false}
+            />
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
 function GroupsCell({ peer }: { peer: Peer }) {
+  // Mirror production density: only the first chip is visible; the
+  // rest collapse into a "+N" pill. Hover tooltip lists the full set.
+  // Edit / add-group flow lives in the row kebab and lands in phase
+  // 4.3 alongside PeerActionCell.
   const groups = (peer.groups ?? []).map((g) => g.name).filter(Boolean);
   if (groups.length === 0) {
     return <span className="text-[12.5px] text-oz2-text-faint">—</span>;
   }
-  const visible = groups.slice(0, 2);
+  const visible = groups.slice(0, 1);
   const overflow = groups.length - visible.length;
   return (
-    <div className="flex flex-wrap items-center gap-1">
-      {visible.map((g) => (
-        <span
-          key={g}
-          className="inline-flex h-5 items-center rounded-full bg-oz2-bg-sunken px-2 font-mono text-[10.5px] text-oz2-text-2"
-        >
-          {g}
-        </span>
-      ))}
-      {overflow > 0 && (
-        <span className="inline-flex h-5 items-center rounded-full bg-oz2-bg-sunken px-2 font-mono text-[10.5px] text-oz2-text-faint">
-          +{overflow}
-        </span>
-      )}
-    </div>
+    <TooltipProvider>
+      <Tooltip delayDuration={1}>
+        <TooltipTrigger asChild>
+          <div className="inline-flex cursor-pointer items-center gap-1.5">
+            {visible.map((g) => (
+              <OzPill key={g} variant="default">
+                {g}
+              </OzPill>
+            ))}
+            {overflow > 0 && <OzPill variant="default">+{overflow}</OzPill>}
+          </div>
+        </TooltipTrigger>
+        <TooltipContent className="!p-0">
+          <div className="min-w-[200px]">
+            <p className="px-3 pt-3 pb-2 font-mono text-[10.5px] uppercase tracking-widest text-oz2-text-faint">
+              Assigned groups
+            </p>
+            <ul className="space-y-1 px-3 pb-3">
+              {groups.map((g) => (
+                <li
+                  key={g}
+                  className="flex items-center gap-2 text-[12px] text-oz2-text"
+                >
+                  <span className="text-oz2-text-faint">{ICONS.groupIcon}</span>
+                  {g}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -464,19 +526,19 @@ function OSCell({ peer }: { peer: Peer }) {
     <TooltipProvider>
       <Tooltip delayDuration={1}>
         <TooltipTrigger asChild>
-          <span className="grid h-7 w-7 cursor-default place-items-center rounded-md text-oz2-text-2 transition-colors hover:bg-oz2-hover">
+          <span className="grid h-7 w-7 cursor-pointer place-items-center rounded-md text-oz2-text-2 transition-colors hover:bg-oz2-hover">
             <OSLogo os={peer.os} />
           </span>
         </TooltipTrigger>
         <TooltipContent className="!p-0">
           <div className="min-w-[200px]">
-            <OsTooltipRow
+            <InfoTooltipRow
               icon={<CpuIcon size={14} />}
               label="OS"
               value={peer.os || "—"}
             />
             {peer.serial_number && peer.serial_number !== "" && (
-              <OsTooltipRow
+              <InfoTooltipRow
                 icon={<Barcode size={14} />}
                 label="Serial number"
                 value={peer.serial_number}
@@ -489,20 +551,29 @@ function OSCell({ peer }: { peer: Peer }) {
   );
 }
 
-function OsTooltipRow({
+function InfoTooltipRow({
   icon,
   label,
   value,
+  mono = true,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
+  mono?: boolean;
 }) {
   return (
     <div className="flex items-center gap-2 border-b border-oz2-border-soft px-3 py-2 text-[12.5px] last:border-b-0">
       <span className="text-oz2-text-faint">{icon}</span>
       <span className="text-oz2-text-faint">{label}</span>
-      <span className="ml-auto truncate font-mono text-oz2-text">{value}</span>
+      <span
+        className={
+          (mono ? "font-mono text-[11.5px] " : "text-[12px] ") +
+          "ml-auto truncate text-oz2-text"
+        }
+      >
+        {value}
+      </span>
     </div>
   );
 }
@@ -947,6 +1018,32 @@ const ICONS = {
     <>
       <circle cx={11} cy={11} r={7} />
       <path d="m20 20-3.5-3.5" />
+    </>,
+  ),
+  pin: baseIcon(
+    <>
+      <path d="M12 13c2 0 4-2 4-4 0-2-1.5-4-4-4S8 7 8 9c0 2 2 4 4 4z" />
+      <path d="M12 13v8" />
+    </>,
+  ),
+  network: baseIcon(
+    <>
+      <circle cx={12} cy={5} r={2} />
+      <circle cx={6} cy={19} r={2} />
+      <circle cx={18} cy={19} r={2} />
+      <path d="M12 7v3M12 10l-5 7M12 10l5 7" />
+    </>,
+  ),
+  globe: baseIcon(
+    <>
+      <circle cx={12} cy={12} r={9} />
+      <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+    </>,
+  ),
+  groupIcon: baseIcon(
+    <>
+      <circle cx={12} cy={8} r={4} />
+      <path d="M4 21a8 8 0 0 1 16 0" />
     </>,
   ),
   chevDown: baseIcon(<path d="m6 9 6 6 6-6" />),
