@@ -207,6 +207,16 @@ function breadcrumbForPath(path: string | null): OzBreadcrumbSegment[] {
   if (path === "/networks" || path.startsWith("/networks/")) {
     return [{ label: "Workspace" }, { label: "Networks" }];
   }
+  // /network (singular) is the per-network detail page reached from
+  // the Networks list. The network's own name shows up as the page
+  // H1 inline so we collapse the crumb tail to a generic "Network".
+  if (path === "/network" || path.startsWith("/network?")) {
+    return [
+      { label: "Workspace" },
+      { label: "Networks" },
+      { label: "Network" },
+    ];
+  }
   if (path === "/network-routes" || path.startsWith("/network-routes/")) {
     return [{ label: "Workspace" }, { label: "Network Routes" }];
   }
