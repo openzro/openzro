@@ -16,7 +16,7 @@ const OzTable = forwardRef<
   <div className="relative w-full overflow-x-auto">
     <table
       ref={ref}
-      className={classNames("w-full caption-bottom text-[15px]", className)}
+      className={classNames("w-full caption-bottom text-[14px]", className)}
       {...props}
     />
   </div>
@@ -70,7 +70,7 @@ const OzTableHead = forwardRef<
   <th
     ref={ref}
     className={classNames(
-      "whitespace-nowrap px-[14px] py-[11px] text-left font-mono text-[12px] font-semibold uppercase tracking-widest text-oz2-text-muted",
+      "whitespace-nowrap px-[14px] py-[11px] text-left font-mono text-[11.5px] font-semibold uppercase tracking-widest text-oz2-text-muted",
       className,
     )}
     {...props}

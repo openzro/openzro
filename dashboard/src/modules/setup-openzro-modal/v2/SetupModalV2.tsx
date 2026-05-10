@@ -102,10 +102,10 @@ function Hero({ title, setupKey }: { title: string; setupKey: boolean }) {
           <path d="M13 16h4" />
         </svg>
       </div>
-      <h2 className="text-[25px] font-semibold tracking-tight text-oz2-text">
+      <h2 className="text-[24px] font-semibold tracking-tight text-oz2-text">
         {title}
       </h2>
-      <p className="mx-auto mt-1.5 max-w-[420px] text-[15.5px] leading-[1.5] text-oz2-text-muted">
+      <p className="mx-auto mt-1.5 max-w-[420px] text-[14.5px] leading-[1.5] text-oz2-text-muted">
         {setupKey
           ? "To get started, install and run Openzro with the setup key as a parameter."
           : "To get started, install Openzro and log in with your email account."}
@@ -135,7 +135,7 @@ function OSTabs({ value, onChange }: { value: OS; onChange: (os: OS) => void }) 
             aria-selected={active}
             onClick={() => onChange(t.id)}
             className={classNames(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-[9px] border px-2 py-2.5 text-[14.5px] font-medium transition-colors",
+              "flex flex-1 items-center justify-center gap-1.5 rounded-[9px] border px-2 py-2.5 text-[13.5px] font-medium transition-colors",
               active
                 ? "border-oz2-border bg-oz2-surface text-oz2-text shadow-oz2-sm"
                 : "border-transparent text-oz2-text-muted hover:text-oz2-text",
@@ -415,7 +415,7 @@ function DockerPrimary({
           href="https://docs.openzro.io/how-to/installation/docker"
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 text-[14.5px] font-medium text-oz2-acc-text underline-offset-2 hover:underline"
+          className="inline-flex items-center gap-1.5 text-[13.5px] font-medium text-oz2-acc-text underline-offset-2 hover:underline"
         >
           Running Openzro in Docker
           <ExternalLinkIcon size={11} />
@@ -467,7 +467,7 @@ function ManualAccordion({
         <span className="grid h-[28px] w-[28px] place-items-center rounded-[8px] bg-oz2-bg-soft text-oz2-text-2">
           <PackageIcon />
         </span>
-        <span className="text-[15px] font-medium text-oz2-text">{label}</span>
+        <span className="text-[14px] font-medium text-oz2-text">{label}</span>
       </button>
       {open && (
         <StepsList className="pb-4 pt-1">
@@ -620,7 +620,7 @@ function Step({
 }) {
   return (
     <li className="relative grid grid-cols-[22px_1fr] gap-3.5">
-      <span className="z-[1] mt-1 grid h-[22px] w-[22px] place-items-center rounded-full border border-oz2-border-strong bg-oz2-surface font-mono text-[12.5px] font-semibold text-oz2-text-muted">
+      <span className="z-[1] mt-1 grid h-[22px] w-[22px] place-items-center rounded-full border border-oz2-border-strong bg-oz2-surface font-mono text-[12px] font-semibold text-oz2-text-muted">
         {n}
       </span>
       {!isLast && (
@@ -636,13 +636,13 @@ function Step({
 
 function StepLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mb-2 text-[15px] leading-[1.5] text-oz2-text-2">{children}</p>
+    <p className="mb-2 text-[14px] leading-[1.5] text-oz2-text-2">{children}</p>
   );
 }
 
 function StepNote({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mt-2 text-[14px] leading-[1.5] text-oz2-text-muted">
+    <p className="mt-2 text-[13px] leading-[1.5] text-oz2-text-muted">
       {children}
     </p>
   );
@@ -650,7 +650,7 @@ function StepNote({ children }: { children: React.ReactNode }) {
 
 function Code({ children }: { children: React.ReactNode }) {
   return (
-    <code className="rounded-[5px] bg-oz2-bg-soft px-1.5 py-px font-mono text-[13px] font-medium text-oz2-acc-text">
+    <code className="rounded-[5px] bg-oz2-bg-soft px-1.5 py-px font-mono text-[12.5px] font-medium text-oz2-acc-text">
       {children}
     </code>
   );
@@ -664,7 +664,7 @@ function SectionTitle({
   label: string;
 }) {
   return (
-    <p className="mb-4 flex items-center gap-2.5 text-[15.5px] font-semibold text-oz2-text">
+    <p className="mb-4 flex items-center gap-2.5 text-[14.5px] font-semibold text-oz2-text">
       <span className="grid h-[26px] w-[26px] place-items-center rounded-[7px] bg-oz2-acc-soft text-oz2-acc-text">
         {icon}
       </span>
@@ -689,7 +689,7 @@ function CodeBlock({
   return (
     <div
       className={classNames(
-        "flex gap-2.5 rounded-[10px] border border-oz2-border-soft bg-oz2-bg-soft px-3.5 py-2.5 font-mono text-[14.5px] font-medium text-oz2-text",
+        "flex gap-2.5 rounded-[10px] border border-oz2-border-soft bg-oz2-bg-soft px-3.5 py-2.5 font-mono text-[13.5px] font-medium text-oz2-text",
         isMulti ? "items-start" : "items-center",
       )}
     >
@@ -788,7 +788,7 @@ function DownloadButtonRow({
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex h-[34px] items-center gap-2 rounded-[10px] border border-transparent bg-oz2-acc px-3.5 text-[15px] font-medium text-oz2-text-on-acc shadow-oz2-acc transition-colors hover:bg-oz2-acc-hover"
+        className="inline-flex h-[34px] items-center gap-2 rounded-[10px] border border-transparent bg-oz2-acc px-3.5 text-[14px] font-medium text-oz2-text-on-acc shadow-oz2-acc transition-colors hover:bg-oz2-acc-hover"
       >
         <DownloadIcon size={14} />
         {label}
@@ -810,7 +810,7 @@ function ExternalButton({
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex h-[34px] items-center gap-2 rounded-[10px] border border-transparent bg-oz2-acc px-3.5 text-[15px] font-medium text-oz2-text-on-acc shadow-oz2-acc transition-colors hover:bg-oz2-acc-hover"
+        className="inline-flex h-[34px] items-center gap-2 rounded-[10px] border border-transparent bg-oz2-acc px-3.5 text-[14px] font-medium text-oz2-text-on-acc shadow-oz2-acc transition-colors hover:bg-oz2-acc-hover"
       >
         <ExternalLinkIcon size={14} />
         {label}
@@ -821,7 +821,7 @@ function ExternalButton({
 
 function Footer() {
   return (
-    <div className="border-t border-oz2-border bg-oz2-bg-soft px-8 py-4 text-[14.5px] leading-[1.55] text-oz2-text-muted">
+    <div className="border-t border-oz2-border bg-oz2-bg-soft px-8 py-4 text-[13.5px] leading-[1.55] text-oz2-text-muted">
       After that you should be connected. Add more devices to your network or
       manage your existing devices in the admin panel. If you have further
       questions check out our{" "}

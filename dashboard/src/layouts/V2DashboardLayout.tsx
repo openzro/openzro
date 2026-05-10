@@ -145,7 +145,7 @@ function V2DashboardChrome({ children }: { children: React.ReactNode }) {
                     height={22}
                     priority
                   />
-                  <span className="font-sans text-[19px] font-semibold tracking-tight text-oz2-text">
+                  <span className="font-sans text-[18px] font-semibold tracking-tight text-oz2-text">
                     open<span className="font-bold text-oz2-acc">Z</span>ro
                   </span>
                 </div>
@@ -422,7 +422,7 @@ function UserFooter({ collapsed = false }: { collapsed?: boolean }) {
           <button
             type="button"
             aria-label="Profile menu"
-            className="grid h-9 w-9 cursor-pointer place-items-center rounded-full text-[12.5px] font-semibold leading-none text-white shadow-oz2-sm transition-transform hover:scale-105"
+            className="grid h-9 w-9 cursor-pointer place-items-center rounded-full text-[12px] font-semibold leading-none text-white shadow-oz2-sm transition-transform hover:scale-105"
             style={{
               background: "linear-gradient(135deg, #f472b6, #a78bfa)",
             }}
@@ -446,7 +446,7 @@ function UserFooter({ collapsed = false }: { collapsed?: boolean }) {
     <div className="flex items-center gap-2.5 rounded-[10px] border border-oz2-border-soft bg-oz2-surface px-2.5 py-2">
       <span
         aria-hidden="true"
-        className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[12.5px] font-semibold leading-none text-white"
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[12px] font-semibold leading-none text-white"
         // Pink → violet gradient from the design handoff. Inline style
         // because Tailwind doesn't expose these exact hex stops.
         style={{
@@ -456,10 +456,10 @@ function UserFooter({ collapsed = false }: { collapsed?: boolean }) {
         {initials}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[14.5px] font-semibold leading-tight text-oz2-text">
+        <p className="truncate text-[13.5px] font-semibold leading-tight text-oz2-text">
           {display}
         </p>
-        <p className="mt-0.5 truncate text-[12.5px] leading-tight text-oz2-text-muted">
+        <p className="mt-0.5 truncate text-[12px] leading-tight text-oz2-text-muted">
           {role}
         </p>
       </div>

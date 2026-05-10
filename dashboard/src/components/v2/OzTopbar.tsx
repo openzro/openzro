@@ -48,7 +48,7 @@ export const OzBreadcrumb = ({
   segments: OzBreadcrumbSegment[];
 }) => {
   return (
-    <ol className="flex items-center gap-1.5 text-[15px]">
+    <ol className="flex items-center gap-1.5 text-[14px]">
       {segments.map((seg, i) => {
         const isLast = i === segments.length - 1;
         return (
