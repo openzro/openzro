@@ -204,6 +204,16 @@ function breadcrumbForPath(path: string | null): OzBreadcrumbSegment[] {
   if (path === "/peers" || path.startsWith("/peers/")) {
     return [{ label: "Workspace" }, { label: "Peers" }];
   }
+  // /peer (singular) is the per-peer detail page. Crumb tail is a
+  // generic "Peer" because the peer's own name shows up as the page
+  // H1 inline.
+  if (path === "/peer" || path.startsWith("/peer?")) {
+    return [
+      { label: "Workspace" },
+      { label: "Peers" },
+      { label: "Peer" },
+    ];
+  }
   if (path === "/networks" || path.startsWith("/networks/")) {
     return [{ label: "Workspace" }, { label: "Networks" }];
   }
