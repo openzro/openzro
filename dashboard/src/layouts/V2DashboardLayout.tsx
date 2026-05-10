@@ -259,6 +259,30 @@ function breadcrumbForPath(path: string | null): OzBreadcrumbSegment[] {
   if (path === "/integrations" || path.startsWith("/integrations/")) {
     return [{ label: "System" }, { label: "Integrations" }];
   }
+  // /settings/* — each sub-route gets a specific second crumb so the
+  // topbar reflects which tab is active. The bare /settings redirects
+  // to /settings/authentication; the crumb match below covers the
+  // redirect target so the breadcrumb is correct on the in-between
+  // tick before the redirect lands.
+  if (path === "/settings" || path.startsWith("/settings/")) {
+    const SETTINGS_TABS: Record<string, string> = {
+      "/settings/authentication": "Authentication",
+      "/settings/auth-providers": "Auth Providers",
+      "/settings/groups": "Groups",
+      "/settings/permissions": "Permissions",
+      "/settings/networks": "Networks",
+      "/settings/clients": "Clients",
+      "/settings/device-admission": "Device Admission",
+      "/settings/danger-zone": "Danger Zone",
+    };
+    const sub = SETTINGS_TABS[path];
+    const crumbs: OzBreadcrumbSegment[] = [
+      { label: "System" },
+      { label: "Settings" },
+    ];
+    if (sub) crumbs.push({ label: sub });
+    return crumbs;
+  }
   return [];
 }
 
