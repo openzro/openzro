@@ -47,6 +47,7 @@ import { Peer } from "@/interfaces/Peer";
 import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
 import PeerActionCell from "@/modules/peers/PeerActionCell";
 import PeerGroupCell from "@/modules/peers/PeerGroupCell";
+import { PeerMultiSelect } from "@/modules/peers/PeerMultiSelect";
 import { OSLogo } from "@/modules/peers/PeerOSCell";
 import SetupModal from "@/modules/setup-openzro-modal/SetupModal";
 
@@ -300,7 +301,6 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
     sortingFns: NOOP_SORTING_FNS,
   });
 
-  const selectedCount = Object.keys(rowSelection).length;
   const pageInfo = table.getState().pagination;
   const pageStart =
     filtered.length === 0 ? 0 : pageInfo.pageIndex * pageInfo.pageSize + 1;
@@ -409,29 +409,17 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
         </button>
       </div>
 
-      <OzCard flush>
-        {selectedCount > 0 && (
-          <div className="flex items-center justify-between gap-3 border-b border-oz2-border-soft bg-oz2-acc-soft px-[18px] py-2.5 text-[12.5px]">
-            <span className="font-medium text-oz2-acc-text">
-              {selectedCount} {selectedCount === 1 ? "peer" : "peers"} selected
-            </span>
-            <div className="flex items-center gap-2">
-              <OzButton variant="default">Add to group</OzButton>
-              <OzButton variant="default">Block</OzButton>
-              <OzButton variant="default" className="text-oz2-err">
-                Delete
-              </OzButton>
-              <button
-                type="button"
-                onClick={() => table.resetRowSelection()}
-                className="rounded-oz2-input px-2 py-1 text-[12px] text-oz2-text-muted hover:bg-oz2-hover hover:text-oz2-text"
-              >
-                Clear
-              </button>
-            </div>
-          </div>
-        )}
+      {/* Floating bulk-action bar from the legacy module — wires
+          Add-to-group (with replace-vs-merge toggle), block, delete,
+          and a cancel button against the operator's selection. The
+          shape (RowSelectionState) is exactly what TanStack hands us,
+          so no adapter needed. Visual paint is legacy until phase 5. */}
+      <PeerMultiSelect
+        selectedPeers={rowSelection}
+        onCanceled={() => table.resetRowSelection()}
+      />
 
+      <OzCard flush>
         <OzTable>
           <OzTableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
