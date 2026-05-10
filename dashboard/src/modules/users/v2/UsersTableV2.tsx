@@ -49,6 +49,7 @@ import { usePermissions } from "@/contexts/PermissionsProvider";
 import { User } from "@/interfaces/User";
 import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
 import LastTimeRow from "@/modules/common-table-rows/LastTimeRow";
+import TeamTabs from "@/modules/team/v2/TeamTabs";
 import UserActionCell from "@/modules/users/table-cells/UserActionCell";
 import UserBlockCell from "@/modules/users/table-cells/UserBlockCell";
 import UserGroupCell from "@/modules/users/table-cells/UserGroupCell";
@@ -279,7 +280,9 @@ export default function UsersTableV2({ users, isLoading }: Props) {
     <TooltipProvider delayDuration={250} skipDelayDuration={100}>
       <div className="space-y-6 p-8">
         <header>
-          <h1 className="text-[24px] font-semibold tracking-tight">Users</h1>
+          <h1 className="text-[24px] font-semibold tracking-tight">
+            Users &amp; Groups
+          </h1>
           <p className="mt-1 max-w-2xl text-[14px] text-oz2-text-muted">
             Manage users and their permissions. Same-domain email users are
             added automatically on first sign-in. Learn more about{" "}
@@ -294,6 +297,8 @@ export default function UsersTableV2({ users, isLoading }: Props) {
             .
           </p>
         </header>
+
+        <TeamTabs />
 
         {/* Invite modal — controlled, opened from the topbar CTA or
             the cold-start hero CTA. Rendered inline so the modal
