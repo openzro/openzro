@@ -339,8 +339,8 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
     <TooltipProvider delayDuration={250} skipDelayDuration={100}>
       <div className="space-y-6 p-8">
       <header>
-        <h1 className="text-[22px] font-semibold tracking-tight">Peers</h1>
-        <p className="mt-1 max-w-2xl text-[13px] text-oz2-text-muted">
+        <h1 className="text-[25px] font-semibold tracking-tight">Peers</h1>
+        <p className="mt-1 max-w-2xl text-[15px] text-oz2-text-muted">
           A list of all machines and devices connected to your private
           network. Use this view to manage peers. Learn more about{" "}
           <a
@@ -355,7 +355,7 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
         </p>
       </header>
 
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12.5px] text-oz2-text-muted">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[14.5px] text-oz2-text-muted">
         <span className="inline-flex items-center gap-2">
           <OzStatusDot status="on" />
           <span className="font-medium text-oz2-text">{counts.online}</span>
@@ -384,7 +384,7 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name, IP, user…"
-            className="h-full flex-1 border-0 bg-transparent text-[13px] outline-none placeholder:text-oz2-text-faint"
+            className="h-full flex-1 border-0 bg-transparent text-[15px] outline-none placeholder:text-oz2-text-faint"
           />
         </div>
 
@@ -489,7 +489,7 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
           </OzTableBody>
         </OzTable>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-oz2-border-soft bg-oz2-bg-sunken px-[18px] py-3 text-[12.5px]">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-oz2-border-soft bg-oz2-bg-sunken px-[18px] py-3 text-[14.5px]">
           <span className="text-oz2-text-muted">
             {filtered.length === 0
               ? "0 peers"
@@ -532,7 +532,7 @@ function NameCell({ peer }: { peer: Peer }) {
           <TextWithTooltip text={peer.name} maxChars={24} />
         </span>
       </span>
-      <span className="block pl-[16px] text-[11.5px] text-oz2-text-muted">
+      <span className="block pl-[16px] text-[13px] text-oz2-text-muted">
         <TextWithTooltip text={display} maxChars={28} />
       </span>
     </div>
@@ -564,12 +564,12 @@ function AddressCell({ peer }: { peer: Peer }) {
       <Tooltip>
         <TooltipTrigger asChild>
           <div className="group/address flex min-w-0 cursor-pointer items-center gap-3">
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-oz2-bg-sunken text-[14px] leading-none">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-oz2-bg-sunken text-[16px] leading-none">
               {flagEmoji(peer.country_code)}
             </span>
             <div className="flex min-w-0 flex-col">
               <span className="flex items-center gap-1.5">
-                <span className="truncate text-[13px] text-oz2-text">
+                <span className="truncate text-[15px] text-oz2-text">
                   {peer.dns_label || peer.name}
                 </span>
                 {peer.dns_label && (
@@ -580,7 +580,7 @@ function AddressCell({ peer }: { peer: Peer }) {
                 )}
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="truncate font-mono text-[11.5px] text-oz2-text-muted">
+                <span className="truncate font-mono text-[13px] text-oz2-text-muted">
                   {peer.ip}
                 </span>
                 {peer.ip && (
@@ -616,7 +616,7 @@ function AddressCell({ peer }: { peer: Peer }) {
             />
             <InfoTooltipRow
               icon={
-                <span className="text-[14px] leading-none">
+                <span className="text-[16px] leading-none">
                   {flagEmoji(peer.country_code)}
                 </span>
               }
@@ -724,12 +724,12 @@ function InfoTooltipRow({
   };
 
   return (
-    <div className="flex items-center gap-2 border-b border-oz2-border-soft px-3 py-2 text-[12.5px] last:border-b-0">
+    <div className="flex items-center gap-2 border-b border-oz2-border-soft px-3 py-2 text-[14.5px] last:border-b-0">
       <span className="text-oz2-text-faint">{icon}</span>
       <span className="text-oz2-text-faint">{label}</span>
       <span
         className={
-          (mono ? "font-mono text-[11.5px] " : "text-[12px] ") +
+          (mono ? "font-mono text-[13px] " : "text-[14px] ") +
           "ml-auto truncate text-oz2-text"
         }
       >
@@ -777,8 +777,8 @@ function LastSeenCell({ peer }: { peer: Peer }) {
         </TooltipTrigger>
         <TooltipContent>
           <div className="flex flex-col gap-1">
-            <span className="text-[11px] text-oz2-text-faint">Last seen on</span>
-            <span className="text-[12.5px] text-oz2-text">
+            <span className="text-[12.5px] text-oz2-text-faint">Last seen on</span>
+            <span className="text-[14.5px] text-oz2-text">
               {date.format("D MMMM, YYYY [at] h:mm A")}
             </span>
           </div>
@@ -843,7 +843,7 @@ function NoticeBadge({
           </OzPill>
         </TooltipTrigger>
         <TooltipContent>
-          <p className="max-w-[260px] text-[12px] leading-relaxed">{tooltip}</p>
+          <p className="max-w-[260px] text-[14px] leading-relaxed">{tooltip}</p>
         </TooltipContent>
       </Tooltip>
   );
@@ -857,7 +857,7 @@ function VersionCell({ peer }: { peer: Peer }) {
       <span className="text-oz2-text-faint">
         <MemoizedOpenzroIcon />
       </span>
-      <span className="font-mono text-[11.5px] text-oz2-text-faint">
+      <span className="font-mono text-[13px] text-oz2-text-faint">
         {display}
       </span>
     </div>
@@ -931,7 +931,7 @@ function SortHeader({
       // reset text-transform from the parent <th>'s uppercase. Same
       // for `font-mono` and the small caps style — keeps headers
       // visually identical regardless of sortable vs static.
-      className="-mx-1 inline-flex h-5 items-center gap-1.5 rounded px-1 text-left font-mono text-[10.5px] font-semibold uppercase tracking-widest text-oz2-text-muted transition-colors hover:text-oz2-text"
+      className="-mx-1 inline-flex h-5 items-center gap-1.5 rounded px-1 text-left font-mono text-[12px] font-semibold uppercase tracking-widest text-oz2-text-muted transition-colors hover:text-oz2-text"
     >
       {label}
       <span
@@ -974,7 +974,7 @@ function SegmentedTabs<T extends string>({
             aria-selected={active}
             onClick={() => onChange(opt.id)}
             className={
-              "inline-flex h-full items-center gap-1.5 whitespace-nowrap rounded-[6px] px-3 text-[12.5px] font-medium transition-colors " +
+              "inline-flex h-full items-center gap-1.5 whitespace-nowrap rounded-[6px] px-3 text-[14.5px] font-medium transition-colors " +
               (active
                 ? "bg-oz2-surface text-oz2-text shadow-oz2-sm"
                 : "hover:text-oz2-text")
@@ -982,7 +982,7 @@ function SegmentedTabs<T extends string>({
           >
             {opt.label}
             {typeof opt.count === "number" && (
-              <span className="font-mono text-[10.5px] text-oz2-text-faint">
+              <span className="font-mono text-[12px] text-oz2-text-faint">
                 {opt.count}
               </span>
             )}
@@ -1034,7 +1034,7 @@ function GroupFilter({
         type="button"
         onClick={() => onOpenChange(!open)}
         className={
-          "inline-flex h-[34px] items-center gap-1.5 rounded-oz2-input border px-3 text-[13px] font-medium transition-colors " +
+          "inline-flex h-[34px] items-center gap-1.5 rounded-oz2-input border px-3 text-[15px] font-medium transition-colors " +
           (value.length > 0
             ? "border-transparent bg-oz2-acc-soft text-oz2-acc-text"
             : "border-oz2-border bg-oz2-surface text-oz2-text-2 hover:bg-oz2-hover")
@@ -1046,12 +1046,12 @@ function GroupFilter({
       </button>
       {open && (
         <div className="absolute right-0 top-full z-30 mt-2 w-[220px] overflow-hidden rounded-oz2-input border border-oz2-border bg-oz2-bg-elev shadow-oz2-md">
-          <p className="border-b border-oz2-border-soft px-3 py-2 font-mono text-[10.5px] uppercase tracking-widest text-oz2-text-faint">
+          <p className="border-b border-oz2-border-soft px-3 py-2 font-mono text-[12px] uppercase tracking-widest text-oz2-text-faint">
             Filter by group
           </p>
           <ul className="max-h-[260px] overflow-y-auto py-1">
             {allGroups.length === 0 && (
-              <li className="px-3 py-3 text-[12px] text-oz2-text-faint">
+              <li className="px-3 py-3 text-[14px] text-oz2-text-faint">
                 No groups yet
               </li>
             )}
@@ -1062,7 +1062,7 @@ function GroupFilter({
                   <button
                     type="button"
                     onClick={() => toggle(g)}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] hover:bg-oz2-hover"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[14.5px] hover:bg-oz2-hover"
                   >
                     <span
                       className={
@@ -1098,7 +1098,7 @@ function GroupFilter({
               <button
                 type="button"
                 onClick={() => onChange([])}
-                className="w-full rounded-oz2-input px-3 py-1.5 text-left text-[12px] text-oz2-text-muted hover:bg-oz2-hover hover:text-oz2-text"
+                className="w-full rounded-oz2-input px-3 py-1.5 text-left text-[14px] text-oz2-text-muted hover:bg-oz2-hover hover:text-oz2-text"
               >
                 Clear selection
               </button>
@@ -1135,7 +1135,7 @@ function PageSizeCombobox({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="inline-flex h-[34px] items-center gap-1.5 rounded-oz2-input border border-oz2-border bg-oz2-surface px-3 text-[13px] font-medium text-oz2-text-2 hover:bg-oz2-hover hover:border-oz2-border-strong"
+        className="inline-flex h-[34px] items-center gap-1.5 rounded-oz2-input border border-oz2-border bg-oz2-surface px-3 text-[15px] font-medium text-oz2-text-2 hover:bg-oz2-hover hover:border-oz2-border-strong"
       >
         <span className="text-oz2-text-faint">Rows:</span>
         <span className="font-mono">{value}</span>
@@ -1153,7 +1153,7 @@ function PageSizeCombobox({
                     setOpen(false);
                   }}
                   className={
-                    "flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-[12.5px] hover:bg-oz2-hover " +
+                    "flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-[14.5px] hover:bg-oz2-hover " +
                     (c === value ? "text-oz2-acc-text" : "text-oz2-text")
                   }
                 >
@@ -1189,7 +1189,7 @@ function Pager({
       >
         <span className="rotate-90">{ICONS.chevDown}</span>
       </PagerBtn>
-      <span className="px-2 font-mono text-[12px] tabular-nums text-oz2-text-muted">
+      <span className="px-2 font-mono text-[14px] tabular-nums text-oz2-text-muted">
         {page} / {totalPages}
       </span>
       <PagerBtn

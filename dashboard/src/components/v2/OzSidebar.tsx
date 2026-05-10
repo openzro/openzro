@@ -74,7 +74,7 @@ const OzSidebar = ({
         {sections.map((section) => (
           <div key={section.id} className="mb-5">
             {!collapsed && (
-              <p className="mb-2 px-3 font-mono text-[11px] uppercase tracking-widest text-oz2-text-faint">
+              <p className="mb-2 px-3 font-mono text-[12.5px] uppercase tracking-widest text-oz2-text-faint">
                 {section.label}
               </p>
             )}
@@ -87,7 +87,7 @@ const OzSidebar = ({
                     title={collapsed ? item.label : undefined}
                     aria-label={collapsed ? item.label : undefined}
                     className={classNames(
-                      "flex h-8 items-center rounded-lg text-[13px] font-medium transition-colors",
+                      "flex h-8 items-center rounded-lg text-[15px] font-medium transition-colors",
                       collapsed
                         ? "w-full justify-center"
                         : "w-full gap-2.5 px-3",

@@ -15,7 +15,7 @@ import React, { forwardRef } from "react";
 export const ozPillVariants = cva(
   [
     "inline-flex items-center gap-1.5 rounded-full border",
-    "px-[9px] py-[3px] font-mono text-[11px] font-medium tracking-tight",
+    "px-[9px] py-[3px] font-mono text-[12.5px] font-medium tracking-tight",
   ],
   {
     variants: {
