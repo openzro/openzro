@@ -1,24 +1,29 @@
-import Breadcrumbs from "@components/Breadcrumbs";
-import Button from "@components/Button";
-import FancyToggleSwitch from "@components/FancyToggleSwitch";
+"use client";
+
 import { notify } from "@components/Notification";
 import * as Tabs from "@radix-ui/react-tabs";
 import { useApiCall } from "@utils/api";
-import { GaugeIcon, LockIcon } from "lucide-react";
 import React, { useState } from "react";
 import { useSWRConfig } from "swr";
-import SettingsIcon from "@/assets/icons/SettingsIcon";
+import OzButton from "@/components/v2/OzButton";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { useHasChanges } from "@/hooks/useHasChanges";
 import { Account } from "@/interfaces/Account";
+import OzSettingsCard from "@/modules/settings/v2/OzSettingsCard";
+import OzSettingsToggle from "@/modules/settings/v2/OzSettingsToggle";
+
+// PermissionsTab — settings sub-page body for /settings/permissions.
+// Functionality preserved verbatim from the pre-phase-5 legacy:
+// regular_users_view_blocked boolean toggle saved through
+// /accounts/{id}. Only paint changes — the single FancyToggleSwitch
+// becomes an OzSettingsToggle inside one OzSettingsCard.
 
 type Props = {
   account: Account;
 };
 
-export default function PermissionsTab({ account }: Props) {
+export default function PermissionsTab({ account }: Readonly<Props>) {
   const { permission } = usePermissions();
-
   const { mutate } = useSWRConfig();
   const saveRequest = useApiCall<Account>("/accounts/" + account.id);
 
@@ -48,50 +53,42 @@ export default function PermissionsTab({ account }: Props) {
     });
   };
 
-  return (
-    <Tabs.Content value={"permissions"} className={"w-full"}>
-      <div className={"p-default py-6 max-w-xl"}>
-        <Breadcrumbs>
-          <Breadcrumbs.Item
-            href={"/settings"}
-            label={"Settings"}
-            icon={<SettingsIcon size={13} />}
-          />
-          <Breadcrumbs.Item
-            href={"/settings?tab=permissions"}
-            label={"Permissions"}
-            icon={<LockIcon size={14} />}
-            active
-          />
-        </Breadcrumbs>
-        <div className={"flex items-start justify-between"}>
-          <h1>Permissions</h1>
-          <Button
-            variant={"primary"}
-            disabled={!hasChanges || !permission.settings.update}
-            onClick={saveChanges}
-          >
-            Save Changes
-          </Button>
-        </div>
+  const editDisabled = !permission.settings.update;
 
-        <div className={"flex flex-col gap-6 mt-8 mb-3"}>
-          <FancyToggleSwitch
-            value={userViewBlocked}
-            onChange={setUserViewBlocked}
-            label={
-              <>
-                <GaugeIcon size={15} />
-                Restrict dashboard for regular users
-              </>
-            }
-            helpText={
-              "Access to the dashboard will be limited and regular users will not be able to view any peers."
-            }
-            disabled={!permission.settings.update}
-          />
+  return (
+    <Tabs.Content value="permissions" className="flex flex-col gap-5">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-[18px] font-semibold tracking-tight text-oz2-text">
+            Permissions
+          </h2>
+          <p className="mt-1 max-w-2xl text-[13px] leading-[1.55] text-oz2-text-muted">
+            Coarse-grained dashboard access controls. Fine-grained role and
+            group permissions live on the Users &amp; Groups screen.
+          </p>
         </div>
-      </div>
+        <OzButton
+          variant="primary"
+          type="button"
+          disabled={!hasChanges || editDisabled}
+          onClick={saveChanges}
+        >
+          Save Changes
+        </OzButton>
+      </header>
+
+      <OzSettingsCard
+        title="Dashboard visibility"
+        sub="Limit what regular (non-admin) users can see when they sign in to the dashboard."
+      >
+        <OzSettingsToggle
+          value={userViewBlocked}
+          onChange={setUserViewBlocked}
+          disabled={editDisabled}
+          label="Restrict dashboard for regular users"
+          desc="Regular users won't be able to view any peers or workspace data — only their own session and account settings."
+        />
+      </OzSettingsCard>
     </Tabs.Content>
   );
 }
