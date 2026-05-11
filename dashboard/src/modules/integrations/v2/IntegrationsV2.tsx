@@ -24,8 +24,9 @@ import SCIMSetupSectionV2 from "@/modules/integrations/v2/sections/SCIMSetupSect
 //   - legacy: PageContainer + Breadcrumbs + h1 + Paragraph +
 //     vertical-rail sub-nav with the active section to the right
 //   - v2:     V2DashboardLayout (already provides chrome) + h1
-//     "Integrations" + handoff-flavored subtitle + horizontal
-//     segmented tabs (DnsTabs-style) + the active section below
+//     "Integrations" + handoff-flavored subtitle + a vertical
+//     220px sub-nav on the left matching SettingsTabsV2, with
+//     the active section rendered to the right
 //
 // Sub-tab state still deep-links via ?subtab=… so refresh /
 // share-link keeps the operator on the right section, matching
@@ -97,44 +98,55 @@ export default function IntegrationsV2() {
         </p>
       </header>
 
-      <nav
-        role="tablist"
-        aria-label="Integrations sub-navigation"
-        className="inline-flex h-[34px] items-center rounded-oz2-input bg-oz2-bg-sunken p-1 text-oz2-text-muted"
-      >
-        {SUB_TABS.map((tab) => {
-          const on = tab.value === active;
-          return (
-            <button
-              key={tab.value}
-              type="button"
-              role="tab"
-              aria-selected={on}
-              onClick={() => select(tab.value)}
-              className={classNames(
-                "inline-flex h-full items-center gap-2 whitespace-nowrap rounded-[6px] px-3 text-[13.5px] font-medium transition-colors",
-                on
-                  ? "bg-oz2-surface text-oz2-text shadow-oz2-sm"
-                  : "hover:text-oz2-text",
-              )}
-            >
-              <span
-                aria-hidden
-                className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center"
-              >
-                {tab.icon}
-              </span>
-              {tab.label}
-            </button>
-          );
-        })}
-      </nav>
+      {/* Two-column layout: vertical sub-nav on the left (220px), the
+          active section on the right. Mirrors SettingsPageShell so the
+          two settings-adjacent surfaces read the same. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-8">
+        <aside className="lg:sticky lg:top-6 lg:self-start">
+          <nav
+            role="tablist"
+            aria-orientation="vertical"
+            aria-label="Integrations sub-navigation"
+            className="flex flex-col gap-0.5"
+          >
+            {SUB_TABS.map((tab) => {
+              const on = tab.value === active;
+              return (
+                <button
+                  key={tab.value}
+                  type="button"
+                  role="tab"
+                  aria-selected={on}
+                  onClick={() => select(tab.value)}
+                  className={classNames(
+                    // Same row shape SettingsTabsV2 uses: 32px tall,
+                    // 2px left rail flips to oz2-acc on the active
+                    // item so horizontal text alignment stays steady.
+                    "group relative inline-flex h-8 items-center gap-2.5 rounded-[6px] border-l-2 pl-3 pr-3 text-left text-[13px] font-medium transition-colors",
+                    on
+                      ? "border-oz2-acc bg-oz2-acc-soft text-oz2-acc-text"
+                      : "border-transparent text-oz2-text-muted hover:bg-oz2-hover hover:text-oz2-text",
+                  )}
+                >
+                  <span
+                    aria-hidden
+                    className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center"
+                  >
+                    {tab.icon}
+                  </span>
+                  <span className="truncate">{tab.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </aside>
 
-      <div className="min-w-0">
-        {active === "flow" && <FlowExportsSectionV2 />}
-        {active === "activity" && <ActivityExportersSectionV2 />}
-        {active === "mdm" && <MDMProvidersSectionV2 />}
-        {active === "idp-sync" && <SCIMSetupSectionV2 />}
+        <div className="min-w-0">
+          {active === "flow" && <FlowExportsSectionV2 />}
+          {active === "activity" && <ActivityExportersSectionV2 />}
+          {active === "mdm" && <MDMProvidersSectionV2 />}
+          {active === "idp-sync" && <SCIMSetupSectionV2 />}
+        </div>
       </div>
     </div>
   );
