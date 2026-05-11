@@ -165,15 +165,22 @@ function Bridge({
   children: React.ReactNode;
   isBi: boolean;
 }) {
+  // Handoff Bridge: the rail (border-left) lives ~24px from the
+  // container's left edge, the circle is absolutely positioned with
+  // negative left so its right edge tucks UNDER the rail rather than
+  // intruding into the rules column. Content gets a generous left
+  // padding so the pills sit comfortably right of the rail with no
+  // overlap with the circle's box-shadow ring.
   return (
-    <div className="relative ml-6 my-1 flex flex-col gap-1.5 border-l-2 border-oz2-acc pl-5 py-3">
+    <div className="relative ml-6 my-1 flex flex-col gap-1.5 border-l-2 border-oz2-acc py-3.5 pl-[22px] pr-3.5">
       <span
         aria-hidden
         className={cn(
-          "absolute left-0 top-1/2 grid h-10 w-10 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full",
+          "absolute top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full",
+          "left-[-21px]",
           "border border-oz2-acc bg-oz2-surface text-oz2-acc",
-          "font-mono text-[20px] font-semibold leading-none",
-          "shadow-[0_0_0_4px_var(--ozv2-surface),0_0_0_5px_rgba(124,58,237,0.18)]",
+          "font-mono text-[18px] font-semibold leading-none",
+          "shadow-[0_0_0_4px_var(--ozv2-surface)]",
         )}
       >
         {isBi ? "↕" : "↓"}
