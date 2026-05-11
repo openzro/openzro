@@ -1,11 +1,6 @@
 "use client";
 
-import Button from "@components/Button";
 import FancyToggleSwitch from "@components/FancyToggleSwitch";
-import HelpText from "@components/HelpText";
-import InlineLink from "@components/InlineLink";
-import { Input } from "@components/Input";
-import { Label } from "@components/Label";
 import {
   Modal,
   ModalClose,
@@ -14,11 +9,9 @@ import {
 } from "@components/modal/Modal";
 import ModalHeader from "@components/modal/ModalHeader";
 import { notify } from "@components/Notification";
-import Paragraph from "@components/Paragraph";
 import { PeerGroupSelector } from "@components/PeerGroupSelector";
 import { PeerSelector } from "@components/PeerSelector";
 import { SegmentedTabs } from "@components/SegmentedTabs";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/Tabs";
 import { getOperatingSystem } from "@hooks/useOperatingSystem";
 import useFetchApi, { useApiCall } from "@utils/api";
 import { cn } from "@utils/helpers";
@@ -37,6 +30,15 @@ import {
 } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
+import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
+import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
+import {
+  OzTabs as Tabs,
+  OzTabsContent as TabsContent,
+  OzTabsList as TabsList,
+  OzTabsTrigger as TabsTrigger,
+} from "@/components/v2/OzTabs";
 import { useDialog } from "@/contexts/DialogProvider";
 import { Network, NetworkRouter } from "@/interfaces/Network";
 import { OperatingSystem } from "@/interfaces/OperatingSystem";
@@ -139,14 +141,12 @@ function RoutingPeerModalContent({
   }, [isNonLinuxRoutingPeer]);
 
   const addRouter = async () => {
-    // Create groups that do not exist
     const g1 = getAllRoutingGroupsToUpdate();
     const createOrUpdateGroups = uniqBy([...g1], "name").map((g) => g.promise);
     const createdGroups = await Promise.all(
       createOrUpdateGroups.map((call) => call()),
     );
 
-    // Check if routing peer is selected
     const isRoutingPeer = type === "peer";
 
     notify({
@@ -168,14 +168,12 @@ function RoutingPeerModalContent({
   };
 
   const updateRouter = async () => {
-    // Create groups that do not exist
     const g1 = getAllRoutingGroupsToUpdate();
     const createOrUpdateGroups = uniqBy([...g1], "name").map((g) => g.promise);
     const createdGroups = await Promise.all(
       createOrUpdateGroups.map((call) => call()),
     );
 
-    // Check if routing peer is selected
     const isRoutingPeer = type === "peer";
 
     notify({
@@ -208,30 +206,28 @@ function RoutingPeerModalContent({
       />
 
       <Tabs defaultValue={tab} onValueChange={(v) => setTab(v)} value={tab}>
-        <TabsList justify={"between"} className={"px-8 justify-between w-full"}>
-          <TabsTrigger value={"router"}>
-            <Share2Icon
-              size={16}
-              className={
-                "text-nb-gray-500 group-data-[state=active]/trigger:text-openzro transition-all"
-              }
-            />
-            Routing Peers
-          </TabsTrigger>
+        <div className="px-8 pb-3 pt-1">
+          <TabsList>
+            <TabsTrigger value={"router"}>
+              <Share2Icon
+                size={16}
+                className="text-oz2-text-faint group-data-[state=active]/trigger:text-oz2-acc transition-colors"
+              />
+              Routing Peers
+            </TabsTrigger>
 
-          <TabsTrigger value={"settings"} className={"ml-auto"}>
-            <Settings2
-              size={16}
-              className={
-                "text-nb-gray-500 group-data-[state=active]/trigger:text-openzro transition-all"
-              }
-            />
-            Advanced Settings
-          </TabsTrigger>
-        </TabsList>
+            <TabsTrigger value={"settings"}>
+              <Settings2
+                size={16}
+                className="text-oz2-text-faint group-data-[state=active]/trigger:text-oz2-acc transition-colors"
+              />
+              Advanced Settings
+            </TabsTrigger>
+          </TabsList>
+        </div>
         <TabsContent value={"router"} className={"pb-6"}>
           <div className={"flex flex-col gap-4 px-8"}>
-            <div className={"relative "}>
+            <div className={"relative"}>
               <SegmentedTabs
                 value={type}
                 onChange={(state) => {
@@ -253,10 +249,10 @@ function RoutingPeerModalContent({
                 </SegmentedTabs.List>
                 <SegmentedTabs.Content value={"peer"}>
                   <div>
-                    <HelpText>
+                    <OzHelpText className="mb-2">
                       Assign a single or multiple peers as routing peers for the
                       network.
-                    </HelpText>
+                    </OzHelpText>
                     <PeerSelector
                       onChange={setRoutingPeer}
                       value={routingPeer}
@@ -265,10 +261,10 @@ function RoutingPeerModalContent({
                 </SegmentedTabs.Content>
                 <SegmentedTabs.Content value={"group"}>
                   <div>
-                    <HelpText>
+                    <OzHelpText className="mb-2">
                       Assign a peer group with machines to be used as routing
                       peers.
-                    </HelpText>
+                    </OzHelpText>
                     <PeerGroupSelector
                       max={1}
                       onChange={setRoutingPeerGroups}
@@ -279,13 +275,13 @@ function RoutingPeerModalContent({
               </SegmentedTabs>
             </div>
 
-            <div className={cn("flex justify-between items-center mt-3")}>
-              <div>
-                <Label>{"Don't have a routing peer?"}</Label>
-                <HelpText className={""}>
+            <div className="mt-3 flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <OzLabel>{"Don't have a routing peer?"}</OzLabel>
+                <OzHelpText className="mt-1">
                   You can install Openzro with a setup key on one or more
                   machines to act as routing peers.
-                </HelpText>
+                </OzHelpText>
               </div>
               <InstallOpenzroWithSetupKeyButton
                 name={`Routing Peer (${network.name})`}
@@ -317,30 +313,25 @@ function RoutingPeerModalContent({
               routingPeerGroupId={routingPeerGroups?.[0]?.id}
             />
 
-            <div className={cn("flex justify-between")}>
-              <div>
-                <Label>Metric</Label>
-                <HelpText className={"max-w-[200px]"}>
+            <div className={cn("flex items-start justify-between gap-6")}>
+              <div className="flex-1 min-w-0">
+                <OzLabel htmlFor="routing-peer-metric">Metric</OzLabel>
+                <OzHelpText className="mt-1">
                   A lower metric indicates higher priority routing peers.
-                </HelpText>
+                </OzHelpText>
               </div>
-
-              <Input
-                min={1}
-                max={9999}
-                maxWidthClass={"max-w-[200px]"}
-                value={metric}
-                data-cy={"metric"}
-                errorTooltip={true}
-                type={"number"}
-                onChange={(e) => setMetric(e.target.value)}
-                customPrefix={
-                  <ArrowDownWideNarrow
-                    size={16}
-                    className={"text-nb-gray-300"}
-                  />
-                }
-              />
+              <div className="w-[200px] shrink-0">
+                <OzInput
+                  id="routing-peer-metric"
+                  min={1}
+                  max={9999}
+                  value={metric}
+                  data-cy={"metric"}
+                  type={"number"}
+                  onChange={(e) => setMetric(e.target.value)}
+                  prefix={<ArrowDownWideNarrow size={16} />}
+                />
+              </div>
             </div>
           </div>
         </TabsContent>
@@ -348,39 +339,41 @@ function RoutingPeerModalContent({
 
       <ModalFooter className={"items-center"}>
         <div className={"w-full"}>
-          <Paragraph className={"text-sm mt-auto"}>
-            Learn more about
-            <InlineLink
+          <p className={"text-sm mt-auto text-oz2-text-muted"}>
+            Learn more about{" "}
+            <a
               href={"https://docs.openzro.io/how-to/networks#routing-peers"}
               target={"_blank"}
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-oz2-acc-text underline-offset-2 hover:underline"
             >
               Routing Peers
               <ExternalLinkIcon size={12} />
-            </InlineLink>
-          </Paragraph>
+            </a>
+          </p>
         </div>
         <div className={"flex gap-3 w-full justify-end"}>
           {tab == "router" && (
             <>
               <ModalClose asChild={true}>
-                <Button variant={"secondary"}>Cancel</Button>
+                <OzButton variant={"default"}>Cancel</OzButton>
               </ModalClose>
-              <Button
+              <OzButton
                 variant={"primary"}
                 onClick={() => setTab("settings")}
                 disabled={!canContinue}
               >
                 Continue
-              </Button>
+              </OzButton>
             </>
           )}
           {tab == "settings" && (
             <>
-              <Button variant={"secondary"} onClick={() => setTab("router")}>
+              <OzButton variant={"default"} onClick={() => setTab("router")}>
                 Back
-              </Button>
+              </OzButton>
 
-              <Button
+              <OzButton
                 variant={"primary"}
                 disabled={
                   routingPeer == undefined && routingPeerGroups.length <= 0
@@ -395,7 +388,7 @@ function RoutingPeerModalContent({
                     Add Routing Peer
                   </>
                 )}
-              </Button>
+              </OzButton>
             </>
           )}
         </div>
@@ -436,7 +429,7 @@ const InstallOpenzroWithSetupKeyButton = ({
       .post({
         name,
         type: "one-off",
-        expires_in: 24 * 60 * 60, // 1 day expiration
+        expires_in: 24 * 60 * 60,
         revoked: false,
         auto_groups: [],
         usage_limit: 1,
@@ -456,10 +449,8 @@ const InstallOpenzroWithSetupKeyButton = ({
 
   return (
     <>
-      <Button
-        variant={"secondary"}
-        size={"xs"}
-        className={"ml-8"}
+      <OzButton
+        variant={"default"}
         onClick={createSetupKey}
         disabled={isLoading}
       >
@@ -469,7 +460,7 @@ const InstallOpenzroWithSetupKeyButton = ({
           <DownloadIcon size={14} />
         )}
         Install Openzro
-      </Button>
+      </OzButton>
       {setupKey && (
         <Modal
           open={installModal}
