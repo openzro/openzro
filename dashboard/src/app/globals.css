@@ -309,6 +309,24 @@ select:focus {
   box-shadow: var(--tw-shadow, 0 0 #0000);
 }
 
+/* cmdk inputs (PeerGroupSelector search, PortSelector search, etc.)
+ * are nested inside an already-bordered popover surface and should
+ * never paint their own border. The above :focus override only fires
+ * while the input is focused — picking a CommandItem briefly steals
+ * focus and Flowbite's base 1px border flashes back in, leaving the
+ * "borda preta com falhas nos cantos" the operator sees. Nuke the
+ * border on cmdk inputs in every state so the surface stays clean.
+ * !important wins against Flowbite's class-level base rule.       */
+input[cmdk-input],
+input[cmdk-input]:focus,
+input[cmdk-input]:focus-visible {
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+}
+
 h1 {
     @apply text-2xl font-medium text-gray-700 dark:text-nb-gray-100 my-1;
 }
