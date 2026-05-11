@@ -519,11 +519,11 @@ function LinuxManual({
         <StepLabel>Install Openzro</StepLabel>
         <CodeBlock
           lines={[
-            <>sudo apt-get update</>,
-            <span className="text-oz2-text-faint"># for CLI only</span>,
-            <>sudo apt-get install openzro</>,
-            <span className="text-oz2-text-faint"># for GUI package</span>,
-            <>sudo apt-get install openzro-ui</>,
+            <span key="update">sudo apt-get update</span>,
+            <span key="cli-comment" className="text-oz2-text-faint"># for CLI only</span>,
+            <span key="cli">sudo apt-get install openzro</span>,
+            <span key="gui-comment" className="text-oz2-text-faint"># for GUI package</span>,
+            <span key="gui">sudo apt-get install openzro-ui</span>,
           ]}
           copyText={[
             "sudo apt-get update",
@@ -576,10 +576,10 @@ function MacOSManualHomebrew({
         <StepLabel>Start Openzro daemon</StepLabel>
         <CodeBlock
           lines={[
-            <span className="text-oz2-text-faint">
+            <span key="comment" className="text-oz2-text-faint">
               # daemon needs root to manage WireGuard interfaces
             </span>,
-            <>sudo brew services start openzro</>,
+            <span key="start">sudo brew services start openzro</span>,
           ]}
           copyText="sudo brew services start openzro"
           message="brew services command copied to your clipboard"
