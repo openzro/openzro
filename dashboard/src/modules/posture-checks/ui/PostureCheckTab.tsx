@@ -1,7 +1,7 @@
-import { TabsContent } from "@components/Tabs";
 import * as React from "react";
 import { useState } from "react";
 import Skeleton from "react-loading-skeleton";
+import { OzTabsContent } from "@/components/v2/OzTabs";
 import { PostureCheck } from "@/interfaces/PostureCheck";
 import { PostureCheckBrowseModal } from "@/modules/posture-checks/modal/PostureCheckBrowseModal";
 import PostureCheckModal from "@/modules/posture-checks/modal/PostureCheckModal";
@@ -44,7 +44,7 @@ export const PostureCheckTab = ({
   const [currentEditCheck, setCurrentEditCheck] = useState<PostureCheck>();
 
   return (
-    <TabsContent value={"posture_checks"} className={"px-8 pb-8 mt-3 relative"}>
+    <OzTabsContent value={"posture_checks"} className={"px-8 pb-8 mt-3 relative"}>
       {isLoading && (
         <div className={"flex flex-col gap-2"}>
           <Skeleton width={"100%"} height={41} />
@@ -96,6 +96,6 @@ export const PostureCheckTab = ({
           </div>
         </>
       )}
-    </TabsContent>
+    </OzTabsContent>
   );
 };
