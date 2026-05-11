@@ -6,7 +6,12 @@ import InlineLink from "@components/InlineLink";
 import { Popover, PopoverContent, PopoverTrigger } from "@components/Popover";
 import { Radio, RadioItem } from "@components/Radio";
 import { ScrollArea } from "@components/ScrollArea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/Tabs";
+import {
+  OzTabs as Tabs,
+  OzTabsContent as TabsContent,
+  OzTabsList as TabsList,
+  OzTabsTrigger as TabsTrigger,
+} from "@/components/v2/OzTabs";
 import { AccessControlGroupCount } from "@components/ui/AccessControlGroupCount";
 import GroupBadge from "@components/ui/GroupBadge";
 import GroupBadgeWithEditPeers from "@components/ui/GroupBadgeWithEditPeers";
@@ -429,10 +434,10 @@ export function PeerGroupSelector({
                         value={search}
                         onClick={(e) => e.preventDefault()}
                       >
-                        <Badge variant={"gray-ghost"}>
+                        <span className="inline-flex items-center gap-1.5 rounded-[6px] border border-dashed border-oz2-border bg-oz2-bg-sunken/60 px-1.5 py-0.5 text-[12px] font-medium text-oz2-text-2">
                           {folderIcon}
                           {search}
-                        </Badge>
+                        </span>
                         <div className="text-[12px] text-oz2-text-muted">
                           Add this group by pressing{" "}
                           <span className="font-semibold text-oz2-acc-text">
@@ -545,30 +550,30 @@ const TabTriggers = ({
   searchRef: React.MutableRefObject<HTMLInputElement | null>;
 }) => {
   return (
-    <TabsList justify={"start"} className={"px-3"}>
-      <TabsTrigger
-        value={"groups"}
-        className={"text-[.8rem] font-normal"}
-        onClick={() => searchRef.current?.focus()}
-      >
-        <FolderGit2
-          className="text-oz2-text-faint transition-colors group-data-[state=active]/trigger:text-oz2-acc-text"
-          size={14}
-        />
-        Groups
-      </TabsTrigger>
-      <TabsTrigger
-        value={"resources"}
-        className={"text-[.8rem] font-normal"}
-        onClick={() => searchRef.current?.focus()}
-      >
-        <Layers3Icon
-          className="text-oz2-text-faint transition-colors group-data-[state=active]/trigger:text-oz2-acc-text"
-          size={14}
-        />
-        Resource
-      </TabsTrigger>
-    </TabsList>
+    <div className="px-3 pt-2">
+      <TabsList>
+        <TabsTrigger
+          value={"groups"}
+          onClick={() => searchRef.current?.focus()}
+        >
+          <FolderGit2
+            className="text-oz2-text-faint transition-colors group-data-[state=active]/trigger:text-oz2-acc"
+            size={14}
+          />
+          Groups
+        </TabsTrigger>
+        <TabsTrigger
+          value={"resources"}
+          onClick={() => searchRef.current?.focus()}
+        >
+          <Layers3Icon
+            className="text-oz2-text-faint transition-colors group-data-[state=active]/trigger:text-oz2-acc"
+            size={14}
+          />
+          Resource
+        </TabsTrigger>
+      </TabsList>
+    </div>
   );
 };
 
