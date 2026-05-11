@@ -38,7 +38,12 @@ const OzTabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={classNames(
-      "inline-flex h-full items-center gap-2 whitespace-nowrap rounded-[6px] px-3 text-[13.5px] font-medium transition-colors",
+      // `group/trigger` exposes the named group so child icons can
+      // swap fill / color on the active tab via
+      // `group-data-[state=active]/trigger:*` selectors — consumers
+      // like RouteModal, PostureCheckModal, AccessControlModal use
+      // this to tint OS / route-type / posture-section icons.
+      "group/trigger inline-flex h-full items-center gap-2 whitespace-nowrap rounded-[6px] px-3 text-[13.5px] font-medium transition-colors",
       "hover:text-oz2-text",
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-oz2-acc/30",
       "disabled:pointer-events-none disabled:opacity-50",
