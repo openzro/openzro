@@ -1,11 +1,13 @@
 "use client";
 
-import InlineLink from "@components/InlineLink";
 import { ModalContent, ModalFooter } from "@components/modal/Modal";
-import Paragraph from "@components/Paragraph";
 import SmallParagraph from "@components/SmallParagraph";
-import { Tabs, TabsList, TabsTrigger } from "@components/Tabs";
 import { cn } from "@utils/helpers";
+import {
+  OzTabs as Tabs,
+  OzTabsList as TabsList,
+  OzTabsTrigger as TabsTrigger,
+} from "@/components/v2/OzTabs";
 import { ExternalLinkIcon } from "lucide-react";
 import { usePathname } from "next/navigation";
 import React, { useMemo } from "react";
@@ -122,58 +124,69 @@ export function SetupModalContent({
           >
             {titleMessage}
           </h2>
-          <Paragraph
-            className={cn("mx-auto mt-3", setupKey ? "max-w-sm" : "max-w-xs")}
+          <p
+            className={cn(
+              "mx-auto mt-3 text-sm text-oz2-text-muted",
+              setupKey ? "max-w-sm" : "max-w-xs",
+            )}
           >
             {setupKey
               ? "To get started, install and run Openzro with the setup key as a parameter."
               : "To get started, install Openzro and log in with your email account."}
-          </Paragraph>
+          </p>
         </div>
       )}
 
       <Tabs defaultValue={String(setupKey ? OperatingSystem.LINUX : safeDefaultOS(os))}>
-        <TabsList justify={tabAlignment} className={"pt-2 px-3"}>
-          <TabsTrigger value={String(OperatingSystem.LINUX)}>
-            <ShellIcon
-              className={
-                "fill-nb-gray-500 group-data-[state=active]/trigger:fill-openzro transition-all"
-              }
-            />
-            Linux
-          </TabsTrigger>
-
-          <TabsTrigger value={String(OperatingSystem.WINDOWS)}>
-            <WindowsIcon
-              className={
-                "fill-nb-gray-500 group-data-[state=active]/trigger:fill-openzro transition-all"
-              }
-            />
-            Windows
-          </TabsTrigger>
-          <TabsTrigger value={String(OperatingSystem.APPLE)}>
-            <AppleIcon
-              className={
-                "fill-nb-gray-500 group-data-[state=active]/trigger:fill-openzro transition-all"
-              }
-            />
-            macOS
-          </TabsTrigger>
-
-          {/* iOS / Android tab triggers temporarily hidden — see the
-              import block at the top of the file for context. */}
-
-          {!hideDocker && (
-            <TabsTrigger value={String(OperatingSystem.DOCKER)}>
-              <DockerIcon
+        <div
+          className={cn(
+            "px-3 pb-3 pt-2",
+            tabAlignment === "center" && "flex justify-center",
+            tabAlignment === "end" && "flex justify-end",
+          )}
+        >
+          <TabsList>
+            <TabsTrigger value={String(OperatingSystem.LINUX)}>
+              <ShellIcon
                 className={
-                  "fill-nb-gray-500 group-data-[state=active]/trigger:fill-openzro transition-all"
+                  "fill-oz2-text-faint group-data-[state=active]/trigger:fill-oz2-acc transition-colors"
                 }
               />
-              Docker
+              Linux
             </TabsTrigger>
-          )}
-        </TabsList>
+
+            <TabsTrigger value={String(OperatingSystem.WINDOWS)}>
+              <WindowsIcon
+                className={
+                  "fill-oz2-text-faint group-data-[state=active]/trigger:fill-oz2-acc transition-colors"
+                }
+              />
+              Windows
+            </TabsTrigger>
+            <TabsTrigger value={String(OperatingSystem.APPLE)}>
+              <AppleIcon
+                className={
+                  "fill-oz2-text-faint group-data-[state=active]/trigger:fill-oz2-acc transition-colors"
+                }
+              />
+              macOS
+            </TabsTrigger>
+
+            {/* iOS / Android tab triggers temporarily hidden — see the
+                import block at the top of the file for context. */}
+
+            {!hideDocker && (
+              <TabsTrigger value={String(OperatingSystem.DOCKER)}>
+                <DockerIcon
+                  className={
+                    "fill-oz2-text-faint group-data-[state=active]/trigger:fill-oz2-acc transition-colors"
+                  }
+                />
+                Docker
+              </TabsTrigger>
+            )}
+          </TabsList>
+        </div>
 
         <LinuxTab
           setupKey={setupKey}
@@ -208,15 +221,17 @@ export function SetupModalContent({
               After that you should be connected. Add more devices to your
               network or manage your existing devices in the admin panel. If you
               have further questions check out our{" "}
-              <InlineLink
+              <a
                 href={
                   "https://docs.openzro.io/how-to/getting-started#installation"
                 }
                 target={"_blank"}
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-oz2-acc-text underline-offset-2 hover:underline"
               >
                 Installation Guide
                 <ExternalLinkIcon size={12} />
-              </InlineLink>
+              </a>
             </SmallParagraph>
           </div>
         </ModalFooter>
