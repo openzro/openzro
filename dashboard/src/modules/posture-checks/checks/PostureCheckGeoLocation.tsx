@@ -42,7 +42,9 @@ export const PostureCheckGeoLocation = ({
       description={
         "Restrict access in your network based on country or region."
       }
-      iconClass={"bg-gradient-to-tr from-indigo-500 to-indigo-400"}
+      iconClass={
+        "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300"
+      }
       modalWidthClass={"max-w-2xl"}
       active={value ? value?.locations?.length > 0 : false}
       onReset={() => onChange(undefined)}

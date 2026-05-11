@@ -66,9 +66,7 @@ export const PostureCheckOperatingSystem = ({
       description={
         "Restrict access in your network based on the operating system."
       }
-      iconClass={
-        "bg-gradient-to-tr from-neutral-500 to-neutral-400 dark:from-nb-gray-500 dark:to-nb-gray-300"
-      }
+      iconClass={"bg-oz2-bg-sunken text-oz2-text-2"}
       active={value !== undefined}
       onReset={() => onChange(undefined)}
     >
