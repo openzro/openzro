@@ -1,4 +1,3 @@
-import Button from "@components/Button";
 import { CommandItem } from "@components/Command";
 import { Popover, PopoverContent, PopoverTrigger } from "@components/Popover";
 import { ScrollArea } from "@components/ScrollArea";
@@ -132,40 +131,38 @@ export function UserRoleSelector({
             {customTrigger}
           </div>
         ) : (
-          <Button
-            variant={"input"}
+          <button
+            type="button"
             disabled={disabled}
             ref={inputRef}
-            className={"w-full group/user-role-selector"}
             data-cy={"user-role-selector"}
+            className={
+              "group/user-role-selector inline-flex h-[34px] w-full items-center justify-between gap-2 rounded-oz2-input border border-oz2-border bg-oz2-surface px-3 text-[13px] text-oz2-text transition-colors " +
+              "hover:border-oz2-border-strong hover:bg-oz2-hover " +
+              "[outline:none] focus-visible:border-oz2-acc focus-visible:ring-2 focus-visible:ring-oz2-acc/30 " +
+              "disabled:cursor-not-allowed disabled:opacity-60"
+            }
           >
-            <div className={"w-full flex justify-between items-center gap-2"}>
-              {selectedRole && (
-                <div className={"flex items-center gap-2.5"}>
-                  <selectedRole.icon size={14} width={14} />
-                  <div className={"flex flex-col text-sm font-medium"}>
-                    <span className={"text-nb-gray-200 whitespace-nowrap"}>
-                      {selectedRole?.name}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              <div className={"pl-2"}>
-                <ChevronsUpDown size={18} className={"shrink-0"} />
+            {selectedRole && (
+              <div className="flex items-center gap-2.5">
+                <selectedRole.icon size={14} className="text-oz2-text-faint" />
+                <span className="font-medium text-oz2-text whitespace-nowrap">
+                  {selectedRole.name}
+                </span>
               </div>
-            </div>
-          </Button>
+            )}
+            <ChevronsUpDown size={14} className="shrink-0 text-oz2-text-faint" />
+          </button>
         )}
       </PopoverTrigger>
       <PopoverContent
-        className="w-full p-0 shadow-sm shadow-nb-gray-950"
+        className="w-full overflow-hidden rounded-oz2-card border border-oz2-border bg-oz2-bg-elev p-0 text-oz2-text shadow-oz2-md"
         style={{
           width: popoverWidth === "auto" ? width : popoverWidth,
         }}
         align={align}
         side={side}
-        sideOffset={10}
+        sideOffset={6}
       >
         <Command
           className={"w-full flex"}
@@ -192,25 +189,28 @@ export function UserRoleSelector({
                     if (item.value === Role.BillingAdmin && !isOpenzroHosted())
                       return null;
 
+                    const isSelected = item.value === value;
                     return (
                       <CommandItem
                         key={item.value}
                         value={item.value}
                         data-cy={"user-role-selector-item"}
-                        className={"py-1 px-2"}
+                        className={
+                          "flex items-center gap-2.5 rounded-[7px] px-2.5 py-2 text-[13px] font-medium transition-colors " +
+                          (isSelected
+                            ? "bg-oz2-acc-soft text-oz2-acc-text"
+                            : "text-oz2-text hover:bg-oz2-hover")
+                        }
                         onSelect={() => toggle(item.value)}
                         onClick={(e) => e.preventDefault()}
                       >
-                        <div className={"flex items-center gap-2.5 p-1"}>
-                          <item.icon size={14} width={14} />
-                          <div
-                            className={
-                              "flex flex-col text-sm font-medium text-nb-gray-200 whitespace-nowrap"
-                            }
-                          >
-                            {item.name}
-                          </div>
-                        </div>
+                        <item.icon
+                          size={14}
+                          className={
+                            isSelected ? "text-oz2-acc-text" : "text-oz2-text-faint"
+                          }
+                        />
+                        <span className="whitespace-nowrap">{item.name}</span>
                       </CommandItem>
                     );
                   })}
