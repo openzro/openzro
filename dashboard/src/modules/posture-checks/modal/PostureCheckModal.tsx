@@ -1,17 +1,19 @@
-import Button from "@components/Button";
-import HelpText from "@components/HelpText";
-import InlineLink from "@components/InlineLink";
-import { Input } from "@components/Input";
-import { Label } from "@components/Label";
 import { Modal, ModalContent, ModalFooter } from "@components/modal/Modal";
 import ModalHeader from "@components/modal/ModalHeader";
-import Paragraph from "@components/Paragraph";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/Tabs";
-import { Textarea } from "@components/Textarea";
 import { cn } from "@utils/helpers";
 import { isEmpty } from "lodash";
 import { ExternalLinkIcon, LayoutList, ShieldCheck, Text } from "lucide-react";
 import React, { useState } from "react";
+import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
+import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
+import {
+  OzTabs,
+  OzTabsContent,
+  OzTabsList,
+  OzTabsTrigger,
+} from "@/components/v2/OzTabs";
+import OzTextarea from "@/components/v2/OzTextarea";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { PostureCheck } from "@/interfaces/PostureCheck";
 import { PostureCheckEndpointSecurity } from "@/modules/posture-checks/checks/PostureCheckEndpointSecurity";
@@ -84,28 +86,25 @@ export default function PostureCheckModal({
             color={"openzro"}
           />
 
-          <Tabs onValueChange={(v) => setTab(v)} defaultValue={tab} value={tab}>
-            <TabsList justify={"start"} className={"px-8"}>
-              <TabsTrigger value={"checks"}>
-                <LayoutList size={16} />
-                Checks
-              </TabsTrigger>
+          <OzTabs onValueChange={(v) => setTab(v)} defaultValue={tab} value={tab}>
+            <div className="px-8">
+              <OzTabsList>
+                <OzTabsTrigger value={"checks"}>
+                  <LayoutList size={16} />
+                  Checks
+                </OzTabsTrigger>
 
-              <TabsTrigger
-                value={"general"}
-                disabled={!isAtLeastOneCheckEnabled}
-              >
-                <Text
-                  size={16}
-                  className={
-                    "text-nb-gray-500 group-data-[state=active]/trigger:text-openzro transition-all"
-                  }
-                />
-                Name & Description
-              </TabsTrigger>
-            </TabsList>
+                <OzTabsTrigger
+                  value={"general"}
+                  disabled={!isAtLeastOneCheckEnabled}
+                >
+                  <Text size={16} />
+                  Name & Description
+                </OzTabsTrigger>
+              </OzTabsList>
+            </div>
 
-            <TabsContent value={"checks"} className={"pb-6 px-8"}>
+            <OzTabsContent value={"checks"} className={"pb-6 px-8"}>
               <>
                 <PostureCheckOpenzroVersion
                   value={check?.checks?.nb_version_check}
@@ -180,15 +179,18 @@ export default function PostureCheckModal({
                   }
                 />
               </>
-            </TabsContent>
-            <TabsContent value={"general"} className={"pb-8 px-8"}>
-              <div className={"flex flex-col gap-6"}>
+            </OzTabsContent>
+            <OzTabsContent value={"general"} className={"pb-8 px-8"}>
+              <div className={"flex flex-col gap-6 pt-2"}>
                 <div>
-                  <Label>Name of the Posture Check</Label>
-                  <HelpText>
+                  <OzLabel htmlFor="posture-name">
+                    Name of the Posture Check
+                  </OzLabel>
+                  <OzHelpText className="mb-2">
                     Set an easily identifiable name for your posture check.
-                  </HelpText>
-                  <Input
+                  </OzHelpText>
+                  <OzInput
+                    id="posture-name"
                     autoFocus={true}
                     tabIndex={0}
                     value={check?.name}
@@ -205,12 +207,15 @@ export default function PostureCheckModal({
                   />
                 </div>
                 <div>
-                  <Label>Description (optional)</Label>
-                  <HelpText>
+                  <OzLabel htmlFor="posture-description" optional>
+                    Description
+                  </OzLabel>
+                  <OzHelpText className="mb-2">
                     Write a short description to add more context to this
                     policy.
-                  </HelpText>
-                  <Textarea
+                  </OzHelpText>
+                  <OzTextarea
+                    id="posture-description"
                     value={check?.description}
                     onChange={(e) =>
                       setCheck({
@@ -228,54 +233,56 @@ export default function PostureCheckModal({
                   />
                 </div>
               </div>
-            </TabsContent>
-          </Tabs>
+            </OzTabsContent>
+          </OzTabs>
 
           <ModalFooter className={"items-center"}>
             <div className={"w-full"}>
-              <Paragraph className={"text-sm mt-auto"}>
-                Learn more about
-                <InlineLink
+              <p className={"text-sm mt-auto text-oz2-text-muted"}>
+                Learn more about{" "}
+                <a
                   href={"https://docs.openzro.io/how-to/manage-posture-checks"}
                   target={"_blank"}
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-oz2-acc-text underline-offset-2 hover:underline"
                 >
                   Posture Checks
                   <ExternalLinkIcon size={12} />
-                </InlineLink>
-              </Paragraph>
+                </a>
+              </p>
             </div>
             <div className={"flex gap-3 w-full justify-end"}>
               <>
                 {tab == "checks" && (
-                  <Button
-                    variant={"secondary"}
+                  <OzButton
+                    variant={"default"}
                     onClick={() => onOpenChange(false)}
                   >
                     Cancel
-                  </Button>
+                  </OzButton>
                 )}
 
                 {tab == "general" && (
-                  <Button
-                    variant={"secondary"}
+                  <OzButton
+                    variant={"default"}
                     onClick={() => setTab("checks")}
                   >
                     Back
-                  </Button>
+                  </OzButton>
                 )}
 
                 {!postureCheck && tab == "checks" && (
-                  <Button
+                  <OzButton
                     variant={"primary"}
                     onClick={() => setTab("general")}
                     disabled={!isAtLeastOneCheckEnabled}
                   >
                     Continue
-                  </Button>
+                  </OzButton>
                 )}
 
                 {((!postureCheck && tab == "general") || postureCheck) && (
-                  <Button
+                  <OzButton
                     variant={"primary"}
                     disabled={!canCreate}
                     onClick={() => {
@@ -287,7 +294,7 @@ export default function PostureCheckModal({
                     }}
                   >
                     {postureCheck ? "Save Changes" : "Create Posture Check"}
-                  </Button>
+                  </OzButton>
                 )}
               </>
             </div>
