@@ -168,13 +168,17 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
       }
     };
 
+    const fieldsDisabled =
+      !permission.policies.update || !permission.policies.create;
+
     return (
       <div className="flex flex-col gap-4">
-        {/* Card 1 — Identity. Name + Description + Enable switch. The
-            switch sits inline with the metadata fields (rather than a
-            footer) so the page reads top-to-bottom without surprise. */}
+        {/* Card 1 — Identity. Mirrors handoff Identity: name + status
+            tile side-by-side at the top, description spans the row
+            below. Trades the modal's stacked-everything layout for
+            the wider horizontal posture the page allows. */}
         <OzCard>
-          <div className="flex flex-col gap-5">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-[minmax(0,1fr)_240px]">
             <div>
               <OzLabel htmlFor="policy-name" required>
                 Policy name
@@ -190,164 +194,118 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
                 data-cy="policy-name"
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., Devs to Servers"
-                disabled={
-                  !permission.policies.update || !permission.policies.create
-                }
+                disabled={fieldsDisabled}
               />
             </div>
 
-            <div>
-              <OzLabel htmlFor="policy-description" optional>
-                Description
-              </OzLabel>
-              <OzHelpText className="mb-2">
-                Write a short description to add more context to this policy.
-              </OzHelpText>
-              <OzTextarea
-                id="policy-description"
-                value={description}
-                data-cy="policy-description"
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="e.g., Devs are allowed to access servers and servers are allowed to access Devs."
-                rows={3}
-                disabled={
-                  !permission.policies.update || !permission.policies.create
+            {/* Compact enable tile — same FancyToggleSwitch the modal
+                used, but constrained to the 240px column so the right
+                edge of the card stays aligned with the cards below. */}
+            <div className="md:pt-7">
+              <FancyToggleSwitch
+                value={enabled}
+                onChange={setEnabled}
+                disabled={fieldsDisabled}
+                label={
+                  <>
+                    <Power size={15} />
+                    Enable Policy
+                  </>
                 }
+                helpText="Toggle the policy on or off."
               />
             </div>
+          </div>
 
-            <FancyToggleSwitch
-              value={enabled}
-              onChange={setEnabled}
-              disabled={
-                !permission.policies.update || !permission.policies.create
-              }
-              label={
-                <>
-                  <Power size={15} />
-                  Enable Policy
-                </>
-              }
-              helpText="Use this switch to enable or disable the policy."
+          <div className="mt-5">
+            <OzLabel htmlFor="policy-description" optional>
+              Description
+            </OzLabel>
+            <OzHelpText className="mb-2">
+              Write a short description to add more context to this policy.
+            </OzHelpText>
+            <OzTextarea
+              id="policy-description"
+              value={description}
+              data-cy="policy-description"
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="e.g., Devs are allowed to access servers and servers are allowed to access Devs."
+              rows={2}
+              disabled={fieldsDisabled}
             />
           </div>
         </OzCard>
 
-        {/* Card 2 — Policy. Protocol + Source/Destination + Ports +
-            inline callouts for the destination-has-resources warning
-            and the unidirectional-ALL caveat. */}
+        {/* Card 2 — Source → Destination. Three columns with the
+            PolicyDirection toggle wedged between, matching the handoff
+            layout where the direction glyph sits visually on the path
+            between the two pickers. Callouts stack below the row. */}
         <OzCard>
-          <div className="flex flex-col gap-6">
-            <div
-              className="flex items-center justify-between"
-              data-cy="protocol-wrapper"
-            >
-              <div>
-                <OzLabel>Protocol</OzLabel>
-                <OzHelpText className="max-w-sm mt-1">
-                  Allow only specified network protocols. To change traffic
-                  direction and ports, select{" "}
-                  <b className="text-oz2-text">TCP</b> or{" "}
-                  <b className="text-oz2-text">UDP</b> protocol.
-                </OzHelpText>
-              </div>
-              <div className="w-[110px] shrink-0">
-                <OzSelect
-                  value={protocol}
-                  onValueChange={(v) => handleProtocolChange(v as Protocol)}
-                  disabled={
-                    !permission.policies.update || !permission.policies.create
-                  }
-                >
-                  <OzSelectTrigger>
-                    <div
-                      className="flex items-center gap-2"
-                      data-cy="protocol-select-button"
-                    >
-                      <Share2 size={14} className="text-oz2-text-faint" />
-                      <OzSelectValue placeholder="Protocol" />
-                    </div>
-                  </OzSelectTrigger>
-                  <OzSelectContent data-cy="protocol-selection">
-                    <OzSelectItem value="all">ALL</OzSelectItem>
-                    <OzSelectItem value="tcp">TCP</OzSelectItem>
-                    <OzSelectItem value="udp">UDP</OzSelectItem>
-                    <OzSelectItem value="icmp">ICMP</OzSelectItem>
-                  </OzSelectContent>
-                </OzSelect>
-              </div>
+          <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+            <div>
+              <OzLabel className="mb-2 inline-flex items-center gap-2">
+                <FolderDown size={14} />
+                Source
+              </OzLabel>
+              <PeerGroupSelector
+                dataCy="source-group-selector"
+                showPeerCount
+                disableInlineRemoveGroup={false}
+                popoverWidth={500}
+                showRoutes={false}
+                onChange={setSourceGroups}
+                values={sourceGroups}
+                saveGroupAssignments={useSave}
+                showResourceCounter={false}
+                disabled={fieldsDisabled}
+              />
             </div>
 
-            <div className="flex gap-6 items-center">
-              <div className="w-full self-start">
-                <OzLabel className="mb-2">
-                  <FolderDown size={15} />
-                  Source
-                </OzLabel>
-                <PeerGroupSelector
-                  dataCy="source-group-selector"
-                  showPeerCount
-                  disableInlineRemoveGroup={false}
-                  popoverWidth={500}
-                  showRoutes={false}
-                  onChange={setSourceGroups}
-                  values={sourceGroups}
-                  saveGroupAssignments={useSave}
-                  showResourceCounter={false}
-                  disabled={
-                    !permission.policies.update || !permission.policies.create
-                  }
-                />
-              </div>
+            <div className="hidden self-center md:block">
               <PolicyDirection
                 value={direction}
                 onChange={setDirection}
                 disabled={destinationOnlyResources}
                 destinationResource={destinationResource}
               />
-              <div className="w-full self-start">
-                <OzLabel className="mb-2">
-                  <FolderInput size={15} />
-                  Destination
-                </OzLabel>
-                <PeerGroupSelector
-                  dataCy="destination-group-selector"
-                  showRoutes
-                  showPeerCount
-                  disableInlineRemoveGroup={false}
-                  popoverWidth={500}
-                  onChange={setDestinationGroups}
-                  values={destinationGroups}
-                  saveGroupAssignments={useSave}
-                  resource={destinationResource}
-                  onResourceChange={setDestinationResource}
-                  showResources
-                  placeholder="Select destination(s)..."
-                  disabled={
-                    !permission.policies.update || !permission.policies.create
-                  }
-                />
-              </div>
+            </div>
+            {/* Mobile: PolicyDirection collapses below the source picker
+                instead of disappearing on narrow viewports. */}
+            <div className="md:hidden">
+              <PolicyDirection
+                value={direction}
+                onChange={setDirection}
+                disabled={destinationOnlyResources}
+                destinationResource={destinationResource}
+              />
             </div>
 
-            {destinationHasResources &&
-              !destinationOnlyResources &&
-              direction === "bi" && (
-                <Callout
-                  variant="warning"
-                  icon={
-                    <AlertCircleIcon
-                      size={14}
-                      className="shrink-0 relative top-[3px] text-oz2-acc"
-                    />
-                  }
-                >
-                  Some destination groups contain resources. Resources only
-                  support incoming traffic and cannot initiate connections.
-                </Callout>
-              )}
+            <div>
+              <OzLabel className="mb-2 inline-flex items-center gap-2">
+                <FolderInput size={14} />
+                Destination
+              </OzLabel>
+              <PeerGroupSelector
+                dataCy="destination-group-selector"
+                showRoutes
+                showPeerCount
+                disableInlineRemoveGroup={false}
+                popoverWidth={500}
+                onChange={setDestinationGroups}
+                values={destinationGroups}
+                saveGroupAssignments={useSave}
+                resource={destinationResource}
+                onResourceChange={setDestinationResource}
+                showResources
+                placeholder="Select destination(s)..."
+                disabled={fieldsDisabled}
+              />
+            </div>
+          </div>
 
-            {protocol === "all" && direction !== "bi" && (
+          {destinationHasResources &&
+            !destinationOnlyResources &&
+            direction === "bi" && (
               <Callout
                 variant="warning"
                 icon={
@@ -356,53 +314,117 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
                     className="shrink-0 relative top-[3px] text-oz2-acc"
                   />
                 }
-                data-cy="unidirectional-all-warning"
+                className="mt-5"
               >
-                Unidirectional ALL is experimental. Reply traffic relies on
-                the firewall&apos;s stateful conntrack — fine for
-                request/response protocols (HTTP, SSH, DNS), but apps that
-                push unsolicited messages from the destination back to the
-                source (SNMP traps, syslog UDP outbound, server-initiated
-                heartbeats) will be dropped. Operationally-asymmetric ICMP
-                (destination-unreachable, fragmentation-needed) is dropped
-                too. Keep ALL bidirectional or split into per-protocol rules
-                if your apps depend on those.{" "}
-                <a
-                  className="underline"
-                  href="https://github.com/openzro/openzro/blob/main/docs/operator/unidirectional-policies.md"
-                  target="_blank"
-                  rel="noreferrer noopener"
-                >
-                  Operator guide
-                </a>
-                .
+                Some destination groups contain resources. Resources only
+                support incoming traffic and cannot initiate connections.
               </Callout>
             )}
 
-            <div
-              className={cn(portDisabled && "opacity-30 pointer-events-none")}
+          {protocol === "all" && direction !== "bi" && (
+            <Callout
+              variant="warning"
+              icon={
+                <AlertCircleIcon
+                  size={14}
+                  className="shrink-0 relative top-[3px] text-oz2-acc"
+                />
+              }
+              className="mt-5"
+              data-cy="unidirectional-all-warning"
             >
-              <OzLabel className="flex items-center gap-2">
-                <Shield size={14} />
-                Ports
+              Unidirectional ALL is experimental. Reply traffic relies on
+              the firewall&apos;s stateful conntrack — fine for
+              request/response protocols (HTTP, SSH, DNS), but apps that
+              push unsolicited messages from the destination back to the
+              source (SNMP traps, syslog UDP outbound, server-initiated
+              heartbeats) will be dropped. Operationally-asymmetric ICMP
+              (destination-unreachable, fragmentation-needed) is dropped
+              too. Keep ALL bidirectional or split into per-protocol rules
+              if your apps depend on those.{" "}
+              <a
+                className="underline"
+                href="https://github.com/openzro/openzro/blob/main/docs/operator/unidirectional-policies.md"
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                Operator guide
+              </a>
+              .
+            </Callout>
+          )}
+        </OzCard>
+
+        {/* Card 3 — Protocol & Ports. Protocol selector + label/help
+            block sit on a single horizontal row at the top, Ports
+            sits below a soft divider. Pulls these out of the
+            Source/Destination card so each card has a single clear
+            responsibility per the handoff "Ports & protocols" group. */}
+        <OzCard>
+          <div
+            className="flex flex-wrap items-start justify-between gap-4"
+            data-cy="protocol-wrapper"
+          >
+            <div className="min-w-0 flex-1">
+              <OzLabel className="inline-flex items-center gap-2">
+                <Share2 size={14} />
+                Protocol
               </OzLabel>
-              <OzHelpText className="mt-1 mb-2">
-                Allow network traffic and access only to specified ports.
-                Select ports or port ranges between 1 and 65535.
+              <OzHelpText className="mt-1 max-w-md">
+                Allow only specified network protocols. Select{" "}
+                <b className="text-oz2-text">TCP</b> or{" "}
+                <b className="text-oz2-text">UDP</b> to constrain ports.
               </OzHelpText>
-              <PortSelector
-                showAll
-                ports={ports}
-                onPortsChange={setPorts}
-                portRanges={portRanges}
-                onPortRangesChange={setPortRanges}
-                disabled={portDisabled}
-              />
             </div>
+            <div className="w-[140px] shrink-0">
+              <OzSelect
+                value={protocol}
+                onValueChange={(v) => handleProtocolChange(v as Protocol)}
+                disabled={fieldsDisabled}
+              >
+                <OzSelectTrigger>
+                  <div
+                    className="flex items-center gap-2"
+                    data-cy="protocol-select-button"
+                  >
+                    <OzSelectValue placeholder="Protocol" />
+                  </div>
+                </OzSelectTrigger>
+                <OzSelectContent data-cy="protocol-selection">
+                  <OzSelectItem value="all">ALL</OzSelectItem>
+                  <OzSelectItem value="tcp">TCP</OzSelectItem>
+                  <OzSelectItem value="udp">UDP</OzSelectItem>
+                  <OzSelectItem value="icmp">ICMP</OzSelectItem>
+                </OzSelectContent>
+              </OzSelect>
+            </div>
+          </div>
+
+          <div className="my-5 h-px bg-oz2-border-soft" aria-hidden />
+
+          <div
+            className={cn(portDisabled && "opacity-30 pointer-events-none")}
+          >
+            <OzLabel className="inline-flex items-center gap-2">
+              <Shield size={14} />
+              Ports
+            </OzLabel>
+            <OzHelpText className="mt-1 mb-2">
+              Allow access only to specified ports. Pick individual ports
+              or ranges between 1 and 65535.
+            </OzHelpText>
+            <PortSelector
+              showAll
+              ports={ports}
+              onPortsChange={setPorts}
+              portRanges={portRanges}
+              onPortRangesChange={setPortRanges}
+              disabled={portDisabled}
+            />
           </div>
         </OzCard>
 
-        {/* Card 3 — Posture Checks. Inlined from the legacy
+        {/* Card 4 — Posture Checks. Inlined from the legacy
             PostureCheckTab so the page doesn't need a tab wrapper to
             host the same minimal table + Add/Browse modals. */}
         <PostureCheckCard
