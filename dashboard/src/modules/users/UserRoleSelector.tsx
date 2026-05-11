@@ -1,6 +1,7 @@
 import { CommandItem } from "@components/Command";
 import { Popover, PopoverContent, PopoverTrigger } from "@components/Popover";
 import { ScrollArea } from "@components/ScrollArea";
+import { cn } from "@utils/helpers";
 import { isOpenzroHosted } from "@utils/openzro";
 import { Command, CommandGroup, CommandList } from "cmdk";
 import { trim } from "lodash";
@@ -125,23 +126,22 @@ export function UserRoleSelector({
         setOpen(isOpen);
       }}
     >
-      <PopoverTrigger asChild={true}>
+      <PopoverTrigger asChild>
         {customTrigger ? (
           <div ref={inputRef} className={"group/user-role-selector"}>
             {customTrigger}
           </div>
         ) : (
           <button
-            type="button"
-            disabled={disabled}
             ref={inputRef}
+            disabled={disabled}
             data-cy={"user-role-selector"}
-            className={
-              "group/user-role-selector inline-flex h-[34px] w-full items-center justify-between gap-2 rounded-oz2-input border border-oz2-border bg-oz2-surface px-3 text-[13px] text-oz2-text transition-colors " +
-              "hover:border-oz2-border-strong hover:bg-oz2-hover " +
-              "[outline:none] focus-visible:border-oz2-acc focus-visible:ring-2 focus-visible:ring-oz2-acc/30 " +
-              "disabled:cursor-not-allowed disabled:opacity-60"
-            }
+            className={cn(
+              "group/user-role-selector inline-flex h-[34px] w-full items-center justify-between gap-2 rounded-oz2-input border border-oz2-border bg-oz2-surface px-3 text-[13px] text-oz2-text transition-colors",
+              "hover:border-oz2-border-strong hover:bg-oz2-hover",
+              "[outline:none] focus-visible:border-oz2-acc focus-visible:ring-2 focus-visible:ring-oz2-acc/30",
+              "disabled:cursor-not-allowed disabled:opacity-60",
+            )}
           >
             {selectedRole && (
               <div className="flex items-center gap-2.5">
