@@ -1,10 +1,5 @@
-import Button from "@components/Button";
 import Code from "@components/Code";
 import FancyToggleSwitch from "@components/FancyToggleSwitch";
-import HelpText from "@components/HelpText";
-import InlineLink from "@components/InlineLink";
-import { Input } from "@components/Input";
-import { Label } from "@components/Label";
 import {
   Modal,
   ModalClose,
@@ -14,7 +9,6 @@ import {
 } from "@components/modal/Modal";
 import ModalHeader from "@components/modal/ModalHeader";
 import { notify } from "@components/Notification";
-import Paragraph from "@components/Paragraph";
 import { PeerGroupSelector } from "@components/PeerGroupSelector";
 import Separator from "@components/Separator";
 import { IconRepeat } from "@tabler/icons-react";
@@ -33,6 +27,9 @@ import {
 import React, { useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
 import SetupKeysIcon from "@/assets/icons/SetupKeysIcon";
+import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
+import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
 import { SetupKey } from "@/interfaces/SetupKey";
 import useGroupHelper from "@/modules/groups/useGroupHelper";
 import SetupModal from "@/modules/setup-openzro-modal/SetupModal";
@@ -105,10 +102,10 @@ export default function SetupKeyModal({
                 <h2 className={"text-2xl text-center mb-2"}>
                   Setup key created successfully!
                 </h2>
-                <Paragraph className={"mt-0 text-sm text-center"}>
+                <p className={"mt-0 text-sm text-center text-oz2-text-muted"}>
                   This key will not be shown again, so be sure to copy it and
                   store in a secure location.
-                </Paragraph>
+                </p>
               </div>
             </div>
           </div>
@@ -127,23 +124,23 @@ export default function SetupKeyModal({
           <ModalFooter className={"items-center"}>
             <div className={"flex gap-3 w-full"}>
               <ModalClose asChild={true}>
-                <Button
-                  variant={"secondary"}
+                <OzButton
+                  variant={"default"}
                   className={"w-full"}
                   tabIndex={-1}
                   data-cy={"setup-key-close"}
                 >
                   Close
-                </Button>
+                </OzButton>
               </ModalClose>
-              <Button
+              <OzButton
                 variant={"primary"}
                 className={"w-full"}
                 onClick={() => setInstallModal(true)}
               >
                 <DownloadIcon size={14} />
                 Install Openzro
-              </Button>
+              </OzButton>
             </div>
           </ModalFooter>
         </ModalContent>
@@ -226,11 +223,13 @@ export function SetupKeyModalContent({
       <Separator />
 
       <div className={"px-8 py-6 flex flex-col gap-8"}>
-        {/* Name Field */}
         <div>
-          <Label>Name</Label>
-          <HelpText>Set an easily identifiable name for your key</HelpText>
-          <Input
+          <OzLabel htmlFor="setup-key-name">Name</OzLabel>
+          <OzHelpText className="mb-2">
+            Set an easily identifiable name for your key
+          </OzHelpText>
+          <OzInput
+            id="setup-key-name"
             placeholder={"e.g., AWS Servers"}
             value={name}
             data-cy={"setup-key-name"}
@@ -238,7 +237,6 @@ export function SetupKeyModalContent({
           />
         </div>
 
-        {/* Reusable Toggle */}
         <div>
           <FancyToggleSwitch
             value={reusable}
@@ -253,58 +251,56 @@ export function SetupKeyModalContent({
           />
         </div>
 
-        {/* Usage Limit */}
         <div className={cn("flex justify-between", !reusable && "opacity-50")}>
           <div>
-            <Label>Usage limit</Label>
-            <HelpText className={"max-w-[200px]"}>
+            <OzLabel htmlFor="setup-key-usage-limit">Usage limit</OzLabel>
+            <OzHelpText className="max-w-[200px]">
               For example, set to 30 if you want to enroll 30 peers
-            </HelpText>
+            </OzHelpText>
           </div>
 
-          <Input
+          <OzInput
+            id="setup-key-usage-limit"
             min={1}
-            maxWidthClass={"max-w-[200px]"}
+            wrapperClassName="max-w-[200px]"
             disabled={!reusable}
             value={usageLimit}
             type={"number"}
             data-cy={"setup-key-usage-limit"}
             onChange={(e) => setUsageLimit(e.target.value)}
             placeholder={usageLimitPlaceholder}
-            customPrefix={
-              <MonitorSmartphoneIcon size={16} className={"text-nb-gray-300"} />
+            prefix={<MonitorSmartphoneIcon size={16} />}
+            suffix={
+              <span className="text-[12.5px] text-oz2-text-faint">Peer(s)</span>
             }
-            customSuffix={"Peer(s)"}
           />
         </div>
 
-        {/* Expires in Days */}
         <div className={"flex justify-between"}>
           <div>
-            <Label>Expires in</Label>
-            <HelpText>
+            <OzLabel htmlFor="setup-key-expire">Expires in</OzLabel>
+            <OzHelpText>
               Days until the key expires.
               <br />
               Leave empty for no expiration.
-            </HelpText>
+            </OzHelpText>
           </div>
-          <Input
-            maxWidthClass={"max-w-[202px]"}
+          <OzInput
+            id="setup-key-expire"
+            wrapperClassName="max-w-[202px]"
             placeholder={"Unlimited"}
             min={1}
             value={expiresIn}
-            errorTooltip={true}
             type={"number"}
             data-cy={"setup-key-expire-in-days"}
             onChange={(e) => setExpiresIn(e.target.value)}
-            customPrefix={
-              <AlarmClock size={16} className={"text-nb-gray-300"} />
+            prefix={<AlarmClock size={16} />}
+            suffix={
+              <span className="text-[12.5px] text-oz2-text-faint">Day(s)</span>
             }
-            customSuffix={"Day(s)"}
           />
         </div>
 
-        {/* Ephemeral Peers Toggle */}
         <div>
           <FancyToggleSwitch
             value={ephemeralPeers}
@@ -321,7 +317,6 @@ export function SetupKeyModalContent({
           />
         </div>
 
-        {/* Allow Extra DNS Labels Toggle */}
         <div>
           <FancyToggleSwitch
             value={allowExtraDNSLabels}
@@ -338,13 +333,12 @@ export function SetupKeyModalContent({
           />
         </div>
 
-        {/* Auto-Assigned Groups */}
         <div>
-          <Label>Auto-assigned groups</Label>
-          <HelpText>
+          <OzLabel>Auto-assigned groups</OzLabel>
+          <OzHelpText className="mb-2">
             These groups will be automatically assigned to peers enrolled with
             this key
-          </HelpText>
+          </OzHelpText>
           <PeerGroupSelector
             onChange={setSelectedGroups}
             values={selectedGroups}
@@ -353,28 +347,29 @@ export function SetupKeyModalContent({
         </div>
       </div>
 
-      {/* Footer */}
       <ModalFooter className={"items-center"}>
         <div className={"w-full"}>
-          <Paragraph className={"text-sm mt-auto"}>
-            Learn more about
-            <InlineLink
+          <p className={"text-sm mt-auto text-oz2-text-muted"}>
+            Learn more about{" "}
+            <a
               href={
                 "https://docs.openzro.io/how-to/register-machines-using-setup-keys"
               }
               target={"_blank"}
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-oz2-acc-text underline-offset-2 hover:underline"
             >
               Setup Keys
               <ExternalLinkIcon size={12} />
-            </InlineLink>
-          </Paragraph>
+            </a>
+          </p>
         </div>
         <div className={"flex gap-3 w-full justify-end"}>
           <ModalClose asChild={true}>
-            <Button variant={"secondary"}>Cancel</Button>
+            <OzButton variant={"default"}>Cancel</OzButton>
           </ModalClose>
 
-          <Button
+          <OzButton
             variant={"primary"}
             onClick={submit}
             disabled={isDisabled}
@@ -382,7 +377,7 @@ export function SetupKeyModalContent({
           >
             <PlusCircle size={16} />
             Create Setup Key
-          </Button>
+          </OzButton>
         </div>
       </ModalFooter>
     </ModalContent>
