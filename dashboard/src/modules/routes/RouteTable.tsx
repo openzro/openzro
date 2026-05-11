@@ -5,8 +5,8 @@ import React, { useMemo, useState } from "react";
 import { useGroups } from "@/contexts/GroupsProvider";
 import { GroupedRoute, Route } from "@/interfaces/Route";
 import RouteAccessControlGroups from "@/modules/routes/RouteAccessControlGroups";
-import RouteActionCell from "@/modules/routes/RouteActionCell";
 import RouteActiveCell from "@/modules/routes/RouteActiveCell";
+import RouteActionCellV2 from "@/modules/routes/v2/RouteActionCellV2";
 import RouteDistributionGroupsCell from "@/modules/routes/RouteDistributionGroupsCell";
 import RouteMetricCell from "@/modules/routes/RouteMetricCell";
 import RoutePeerCell from "@/modules/routes/RoutePeerCell";
@@ -86,7 +86,7 @@ export const RouteTableColumns: ColumnDef<Route>[] = [
   {
     accessorKey: "id",
     header: "",
-    cell: ({ row }) => <RouteActionCell route={row.original} />,
+    cell: ({ row }) => <RouteActionCellV2 route={row.original} />,
   },
 ];
 
