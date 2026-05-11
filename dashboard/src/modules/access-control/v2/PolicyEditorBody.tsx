@@ -274,6 +274,7 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
                     saveGroupAssignments={useSave}
                     showResourceCounter={false}
                     disabled={fieldsDisabled}
+                    side="top"
                   />
                 </div>
 
@@ -312,6 +313,7 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
                     showResources
                     placeholder="Select destination(s)..."
                     disabled={fieldsDisabled}
+                    side="top"
                   />
                 </div>
               </div>
