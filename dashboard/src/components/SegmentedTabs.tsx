@@ -3,6 +3,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@radix-ui/react-tabs";
 import { cn } from "@utils/helpers";
 import React from "react";
 
+// SegmentedTabs — v2 paint. The shape is preserved: <SegmentedTabs>,
+// <SegmentedTabs.List>, <SegmentedTabs.Trigger>, <SegmentedTabs.Content>.
+// Only the tokens change: nb-gray legacy classes swap for the oz2-*
+// palette so this matches the rest of the v2 chrome (handoff Forms.html
+// segmented control + screens-1 peer-tab card).
+
 type Props = {
   value?: string;
   onChange?: (value: string) => void;
@@ -31,9 +37,7 @@ function List({
   return (
     <TabsList
       className={cn(
-        "p-1.5 rounded-t-lg flex justify-center gap-1 border border-b-0",
-        "bg-neutral-100 border-neutral-200",
-        "dark:bg-nb-gray-930/70 dark:border-nb-gray-900",
+        "flex justify-center gap-1 rounded-t-oz2-card border border-b-0 border-oz2-border bg-oz2-bg-sunken p-1.5",
         className,
       )}
     >
@@ -52,20 +56,23 @@ function Trigger({
   disabled?: boolean;
 }) {
   const currentValue = useTabContext();
+  const active = value === currentValue;
   return (
     <TabsTrigger
       disabled={disabled}
       className={cn(
-        "px-4 py-2 text-sm rounded-md w-full transition-all data-[disabled]:opacity-10",
-        value == currentValue
-          ? "bg-white text-neutral-900 shadow-sm dark:bg-nb-gray-900 dark:text-white dark:shadow-none"
+        "w-full rounded-oz2-input px-4 py-2 text-[13px] font-medium transition-colors",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-oz2-acc/40",
+        "data-[disabled]:opacity-40",
+        active
+          ? "bg-oz2-surface text-oz2-text shadow-oz2-sm"
           : disabled
-          ? ""
-          : "text-neutral-600 hover:bg-white/70 dark:text-nb-gray-400 dark:hover:bg-nb-gray-900/50",
+            ? "text-oz2-text-faint"
+            : "text-oz2-text-muted hover:bg-oz2-surface/60 hover:text-oz2-text",
       )}
       value={value}
     >
-      <div className={"flex items-center w-full justify-center gap-2"}>
+      <div className={"flex w-full items-center justify-center gap-2"}>
         {children}
       </div>
     </TabsTrigger>
@@ -83,9 +90,7 @@ function Content({
     <TabsContent
       value={value}
       className={cn(
-        "px-4 pt-2 pb-5 rounded-b-md mt-0 border border-t-0",
-        "bg-neutral-50 border-neutral-200",
-        "dark:bg-nb-gray-930/70 dark:border-nb-gray-900",
+        "mt-0 rounded-b-oz2-card border border-t-0 border-oz2-border bg-oz2-bg-sunken/60 px-4 pb-5 pt-2",
       )}
     >
       {children}
