@@ -298,7 +298,14 @@ select:focus {
   --tw-ring-color: transparent;
   --tw-ring-shadow: 0 0 #0000;
   --tw-ring-offset-shadow: 0 0 #0000;
-  border-color: inherit;
+  /* border-color: inherit (the earlier value) fell through to text-
+   * color via the inherit chain, painting a thin dark border with
+   * mis-matched corners on focused cmdk inputs (PeerGroupSelector
+   * search, etc.). Make it explicitly transparent so Flowbite's
+   * default border-width can stay 1px without showing anything.
+   * v2 input wrappers paint their own border-on-focus via Tailwind
+   * focus utilities — they don't rely on this rule for affordance. */
+  border-color: transparent;
   box-shadow: var(--tw-shadow, 0 0 #0000);
 }
 
