@@ -251,33 +251,40 @@ export function SetupKeyModalContent({
           />
         </div>
 
-        <div className={cn("flex justify-between", !reusable && "opacity-50")}>
-          <div>
+        <div
+          className={cn(
+            "flex items-start justify-between gap-6",
+            !reusable && "opacity-50",
+          )}
+        >
+          <div className="flex-1 min-w-0">
             <OzLabel htmlFor="setup-key-usage-limit">Usage limit</OzLabel>
-            <OzHelpText className="max-w-[200px]">
+            <OzHelpText>
               For example, set to 30 if you want to enroll 30 peers
             </OzHelpText>
           </div>
-
-          <OzInput
-            id="setup-key-usage-limit"
-            min={1}
-            wrapperClassName="max-w-[200px]"
-            disabled={!reusable}
-            value={usageLimit}
-            type={"number"}
-            data-cy={"setup-key-usage-limit"}
-            onChange={(e) => setUsageLimit(e.target.value)}
-            placeholder={usageLimitPlaceholder}
-            prefix={<MonitorSmartphoneIcon size={16} />}
-            suffix={
-              <span className="text-[12.5px] text-oz2-text-faint">Peer(s)</span>
-            }
-          />
+          <div className="w-[200px] shrink-0">
+            <OzInput
+              id="setup-key-usage-limit"
+              min={1}
+              disabled={!reusable}
+              value={usageLimit}
+              type={"number"}
+              data-cy={"setup-key-usage-limit"}
+              onChange={(e) => setUsageLimit(e.target.value)}
+              placeholder={usageLimitPlaceholder}
+              prefix={<MonitorSmartphoneIcon size={16} />}
+              suffix={
+                <span className="text-[12.5px] text-oz2-text-faint">
+                  Peer(s)
+                </span>
+              }
+            />
+          </div>
         </div>
 
-        <div className={"flex justify-between"}>
-          <div>
+        <div className="flex items-start justify-between gap-6">
+          <div className="flex-1 min-w-0">
             <OzLabel htmlFor="setup-key-expire">Expires in</OzLabel>
             <OzHelpText>
               Days until the key expires.
@@ -285,20 +292,23 @@ export function SetupKeyModalContent({
               Leave empty for no expiration.
             </OzHelpText>
           </div>
-          <OzInput
-            id="setup-key-expire"
-            wrapperClassName="max-w-[202px]"
-            placeholder={"Unlimited"}
-            min={1}
-            value={expiresIn}
-            type={"number"}
-            data-cy={"setup-key-expire-in-days"}
-            onChange={(e) => setExpiresIn(e.target.value)}
-            prefix={<AlarmClock size={16} />}
-            suffix={
-              <span className="text-[12.5px] text-oz2-text-faint">Day(s)</span>
-            }
-          />
+          <div className="w-[200px] shrink-0">
+            <OzInput
+              id="setup-key-expire"
+              placeholder={"Unlimited"}
+              min={1}
+              value={expiresIn}
+              type={"number"}
+              data-cy={"setup-key-expire-in-days"}
+              onChange={(e) => setExpiresIn(e.target.value)}
+              prefix={<AlarmClock size={16} />}
+              suffix={
+                <span className="text-[12.5px] text-oz2-text-faint">
+                  Day(s)
+                </span>
+              }
+            />
+          </div>
         </div>
 
         <div>
