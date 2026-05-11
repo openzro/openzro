@@ -1,11 +1,6 @@
 "use client";
 
-import Button from "@components/Button";
 import FancyToggleSwitch from "@components/FancyToggleSwitch";
-import HelpText from "@components/HelpText";
-import InlineLink from "@components/InlineLink";
-import { Input } from "@components/Input";
-import { Label } from "@components/Label";
 import {
   Modal,
   ModalClose,
@@ -13,9 +8,6 @@ import {
   ModalFooter,
 } from "@components/modal/Modal";
 import ModalHeader from "@components/modal/ModalHeader";
-import Paragraph from "@components/Paragraph";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/Tabs";
-import { Textarea } from "@components/Textarea";
 import InputDomain, { domainReducer } from "@components/ui/InputDomain";
 import { cn } from "@utils/helpers";
 import cidr from "ip-cidr";
@@ -32,6 +24,16 @@ import {
 } from "lucide-react";
 import React, { useMemo, useReducer, useRef, useState } from "react";
 import NetworkRoutesIcon from "@/assets/icons/NetworkRoutesIcon";
+import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
+import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
+import {
+  OzTabs as Tabs,
+  OzTabsContent as TabsContent,
+  OzTabsList as TabsList,
+  OzTabsTrigger as TabsTrigger,
+} from "@/components/v2/OzTabs";
+import OzTextarea from "@/components/v2/OzTextarea";
 import { useRoutes } from "@/contexts/RoutesProvider";
 import { Domain } from "@/interfaces/Domain";
 import { GroupedRoute } from "@/interfaces/Route";
@@ -81,16 +83,10 @@ function GroupedRouteUpdateModalContent({
     [groupedRoute.network],
   );
 
-  // Network range — editable only for ip-range groups (not exit nodes,
-  // since changing 0.0.0.0/0 to anything else turns it into a regular
-  // route and we don't want to model that switch through this UI).
   const [networkRange, setNetworkRange] = useState<string>(
     groupedRoute.network || "",
   );
 
-  // Domains — editable only for domain groups. Seed the reducer from
-  // the existing list. We mark each existing domain with `is_selected`
-  // === undefined so the InputDomain treats it as user-entered.
   const seedDomains: Domain[] = useMemo(() => {
     const list = groupedRoute.domains ?? [];
     return list.map((name, i) => ({
@@ -102,13 +98,11 @@ function GroupedRouteUpdateModalContent({
   const [domainRoutes, setDomainRoutes] = useReducer(domainReducer, seedDomains);
   const [domainError, setDomainError] = useState<boolean>(false);
 
-  // Description, enabled, metric — applied uniformly across children.
   const [description, setDescription] = useState<string>(
     groupedRoute.description || "",
   );
   const [enabled, setEnabled] = useState<boolean>(groupedRoute.enabled);
 
-  // Metric: GroupedRoute doesn't carry it; seed from the first child.
   const initialMetric = useMemo(() => {
     const first = groupedRoute.routes?.[0];
     return first?.metric?.toString() ?? "9999";
@@ -213,43 +207,39 @@ function GroupedRouteUpdateModalContent({
       />
 
       <Tabs defaultValue={tab} onValueChange={(v) => setTab(v)} value={tab}>
-        <TabsList justify={"start"} className={"px-8"}>
-          <TabsTrigger
-            value={"network"}
-            onClick={() => networkRangeRef.current?.focus()}
-          >
-            <RouteIcon
-              size={16}
-              className={
-                "text-nb-gray-500 group-data-[state=active]/trigger:text-openzro transition-all"
-              }
-            />
-            Route
-          </TabsTrigger>
-          <TabsTrigger value={"general"}>
-            <Text
-              size={16}
-              className={
-                "text-nb-gray-500 group-data-[state=active]/trigger:text-openzro transition-all"
-              }
-            />
-            Description
-          </TabsTrigger>
-          <TabsTrigger value={"settings"} disabled={isExitNode}>
-            <Settings2
-              size={16}
-              className={
-                "text-nb-gray-500 group-data-[state=active]/trigger:text-openzro transition-all"
-              }
-            />
-            Settings
-          </TabsTrigger>
-        </TabsList>
+        <div className="px-8 pb-3 pt-1">
+          <TabsList>
+            <TabsTrigger
+              value={"network"}
+              onClick={() => networkRangeRef.current?.focus()}
+            >
+              <RouteIcon
+                size={16}
+                className="text-oz2-text-faint group-data-[state=active]/trigger:text-oz2-acc transition-colors"
+              />
+              Route
+            </TabsTrigger>
+            <TabsTrigger value={"general"}>
+              <Text
+                size={16}
+                className="text-oz2-text-faint group-data-[state=active]/trigger:text-oz2-acc transition-colors"
+              />
+              Description
+            </TabsTrigger>
+            <TabsTrigger value={"settings"} disabled={isExitNode}>
+              <Settings2
+                size={16}
+                className="text-oz2-text-faint group-data-[state=active]/trigger:text-oz2-acc transition-colors"
+              />
+              Settings
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value={"network"} className={"pb-8"}>
-          <div className={"px-8 flex-col flex gap-4 pt-2"}>
+          <div className={"px-8 flex flex-col gap-4 pt-2"}>
             <div>
-              <Label className={"flex items-center gap-2"}>
+              <OzLabel className="inline-flex items-center gap-2">
                 {routeType === "ip-range" ? (
                   <>
                     <NetworkIcon size={14} />
@@ -261,23 +251,23 @@ function GroupedRouteUpdateModalContent({
                     Domains
                   </>
                 )}
-              </Label>
-              <HelpText>
+              </OzLabel>
+              <OzHelpText className="mb-2">
                 {routeType === "ip-range"
                   ? "Change the private IPv4 range. The new range will be applied to every routing peer attached to this network."
                   : "Change the domain list. The new list will be applied to every routing peer attached to this network."}
-              </HelpText>
+              </OzHelpText>
             </div>
 
             {routeType === "ip-range" && (
-              <Input
+              <OzInput
                 ref={networkRangeRef}
-                customPrefix={<NetworkIcon size={16} />}
+                prefix={<NetworkIcon size={16} />}
                 placeholder={"e.g., 172.16.0.0/16"}
                 value={networkRange}
                 data-cy={"grouped-network-range"}
                 disabled={isExitNode}
-                className={"font-mono !text-[13px]"}
+                mono
                 error={cidrError}
                 onChange={(e) => setNetworkRange(e.target.value)}
               />
@@ -286,7 +276,7 @@ function GroupedRouteUpdateModalContent({
             {routeType === "domains" && (
               <div>
                 {domainRoutes.length > 0 && (
-                  <div className={"flex flex-col gap-2 w-full mb-3"}>
+                  <div className={"mb-3 flex w-full flex-col gap-2"}>
                     {domainRoutes.map((domain, i) => (
                       <InputDomain
                         key={domain.id}
@@ -307,17 +297,16 @@ function GroupedRouteUpdateModalContent({
                     ))}
                   </div>
                 )}
-                <Button
-                  variant={"dotted"}
-                  className={"w-full"}
-                  size={"sm"}
+                <button
+                  type="button"
                   disabled={domainRoutes.length === 32}
                   data-cy={"grouped-add-domain"}
                   onClick={() => setDomainRoutes({ type: "ADD" })}
+                  className="inline-flex h-[34px] w-full items-center justify-center gap-2 rounded-oz2-input border border-dashed border-oz2-border-strong bg-transparent px-3 text-[13px] font-medium text-oz2-text-muted transition-colors hover:border-oz2-acc hover:bg-oz2-acc-soft/50 hover:text-oz2-acc-text disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <PlusIcon size={14} />
                   Add Domain
-                </Button>
+                </button>
               </div>
             )}
           </div>
@@ -326,12 +315,15 @@ function GroupedRouteUpdateModalContent({
         <TabsContent value={"general"} className={"px-8 pb-6"}>
           <div className={"flex flex-col gap-6"}>
             <div>
-              <Label>Description (optional)</Label>
-              <HelpText>
+              <OzLabel htmlFor="grouped-route-description" optional>
+                Description
+              </OzLabel>
+              <OzHelpText className="mb-2">
                 Write a short description to add more context to this network.
                 The same description is applied to every routing peer.
-              </HelpText>
-              <Textarea
+              </OzHelpText>
+              <OzTextarea
+                id="grouped-route-description"
                 placeholder={
                   "e.g., Route to access all devices in the AWS VPC, located in Frankfurt."
                 }
@@ -358,31 +350,26 @@ function GroupedRouteUpdateModalContent({
                 "Enable or disable the network. Applies to every routing peer attached."
               }
             />
-            <div className={cn("flex justify-between")}>
-              <div>
-                <Label>Metric</Label>
-                <HelpText className={"max-w-[260px]"}>
+            <div className={cn("flex items-start justify-between gap-6")}>
+              <div className="flex-1 min-w-0">
+                <OzLabel htmlFor="grouped-route-metric">Metric</OzLabel>
+                <OzHelpText className="mt-1">
                   A lower metric indicates a higher priority route. Applied
                   uniformly across all routing peers.
-                </HelpText>
+                </OzHelpText>
               </div>
-
-              <Input
-                min={1}
-                max={9999}
-                maxWidthClass={"max-w-[200px]"}
-                value={metric}
-                error={metricError}
-                errorTooltip={true}
-                type={"number"}
-                onChange={(e) => setMetric(e.target.value)}
-                customPrefix={
-                  <ArrowDownWideNarrow
-                    size={16}
-                    className={"text-nb-gray-300"}
-                  />
-                }
-              />
+              <div className="w-[200px] shrink-0">
+                <OzInput
+                  id="grouped-route-metric"
+                  min={1}
+                  max={9999}
+                  value={metric}
+                  error={metricError}
+                  type={"number"}
+                  onChange={(e) => setMetric(e.target.value)}
+                  prefix={<ArrowDownWideNarrow size={16} />}
+                />
+              </div>
             </div>
           </div>
         </TabsContent>
@@ -390,30 +377,32 @@ function GroupedRouteUpdateModalContent({
 
       <ModalFooter className={"items-center"}>
         <div className={"w-full"}>
-          <Paragraph className={"text-sm mt-auto"}>
-            Learn more about
-            <InlineLink
+          <p className={"text-sm mt-auto text-oz2-text-muted"}>
+            Learn more about{" "}
+            <a
               href={
                 "https://docs.openzro.io/how-to/routing-traffic-to-private-networks"
               }
               target={"_blank"}
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-oz2-acc-text underline-offset-2 hover:underline"
             >
               Network Routes
               <ExternalLinkIcon size={12} />
-            </InlineLink>
-          </Paragraph>
+            </a>
+          </p>
         </div>
         <div className={"flex gap-3 w-full justify-end"}>
           <ModalClose asChild={true}>
-            <Button variant={"secondary"}>Cancel</Button>
+            <OzButton variant={"default"}>Cancel</OzButton>
           </ModalClose>
-          <Button
+          <OzButton
             variant={"primary"}
             disabled={isDisabled}
             onClick={handleSave}
           >
             Save Changes
-          </Button>
+          </OzButton>
         </div>
       </ModalFooter>
     </ModalContent>
