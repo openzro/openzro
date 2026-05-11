@@ -41,7 +41,7 @@ import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
 import DnsTabs from "@/modules/dns/v2/DnsTabs";
 import NameserverModal from "@/modules/dns-nameservers/NameserverModal";
 import NameserverTemplateModal from "@/modules/dns-nameservers/NameserverTemplateModal";
-import NameserverActionCell from "@/modules/dns-nameservers/table/NameserverActionCell";
+import NameserverActionCellV2 from "@/modules/dns-nameservers/v2/cells/NameserverActionCellV2";
 import NameserverActiveCell from "@/modules/dns-nameservers/table/NameserverActiveCell";
 import NameserverDistributionGroupsCell from "@/modules/dns-nameservers/table/NameserverDistributionGroupsCell";
 import NameserverMatchDomainsCell from "@/modules/dns-nameservers/table/NameserverMatchDomainsCell";
@@ -196,7 +196,15 @@ export default function NameserversTableV2({
         size: 40,
         enableSorting: false,
         header: () => null,
-        cell: ({ row }) => <NameserverActionCell ns={row.original} />,
+        cell: ({ row }) => (
+          <NameserverActionCellV2
+            ns={row.original}
+            onEdit={() => {
+              setEditGroup(row.original);
+              setEditCell("");
+            }}
+          />
+        ),
       },
     ],
     [],

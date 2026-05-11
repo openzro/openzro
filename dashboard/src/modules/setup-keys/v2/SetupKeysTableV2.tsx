@@ -43,7 +43,7 @@ import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
 import EmptyRow from "@/modules/common-table-rows/EmptyRow";
 import ExpirationDateRow from "@/modules/common-table-rows/ExpirationDateRow";
 import LastTimeRow from "@/modules/common-table-rows/LastTimeRow";
-import SetupKeyActionCell from "@/modules/setup-keys/SetupKeyActionCell";
+import SetupKeyActionCellV2 from "@/modules/setup-keys/v2/cells/SetupKeyActionCellV2";
 import SetupKeyGroupsCell from "@/modules/setup-keys/SetupKeyGroupsCell";
 import SetupKeyModal from "@/modules/setup-keys/SetupKeyModal";
 import SetupKeyNameCell from "@/modules/setup-keys/SetupKeyNameCell";
@@ -228,7 +228,7 @@ export default function SetupKeysTableV2({ setupKeys, isLoading }: Props) {
         size: 40,
         enableSorting: false,
         header: () => null,
-        cell: ({ row }) => <SetupKeyActionCell setupKey={row.original} />,
+        cell: ({ row }) => <SetupKeyActionCellV2 setupKey={row.original} />,
       },
     ],
     [],
