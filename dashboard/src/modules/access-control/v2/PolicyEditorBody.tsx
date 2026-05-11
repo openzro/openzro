@@ -137,28 +137,23 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
       return false;
     };
 
-    React.useImperativeHandle(
-      ref,
-      () => ({
-        submit: () => {
-          if (useSave) submit();
-          else onSuccess?.(policy ?? ({} as Policy));
-        },
-        isSubmitDisabled,
-        isDirty: () => name.length > 0 || description.length > 0,
-      }),
-      // The hook returns stable setters, so we depend on the values
-      // that drive isSubmitDisabled.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      [
-        name,
-        description,
-        sourceGroups,
-        destinationGroups,
-        destinationResource,
-        useSave,
-      ],
-    );
+    // No deps array — the factory runs every render so the closures
+    // it captures (submit, isSubmitDisabled) always see the latest
+    // form state. The earlier version listed only a subset of inputs
+    // (name, description, source/destination groups) which left
+    // ports / port ranges / protocol / enabled / direction / posture
+    // checks behind: changing those after the first render kept the
+    // shell calling a stale `submit` that persisted the old values.
+    // Re-running each render costs only a function-object allocation
+    // and is what useImperativeHandle is designed for.
+    React.useImperativeHandle(ref, () => ({
+      submit: () => {
+        if (useSave) submit();
+        else onSuccess?.(policy ?? ({} as Policy));
+      },
+      isSubmitDisabled,
+      isDirty: () => name.length > 0 || description.length > 0,
+    }));
 
     const handleProtocolChange = (p: Protocol) => {
       setProtocol(p);
