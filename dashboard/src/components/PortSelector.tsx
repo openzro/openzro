@@ -205,13 +205,14 @@ export function PortSelector({
                     "absolute right-0 top-0 h-full flex items-center pr-4"
                   }
                 >
-                  <div
+                  <kbd
                     className={
-                      "flex items-center bg-nb-gray-800 py-1 px-1.5 rounded-[4px] border border-nb-gray-500"
+                      "inline-flex items-center rounded-[4px] border border-oz2-border bg-oz2-bg-sunken px-1.5 py-1 text-oz2-text-faint"
                     }
+                    aria-label="Press Enter to add"
                   >
                     <IconArrowBack size={10} />
-                  </div>
+                  </kbd>
                 </div>
               </div>
 
