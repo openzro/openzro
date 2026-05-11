@@ -122,7 +122,7 @@ Driven by **traffic + dependency**: most-visited screens first;
 screens that share components migrate adjacently to avoid double-work.
 
 1. Peers (most-visited; all primitives exercised; sets the pattern)
-2. Networks (re-uses Peers patterns; plus expand-row interaction)
+2. Networks (reuses Peers patterns; plus expand-row interaction)
 3. Setup Keys (table + key creation modal; small but operationally critical)
 4. Access Control (form-heavy, exercises the live-preview pane)
 5. Users & Groups (tabs, two distinct table shapes)
