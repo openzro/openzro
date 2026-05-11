@@ -1,4 +1,3 @@
-import Badge from "@components/Badge";
 import { Callout } from "@components/Callout";
 import { Checkbox } from "@components/Checkbox";
 import { CommandItem } from "@components/Command";
@@ -113,50 +112,47 @@ export function PortSelector({
         <PopoverTrigger asChild>
           <button
             className={cn(
-              "min-h-[48px] w-full relative items-center",
-              "border border-neutral-200 dark:border-nb-gray-700 justify-between py-2 px-3",
-              "rounded-md bg-white text-sm dark:bg-nb-gray-900/40 flex dark:text-neutral-400/70 text-neutral-500 cursor-pointer hover:dark:bg-nb-gray-900/50",
+              "flex w-full min-h-[40px] items-center justify-between gap-2 py-1.5 px-3",
+              "rounded-oz2-input border border-oz2-border bg-oz2-surface text-[13px] text-oz2-text-muted",
+              "transition-colors hover:border-oz2-border-strong",
+              "disabled:cursor-not-allowed disabled:opacity-50",
             )}
             data-cy={"port-selector"}
             disabled={disabled}
             ref={inputRef}
           >
-            <div
-              className={
-                "flex items-center gap-2 border-nb-gray-700 flex-wrap h-full"
-              }
-            >
+            <div className="flex flex-wrap items-center gap-1.5">
               {portsInput.length === 0 && showAll && (
-                <Badge
-                  variant={"gray"}
-                  className={"uppercase tracking-wider font-medium py-1"}
-                >
+                <span className="inline-flex items-center rounded-[6px] border border-oz2-border-soft bg-oz2-bg-sunken px-1.5 py-0.5 font-mono text-[10.5px] font-medium uppercase tracking-[0.06em] text-oz2-text-muted">
                   All
-                </Badge>
+                </span>
               )}
 
               {portsInput.map((x) => (
-                <Badge
+                <span
                   key={x}
-                  variant={"gray"}
-                  onClick={() => toggle(x)}
-                  className={"uppercase tracking-wider font-medium py-1"}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    toggle(x);
+                  }}
+                  className="group inline-flex cursor-pointer items-center gap-1 rounded-[6px] bg-oz2-acc-soft px-1.5 py-0.5 font-mono text-[11px] font-medium text-oz2-acc-text transition-colors hover:bg-oz2-acc-soft-2"
                 >
                   {x}
                   <XIcon
-                    size={12}
-                    className={"cursor-pointer group-hover:text-black"}
+                    size={11}
+                    className="text-oz2-acc-text/70 transition-colors group-hover:text-oz2-acc-text"
                   />
-                </Badge>
+                </span>
               ))}
               {ports.length == 0 && <span>Select ports...</span>}
             </div>
 
-            <ChevronsUpDown size={18} className={"shrink-0"} />
+            <ChevronsUpDown size={14} className="shrink-0 text-oz2-text-faint" />
           </button>
         </PopoverTrigger>
         <PopoverContent
-          className="w-full p-0 shadow-sm  shadow-nb-gray-950"
+          className="overflow-hidden rounded-oz2-card border border-oz2-border bg-oz2-bg-elev p-0 text-oz2-text shadow-oz2-md"
           style={{
             width: popoverWidth === "auto" ? width : popoverWidth,
           }}
@@ -175,13 +171,12 @@ export function PortSelector({
             }}
           >
             <CommandList className={"w-full"}>
-              <div className={"relative"}>
+              <div className="relative border-b border-oz2-border-soft">
                 <CommandInput
                   className={cn(
-                    "min-h-[42px] w-full relative",
-                    "border-b-0 border-t-0 border-r-0 border-l-0 border-neutral-200 dark:border-nb-gray-700 items-center",
-                    "bg-transparent text-sm outline-none focus-visible:outline-none ring-0 focus-visible:ring-0",
-                    "dark:placeholder:text-nb-gray-400 font-light placeholder:text-neutral-500 pl-10",
+                    "h-10 w-full bg-transparent text-[13px] text-oz2-text outline-none",
+                    "placeholder:text-oz2-text-faint",
+                    "pl-10 pr-12",
                   )}
                   data-cy={"port-input"}
                   ref={searchRef}
@@ -191,24 +186,12 @@ export function PortSelector({
                     'Add a port or a range e.g. 80 or 1-1023 and press "Enter" to add...'
                   }
                 />
-                <div
-                  className={
-                    "absolute left-0 top-0 h-full flex items-center pl-4"
-                  }
-                >
-                  <div className={"flex items-center"}>
-                    <SearchIcon size={14} />
-                  </div>
+                <div className="pointer-events-none absolute left-0 top-0 flex h-full items-center pl-4 text-oz2-text-faint">
+                  <SearchIcon size={14} />
                 </div>
-                <div
-                  className={
-                    "absolute right-0 top-0 h-full flex items-center pr-4"
-                  }
-                >
+                <div className="absolute right-0 top-0 flex h-full items-center pr-3">
                   <kbd
-                    className={
-                      "inline-flex items-center rounded-[4px] border border-oz2-border bg-oz2-bg-sunken px-1.5 py-1 text-oz2-text-faint"
-                    }
+                    className="inline-flex items-center gap-1 rounded-[5px] border border-oz2-border-soft bg-oz2-bg-sunken px-1.5 py-[3px] font-mono text-[10.5px] text-oz2-text-faint"
                     aria-label="Press Enter to add"
                   >
                     <IconArrowBack size={10} />
@@ -236,11 +219,7 @@ export function PortSelector({
 
                 {notFound && (
                   <CommandGroup>
-                    <div
-                      className={cn(
-                        "max-h-[180px] overflow-y-auto flex flex-col gap-1",
-                      )}
-                    >
+                    <div className="max-h-[180px] overflow-y-auto px-2 py-2">
                       <CommandItem
                         key={search}
                         onSelect={() => {
@@ -250,19 +229,12 @@ export function PortSelector({
                         value={search}
                         onClick={(e) => e.preventDefault()}
                       >
-                        <Badge
-                          variant={"gray"}
-                          className={
-                            "uppercase tracking-wider font-medium py-1"
-                          }
-                        >
+                        <span className="inline-flex items-center rounded-[6px] bg-oz2-acc-soft px-1.5 py-0.5 font-mono text-[11px] font-medium text-oz2-acc-text">
                           {search}
-                        </Badge>
-                        <div
-                          className={"text-neutral-500 dark:text-nb-gray-300"}
-                        >
+                        </span>
+                        <div className="text-[12px] text-oz2-text-muted">
                           Add this port or range by pressing{" "}
-                          <span className={"font-bold text-openzro"}>
+                          <span className="font-semibold text-oz2-acc-text">
                             {"'Enter'"}
                           </span>
                         </div>
@@ -272,11 +244,7 @@ export function PortSelector({
                 )}
 
                 <CommandGroup>
-                  <div
-                    className={cn(
-                      "max-h-[180px] overflow-y-auto flex flex-col gap-1",
-                    )}
-                  >
+                  <div className="flex max-h-[180px] flex-col gap-1 overflow-y-auto px-2 py-2">
                     {portsInput.map((option) => {
                       const isSelected = portsInput.includes(option);
                       return (
@@ -289,24 +257,10 @@ export function PortSelector({
                           }}
                           onClick={(e) => e.preventDefault()}
                         >
-                          <div className={"flex items-center gap-2"}>
-                            <Badge
-                              variant={"gray"}
-                              className={
-                                "uppercase tracking-wider font-medium py-1"
-                              }
-                            >
-                              {option}
-                            </Badge>
-                          </div>
-
-                          <div
-                            className={
-                              "text-neutral-500 dark:text-nb-gray-300 font-medium flex items-center gap-2"
-                            }
-                          >
-                            <Checkbox checked={isSelected} />
-                          </div>
+                          <span className="inline-flex items-center rounded-[6px] bg-oz2-acc-soft px-1.5 py-0.5 font-mono text-[11px] font-medium text-oz2-acc-text">
+                            {option}
+                          </span>
+                          <Checkbox checked={isSelected} />
                         </CommandItem>
                       );
                     })}
@@ -320,7 +274,7 @@ export function PortSelector({
       {portRanges?.length > 0 && (
         <Callout variant={"info"} className={"mt-4"}>
           Port ranges requires Openzro client{" "}
-          <span className={"text-white font-normal"}>v0.48</span> or higher.
+          <span className="font-medium text-oz2-text">v0.48</span> or higher.
         </Callout>
       )}
     </>
