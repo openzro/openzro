@@ -36,7 +36,9 @@ export const PostureCheckEndpointSecurity = ({
         "Restrict access in your network based on device compliance reported by an MDM/EDR vendor."
       }
       icon={<ShieldHalf size={16} />}
-      iconClass={"bg-gradient-to-tr from-emerald-500 to-emerald-400"}
+      iconClass={
+        "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+      }
       modalWidthClass={"max-w-xl"}
       onReset={() => onChange(undefined)}
     >

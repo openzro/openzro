@@ -221,6 +221,7 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
               onChange={(e) => setDescription(e.target.value)}
               placeholder="e.g., Devs are allowed to access servers and servers are allowed to access Devs."
               rows={2}
+              className="!min-h-[60px]"
               disabled={fieldsDisabled}
             />
           </div>
