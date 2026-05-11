@@ -249,29 +249,31 @@ export function AccessControlModalContent({
                   <b className={"text-oz2-text"}>UDP</b> protocol.
                 </OzHelpText>
               </div>
-              <OzSelect
-                value={protocol}
-                onValueChange={(v) => handleProtocolChange(v as Protocol)}
-                disabled={
-                  !permission.policies.update || !permission.policies.create
-                }
-              >
-                <OzSelectTrigger className="w-[140px]">
-                  <div
-                    className={"flex items-center gap-3"}
-                    data-cy={"protocol-select-button"}
-                  >
-                    <Share2 size={15} className={"text-oz2-text-faint"} />
-                    <OzSelectValue placeholder="Select protocol..." />
-                  </div>
-                </OzSelectTrigger>
-                <OzSelectContent data-cy={"protocol-selection"}>
-                  <OzSelectItem value="all">ALL</OzSelectItem>
-                  <OzSelectItem value="tcp">TCP</OzSelectItem>
-                  <OzSelectItem value="udp">UDP</OzSelectItem>
-                  <OzSelectItem value="icmp">ICMP</OzSelectItem>
-                </OzSelectContent>
-              </OzSelect>
+              <div className="w-[110px] shrink-0">
+                <OzSelect
+                  value={protocol}
+                  onValueChange={(v) => handleProtocolChange(v as Protocol)}
+                  disabled={
+                    !permission.policies.update || !permission.policies.create
+                  }
+                >
+                  <OzSelectTrigger>
+                    <div
+                      className={"flex items-center gap-2"}
+                      data-cy={"protocol-select-button"}
+                    >
+                      <Share2 size={14} className={"text-oz2-text-faint"} />
+                      <OzSelectValue placeholder="Protocol" />
+                    </div>
+                  </OzSelectTrigger>
+                  <OzSelectContent data-cy={"protocol-selection"}>
+                    <OzSelectItem value="all">ALL</OzSelectItem>
+                    <OzSelectItem value="tcp">TCP</OzSelectItem>
+                    <OzSelectItem value="udp">UDP</OzSelectItem>
+                    <OzSelectItem value="icmp">ICMP</OzSelectItem>
+                  </OzSelectContent>
+                </OzSelect>
+              </div>
             </div>
 
             <div className={"flex gap-6 items-center"}>
