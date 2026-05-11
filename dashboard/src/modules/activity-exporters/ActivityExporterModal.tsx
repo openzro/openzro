@@ -429,11 +429,18 @@ export default function ActivityExporterModal({
                     id="exporter-es-username"
                     value={esUsername}
                     onChange={(e) => setEsUsername(e.target.value)}
-                    placeholder={"basic auth fallback"}
+                    placeholder={
+                      isEdit ? PLACEHOLDER_KEEP : "basic auth fallback"
+                    }
                   />
                 </div>
               </div>
-              {esUsername && (
+              {/* Password field renders whenever there's a username typed OR
+                  we're editing — on edit we don't know if the existing record
+                  uses basic auth without exposing auth_mode, so showing the
+                  field unconditionally lets the operator update it without
+                  having to retype the username first. */}
+              {(esUsername || isEdit) && (
                 <div>
                   <OzLabel htmlFor="exporter-es-password">Password</OzLabel>
                   <OzInput

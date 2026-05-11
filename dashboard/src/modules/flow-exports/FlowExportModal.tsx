@@ -611,6 +611,7 @@ function ElasticForm({
             id="flow-elastic-user"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
+            placeholder={isEdit ? "(unchanged)" : ""}
           />
         </div>
         <div>
