@@ -74,13 +74,7 @@ interface Props {
   isLoading: boolean;
 }
 
-type StatusFilter = "all" | "on" | "warn" | "off" | "pending";
-
-// Idle threshold: connected=true peers whose last_seen is older than
-// this fall into the v2 "Idle" status. The API exposes no native
-// "idle" — this is a UI-only categorization to highlight stale peers
-// that the management hasn't yet flipped to disconnected.
-const IDLE_THRESHOLD_MS = 5 * 60 * 1000;
+type StatusFilter = "all" | "on" | "off" | "pending";
 
 const noopFilter: FilterFn<unknown> = () => true;
 const noopSort: SortingFn<unknown> = () => 0;
@@ -94,13 +88,8 @@ const NOOP_SORTING_FNS = {
   checkbox: noopSort,
 };
 
-function deriveStatus(peer: Peer): "on" | "warn" | "off" {
-  if (!peer.connected) return "off";
-  const lastSeenMs = new Date(peer.last_seen).getTime();
-  if (Number.isFinite(lastSeenMs) && Date.now() - lastSeenMs > IDLE_THRESHOLD_MS) {
-    return "warn";
-  }
-  return "on";
+function deriveStatus(peer: Peer): "on" | "off" {
+  return peer.connected ? "on" : "off";
 }
 
 export default function PeersTableV2({ peers, isLoading }: Props) {
@@ -133,17 +122,14 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
 
   const counts = useMemo(() => {
     let online = 0;
-    let idle = 0;
     let offline = 0;
     let pending = 0;
     for (const p of all) {
       if (p.approval_required) pending += 1;
-      const s = deriveStatus(p);
-      if (s === "on") online += 1;
-      else if (s === "warn") idle += 1;
+      if (deriveStatus(p) === "on") online += 1;
       else offline += 1;
     }
-    return { online, idle, offline, pending, total: all.length };
+    return { online, offline, pending, total: all.length };
   }, [all]);
 
   const allGroupNames = useMemo(() => {
@@ -184,6 +170,14 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
   useEffect(() => {
     setPagination((prev) => ({ ...prev, pageIndex: 0 }));
   }, [search, statusFilter, groupFilter]);
+
+  // Pending tab vanishes when count=0; fall back to "all" so the user
+  // isn't stuck on a hidden tab.
+  useEffect(() => {
+    if (statusFilter === "pending" && counts.pending === 0) {
+      setStatusFilter("all");
+    }
+  }, [statusFilter, counts.pending]);
 
   const columns = useMemo<ColumnDef<Peer>[]>(
     () => [
@@ -374,11 +368,6 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
           Online
         </span>
         <span className="inline-flex items-center gap-2">
-          <OzStatusDot status="warn" />
-          <span className="font-medium text-oz2-text">{counts.idle}</span>
-          Idle
-        </span>
-        <span className="inline-flex items-center gap-2">
           <OzStatusDot status="off" />
           <span className="font-medium text-oz2-text">{counts.offline}</span>
           Offline
@@ -390,7 +379,7 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <div className="inline-flex h-[34px] flex-1 min-w-[220px] items-center gap-2 rounded-oz2-input border border-oz2-border bg-oz2-surface px-3">
+        <div className="inline-flex h-[34px] w-[280px] items-center gap-2 rounded-oz2-input border border-oz2-border bg-oz2-surface px-3">
           <span className="text-oz2-text-faint">{ICONS.search}</span>
           <input
             value={search}
@@ -406,9 +395,10 @@ export default function PeersTableV2({ peers, isLoading }: Props) {
           options={[
             { id: "all", label: "All", count: counts.total },
             { id: "on", label: "Online", count: counts.online },
-            { id: "warn", label: "Idle", count: counts.idle },
             { id: "off", label: "Offline", count: counts.offline },
-            { id: "pending", label: "Pending", count: counts.pending },
+            ...(counts.pending > 0
+              ? [{ id: "pending" as const, label: "Pending", count: counts.pending }]
+              : []),
           ]}
         />
 
