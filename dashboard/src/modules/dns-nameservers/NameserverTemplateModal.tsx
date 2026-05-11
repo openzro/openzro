@@ -1,6 +1,5 @@
 "use client";
 
-import InlineLink from "@components/InlineLink";
 import { Modal, ModalContent, ModalTrigger } from "@components/modal/Modal";
 import classNames from "classnames";
 import { ExternalLinkIcon, Globe, ShieldCheck } from "lucide-react";
@@ -281,15 +280,16 @@ function ProviderButton({
               <span>{tile.ips[1]}</span>
             </>
           )}
-          <InlineLink
+          <a
             href={tile.href}
             target="_blank"
-            className="ml-auto"
+            rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
+            className="ml-auto inline-flex items-center gap-1 text-oz2-acc-text underline-offset-2 hover:underline"
           >
             Learn more
             <ExternalLinkIcon size={10} />
-          </InlineLink>
+          </a>
         </div>
       </div>
     </button>
