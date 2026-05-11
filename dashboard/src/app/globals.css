@@ -255,6 +255,53 @@
   outline-offset: 2px;
 }
 
+/* ──────────────────────────────────────────────────────────────────
+ * Flowbite focus-ring override — root cause of the "borda azul nos
+ * cantos quebrados" on every search-enabled dropdown, modal input,
+ * etc. The Flowbite plugin (loaded in tailwind.config.ts) injects a
+ * global rule:
+ *
+ *   [type='text']:focus, [type='email']:focus, …, select:focus,
+ *   textarea:focus {
+ *     --tw-ring-color: #1C64F2;   ← Flowbite blue-600
+ *     border-color:    #1C64F2;
+ *     box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow);
+ *   }
+ *
+ * That paints a 1-2px BLUE ring around every focused native form
+ * element across the dashboard — overriding the v2 focus tokens
+ * the per-component wrappers (OzInput / OzSelect / OzTextarea /
+ * PeerGroupSelector / Command popovers) try to apply.
+ *
+ * Strip it. v2 components own their own focus visuals via Tailwind
+ * utilities on the wrapper element (`focus-within:border-oz2-acc`,
+ * `focus-visible:ring-oz2-acc/30`, etc.). Leave outline alone so
+ * screen readers / high-contrast mode still get keyboard-focus
+ * affordance through the host element's `outline:none` or
+ * `focus-visible:` Tailwind rules.
+ * ────────────────────────────────────────────────────────────────── */
+[type='text']:focus,
+[type='email']:focus,
+[type='url']:focus,
+[type='password']:focus,
+[type='number']:focus,
+[type='date']:focus,
+[type='datetime-local']:focus,
+[type='month']:focus,
+[type='search']:focus,
+[type='tel']:focus,
+[type='time']:focus,
+[type='week']:focus,
+[multiple]:focus,
+textarea:focus,
+select:focus {
+  --tw-ring-color: transparent;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-ring-offset-shadow: 0 0 #0000;
+  border-color: inherit;
+  box-shadow: var(--tw-shadow, 0 0 #0000);
+}
+
 h1 {
     @apply text-2xl font-medium text-gray-700 dark:text-nb-gray-100 my-1;
 }
