@@ -32,6 +32,7 @@ import { usePermissions } from "@/contexts/PermissionsProvider";
 import { Group } from "@/interfaces/Group";
 import { Policy, Protocol } from "@/interfaces/Policy";
 import { PostureCheck } from "@/interfaces/PostureCheck";
+import PolicyLivePreview from "@/modules/access-control/v2/PolicyLivePreview";
 import { useAccessControl } from "@/modules/access-control/useAccessControl";
 import { PostureCheckBrowseModal } from "@/modules/posture-checks/modal/PostureCheckBrowseModal";
 import PostureCheckModal from "@/modules/posture-checks/modal/PostureCheckModal";
@@ -171,12 +172,14 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
       !permission.policies.update || !permission.policies.create;
 
     return (
-      // Single-column stack for pass 1. The Posture Checks card hosts
-      // a minimal table that wants real width — squeezing it into a
-      // 340px sidebar made the table's headers and labels wrap
-      // per-word. Pass 2 reintroduces a right rail with Live Preview
-      // + Impact (both naturally narrow content) where 340px works.
-      <div className="flex flex-col gap-4">
+      // 2-col layout: form cards on the left, sticky Live Preview on
+      // the right. The preview hugs the top of the viewport while the
+      // operator scrolls through Source/Destination, Protocol/Ports
+      // and Posture so the preview always reflects the field they
+      // just touched. Below xl the preview falls under the form for
+      // narrow screens.
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="flex min-w-0 flex-col gap-4">
         {/* Card 1 — Identity. Mirrors handoff Identity: name + status
             tile side-by-side at the top, description spans the row
             below. Trades the modal's stacked-everything layout for
@@ -417,14 +420,31 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
         </OzCard>
 
         {/* Card 4 — Posture Checks. Lives in the form column at full
-            width because its minimal table needs real space; the sidebar
-            slot reappears in pass 2 with Live Preview + Impact, which
-            tolerate a narrow column much better. */}
+            width because its minimal table needs real space; the
+            right-rail slot is reserved for narrow content (Live
+            Preview now, Impact in a follow-up). */}
         <PostureCheckCard
           postureChecks={postureChecks}
           setPostureChecks={setPostureChecks}
           isLoading={isPostureChecksLoading}
         />
+        </div>
+
+        {/* Right rail — sticky Live Preview aligned with the top of
+            the Identity card. */}
+        <aside className="flex flex-col gap-4 xl:sticky xl:top-6 xl:self-start">
+          <PolicyLivePreview
+            name={name}
+            enabled={enabled}
+            direction={direction}
+            sourceGroups={sourceGroups}
+            destinationGroups={destinationGroups}
+            destinationResource={destinationResource}
+            protocol={protocol}
+            ports={ports}
+            portRanges={portRanges}
+          />
+        </aside>
       </div>
     );
   },
