@@ -1,7 +1,6 @@
 "use client";
 
 import { Callout } from "@components/Callout";
-import FancyToggleSwitch from "@components/FancyToggleSwitch";
 import { PeerGroupSelector } from "@components/PeerGroupSelector";
 import { PortSelector } from "@components/PortSelector";
 import PolicyDirection from "@components/ui/PolicyDirection";
@@ -10,7 +9,6 @@ import {
   AlertCircleIcon,
   FolderDown,
   FolderInput,
-  Power,
   Share2,
   Shield,
   ShieldCheck,
@@ -21,6 +19,7 @@ import Skeleton from "react-loading-skeleton";
 import OzCard from "@/components/v2/OzCard";
 import OzInput from "@/components/v2/OzInput";
 import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
+import OzSwitch from "@/components/v2/OzSwitch";
 import {
   OzSelect,
   OzSelectContent,
@@ -172,13 +171,18 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
       !permission.policies.update || !permission.policies.create;
 
     return (
-      <div className="flex flex-col gap-4">
+      // 2-col layout — form cards on the left, sidebar on the right.
+      // Sidebar hosts Posture Checks for pass 1 and gains a Live
+      // Preview + Impact stack in pass 2. Collapses to a single column
+      // below xl so the cards stay readable on narrower screens.
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="flex flex-col gap-4 min-w-0">
         {/* Card 1 — Identity. Mirrors handoff Identity: name + status
             tile side-by-side at the top, description spans the row
             below. Trades the modal's stacked-everything layout for
             the wider horizontal posture the page allows. */}
         <OzCard>
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-[minmax(0,1fr)_240px]">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-[minmax(0,1fr)_160px]">
             <div>
               <OzLabel htmlFor="policy-name" required>
                 Policy name
@@ -198,21 +202,13 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
               />
             </div>
 
-            {/* Compact enable tile — same FancyToggleSwitch the modal
-                used, but constrained to the 240px column so the right
-                edge of the card stays aligned with the cards below. */}
-            <div className="md:pt-7">
-              <FancyToggleSwitch
+            <div>
+              <OzLabel>Status</OzLabel>
+              <OzHelpText className="mb-2 invisible">.</OzHelpText>
+              <EnableToggleButton
                 value={enabled}
                 onChange={setEnabled}
                 disabled={fieldsDisabled}
-                label={
-                  <>
-                    <Power size={15} />
-                    Enable Policy
-                  </>
-                }
-                helpText="Toggle the policy on or off."
               />
             </div>
           </div>
@@ -424,14 +420,19 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
           </div>
         </OzCard>
 
-        {/* Card 4 — Posture Checks. Inlined from the legacy
-            PostureCheckTab so the page doesn't need a tab wrapper to
-            host the same minimal table + Add/Browse modals. */}
-        <PostureCheckCard
-          postureChecks={postureChecks}
-          setPostureChecks={setPostureChecks}
-          isLoading={isPostureChecksLoading}
-        />
+        </div>
+
+        {/* Right sidebar. Pass 1 carries Posture Checks alone; pass 2
+            slots a Live Preview + Impact pair on top, sliding Posture
+            down or back into the form col. Sticky so it stays in
+            reach while the form cards scroll. */}
+        <aside className="flex flex-col gap-4 xl:sticky xl:top-6 xl:self-start">
+          <PostureCheckCard
+            postureChecks={postureChecks}
+            setPostureChecks={setPostureChecks}
+            isLoading={isPostureChecksLoading}
+          />
+        </aside>
       </div>
     );
   },
@@ -542,3 +543,43 @@ function PostureCheckCard({
   );
 }
 
+// EnableToggleButton — compact bordered tile matching the handoff
+// Identity-card Status widget. Sits in a 160px column next to the
+// policy name. Single visual unit so the operator sees enable/disable
+// state at a glance without a separate label-and-helptext block.
+function EnableToggleButton({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: boolean;
+  onChange: (v: boolean) => void;
+  disabled: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={value}
+      disabled={disabled}
+      onClick={() => onChange(!value)}
+      className={cn(
+        "inline-flex h-[38px] w-full items-center gap-2.5 rounded-oz2-input border border-oz2-border bg-oz2-surface px-3 text-[13px] font-medium text-oz2-text transition-colors",
+        "hover:border-oz2-border-strong hover:bg-oz2-hover",
+        "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-oz2-surface disabled:hover:border-oz2-border",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-oz2-acc/40",
+      )}
+    >
+      <OzSwitch
+        size="sm"
+        checked={value}
+        onCheckedChange={onChange}
+        disabled={disabled}
+        // The outer button already handles the click; let the switch
+        // render its own state without re-firing onChange.
+        onClick={(e) => e.stopPropagation()}
+      />
+      {value ? "Enabled" : "Disabled"}
+    </button>
+  );
+}

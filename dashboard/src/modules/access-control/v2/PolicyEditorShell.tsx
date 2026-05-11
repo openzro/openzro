@@ -123,13 +123,10 @@ export default function PolicyEditorShell({
         </p>
       </header>
 
-      {/* Width left uncapped on pass 1 so the cards' internal
-          horizontal layouts (Source/Destination 3-col, Identity
-          name+enable, Protocol header row) actually breathe instead
-          of pretending the modal's max-w-2xl wrap-everything is still
-          the target. Pass 2 will introduce a 380px right rail and
-          this width naturally narrows under the grid template. */}
-      <div className="max-w-6xl">
+      {/* max-w-7xl fits the form col + the 340px sidebar at xl with
+          comfortable breathing room. The 2-col grid lives inside the
+          body, so the shell only caps the overall page width. */}
+      <div className="max-w-7xl">
         <PolicyEditorBody
           ref={editorRef}
           policy={policy}
