@@ -348,16 +348,18 @@ const NAV_ICONS = {
       <path d="M12 7v3M12 10l-5 7M12 10l5 7" />
     </>,
   ),
-  // Y-shape signpost — two chevron panels stacked on a vertical pole,
-  // top one pointing right and bottom one pointing left. Conveys
-  // "choice of route" / "directional split" for /network-routes,
-  // visually distinct from the connected-mesh `network` icon used
-  // for /networks (which represents a segment, not a path).
+  // Split arrow — single trunk rising from the bottom and forking
+  // into two branches with arrowheads pointing up-left and up-right.
+  // Conveys "traffic distribution / route branching" for
+  // /network-routes, visually distinct from the connected-mesh
+  // `network` icon used for /networks (segment, not path).
   networkRoutes: navIcon(
     <>
-      <path d="M12 3v18" />
-      <path d="M12 5h7l2 2-2 2h-7z" />
-      <path d="M12 11H5l-2 2 2 2h7z" />
+      <path d="M12 21V13" />
+      <path d="M12 13l-6-6" />
+      <path d="M10 7H6v4" />
+      <path d="M12 13l6-6" />
+      <path d="M14 7h4v4" />
     </>,
   ),
   shield: navIcon(<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" />),
