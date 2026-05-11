@@ -7,16 +7,20 @@ import * as React from "react";
 
 type PopoverVariants = VariantProps<typeof popoverVariants>;
 
+// Variants paint with v2 tokens in both modes — the legacy
+// `dark:border-nb-gray-800` token was a violet-tinted gray
+// (rgb 64 62 96) that read as a stray "blue/violet" border around
+// popovers when dark mode was active. oz2-border resolves to a
+// subtle 10% violet rgba in dark, which sits flat against the
+// elevated surface.
 export const popoverVariants = cva([], {
   variants: {
     variant: {
       lighter: [
-        "rounded-md border border-neutral-200 bg-white px-5 py-3 text-sm text-neutral-950 shadow-md",
-        "dark:border-nb-gray-800 dark:bg-nb-gray-920 dark:text-neutral-50",
+        "rounded-md border border-oz2-border bg-oz2-surface px-5 py-3 text-sm text-oz2-text shadow-oz2-md",
       ],
       dark: [
-        "rounded-md border border-neutral-200 bg-white px-5 py-3 text-sm text-neutral-950 shadow-md",
-        "dark:border-nb-gray-900 dark:bg-nb-gray-940 dark:text-gray-50",
+        "rounded-md border border-oz2-border bg-oz2-bg-elev px-5 py-3 text-sm text-oz2-text shadow-oz2-md",
       ],
     },
   },
