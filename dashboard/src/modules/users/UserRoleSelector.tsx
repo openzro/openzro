@@ -126,42 +126,35 @@ export function UserRoleSelector({
         setOpen(isOpen);
       }}
     >
-      <PopoverTrigger asChild>
-        {customTrigger ? (
+      {customTrigger ? (
+        <PopoverTrigger asChild>
           <div ref={inputRef} className={"group/user-role-selector"}>
             {customTrigger}
           </div>
-        ) : (
-          <button
-            ref={inputRef}
-            disabled={disabled}
-            data-cy={"user-role-selector"}
-            // Explicit onClick fallback — Radix Slot composes its own
-            // handler when asChild clones a native <button>, but in
-            // the v2 repaint commit (71627e8a) the click stopped
-            // reaching Slot. Adding setOpen here makes the trigger
-            // unconditionally toggle the popover; Radix still owns
-            // close-on-outside-click + Esc + focus restoration.
-            onClick={() => setOpen((prev) => !prev)}
-            className={cn(
-              "group/user-role-selector inline-flex h-[34px] w-full items-center justify-between gap-2 rounded-oz2-input border border-oz2-border bg-oz2-surface px-3 text-[13px] text-oz2-text transition-colors",
-              "hover:border-oz2-border-strong hover:bg-oz2-hover",
-              "[outline:none] focus-visible:border-oz2-acc focus-visible:ring-2 focus-visible:ring-oz2-acc/30",
-              "disabled:cursor-not-allowed disabled:opacity-60",
-            )}
-          >
-            {selectedRole && (
-              <div className="flex items-center gap-2.5">
-                <selectedRole.icon size={14} className="text-oz2-text-faint" />
-                <span className="font-medium text-oz2-text whitespace-nowrap">
-                  {selectedRole.name}
-                </span>
-              </div>
-            )}
-            <ChevronsUpDown size={14} className="shrink-0 text-oz2-text-faint" />
-          </button>
-        )}
-      </PopoverTrigger>
+        </PopoverTrigger>
+      ) : (
+        <PopoverTrigger
+          ref={inputRef}
+          disabled={disabled}
+          data-cy={"user-role-selector"}
+          className={cn(
+            "group/user-role-selector inline-flex h-[34px] w-full items-center justify-between gap-2 rounded-oz2-input border border-oz2-border bg-oz2-surface px-3 text-[13px] text-oz2-text transition-colors",
+            "hover:border-oz2-border-strong hover:bg-oz2-hover",
+            "[outline:none] focus-visible:border-oz2-acc focus-visible:ring-2 focus-visible:ring-oz2-acc/30",
+            "disabled:cursor-not-allowed disabled:opacity-60",
+          )}
+        >
+          {selectedRole && (
+            <div className="flex items-center gap-2.5">
+              <selectedRole.icon size={14} className="text-oz2-text-faint" />
+              <span className="font-medium text-oz2-text whitespace-nowrap">
+                {selectedRole.name}
+              </span>
+            </div>
+          )}
+          <ChevronsUpDown size={14} className="shrink-0 text-oz2-text-faint" />
+        </PopoverTrigger>
+      )}
       <PopoverContent
         className="w-full overflow-hidden rounded-oz2-card border border-oz2-border bg-oz2-bg-elev p-0 text-oz2-text shadow-oz2-md"
         style={{

@@ -94,9 +94,11 @@ export function UserInviteModalContent({ onSuccess }: Readonly<ModalProps>) {
 
   return (
     <ModalContent maxWidthClass={"max-w-md relative"} showClose={true}>
+      {/* Decorative gradient overlay — `pointer-events-none` so it
+          doesn't intercept clicks on the form fields below it. */}
       <div
         className={
-          "h-full w-full absolute left-0 top-0 rounded-md overflow-hidden z-0"
+          "pointer-events-none h-full w-full absolute left-0 top-0 rounded-md overflow-hidden z-0"
         }
       >
         <div
