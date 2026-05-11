@@ -3,11 +3,9 @@
 import { Callout } from "@components/Callout";
 import FancyToggleSwitch from "@components/FancyToggleSwitch";
 import {
-  Modal,
   ModalClose,
   ModalContent,
   ModalFooter,
-  ModalTrigger,
 } from "@components/modal/Modal";
 import ModalHeader from "@components/modal/ModalHeader";
 import { PeerGroupSelector } from "@components/PeerGroupSelector";
@@ -27,6 +25,7 @@ import {
   Text,
 } from "lucide-react";
 import React, { useMemo, useState } from "react";
+// useState is still used inside AccessControlModalContent (tab + form state).
 import AccessControlIcon from "@/assets/icons/AccessControlIcon";
 import OzButton from "@/components/v2/OzButton";
 import OzInput from "@/components/v2/OzInput";
@@ -53,60 +52,13 @@ import { useAccessControl } from "@/modules/access-control/useAccessControl";
 import { PostureCheckTab } from "@/modules/posture-checks/ui/PostureCheckTab";
 import { PostureCheckTabTrigger } from "@/modules/posture-checks/ui/PostureCheckTabTrigger";
 
-type Props = {
-  children?: React.ReactNode;
-};
-
-type UpdateModalProps = {
-  policy: Policy;
-  open: boolean;
-  onOpenChange?: (open: boolean) => void;
-  cell?: string;
-  postureCheckTemplates?: PostureCheck[];
-  onSuccess?: (policy: Policy) => void;
-  useSave?: boolean;
-  allowEditPeers?: boolean;
-};
-
-export default function AccessControlModal({ children }: Readonly<Props>) {
-  const [modal, setModal] = useState(false);
-
-  return (
-    <Modal open={modal} onOpenChange={setModal} key={modal ? 1 : 0}>
-      {children && <ModalTrigger asChild>{children}</ModalTrigger>}
-      {modal && <AccessControlModalContent onSuccess={() => setModal(false)} />}
-    </Modal>
-  );
-}
-
-export function AccessControlUpdateModal({
-  policy,
-  open,
-  onOpenChange,
-  cell,
-  postureCheckTemplates,
-  onSuccess,
-  useSave = true,
-  allowEditPeers,
-}: Readonly<UpdateModalProps>) {
-  return (
-    <Modal open={open} onOpenChange={onOpenChange} key={open ? 1 : 0}>
-      {open && (
-        <AccessControlModalContent
-          onSuccess={(p) => {
-            onOpenChange && onOpenChange(false);
-            onSuccess && onSuccess(p);
-          }}
-          policy={policy}
-          cell={cell}
-          postureCheckTemplates={postureCheckTemplates}
-          useSave={useSave}
-          allowEditPeers={allowEditPeers}
-        />
-      )}
-    </Modal>
-  );
-}
+// Only AccessControlModalContent is exported now. The standalone
+// AccessControlModal + AccessControlUpdateModal wrappers were used by
+// the legacy /access-control table — both are gone. Networks' multi-
+// step wizard (NetworkProvider) still composes this body inline
+// inside its own Modal so the wizard's post-policy "ask for routing
+// peer" continuation stays in the same modal stack instead of
+// navigating away to /access-control/new.
 
 type ModalProps = {
   onSuccess?: (p: Policy) => void;

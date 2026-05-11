@@ -4,6 +4,7 @@ import { Callout } from "@components/Callout";
 import { PeerGroupSelector } from "@components/PeerGroupSelector";
 import { PortSelector } from "@components/PortSelector";
 import PolicyDirection from "@components/ui/PolicyDirection";
+import * as LabelPrimitive from "@radix-ui/react-label";
 import { cn } from "@utils/helpers";
 import {
   AlertCircleIcon,
@@ -18,27 +19,26 @@ import OzCard from "@/components/v2/OzCard";
 import OzInput from "@/components/v2/OzInput";
 import { OzHelpText } from "@/components/v2/OzLabel";
 import {
-  OzTabs,
-  OzTabsContent,
-  OzTabsList,
-  OzTabsTrigger,
-} from "@/components/v2/OzTabs";
-import * as LabelPrimitive from "@radix-ui/react-label";
-import {
   OzSelect,
   OzSelectContent,
   OzSelectItem,
   OzSelectTrigger,
   OzSelectValue,
 } from "@/components/v2/OzSelect";
+import {
+  OzTabs,
+  OzTabsContent,
+  OzTabsList,
+  OzTabsTrigger,
+} from "@/components/v2/OzTabs";
 import OzTextarea from "@/components/v2/OzTextarea";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { Group } from "@/interfaces/Group";
 import { Policy, Protocol } from "@/interfaces/Policy";
 import { PostureCheck } from "@/interfaces/PostureCheck";
+import { useAccessControl } from "@/modules/access-control/useAccessControl";
 import PolicyImpact from "@/modules/access-control/v2/PolicyImpact";
 import PolicyLivePreview from "@/modules/access-control/v2/PolicyLivePreview";
-import { useAccessControl } from "@/modules/access-control/useAccessControl";
 import { PostureCheckBrowseModal } from "@/modules/posture-checks/modal/PostureCheckBrowseModal";
 import PostureCheckModal from "@/modules/posture-checks/modal/PostureCheckModal";
 import PostureCheckMinimalTable from "@/modules/posture-checks/table/PostureCheckMinimalTable";

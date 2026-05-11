@@ -39,7 +39,6 @@ import {
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { Policy } from "@/interfaces/Policy";
 import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
-import AccessControlActionCellV2 from "@/modules/access-control/v2/cells/AccessControlActionCellV2";
 import AccessControlActiveCell from "@/modules/access-control/table/AccessControlActiveCell";
 import AccessControlDestinationsCell from "@/modules/access-control/table/AccessControlDestinationsCell";
 import AccessControlDirectionCell from "@/modules/access-control/table/AccessControlDirectionCell";
@@ -48,6 +47,7 @@ import AccessControlPortsCell from "@/modules/access-control/table/AccessControl
 import AccessControlPostureCheckCell from "@/modules/access-control/table/AccessControlPostureCheckCell";
 import AccessControlProtocolCell from "@/modules/access-control/table/AccessControlProtocolCell";
 import AccessControlSourcesCell from "@/modules/access-control/table/AccessControlSourcesCell";
+import AccessControlActionCellV2 from "@/modules/access-control/v2/cells/AccessControlActionCellV2";
 
 // AccessControlTableV2 — phase-5.6 v2 paint over real /api/policies data.
 // Mirrors SetupKeysTableV2 chrome (header + stat badges + toolbar +
