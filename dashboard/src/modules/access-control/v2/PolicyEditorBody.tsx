@@ -5,7 +5,12 @@ import { PeerGroupSelector } from "@components/PeerGroupSelector";
 import { PortSelector } from "@components/PortSelector";
 import PolicyDirection from "@components/ui/PolicyDirection";
 import { cn } from "@utils/helpers";
-import { AlertCircleIcon, ArrowRightLeft, ShieldCheck } from "lucide-react";
+import {
+  AlertCircleIcon,
+  ArrowRightLeft,
+  Shield,
+  ShieldCheck,
+} from "lucide-react";
 import * as React from "react";
 import { useState } from "react";
 import Skeleton from "react-loading-skeleton";
@@ -241,6 +246,10 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
                   <ArrowRightLeft size={14} />
                   Policy
                 </OzTabsTrigger>
+                <OzTabsTrigger value="ports">
+                  <Shield size={14} />
+                  Ports & Protocol
+                </OzTabsTrigger>
                 <OzTabsTrigger value="posture">
                   <ShieldCheck size={14} />
                   Posture Checks
@@ -358,8 +367,9 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
                 </Callout>
               )}
 
-              <div className="my-5 h-px bg-oz2-border-soft" aria-hidden />
+            </OzTabsContent>
 
+            <OzTabsContent value="ports" className="px-[18px] pb-[18px] pt-3">
               <div
                 className="flex flex-wrap items-start justify-between gap-4"
                 data-cy="protocol-wrapper"
@@ -395,13 +405,18 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
                 </div>
               </div>
 
+              <div className="my-5 h-px bg-oz2-border-soft" aria-hidden />
+
               <div
-                className={cn(
-                  "mt-4",
-                  portDisabled && "opacity-30 pointer-events-none",
-                )}
+                className={cn(portDisabled && "opacity-30 pointer-events-none")}
               >
-                <FieldLabel hint="Empty = all ports for the chosen protocol.">
+                <FieldLabel
+                  hint={
+                    portDisabled
+                      ? "Switch the protocol on the Policy tab to TCP or UDP to constrain ports."
+                      : "Empty = all ports for the chosen protocol."
+                  }
+                >
                   Ports
                 </FieldLabel>
                 <PortSelector
