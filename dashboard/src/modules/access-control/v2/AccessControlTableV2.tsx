@@ -44,7 +44,7 @@ import {
   AccessControlModalContent,
   AccessControlUpdateModal,
 } from "@/modules/access-control/AccessControlModal";
-import AccessControlActionCell from "@/modules/access-control/table/AccessControlActionCell";
+import AccessControlActionCellV2 from "@/modules/access-control/v2/cells/AccessControlActionCellV2";
 import AccessControlActiveCell from "@/modules/access-control/table/AccessControlActiveCell";
 import AccessControlDestinationsCell from "@/modules/access-control/table/AccessControlDestinationsCell";
 import AccessControlDirectionCell from "@/modules/access-control/table/AccessControlDirectionCell";
@@ -222,7 +222,15 @@ export default function AccessControlTableV2({ policies, isLoading }: Props) {
         size: 40,
         enableSorting: false,
         header: () => null,
-        cell: ({ row }) => <AccessControlActionCell policy={row.original} />,
+        cell: ({ row }) => (
+          <AccessControlActionCellV2
+            policy={row.original}
+            onEdit={() => {
+              setEditPolicy(row.original);
+              setEditCell("");
+            }}
+          />
+        ),
       },
     ],
     [],
