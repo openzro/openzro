@@ -123,13 +123,11 @@ export default function PolicyEditorShell({
         </p>
       </header>
 
-      {/* Pass 1 stacks everything in a single column — Posture Checks'
-          minimal table needs full width to render properly. max-w-5xl
-          (1024px) gives Identity/Source-Dest/Protocol-Ports/Posture
-          comfortable proportions without sprawling. Pass 2 will widen
-          the page and reintroduce a 380px right rail for Live Preview
-          + Impact. */}
-      <div className="max-w-5xl">
+      {/* max-w-7xl fits the form col (Posture's minimal table needs
+          real width) plus the 340px Live Preview rail at xl. Below xl
+          the rail falls below the form so cards still get full width
+          on narrower screens. */}
+      <div className="max-w-7xl">
         <PolicyEditorBody
           ref={editorRef}
           policy={policy}
