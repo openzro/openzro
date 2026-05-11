@@ -1,5 +1,6 @@
 "use client";
 
+import { Modal } from "@components/modal/Modal";
 import {
   Tooltip,
   TooltipContent,
@@ -39,6 +40,7 @@ import {
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { Policy } from "@/interfaces/Policy";
 import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
+import { AccessControlModalContent } from "@/modules/access-control/AccessControlModal";
 import AccessControlActionCellV2 from "@/modules/access-control/v2/cells/AccessControlActionCellV2";
 import AccessControlActiveCell from "@/modules/access-control/table/AccessControlActiveCell";
 import AccessControlDestinationsCell from "@/modules/access-control/table/AccessControlDestinationsCell";
@@ -81,17 +83,18 @@ export default function AccessControlTableV2({ policies, isLoading }: Props) {
   const params = useSearchParams();
   const idParam = params.get("id") ?? undefined;
 
-  // Create + edit flows now navigate to dedicated pages
-  // (/access-control/new and /access-control/[id]); the table no
-  // longer owns modal state for either path. The legacy modal lives
-  // on for the inline "Create policy for this route" flow inside
-  // RouteModal, but that path does not touch this component.
+  // Create flow stays on the modal — a blank form has no preview /
+  // context to justify a full page, and the lighter affordance lets
+  // operators sketch a policy without losing the table view behind.
+  // Edit flow lifts to /access-control/edit?id=…, where there is real
+  // policy state for the right-rail panels to make use of.
+  const [createOpen, setCreateOpen] = useState(false);
 
   useV2TopbarRight(
     <OzButton
       variant="primary"
       type="button"
-      onClick={() => router.push("/access-control/new")}
+      onClick={() => setCreateOpen(true)}
       disabled={!permission.policies.create}
     >
       <PlusCircle size={14} />
@@ -214,7 +217,9 @@ export default function AccessControlTableV2({ policies, isLoading }: Props) {
         cell: ({ row }) => (
           <AccessControlActionCellV2
             policy={row.original}
-            onEdit={() => router.push(`/access-control/${row.original.id}`)}
+            onEdit={() =>
+              router.push(`/access-control/edit?id=${row.original.id}`)
+            }
           />
         ),
       },
@@ -253,7 +258,7 @@ export default function AccessControlTableV2({ policies, isLoading }: Props) {
     if (target.closest("button, a, [role='switch'], input, [data-stop-row-click]")) {
       return;
     }
-    router.push(`/access-control/${row.original.id}`);
+    router.push(`/access-control/edit?id=${row.original.id}`);
   };
 
   const pageInfo = table.getState().pagination;
@@ -289,10 +294,25 @@ export default function AccessControlTableV2({ policies, isLoading }: Props) {
           </p>
         </header>
 
+        {/* Create modal — opened from the topbar CTA or the cold-start
+            hero. Rendered inline so AccessControlModalContent resolves
+            usePolicies() / useGroups() from this subtree's providers. */}
+        <Modal
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          key={createOpen ? "create-open" : "create-closed"}
+        >
+          {createOpen && (
+            <AccessControlModalContent
+              onSuccess={() => setCreateOpen(false)}
+            />
+          )}
+        </Modal>
+
         {isColdStart ? (
           <AccessControlEmptyState
             canCreate={permission.policies.create}
-            onCreate={() => router.push("/access-control/new")}
+            onCreate={() => setCreateOpen(true)}
           />
         ) : (
           <>
