@@ -1,5 +1,4 @@
 import { DropdownInput } from "@components/DropdownInput";
-import Kbd from "@components/Kbd";
 import { Modal, ModalContent } from "@components/modal/Modal";
 import { VirtualScrollAreaList } from "@components/VirtualScrollAreaList";
 import { useSearch } from "@hooks/useSearch";
@@ -358,34 +357,61 @@ const LoadingState = () => {
   );
 };
 
+// Bottom-of-modal hint strip teaching the four operations the
+// operator can do from here: ↑↓ to scan results, ↵ to open, esc to
+// dismiss, and the global ⌘K / Ctrl+K toggle. Platform-aware so the
+// hint matches the actual key the user has to press.
 const KeyboardShortcutsFooter = () => {
+  const [mac, setMac] = React.useState(false);
+  React.useEffect(() => {
+    if (typeof navigator === "undefined") return;
+    setMac(/Mac|iPod|iPhone|iPad/.test(navigator.platform));
+  }, []);
   return (
-    <div
-      className={
-        "bg-nb-gray-940 border-t border-nb-gray-910 px-4 py-3 text-xs text-nb-gray-300 flex items-center gap-5"
-      }
-    >
-      <div className={"flex items-center gap-1.5"}>
-        <Kbd variant={"darker"}>
-          <ArrowUpIcon size={12} />
-        </Kbd>
-        <Kbd variant={"darker"}>
-          <ArrowDownIcon size={12} />
-        </Kbd>
-        <div className={"ml-1"}>Navigate</div>
-      </div>
-      <div className={"flex items-center gap-1.5"}>
-        <Kbd variant={"darker"}>
-          <CornerDownLeft size={12} />
-        </Kbd>
-        <div className={"ml-1"}>Open</div>
-      </div>
-      <div className={"flex items-center gap-1.5"}>
-        <Kbd variant={"darker"} className={"text-[0.65rem] font-medium"}>
-          esc
-        </Kbd>
-        <div className={"ml-1"}>Close</div>
-      </div>
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-oz2-border-soft bg-oz2-bg-sunken px-4 py-3 text-[12px] text-oz2-text-muted">
+      <Shortcut label="Navigate">
+        <KbdHint>
+          <ArrowUpIcon size={11} />
+        </KbdHint>
+        <KbdHint>
+          <ArrowDownIcon size={11} />
+        </KbdHint>
+      </Shortcut>
+      <Shortcut label="Open">
+        <KbdHint>
+          <CornerDownLeft size={11} />
+        </KbdHint>
+      </Shortcut>
+      <Shortcut label="Close">
+        <KbdHint>esc</KbdHint>
+      </Shortcut>
+      <Shortcut label="Toggle">
+        <KbdHint>{mac ? "⌘" : "Ctrl"}</KbdHint>
+        <KbdHint>K</KbdHint>
+      </Shortcut>
     </div>
   );
 };
+
+function Shortcut({
+  children,
+  label,
+}: {
+  children: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1">{children}</div>
+      <span className="text-oz2-text-muted">{label}</span>
+    </div>
+  );
+}
+
+function KbdHint({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[4px] border border-oz2-border-soft bg-oz2-surface px-1 font-mono text-[10.5px] font-medium text-oz2-text-faint">
+      {children}
+    </kbd>
+  );
+}
