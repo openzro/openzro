@@ -363,6 +363,16 @@ const NAV_ICONS = {
     </>,
   ),
   shield: navIcon(<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" />),
+  // Same shield silhouette as `shield`, with a checkmark inside.
+  // Differentiates Posture Checks ("device is in spec") from Access
+  // Control ("who can reach what") — the two were sharing the plain
+  // shield and the labels were doing all the differentiation work.
+  shieldCheck: navIcon(
+    <>
+      <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" />
+      <path d="m9 12 2 2 4-4" />
+    </>,
+  ),
   key: navIcon(
     <>
       <circle cx={8} cy={15} r={4} />
@@ -481,7 +491,7 @@ function buildSidebarSections(
         {
           id: "posture-checks",
           label: "Posture Checks",
-          icon: NAV_ICONS.shield,
+          icon: NAV_ICONS.shieldCheck,
           active: matches("/posture-checks"),
           onClick: () => go("/posture-checks"),
         },
