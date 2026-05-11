@@ -133,10 +133,97 @@ func (in *SaveInput) publicBlob() ([]byte, error) {
 	return nil, fmt.Errorf("flow_exports: unknown type %q", in.Type)
 }
 
+// MergeIncomingSecret preserves the existing credential fields when
+// the caller posts an empty value on update. The API never reads
+// secrets back, so the dashboard sends "" to mean "leave as is". On
+// Elastic the same convention extends to Username because the public
+// projection only exposes AuthMode, not the actual identifier.
+func (in *SaveInput) MergeIncomingSecret(prev any) {
+	switch in.Type {
+	case TypeElastic:
+		if in.Elastic == nil {
+			return
+		}
+		pc, ok := prev.(*ElasticDestConfig)
+		if !ok || pc == nil {
+			return
+		}
+		if in.Elastic.APIKey == "" {
+			in.Elastic.APIKey = pc.APIKey
+		}
+		if in.Elastic.Username == "" {
+			in.Elastic.Username = pc.Username
+		}
+		if in.Elastic.Password == "" {
+			in.Elastic.Password = pc.Password
+		}
+	case TypeS3:
+		if in.S3 == nil {
+			return
+		}
+		pc, ok := prev.(*S3DestConfig)
+		if !ok || pc == nil {
+			return
+		}
+		if in.S3.AccessKey == "" {
+			in.S3.AccessKey = pc.AccessKey
+		}
+		if in.S3.SecretKey == "" {
+			in.S3.SecretKey = pc.SecretKey
+		}
+	case TypeHTTP:
+		// HTTP carries operator-defined header auth; the dashboard
+		// does not expose a headers field for flow exports today, so
+		// there is nothing to merge.
+	case TypeDatadog:
+		if in.Datadog == nil {
+			return
+		}
+		if in.Datadog.APIKey != "" {
+			return
+		}
+		if pc, ok := prev.(*DatadogDestConfig); ok && pc != nil {
+			in.Datadog.APIKey = pc.APIKey
+		}
+	case TypeGCS:
+		if in.GCS == nil {
+			return
+		}
+		pc, ok := prev.(*GCSDestConfig)
+		if !ok || pc == nil {
+			return
+		}
+		if in.GCS.CredentialsJSON == "" {
+			in.GCS.CredentialsJSON = pc.CredentialsJSON
+		}
+		if in.GCS.CredentialsFile == "" {
+			in.GCS.CredentialsFile = pc.CredentialsFile
+		}
+	}
+}
+
 // Save creates or updates a row. Sensitive fields are encrypted
 // before INSERT/UPDATE. Returns the persisted ID and (decrypted)
 // FlowExport so the API can return it directly.
 func (s *Store) Save(ctx context.Context, in SaveInput) (*FlowExport, error) {
+	// Update path: fetch the existing row, decrypt its config, and
+	// fall back to the previous secret values for any incoming field
+	// the caller left blank. Without this, every Save round-trips as
+	// "credentials wiped" and the next ApplyAll fails to authenticate.
+	var existing *FlowExport
+	if in.ID != 0 {
+		row, err := s.Get(ctx, in.ID)
+		if err != nil {
+			return nil, err
+		}
+		prev, err := s.Decrypt(row)
+		if err != nil {
+			return nil, fmt.Errorf("flow_exports: decrypt prev: %w", err)
+		}
+		in.MergeIncomingSecret(prev)
+		existing = row
+	}
+
 	if err := in.Validate(); err != nil {
 		return nil, err
 	}
@@ -170,13 +257,6 @@ func (s *Store) Save(ctx context.Context, in SaveInput) (*FlowExport, error) {
 		}
 	} else {
 		// Update path: take the existing CreatedAt so we don't shift it.
-		var existing FlowExport
-		if err := s.db.WithContext(ctx).First(&existing, in.ID).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, ErrNotFound
-			}
-			return nil, err
-		}
 		row.CreatedAt = existing.CreatedAt
 		if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
 			return nil, err
