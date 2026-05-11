@@ -41,12 +41,12 @@ import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
 import DnsTabs from "@/modules/dns/v2/DnsTabs";
 import NameserverModal from "@/modules/dns-nameservers/NameserverModal";
 import NameserverTemplateModal from "@/modules/dns-nameservers/NameserverTemplateModal";
-import NameserverActionCellV2 from "@/modules/dns-nameservers/v2/cells/NameserverActionCellV2";
 import NameserverActiveCell from "@/modules/dns-nameservers/table/NameserverActiveCell";
 import NameserverDistributionGroupsCell from "@/modules/dns-nameservers/table/NameserverDistributionGroupsCell";
 import NameserverMatchDomainsCell from "@/modules/dns-nameservers/table/NameserverMatchDomainsCell";
 import NameserverNameCell from "@/modules/dns-nameservers/table/NameserverNameCell";
 import NameserverNameserversCell from "@/modules/dns-nameservers/table/NameserverNameserversCell";
+import NameserverActionCellV2 from "@/modules/dns-nameservers/v2/cells/NameserverActionCellV2";
 
 // NameserversTableV2 — phase-5.14 v2 paint over /api/dns/nameservers.
 // Mirrors the SetupKeysTableV2 / AccessControlTableV2 chrome (header

@@ -3,11 +3,6 @@
 import { ModalContent, ModalFooter } from "@components/modal/Modal";
 import SmallParagraph from "@components/SmallParagraph";
 import { cn } from "@utils/helpers";
-import {
-  OzTabs as Tabs,
-  OzTabsList as TabsList,
-  OzTabsTrigger as TabsTrigger,
-} from "@/components/v2/OzTabs";
 import { ExternalLinkIcon } from "lucide-react";
 import { usePathname } from "next/navigation";
 import React, { useMemo } from "react";
@@ -15,6 +10,11 @@ import AppleIcon from "@/assets/icons/AppleIcon";
 import DockerIcon from "@/assets/icons/DockerIcon";
 import ShellIcon from "@/assets/icons/ShellIcon";
 import WindowsIcon from "@/assets/icons/WindowsIcon";
+import {
+  OzTabs as Tabs,
+  OzTabsList as TabsList,
+  OzTabsTrigger as TabsTrigger,
+} from "@/components/v2/OzTabs";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import useOperatingSystem from "@/hooks/useOperatingSystem";
 import { OperatingSystem } from "@/interfaces/OperatingSystem";
