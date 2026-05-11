@@ -276,7 +276,11 @@ export function PeerGroupSelector({
               // tall, so 38px floor + py-1.5 gives them room.
               "group relative flex w-full min-h-[38px] items-center justify-between gap-2 rounded-oz2-input border border-oz2-border bg-oz2-surface px-3 py-1.5 text-[13px] text-oz2-text-faint transition-colors",
               "hover:border-oz2-border-strong hover:bg-oz2-hover",
-              "focus:outline-none focus:border-oz2-acc focus:ring-2 focus:ring-oz2-acc/30",
+              // focus-visible (not focus) — mouse click moves focus
+              // into the popover content; the trigger keeping the
+              // violet ring after open made it look like the popover
+              // had a stray blue border.
+              "[outline:none] focus-visible:[outline:none] focus-visible:border-oz2-acc focus-visible:ring-2 focus-visible:ring-oz2-acc/30",
               "disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-60",
             )}
             disabled={disabled}
