@@ -5,13 +5,19 @@ import { PeerGroupSelector } from "@components/PeerGroupSelector";
 import { PortSelector } from "@components/PortSelector";
 import PolicyDirection from "@components/ui/PolicyDirection";
 import { cn } from "@utils/helpers";
-import { AlertCircleIcon, ShieldCheck } from "lucide-react";
+import { AlertCircleIcon, ArrowRightLeft, ShieldCheck } from "lucide-react";
 import * as React from "react";
 import { useState } from "react";
 import Skeleton from "react-loading-skeleton";
 import OzCard from "@/components/v2/OzCard";
 import OzInput from "@/components/v2/OzInput";
 import { OzHelpText } from "@/components/v2/OzLabel";
+import {
+  OzTabs,
+  OzTabsContent,
+  OzTabsList,
+  OzTabsTrigger,
+} from "@/components/v2/OzTabs";
 import * as LabelPrimitive from "@radix-ui/react-label";
 import {
   OzSelect,
@@ -225,190 +231,206 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
           </div>
         </OzCard>
 
-        {/* Card 2 — Source → Destination. Three columns with the
-            PolicyDirection toggle wedged between, matching the handoff
-            layout where the direction glyph sits visually on the path
-            between the two pickers. Callouts stack below the row. */}
-        <OzCard>
-          <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
-            <div>
-              <FieldLabel hint="Peers in any of these groups can initiate the connection.">
-                Source · From
-              </FieldLabel>
-              <PeerGroupSelector
-                dataCy="source-group-selector"
-                showPeerCount
-                disableInlineRemoveGroup={false}
-                popoverWidth={500}
-                showRoutes={false}
-                onChange={setSourceGroups}
-                values={sourceGroups}
-                saveGroupAssignments={useSave}
-                showResourceCounter={false}
-                disabled={fieldsDisabled}
-              />
+        {/* Card 2 — tabbed rules card. The legacy modal used to split
+            "Policy" (Source/Destination + Protocol + Ports) and
+            "Posture Checks" across two tabs; the page editor adopts
+            the same shape inside a single OzCard so the two
+            conceptual layers (network rules vs. peer prerequisites)
+            stay distinct without inflating the card count. */}
+        <OzCard flush>
+          <OzTabs defaultValue="policy">
+            <div className="px-[18px] pt-[14px]">
+              <OzTabsList>
+                <OzTabsTrigger value="policy">
+                  <ArrowRightLeft size={14} />
+                  Policy
+                </OzTabsTrigger>
+                <OzTabsTrigger value="posture">
+                  <ShieldCheck size={14} />
+                  Posture Checks
+                </OzTabsTrigger>
+              </OzTabsList>
             </div>
 
-            <div className="hidden self-center md:block">
-              <PolicyDirection
-                value={direction}
-                onChange={setDirection}
-                disabled={destinationOnlyResources}
-                destinationResource={destinationResource}
-              />
-            </div>
-            {/* Mobile: PolicyDirection collapses below the source picker
-                instead of disappearing on narrow viewports. */}
-            <div className="md:hidden">
-              <PolicyDirection
-                value={direction}
-                onChange={setDirection}
-                disabled={destinationOnlyResources}
-                destinationResource={destinationResource}
-              />
-            </div>
-
-            <div>
-              <FieldLabel hint="Connections will be matched against these destination groups.">
-                Destination · To
-              </FieldLabel>
-              <PeerGroupSelector
-                dataCy="destination-group-selector"
-                showRoutes
-                showPeerCount
-                disableInlineRemoveGroup={false}
-                popoverWidth={500}
-                onChange={setDestinationGroups}
-                values={destinationGroups}
-                saveGroupAssignments={useSave}
-                resource={destinationResource}
-                onResourceChange={setDestinationResource}
-                showResources
-                placeholder="Select destination(s)..."
-                disabled={fieldsDisabled}
-              />
-            </div>
-          </div>
-
-          {destinationHasResources &&
-            !destinationOnlyResources &&
-            direction === "bi" && (
-              <Callout
-                variant="warning"
-                icon={
-                  <AlertCircleIcon
-                    size={14}
-                    className="shrink-0 relative top-[3px] text-oz2-acc"
+            <OzTabsContent value="policy" className="px-[18px] pb-[18px] pt-3">
+              <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+                <div>
+                  <FieldLabel hint="Peers in any of these groups can initiate the connection.">
+                    Source · From
+                  </FieldLabel>
+                  <PeerGroupSelector
+                    dataCy="source-group-selector"
+                    showPeerCount
+                    disableInlineRemoveGroup={false}
+                    popoverWidth={500}
+                    showRoutes={false}
+                    onChange={setSourceGroups}
+                    values={sourceGroups}
+                    saveGroupAssignments={useSave}
+                    showResourceCounter={false}
+                    disabled={fieldsDisabled}
                   />
-                }
-                className="mt-5"
-              >
-                Some destination groups contain resources. Resources only
-                support incoming traffic and cannot initiate connections.
-              </Callout>
-            )}
+                </div>
 
-          {protocol === "all" && direction !== "bi" && (
-            <Callout
-              variant="warning"
-              icon={
-                <AlertCircleIcon
-                  size={14}
-                  className="shrink-0 relative top-[3px] text-oz2-acc"
-                />
-              }
-              className="mt-5"
-              data-cy="unidirectional-all-warning"
-            >
-              Unidirectional ALL is experimental. Reply traffic relies on
-              the firewall&apos;s stateful conntrack — fine for
-              request/response protocols (HTTP, SSH, DNS), but apps that
-              push unsolicited messages from the destination back to the
-              source (SNMP traps, syslog UDP outbound, server-initiated
-              heartbeats) will be dropped. Operationally-asymmetric ICMP
-              (destination-unreachable, fragmentation-needed) is dropped
-              too. Keep ALL bidirectional or split into per-protocol rules
-              if your apps depend on those.{" "}
-              <a
-                className="underline"
-                href="https://github.com/openzro/openzro/blob/main/docs/operator/unidirectional-policies.md"
-                target="_blank"
-                rel="noreferrer noopener"
-              >
-                Operator guide
-              </a>
-              .
-            </Callout>
-          )}
-        </OzCard>
+                <div className="hidden self-center md:block">
+                  <PolicyDirection
+                    value={direction}
+                    onChange={setDirection}
+                    disabled={destinationOnlyResources}
+                    destinationResource={destinationResource}
+                  />
+                </div>
+                <div className="md:hidden">
+                  <PolicyDirection
+                    value={direction}
+                    onChange={setDirection}
+                    disabled={destinationOnlyResources}
+                    destinationResource={destinationResource}
+                  />
+                </div>
 
-        {/* Card 3 — Protocol & Ports. Protocol selector + label/help
-            block sit on a single horizontal row at the top, Ports
-            sits below a soft divider. Pulls these out of the
-            Source/Destination card so each card has a single clear
-            responsibility per the handoff "Ports & protocols" group. */}
-        <OzCard>
-          <div
-            className="flex flex-wrap items-start justify-between gap-4"
-            data-cy="protocol-wrapper"
-          >
-            <div className="min-w-0 flex-1">
-              <FieldLabel hint="Allow only specified network protocols. Select TCP or UDP to constrain ports.">
-                Protocol
-              </FieldLabel>
-            </div>
-            <div className="w-[140px] shrink-0">
-              <OzSelect
-                value={protocol}
-                onValueChange={(v) => handleProtocolChange(v as Protocol)}
-                disabled={fieldsDisabled}
-              >
-                <OzSelectTrigger>
-                  <div
-                    className="flex items-center gap-2"
-                    data-cy="protocol-select-button"
+                <div>
+                  <FieldLabel hint="Connections will be matched against these destination groups.">
+                    Destination · To
+                  </FieldLabel>
+                  <PeerGroupSelector
+                    dataCy="destination-group-selector"
+                    showRoutes
+                    showPeerCount
+                    disableInlineRemoveGroup={false}
+                    popoverWidth={500}
+                    onChange={setDestinationGroups}
+                    values={destinationGroups}
+                    saveGroupAssignments={useSave}
+                    resource={destinationResource}
+                    onResourceChange={setDestinationResource}
+                    showResources
+                    placeholder="Select destination(s)..."
+                    disabled={fieldsDisabled}
+                  />
+                </div>
+              </div>
+
+              {destinationHasResources &&
+                !destinationOnlyResources &&
+                direction === "bi" && (
+                  <Callout
+                    variant="warning"
+                    icon={
+                      <AlertCircleIcon
+                        size={14}
+                        className="shrink-0 relative top-[3px] text-oz2-acc"
+                      />
+                    }
+                    className="mt-5"
                   >
-                    <OzSelectValue placeholder="Protocol" />
-                  </div>
-                </OzSelectTrigger>
-                <OzSelectContent data-cy="protocol-selection">
-                  <OzSelectItem value="all">ALL</OzSelectItem>
-                  <OzSelectItem value="tcp">TCP</OzSelectItem>
-                  <OzSelectItem value="udp">UDP</OzSelectItem>
-                  <OzSelectItem value="icmp">ICMP</OzSelectItem>
-                </OzSelectContent>
-              </OzSelect>
-            </div>
-          </div>
+                    Some destination groups contain resources. Resources only
+                    support incoming traffic and cannot initiate connections.
+                  </Callout>
+                )}
 
-          <div className="my-5 h-px bg-oz2-border-soft" aria-hidden />
+              {protocol === "all" && direction !== "bi" && (
+                <Callout
+                  variant="warning"
+                  icon={
+                    <AlertCircleIcon
+                      size={14}
+                      className="shrink-0 relative top-[3px] text-oz2-acc"
+                    />
+                  }
+                  className="mt-5"
+                  data-cy="unidirectional-all-warning"
+                >
+                  Unidirectional ALL is experimental. Reply traffic relies on
+                  the firewall&apos;s stateful conntrack — fine for
+                  request/response protocols (HTTP, SSH, DNS), but apps that
+                  push unsolicited messages from the destination back to the
+                  source (SNMP traps, syslog UDP outbound, server-initiated
+                  heartbeats) will be dropped. Operationally-asymmetric
+                  ICMP (destination-unreachable, fragmentation-needed) is
+                  dropped too. Keep ALL bidirectional or split into
+                  per-protocol rules if your apps depend on those.{" "}
+                  <a
+                    className="underline"
+                    href="https://github.com/openzro/openzro/blob/main/docs/operator/unidirectional-policies.md"
+                    target="_blank"
+                    rel="noreferrer noopener"
+                  >
+                    Operator guide
+                  </a>
+                  .
+                </Callout>
+              )}
 
-          <div
-            className={cn(portDisabled && "opacity-30 pointer-events-none")}
-          >
-            <FieldLabel hint="Empty = all ports for the chosen protocol.">
-              Ports
-            </FieldLabel>
-            <PortSelector
-              showAll
-              ports={ports}
-              onPortsChange={setPorts}
-              portRanges={portRanges}
-              onPortRangesChange={setPortRanges}
-              disabled={portDisabled}
-            />
-          </div>
+              <div className="my-5 h-px bg-oz2-border-soft" aria-hidden />
+
+              <div
+                className="flex flex-wrap items-start justify-between gap-4"
+                data-cy="protocol-wrapper"
+              >
+                <div className="min-w-0 flex-1">
+                  <FieldLabel hint="Allow only specified network protocols. Select TCP or UDP to constrain ports.">
+                    Protocol
+                  </FieldLabel>
+                </div>
+                <div className="w-[140px] shrink-0">
+                  <OzSelect
+                    value={protocol}
+                    onValueChange={(v) =>
+                      handleProtocolChange(v as Protocol)
+                    }
+                    disabled={fieldsDisabled}
+                  >
+                    <OzSelectTrigger>
+                      <div
+                        className="flex items-center gap-2"
+                        data-cy="protocol-select-button"
+                      >
+                        <OzSelectValue placeholder="Protocol" />
+                      </div>
+                    </OzSelectTrigger>
+                    <OzSelectContent data-cy="protocol-selection">
+                      <OzSelectItem value="all">ALL</OzSelectItem>
+                      <OzSelectItem value="tcp">TCP</OzSelectItem>
+                      <OzSelectItem value="udp">UDP</OzSelectItem>
+                      <OzSelectItem value="icmp">ICMP</OzSelectItem>
+                    </OzSelectContent>
+                  </OzSelect>
+                </div>
+              </div>
+
+              <div
+                className={cn(
+                  "mt-4",
+                  portDisabled && "opacity-30 pointer-events-none",
+                )}
+              >
+                <FieldLabel hint="Empty = all ports for the chosen protocol.">
+                  Ports
+                </FieldLabel>
+                <PortSelector
+                  showAll
+                  ports={ports}
+                  onPortsChange={setPorts}
+                  portRanges={portRanges}
+                  onPortRangesChange={setPortRanges}
+                  disabled={portDisabled}
+                />
+              </div>
+            </OzTabsContent>
+
+            <OzTabsContent
+              value="posture"
+              className="px-[18px] pb-[18px] pt-3"
+            >
+              <PostureCheckCardBody
+                postureChecks={postureChecks}
+                setPostureChecks={setPostureChecks}
+                isLoading={isPostureChecksLoading}
+              />
+            </OzTabsContent>
+          </OzTabs>
         </OzCard>
-
-        {/* Card 4 — Posture Checks. Lives in the form column at full
-            width because its minimal table needs real space; the
-            right-rail slot is reserved for narrow content (Live
-            Preview now, Impact in a follow-up). */}
-        <PostureCheckCard
-          postureChecks={postureChecks}
-          setPostureChecks={setPostureChecks}
-          isLoading={isPostureChecksLoading}
-        />
         </div>
 
         {/* Right rail — sticky Live Preview + Impact aligned with the
@@ -440,11 +462,12 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
 
 export default PolicyEditorBody;
 
-// PostureCheckCard wraps the same minimal-table + Add/Browse-modal
-// composition the legacy PostureCheckTab used, swapping the
-// OzTabsContent wrapper for an OzCard so it can sit alongside the
-// other policy cards in the page editor.
-function PostureCheckCard({
+// PostureCheckCardBody — the inner content of the Posture Checks
+// tab. Drops the standalone card wrapper (the parent OzTabsContent
+// already supplies padding + surface) but keeps the helper-modal
+// state and the minimal-table composition the legacy PostureCheckTab
+// pioneered.
+function PostureCheckCardBody({
   postureChecks,
   setPostureChecks,
   isLoading,
@@ -477,22 +500,12 @@ function PostureCheckCard({
   const [currentEditCheck, setCurrentEditCheck] = useState<PostureCheck>();
 
   return (
-    <OzCard>
-      <div className="mb-4 flex items-start gap-3">
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-oz2-acc-soft text-oz2-acc-text">
-          <ShieldCheck size={14} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="text-[14px] font-semibold text-oz2-text">
-            Posture Checks
-          </div>
-          <p className="mt-0.5 text-[12.5px] leading-[1.5] text-oz2-text-muted">
-            Conditions a source peer must satisfy before this policy
-            applies — OS, agent version, geofencing. Empty list means the
-            policy applies unconditionally.
-          </p>
-        </div>
-      </div>
+    <>
+      <p className="mb-4 max-w-2xl text-[12.5px] leading-[1.5] text-oz2-text-muted">
+        Conditions a source peer must satisfy before this policy applies —
+        OS, agent version, geofencing. Empty list means the policy applies
+        unconditionally.
+      </p>
 
       {isLoading ? (
         <div className="flex flex-col gap-2">
@@ -539,7 +552,7 @@ function PostureCheckCard({
           />
         </>
       )}
-    </OzCard>
+    </>
   );
 }
 
