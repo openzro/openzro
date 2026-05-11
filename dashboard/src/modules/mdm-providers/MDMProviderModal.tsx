@@ -1,8 +1,5 @@
 "use client";
 
-import Button from "@components/Button";
-import { Input } from "@components/Input";
-import { Label } from "@components/Label";
 import {
   Modal,
   ModalClose,
@@ -11,11 +8,20 @@ import {
 } from "@components/modal/Modal";
 import ModalHeader from "@components/modal/ModalHeader";
 import { notify } from "@components/Notification";
-import Paragraph from "@components/Paragraph";
 import { useApiCall } from "@utils/api";
 import { ShieldCheckIcon } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { useSWRConfig } from "swr";
+import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
+import OzLabel from "@/components/v2/OzLabel";
+import {
+  OzSelect,
+  OzSelectContent,
+  OzSelectItem,
+  OzSelectTrigger,
+  OzSelectValue,
+} from "@/components/v2/OzSelect";
 import {
   CrowdStrikeCloud,
   MDMProvider,
@@ -196,8 +202,9 @@ export default function MDMProviderModal({
 
         <div className="px-8 pt-3 pb-6 grid gap-4">
           <div>
-            <Label>Name</Label>
-            <Input
+            <OzLabel htmlFor="mdm-name">Name</OzLabel>
+            <OzInput
+              id="mdm-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="prod-intune"
@@ -205,46 +212,57 @@ export default function MDMProviderModal({
           </div>
 
           <div>
-            <Label>Type</Label>
-            <select
+            <OzLabel>Type</OzLabel>
+            <OzSelect
               value={type}
+              onValueChange={(v) => setType(v as MDMProviderType)}
               disabled={isEdit}
-              onChange={(e) => setType(e.target.value as MDMProviderType)}
-              className="w-full rounded-md border border-nb-gray-700 bg-nb-gray-940 px-3 py-2 text-sm"
             >
-              <option value="intune">Microsoft Intune</option>
-              <option value="sentinelone">SentinelOne</option>
-              <option value="huntress">Huntress</option>
-              <option value="crowdstrike">CrowdStrike Falcon</option>
-            </select>
+              <OzSelectTrigger>
+                <OzSelectValue placeholder="Select a provider type" />
+              </OzSelectTrigger>
+              <OzSelectContent>
+                <OzSelectItem value="intune">Microsoft Intune</OzSelectItem>
+                <OzSelectItem value="sentinelone">SentinelOne</OzSelectItem>
+                <OzSelectItem value="huntress">Huntress</OzSelectItem>
+                <OzSelectItem value="crowdstrike">
+                  CrowdStrike Falcon
+                </OzSelectItem>
+              </OzSelectContent>
+            </OzSelect>
           </div>
 
           {type === "intune" && (
             <>
-              <Paragraph className="text-xs text-nb-gray-300">
+              <p className="text-[12px] leading-[1.5] text-oz2-text-muted">
                 Register an app in Microsoft Entra (Azure AD) with the{" "}
                 <b>DeviceManagementManagedDevices.Read.All</b> permission
                 (admin consent required). Use the app&apos;s client ID +
                 client secret here.
-              </Paragraph>
+              </p>
               <div>
-                <Label>Tenant ID</Label>
-                <Input
+                <OzLabel htmlFor="mdm-intune-tenant">Tenant ID</OzLabel>
+                <OzInput
+                  id="mdm-intune-tenant"
                   value={intuneTenant}
                   onChange={(e) => setIntuneTenant(e.target.value)}
                   placeholder="00000000-0000-0000-0000-000000000000"
                 />
               </div>
               <div>
-                <Label>Client ID (Application ID)</Label>
-                <Input
+                <OzLabel htmlFor="mdm-intune-client">
+                  Client ID (Application ID)
+                </OzLabel>
+                <OzInput
+                  id="mdm-intune-client"
                   value={intuneClient}
                   onChange={(e) => setIntuneClient(e.target.value)}
                 />
               </div>
               <div>
-                <Label>Client Secret</Label>
-                <Input
+                <OzLabel htmlFor="mdm-intune-secret">Client Secret</OzLabel>
+                <OzInput
+                  id="mdm-intune-secret"
                   type="password"
                   value={intuneSecret}
                   onChange={(e) => setIntuneSecret(e.target.value)}
@@ -256,21 +274,23 @@ export default function MDMProviderModal({
 
           {type === "sentinelone" && (
             <>
-              <Paragraph className="text-xs text-nb-gray-300">
+              <p className="text-[12px] leading-[1.5] text-oz2-text-muted">
                 Mint an API Token in the S1 console under Settings →
                 Users → Service Users (Viewer role is enough).
-              </Paragraph>
+              </p>
               <div>
-                <Label>Management URL</Label>
-                <Input
+                <OzLabel htmlFor="mdm-s1-url">Management URL</OzLabel>
+                <OzInput
+                  id="mdm-s1-url"
                   value={s1URL}
                   onChange={(e) => setS1URL(e.target.value)}
                   placeholder="https://acme.sentinelone.net"
                 />
               </div>
               <div>
-                <Label>API Token</Label>
-                <Input
+                <OzLabel htmlFor="mdm-s1-token">API Token</OzLabel>
+                <OzInput
+                  id="mdm-s1-token"
                   type="password"
                   value={s1Token}
                   onChange={(e) => setS1Token(e.target.value)}
@@ -282,21 +302,23 @@ export default function MDMProviderModal({
 
           {type === "huntress" && (
             <>
-              <Paragraph className="text-xs text-nb-gray-300">
+              <p className="text-[12px] leading-[1.5] text-oz2-text-muted">
                 Generate API credentials in the Huntress dashboard
                 under Account Settings → API Credentials.
-              </Paragraph>
+              </p>
               <div>
-                <Label>API Key</Label>
-                <Input
+                <OzLabel htmlFor="mdm-huntress-key">API Key</OzLabel>
+                <OzInput
+                  id="mdm-huntress-key"
                   value={huntressKey}
                   onChange={(e) => setHuntressKey(e.target.value)}
                   placeholder={isEdit ? "(unchanged)" : ""}
                 />
               </div>
               <div>
-                <Label>API Secret</Label>
-                <Input
+                <OzLabel htmlFor="mdm-huntress-secret">API Secret</OzLabel>
+                <OzInput
+                  id="mdm-huntress-secret"
                   type="password"
                   value={huntressSecret}
                   onChange={(e) => setHuntressSecret(e.target.value)}
@@ -308,39 +330,55 @@ export default function MDMProviderModal({
 
           {type === "crowdstrike" && (
             <>
-              <Paragraph className="text-xs text-nb-gray-300">
+              <p className="text-[12px] leading-[1.5] text-oz2-text-muted">
                 Mint a Falcon API client in the CrowdStrike console
                 under Support → API Clients and Keys with the{" "}
                 <b>Hosts: Read</b> scope. Pick the cloud region your
                 Falcon tenant lives in — the same client cannot
                 cross regions.
-              </Paragraph>
+              </p>
               <div>
-                <Label>Cloud</Label>
-                <select
+                <OzLabel>Cloud</OzLabel>
+                <OzSelect
                   value={csCloud}
-                  onChange={(e) =>
-                    setCSCloud(e.target.value as CrowdStrikeCloud)
-                  }
-                  className="w-full rounded-md border border-nb-gray-700 bg-nb-gray-940 px-3 py-2 text-sm"
+                  onValueChange={(v) => setCSCloud(v as CrowdStrikeCloud)}
                 >
-                  <option value="us-1">US-1 (api.crowdstrike.com)</option>
-                  <option value="us-2">US-2 (api.us-2.crowdstrike.com)</option>
-                  <option value="eu-1">EU-1 (api.eu-1.crowdstrike.com)</option>
-                  <option value="us-gov-1">US-GOV-1 (Falcon GovCloud)</option>
-                  <option value="us-gov-2">US-GOV-2 (Falcon GovCloud 2)</option>
-                </select>
+                  <OzSelectTrigger>
+                    <OzSelectValue />
+                  </OzSelectTrigger>
+                  <OzSelectContent>
+                    <OzSelectItem value="us-1">
+                      US-1 (api.crowdstrike.com)
+                    </OzSelectItem>
+                    <OzSelectItem value="us-2">
+                      US-2 (api.us-2.crowdstrike.com)
+                    </OzSelectItem>
+                    <OzSelectItem value="eu-1">
+                      EU-1 (api.eu-1.crowdstrike.com)
+                    </OzSelectItem>
+                    <OzSelectItem value="us-gov-1">
+                      US-GOV-1 (Falcon GovCloud)
+                    </OzSelectItem>
+                    <OzSelectItem value="us-gov-2">
+                      US-GOV-2 (Falcon GovCloud 2)
+                    </OzSelectItem>
+                  </OzSelectContent>
+                </OzSelect>
               </div>
               <div>
-                <Label>API Client ID</Label>
-                <Input
+                <OzLabel htmlFor="mdm-cs-client-id">API Client ID</OzLabel>
+                <OzInput
+                  id="mdm-cs-client-id"
                   value={csClientID}
                   onChange={(e) => setCSClientID(e.target.value)}
                 />
               </div>
               <div>
-                <Label>API Client Secret</Label>
-                <Input
+                <OzLabel htmlFor="mdm-cs-client-secret">
+                  API Client Secret
+                </OzLabel>
+                <OzInput
+                  id="mdm-cs-client-secret"
                   type="password"
                   value={csClientSecret}
                   onChange={(e) => setCSClientSecret(e.target.value)}
@@ -353,11 +391,11 @@ export default function MDMProviderModal({
 
         <ModalFooter className="items-center gap-3">
           <ModalClose asChild>
-            <Button variant="secondary">Cancel</Button>
+            <OzButton variant="default">Cancel</OzButton>
           </ModalClose>
-          <Button variant="primary" onClick={onSave} disabled={saving}>
+          <OzButton variant="primary" onClick={onSave} disabled={saving}>
             {saving ? "Saving..." : isEdit ? "Save changes" : "Create"}
-          </Button>
+          </OzButton>
         </ModalFooter>
       </ModalContent>
     </Modal>

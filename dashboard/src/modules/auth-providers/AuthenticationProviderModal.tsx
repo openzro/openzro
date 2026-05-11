@@ -1,8 +1,5 @@
 "use client";
 
-import Button from "@components/Button";
-import { Input } from "@components/Input";
-import { Label } from "@components/Label";
 import {
   Modal,
   ModalClose,
@@ -11,12 +8,21 @@ import {
 } from "@components/modal/Modal";
 import ModalHeader from "@components/modal/ModalHeader";
 import { notify } from "@components/Notification";
-import Paragraph from "@components/Paragraph";
 import { useApiCall } from "@utils/api";
 import loadConfig from "@utils/config";
 import { ShieldIcon } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
+import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
+import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
+import {
+  OzSelect,
+  OzSelectContent,
+  OzSelectItem,
+  OzSelectTrigger,
+  OzSelectValue,
+} from "@/components/v2/OzSelect";
 import {
   AuthenticationProvider,
   AuthenticationProviderInput,
@@ -179,55 +185,60 @@ export default function AuthenticationProviderModal({
 
         <div className="px-8 pt-3 pb-6 grid gap-4">
           <div>
-            <Label>ID</Label>
-            <Input
+            <OzLabel htmlFor="auth-provider-id">ID</OzLabel>
+            <OzInput
+              id="auth-provider-id"
               value={id}
               onChange={(e) => setId(e.target.value)}
               placeholder="acme-google"
               disabled={isEdit}
             />
-            <Paragraph className="text-xs text-nb-gray-300 mt-1">
+            <OzHelpText className="mt-1.5">
               URL-safe identifier used in <code>/dex/auth/{"{"}id{"}"}</code>.
               Cannot be changed after create.
-            </Paragraph>
+            </OzHelpText>
           </div>
 
           <div>
-            <Label>Type</Label>
-            <select
+            <OzLabel>Type</OzLabel>
+            <OzSelect
               value={type}
+              onValueChange={(v) => setType(v as ConnectorType)}
               disabled={isEdit}
-              onChange={(e) => setType(e.target.value as ConnectorType)}
-              className="w-full rounded-md border border-nb-gray-700 bg-nb-gray-940 px-3 py-2 text-sm"
             >
-              {CONNECTOR_TYPES.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-            <Paragraph className="text-xs text-nb-gray-300 mt-1">
-              {meta.description}
-            </Paragraph>
+              <OzSelectTrigger>
+                <OzSelectValue placeholder="Select a connector type" />
+              </OzSelectTrigger>
+              <OzSelectContent>
+                {CONNECTOR_TYPES.map((p) => (
+                  <OzSelectItem key={p.value} value={p.value}>
+                    {p.label}
+                  </OzSelectItem>
+                ))}
+              </OzSelectContent>
+            </OzSelect>
+            <OzHelpText className="mt-1.5">{meta.description}</OzHelpText>
           </div>
 
           <div>
-            <Label>Display name</Label>
-            <Input
+            <OzLabel htmlFor="auth-provider-name">Display name</OzLabel>
+            <OzInput
+              id="auth-provider-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Acme Google"
             />
-            <Paragraph className="text-xs text-nb-gray-300 mt-1">
+            <OzHelpText className="mt-1.5">
               Shown on the Dex login page as &quot;Log in with{" "}
               {name || meta.label}&quot;.
-            </Paragraph>
+            </OzHelpText>
           </div>
 
           {isOIDC && (
             <div>
-              <Label>Issuer URL</Label>
-              <Input
+              <OzLabel htmlFor="auth-provider-issuer">Issuer URL</OzLabel>
+              <OzInput
+                id="auth-provider-issuer"
                 value={issuer}
                 onChange={(e) => setIssuer(e.target.value)}
                 placeholder={issuerPlaceholder(type)}
@@ -237,8 +248,11 @@ export default function AuthenticationProviderModal({
 
           {type === "microsoft" && (
             <div>
-              <Label>Tenant (optional)</Label>
-              <Input
+              <OzLabel htmlFor="auth-provider-tenant" optional>
+                Tenant
+              </OzLabel>
+              <OzInput
+                id="auth-provider-tenant"
                 value={tenant}
                 onChange={(e) => setTenant(e.target.value)}
                 placeholder="common, organizations, or a specific tenant ID"
@@ -248,15 +262,19 @@ export default function AuthenticationProviderModal({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <Label>Client ID</Label>
-              <Input
+              <OzLabel htmlFor="auth-provider-client-id">Client ID</OzLabel>
+              <OzInput
+                id="auth-provider-client-id"
                 value={clientID}
                 onChange={(e) => setClientID(e.target.value)}
               />
             </div>
             <div>
-              <Label>Client Secret</Label>
-              <Input
+              <OzLabel htmlFor="auth-provider-client-secret">
+                Client Secret
+              </OzLabel>
+              <OzInput
+                id="auth-provider-client-secret"
                 type="password"
                 value={clientSecret}
                 onChange={(e) => setClientSecret(e.target.value)}
@@ -266,32 +284,32 @@ export default function AuthenticationProviderModal({
           </div>
 
           <div>
-            <Label>Redirect URI</Label>
-            <Input
+            <OzLabel htmlFor="auth-provider-redirect">Redirect URI</OzLabel>
+            <OzInput
+              id="auth-provider-redirect"
               value={redirectURI}
               onChange={(e) => setRedirectURI(e.target.value)}
             />
-            <Paragraph className="text-xs text-nb-gray-300 mt-1">
-              This is Dex&apos;s callback endpoint, not the
-              dashboard&apos;s — Dex receives the OIDC response from
-              your IdP, then forwards a session token to the
-              dashboard. Whitelist this exact URL in your IdP&apos;s
-              app config (e.g. Keycloak: Clients →{" "}
+            <OzHelpText className="mt-1.5">
+              This is Dex&apos;s callback endpoint, not the dashboard&apos;s —
+              Dex receives the OIDC response from your IdP, then forwards a
+              session token to the dashboard. Whitelist this exact URL in your
+              IdP&apos;s app config (e.g. Keycloak: Clients →{" "}
               <em>your-client</em> → Valid redirect URIs). Defaults to{" "}
               <code>{defaultRedirectURI(dashboardConfig.authority)}</code>.
-            </Paragraph>
+            </OzHelpText>
           </div>
         </div>
 
         <ModalFooter>
           <ModalClose asChild>
-            <Button variant="secondary" disabled={saving}>
+            <OzButton variant="default" disabled={saving}>
               Cancel
-            </Button>
+            </OzButton>
           </ModalClose>
-          <Button variant="primary" onClick={save} disabled={saving}>
+          <OzButton variant="primary" onClick={save} disabled={saving}>
             {saving ? "Saving…" : isEdit ? "Save changes" : "Add provider"}
-          </Button>
+          </OzButton>
         </ModalFooter>
       </ModalContent>
     </Modal>
