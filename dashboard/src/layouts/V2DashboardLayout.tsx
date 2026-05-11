@@ -348,6 +348,18 @@ const NAV_ICONS = {
       <path d="M12 7v3M12 10l-5 7M12 10l5 7" />
     </>,
   ),
+  // Y-shape signpost — two chevron panels stacked on a vertical pole,
+  // top one pointing right and bottom one pointing left. Conveys
+  // "choice of route" / "directional split" for /network-routes,
+  // visually distinct from the connected-mesh `network` icon used
+  // for /networks (which represents a segment, not a path).
+  networkRoutes: navIcon(
+    <>
+      <path d="M12 3v18" />
+      <path d="M12 5h7l2 2-2 2h-7z" />
+      <path d="M12 11H5l-2 2 2 2h7z" />
+    </>,
+  ),
   shield: navIcon(<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" />),
   key: navIcon(
     <>
@@ -437,7 +449,7 @@ function buildSidebarSections(
         {
           id: "network-routes",
           label: "Network Routes",
-          icon: NAV_ICONS.network,
+          icon: NAV_ICONS.networkRoutes,
           active: matches("/network-routes"),
           onClick: () => go("/network-routes"),
         },
