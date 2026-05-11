@@ -20,7 +20,12 @@ import Paragraph from "@components/Paragraph";
 import { PeerGroupSelector } from "@components/PeerGroupSelector";
 import { PeerSelector } from "@components/PeerSelector";
 import { SegmentedTabs } from "@components/SegmentedTabs";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/Tabs";
+import {
+  OzTabs as Tabs,
+  OzTabsContent as TabsContent,
+  OzTabsList as TabsList,
+  OzTabsTrigger as TabsTrigger,
+} from "@/components/v2/OzTabs";
 import { Textarea } from "@components/Textarea";
 import InputDomain, { domainReducer } from "@components/ui/InputDomain";
 import { getOperatingSystem } from "@hooks/useOperatingSystem";
@@ -401,57 +406,51 @@ export function RouteModalContent({
       />
 
       <Tabs defaultValue={tab} onValueChange={(v) => setTab(v)} value={tab}>
-        <TabsList justify={"start"} className={"px-8"}>
-          {!(exitNode && peer) && (
-            <TabsTrigger
-              value={"network"}
-              onClick={() => networkRangeRef.current?.focus()}
-            >
-              <RouteIcon
-                size={16}
-                className={
-                  "text-nb-gray-500 group-data-[state=active]/trigger:text-openzro transition-all"
-                }
-              />
-              Route
-            </TabsTrigger>
-          )}
+        <div className="px-8 pb-3 pt-1">
+          <TabsList>
+            {!(exitNode && peer) && (
+              <TabsTrigger
+                value={"network"}
+                onClick={() => networkRangeRef.current?.focus()}
+              >
+                <RouteIcon
+                  size={16}
+                  className="text-oz2-text-faint group-data-[state=active]/trigger:text-oz2-acc transition-colors"
+                />
+                Route
+              </TabsTrigger>
+            )}
 
-          <TabsTrigger value={"access-control"} disabled={!isNetworkEntered}>
-            <FolderGit2
-              size={16}
-              className={
-                "text-nb-gray-500 group-data-[state=active]/trigger:text-openzro transition-all"
-              }
-            />
-            Groups
-          </TabsTrigger>
-          <TabsTrigger
-            value={"general"}
-            disabled={!isGroupsEntered}
-            onClick={() => nameRef.current?.focus()}
-          >
-            <Text
-              size={16}
-              className={
-                "text-nb-gray-500 group-data-[state=active]/trigger:text-openzro transition-all"
-              }
-            />
-            Name & Description
-          </TabsTrigger>
-          <TabsTrigger
-            value={"settings"}
-            disabled={!isNetworkEntered || !isNameEntered || !isGroupsEntered}
-          >
-            <Settings2
-              size={16}
-              className={
-                "text-nb-gray-500 group-data-[state=active]/trigger:text-openzro transition-all"
-              }
-            />
-            Additional Settings
-          </TabsTrigger>
-        </TabsList>
+            <TabsTrigger value={"access-control"} disabled={!isNetworkEntered}>
+              <FolderGit2
+                size={16}
+                className="text-oz2-text-faint group-data-[state=active]/trigger:text-oz2-acc transition-colors"
+              />
+              Groups
+            </TabsTrigger>
+            <TabsTrigger
+              value={"general"}
+              disabled={!isGroupsEntered}
+              onClick={() => nameRef.current?.focus()}
+            >
+              <Text
+                size={16}
+                className="text-oz2-text-faint group-data-[state=active]/trigger:text-oz2-acc transition-colors"
+              />
+              Name & Description
+            </TabsTrigger>
+            <TabsTrigger
+              value={"settings"}
+              disabled={!isNetworkEntered || !isNameEntered || !isGroupsEntered}
+            >
+              <Settings2
+                size={16}
+                className="text-oz2-text-faint group-data-[state=active]/trigger:text-oz2-acc transition-colors"
+              />
+              Additional Settings
+            </TabsTrigger>
+          </TabsList>
+        </div>
         <TabsContent value={"network"} className={"pb-8"}>
           <div className={"px-8 flex-col flex gap-4"}>
             <div className={cn(exitNode && "hidden")}>
