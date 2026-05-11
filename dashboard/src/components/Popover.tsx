@@ -50,23 +50,25 @@ const PopoverContent = React.forwardRef<
         ref={ref}
         align={align}
         sideOffset={sideOffset}
+        {...props}
         className={cn(
-          // Radix moves focus to Content on open; without an explicit
-          // outline override the browser's default focus outline
-          // (blue, square-cornered) wraps the popover and bleeds past
-          // the rounded border. Tailwind's `outline-none` is actually
-          // `outline: 2px solid transparent`, which doesn't reliably
-          // suppress the user-agent ring on every browser/state. Use
-          // arbitrary CSS `[outline:none]` so we write the real
-          // `outline: none` directly. Inner controls own their own
-          // focus styling.
-          "z-50 overflow-hidden [outline:none] focus:[outline:none] focus-visible:[outline:none]",
+          // outline-0 sets outline-width: 0px which kills the ring
+          // regardless of outline-style / color (browser default
+          // `:focus-visible { outline: ... }` only paints if width
+          // is nonzero).
+          "z-50 overflow-hidden outline-0 focus:outline-0 focus-visible:outline-0 focus-within:outline-0",
           "animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
           "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
           popoverVariants({ variant }),
           className,
         )}
-        {...props}
+        // Inline `outline: none` — Tailwind's `outline-none` is
+        // actually `outline: 2px solid transparent` and the arbitrary
+        // `[outline:none]` route was still letting the user-agent
+        // focus ring paint through in some browser/state combos.
+        // Inline style wins regardless of cascade or twMerge order
+        // and writes a literal `outline: none`.
+        style={{ outline: "none", ...(props.style ?? {}) }}
       />
     </PopoverPrimitive.Portal>
   ),
