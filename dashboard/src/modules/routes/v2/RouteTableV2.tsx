@@ -22,12 +22,12 @@ import {
 } from "@/components/v2/OzTable";
 import { useGroups } from "@/contexts/GroupsProvider";
 import { GroupedRoute, Route } from "@/interfaces/Route";
-import RouteAccessControlGroups from "@/modules/routes/RouteAccessControlGroups";
-import RouteDistributionGroupsCell from "@/modules/routes/RouteDistributionGroupsCell";
-import RoutePeerCell from "@/modules/routes/RoutePeerCell";
+import RouteAccessControlGroupsV2 from "@/modules/routes/v2/RouteAccessControlGroupsV2";
 import RouteActionCellV2 from "@/modules/routes/v2/RouteActionCellV2";
 import RouteActiveCellV2 from "@/modules/routes/v2/RouteActiveCellV2";
+import RouteDistributionGroupsCellV2 from "@/modules/routes/v2/RouteDistributionGroupsCellV2";
 import RouteMetricCellV2 from "@/modules/routes/v2/RouteMetricCellV2";
+import RoutePeerCellV2 from "@/modules/routes/v2/RoutePeerCellV2";
 
 // V2 paint of RouteTable — replaces the legacy DataTable shell with
 // OzTable. Reuses the existing data cells (RoutePeerCell,
@@ -56,7 +56,7 @@ const columns: ColumnDef<Route>[] = [
     accessorKey: "network_id",
     sortingFn: "text",
     header: ({ column }) => <SortHeader column={column} label="Name" />,
-    cell: ({ row }) => <RoutePeerCell route={row.original} />,
+    cell: ({ row }) => <RoutePeerCellV2 route={row.original} />,
   },
   {
     id: "metric",
@@ -79,7 +79,7 @@ const columns: ColumnDef<Route>[] = [
     header: ({ column }) => (
       <SortHeader column={column} label="Distribution Groups" />
     ),
-    cell: ({ row }) => <RouteDistributionGroupsCell route={row.original} />,
+    cell: ({ row }) => <RouteDistributionGroupsCellV2 route={row.original} />,
   },
   {
     id: "access_control_groups",
@@ -88,7 +88,7 @@ const columns: ColumnDef<Route>[] = [
     header: ({ column }) => (
       <SortHeader column={column} label="Access Control Groups" />
     ),
-    cell: ({ row }) => <RouteAccessControlGroups route={row.original} />,
+    cell: ({ row }) => <RouteAccessControlGroupsV2 route={row.original} />,
   },
   {
     id: "actions",
@@ -140,7 +140,7 @@ export default function RouteTableV2({ row }: Props) {
   });
 
   return (
-    <div className="border-t border-oz2-border-soft">
+    <div>
       <OzTable className="text-[13px]">
         <OzTableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
