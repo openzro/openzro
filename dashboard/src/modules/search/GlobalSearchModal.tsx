@@ -183,7 +183,7 @@ const GlobalSearchModalContent = ({ open, setOpen }: Props) => {
               }}
               renderHeading={(item) => {
                 return (
-                  <div className={"text-xs text-nb-gray-400 px-4 py-2"}>
+                  <div className="px-4 py-2 font-mono text-[10.5px] uppercase tracking-[0.08em] text-oz2-text-faint">
                     {item.type === SearchType.Network &&
                       `Networks (${networksCount})`}
                     {item.type === SearchType.NetworkResource &&
@@ -195,56 +195,40 @@ const GlobalSearchModalContent = ({ open, setOpen }: Props) => {
                 const network = findNetworkByResourceId(item.id);
 
                 return (
-                  <div className={"flex justify-between items-center w-full"}>
-                    <div className={"flex justify-between items-center gap-3"}>
-                      <div
-                        className={
-                          "h-8 w-8 bg-nb-gray-850 group-aria-selected/list-item:bg-nb-gray-700 flex items-center justify-center rounded-md"
-                        }
-                      >
+                  <div className="flex w-full items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-oz2-input bg-oz2-bg-sunken text-oz2-text-2 group-aria-selected/list-item:bg-oz2-acc-soft group-aria-selected/list-item:text-oz2-acc-text transition-colors">
                         {item.type === SearchType.Network && (
-                          <div className={"uppercase font-medium"}>
+                          <span className="font-mono text-[11px] font-medium uppercase tracking-[0.04em]">
                             {item.data.name.substring(0, 2)}
-                          </div>
+                          </span>
                         )}
                         {item.type === SearchType.NetworkResource && (
                           <ResourceIcon type={item.data.type} />
                         )}
                       </div>
-                      <div>
-                        <div>
-                          {item.data.name} {network && ` - ${network.name}`}
+                      <div className="min-w-0">
+                        <div className="truncate text-[13px] text-oz2-text">
+                          {item.data.name}
+                          {network && (
+                            <span className="text-oz2-text-muted"> · {network.name}</span>
+                          )}
                         </div>
-                        <div className={"text-nb-gray-400"}>
+                        <div className="truncate text-[11.5px] text-oz2-text-muted">
                           {item.data.description}
                         </div>
                       </div>
                     </div>
-                    <div className={"flex items-center justify-center gap-4"}>
+                    <div className="flex shrink-0 items-center gap-4">
                       {item.type === SearchType.Network && (
-                        <div>
-                          <div
-                            className={
-                              "text-[0.65rem] text-nb-gray-250 flex items-center gap-2 leading-none"
-                            }
-                          >
-                            <LayersIcon
-                              size={12}
-                              className={"relative -top-[1px]"}
-                            />
-                            {item.data?.resources?.length} Resource(s)
-                          </div>
+                        <div className="inline-flex items-center gap-1.5 text-[11px] leading-none text-oz2-text-muted">
+                          <LayersIcon size={12} />
+                          {item.data?.resources?.length} Resource(s)
                         </div>
                       )}
                       {item.type === SearchType.NetworkResource && (
-                        <div>
-                          <div
-                            className={
-                              "text-[0.62rem] font-mono text-nb-gray-250"
-                            }
-                          >
-                            {item.data?.address}
-                          </div>
+                        <div className="font-mono text-[10.5px] text-oz2-text-muted">
+                          {item.data?.address}
                         </div>
                       )}
                       <div>
@@ -284,62 +268,54 @@ const ResourceIcon = ({ type }: { type: NetworkResource["type"] }) => {
 
 const BlankState = () => {
   return (
-    <div className={"flex items-center justify-center pb-8"}>
-      <div className={"text-center"}>
-        <div className={"flex items-center justify-center mb-3 mt-3 gap-3"}>
-          <div
-            className={
-              "bg-nb-gray-920 h-8 w-8 flex items-center justify-center rounded-md"
-            }
-          >
+    <div className="flex items-center justify-center pb-8">
+      <div className="text-center">
+        <div className="mb-3 mt-3 flex items-center justify-center gap-2">
+          <HintTile>
             <NetworkIcon size={16} />
-          </div>
-          <div
-            className={
-              "bg-nb-gray-920 h-8 w-8 flex items-center justify-center rounded-md"
-            }
-          >
+          </HintTile>
+          <HintTile>
             <WorkflowIcon size={16} />
-          </div>
-          <div
-            className={
-              "bg-nb-gray-920 h-8 w-8 flex items-center justify-center rounded-md"
-            }
-          >
+          </HintTile>
+          <HintTile>
             <GlobeIcon size={16} />
-          </div>
+          </HintTile>
         </div>
 
-        <div className={"text-nb-gray-100 mb-1"}>
+        <div className="mb-1 text-[13.5px] font-medium text-oz2-text">
           Search for Networks and Resources
         </div>
-        <div className={"text-sm text-nb-gray-350 font-light"}>
-          Quickly find networks and associated resources. <br />
-          Start typing to search by name, description or address.
+        <div className="max-w-sm text-[12.5px] leading-[1.55] text-oz2-text-muted">
+          Quickly find networks and associated resources. Start typing to
+          search by name, description or address.
         </div>
       </div>
     </div>
   );
 };
 
+function HintTile({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="grid h-8 w-8 place-items-center rounded-oz2-input bg-oz2-acc-soft text-oz2-acc-text">
+      {children}
+    </div>
+  );
+}
+
 const NotFoundState = () => {
   return (
-    <div className={"flex items-center justify-center pb-8"}>
-      <div className={"text-center"}>
-        <div className={"flex items-center justify-center mb-3 mt-3 gap-3"}>
-          <div
-            className={
-              "bg-nb-gray-920 h-8 w-8 flex items-center justify-center rounded-md"
-            }
-          >
+    <div className="flex items-center justify-center pb-8">
+      <div className="text-center">
+        <div className="mb-3 mt-3 flex items-center justify-center">
+          <div className="grid h-8 w-8 place-items-center rounded-oz2-input bg-oz2-bg-sunken text-oz2-text-muted">
             <TextSearchIcon size={16} />
           </div>
         </div>
 
-        <div className={"text-nb-gray-100 mb-1"}>
+        <div className="mb-1 text-[13.5px] font-medium text-oz2-text">
           Could not find any results
         </div>
-        <div className={"text-sm text-nb-gray-350 font-light max-w-xs"}>
+        <div className="max-w-xs text-[12.5px] leading-[1.55] text-oz2-text-muted">
           {`We couldn't find any results. Please try a different search term.`}
         </div>
       </div>
