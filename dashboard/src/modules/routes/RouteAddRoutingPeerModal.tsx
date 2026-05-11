@@ -1,9 +1,5 @@
 "use client";
 
-import Button from "@components/Button";
-import HelpText from "@components/HelpText";
-import InlineLink from "@components/InlineLink";
-import { Label } from "@components/Label";
 import {
   Modal,
   ModalClose,
@@ -12,7 +8,6 @@ import {
 } from "@components/modal/Modal";
 import ModalHeader from "@components/modal/ModalHeader";
 import { NetworkRouteSelector } from "@components/NetworkRouteSelector";
-import Paragraph from "@components/Paragraph";
 import { PeerGroupSelector } from "@components/PeerGroupSelector";
 import { PeerSelector } from "@components/PeerSelector";
 import Separator from "@components/Separator";
@@ -20,6 +15,8 @@ import { uniqBy } from "lodash";
 import { ExternalLinkIcon, PlusCircle } from "lucide-react";
 import React, { useMemo, useState } from "react";
 import NetworkRoutesIcon from "@/assets/icons/NetworkRoutesIcon";
+import OzButton from "@/components/v2/OzButton";
+import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
 import { useRoutes } from "@/contexts/RoutesProvider";
 import { Peer } from "@/interfaces/Peer";
 import { GroupedRoute, Route } from "@/interfaces/Route";
@@ -175,10 +172,10 @@ function Content({ onSuccess, groupedRoute, peer }: ModalProps) {
 
       <div className={"flex flex-col gap-6 px-8 py-6"}>
         <div>
-          <Label>Network Identifier</Label>
-          <HelpText>
+          <OzLabel>Network Identifier</OzLabel>
+          <OzHelpText className="mb-2">
             Network name and CIDR that you are adding the route to.
-          </HelpText>
+          </OzHelpText>
           <NetworkRouteSelector
             disabled={groupedRoute != undefined}
             value={routeNetwork}
@@ -186,10 +183,10 @@ function Content({ onSuccess, groupedRoute, peer }: ModalProps) {
           />
         </div>
         <div>
-          <Label>Routing Peer</Label>
-          <HelpText>
+          <OzLabel>Routing Peer</OzLabel>
+          <OzHelpText className="mb-2">
             Assign a single peer as a routing peer for the network route.
-          </HelpText>
+          </OzHelpText>
           <PeerSelector
             onChange={setRoutingPeer}
             value={routingPeer}
@@ -198,19 +195,19 @@ function Content({ onSuccess, groupedRoute, peer }: ModalProps) {
           />
         </div>
         <div>
-          <Label>Distribution Groups</Label>
-          <HelpText>
+          <OzLabel>Distribution Groups</OzLabel>
+          <OzHelpText className="mb-2">
             Advertise this route to peers that belong to the following groups
-          </HelpText>
+          </OzHelpText>
           <PeerGroupSelector onChange={setGroups} values={groups} />
         </div>
         <div>
-          <Label>Access Control Groups (optional)</Label>
-          <HelpText>
+          <OzLabel optional>Access Control Groups</OzLabel>
+          <OzHelpText className="mb-2">
             These groups offer a more granular control of internal services in
             your network. They can be used in access control policies to limit
             and control access of this route.
-          </HelpText>
+          </OzHelpText>
           <PeerGroupSelector
             onChange={setAccessControlGroups}
             values={accessControlGroups}
@@ -219,32 +216,34 @@ function Content({ onSuccess, groupedRoute, peer }: ModalProps) {
       </div>
       <ModalFooter className={"items-center"}>
         <div className={"w-full"}>
-          <Paragraph className={"text-sm mt-auto"}>
-            Learn more about
-            <InlineLink
+          <p className={"text-sm mt-auto text-oz2-text-muted"}>
+            Learn more about{" "}
+            <a
               href={
                 "https://docs.openzro.io/how-to/routing-traffic-to-private-networks"
               }
               target={"_blank"}
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-oz2-acc-text underline-offset-2 hover:underline"
             >
               Network Routes
               <ExternalLinkIcon size={12} />
-            </InlineLink>
-          </Paragraph>
+            </a>
+          </p>
         </div>
         <div className={"flex gap-3 w-full justify-end"}>
           <ModalClose asChild={true}>
-            <Button variant={"secondary"}>Cancel</Button>
+            <OzButton variant={"default"}>Cancel</OzButton>
           </ModalClose>
 
-          <Button
+          <OzButton
             variant={"primary"}
             disabled={isDisabled}
             onClick={createRouteHandler}
           >
             <PlusCircle size={16} />
             Add Route
-          </Button>
+          </OzButton>
         </div>
       </ModalFooter>
     </ModalContent>
