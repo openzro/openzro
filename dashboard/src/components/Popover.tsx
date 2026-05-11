@@ -47,7 +47,12 @@ const PopoverContent = React.forwardRef<
         align={align}
         sideOffset={sideOffset}
         className={cn(
-          "z-50 overflow-hidden",
+          // Radix moves focus to Content on open; without explicit
+          // outline-none the browser's default focus outline (blue,
+          // square-cornered) wraps the popover and bleeds past the
+          // rounded border. Suppress it globally — the inner controls
+          // own their own focus styling (e.g. CommandInput, OzInput).
+          "z-50 overflow-hidden outline-none focus:outline-none focus-visible:outline-none",
           "animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
           "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
           popoverVariants({ variant }),
