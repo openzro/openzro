@@ -5,20 +5,14 @@ import { PeerGroupSelector } from "@components/PeerGroupSelector";
 import { PortSelector } from "@components/PortSelector";
 import PolicyDirection from "@components/ui/PolicyDirection";
 import { cn } from "@utils/helpers";
-import {
-  AlertCircleIcon,
-  FolderDown,
-  FolderInput,
-  Share2,
-  Shield,
-  ShieldCheck,
-} from "lucide-react";
+import { AlertCircleIcon, ShieldCheck } from "lucide-react";
 import * as React from "react";
 import { useState } from "react";
 import Skeleton from "react-loading-skeleton";
 import OzCard from "@/components/v2/OzCard";
 import OzInput from "@/components/v2/OzInput";
-import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
+import { OzHelpText } from "@/components/v2/OzLabel";
+import * as LabelPrimitive from "@radix-ui/react-label";
 import {
   OzSelect,
   OzSelectContent,
@@ -31,6 +25,7 @@ import { usePermissions } from "@/contexts/PermissionsProvider";
 import { Group } from "@/interfaces/Group";
 import { Policy, Protocol } from "@/interfaces/Policy";
 import { PostureCheck } from "@/interfaces/PostureCheck";
+import PolicyImpact from "@/modules/access-control/v2/PolicyImpact";
 import PolicyLivePreview from "@/modules/access-control/v2/PolicyLivePreview";
 import { useAccessControl } from "@/modules/access-control/useAccessControl";
 import { PostureCheckBrowseModal } from "@/modules/posture-checks/modal/PostureCheckBrowseModal";
@@ -186,9 +181,9 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
         <OzCard>
           <div className="grid grid-cols-1 gap-5 md:grid-cols-[minmax(0,1fr)_160px]">
             <div>
-              <OzLabel htmlFor="policy-name" required>
+              <FieldLabel htmlFor="policy-name" required>
                 Policy name
-              </OzLabel>
+              </FieldLabel>
               <OzInput
                 id="policy-name"
                 autoFocus={!policy}
@@ -202,7 +197,7 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
             </div>
 
             <div>
-              <OzLabel>Status</OzLabel>
+              <FieldLabel>Status</FieldLabel>
               <EnableToggleButton
                 value={enabled}
                 onChange={setEnabled}
@@ -212,11 +207,11 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
           </div>
 
           <div className="mt-5">
-            <OzLabel htmlFor="policy-description" optional>
+            <FieldLabel htmlFor="policy-description" optional>
               Description
-            </OzLabel>
+            </FieldLabel>
             <OzHelpText className="mb-2">
-              Write a short description to add more context to this policy.
+              Helps teammates understand intent.
             </OzHelpText>
             <OzTextarea
               id="policy-description"
@@ -237,10 +232,9 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
         <OzCard>
           <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
             <div>
-              <OzLabel className="mb-2 inline-flex items-center gap-2">
-                <FolderDown size={14} />
-                Source
-              </OzLabel>
+              <FieldLabel hint="Peers in any of these groups can initiate the connection.">
+                Source · From
+              </FieldLabel>
               <PeerGroupSelector
                 dataCy="source-group-selector"
                 showPeerCount
@@ -275,10 +269,9 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
             </div>
 
             <div>
-              <OzLabel className="mb-2 inline-flex items-center gap-2">
-                <FolderInput size={14} />
-                Destination
-              </OzLabel>
+              <FieldLabel hint="Connections will be matched against these destination groups.">
+                Destination · To
+              </FieldLabel>
               <PeerGroupSelector
                 dataCy="destination-group-selector"
                 showRoutes
@@ -360,15 +353,9 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
             data-cy="protocol-wrapper"
           >
             <div className="min-w-0 flex-1">
-              <OzLabel className="inline-flex items-center gap-2">
-                <Share2 size={14} />
+              <FieldLabel hint="Allow only specified network protocols. Select TCP or UDP to constrain ports.">
                 Protocol
-              </OzLabel>
-              <OzHelpText className="mt-1 max-w-md">
-                Allow only specified network protocols. Select{" "}
-                <b className="text-oz2-text">TCP</b> or{" "}
-                <b className="text-oz2-text">UDP</b> to constrain ports.
-              </OzHelpText>
+              </FieldLabel>
             </div>
             <div className="w-[140px] shrink-0">
               <OzSelect
@@ -399,14 +386,9 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
           <div
             className={cn(portDisabled && "opacity-30 pointer-events-none")}
           >
-            <OzLabel className="inline-flex items-center gap-2">
-              <Shield size={14} />
+            <FieldLabel hint="Empty = all ports for the chosen protocol.">
               Ports
-            </OzLabel>
-            <OzHelpText className="mt-1 mb-2">
-              Allow access only to specified ports. Pick individual ports
-              or ranges between 1 and 65535.
-            </OzHelpText>
+            </FieldLabel>
             <PortSelector
               showAll
               ports={ports}
@@ -429,8 +411,10 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
         />
         </div>
 
-        {/* Right rail — sticky Live Preview aligned with the top of
-            the Identity card. */}
+        {/* Right rail — sticky Live Preview + Impact aligned with the
+            top of the Identity card. Preview shows the policy shape;
+            Impact tells the operator how many peers/services the
+            policy actually touches today. */}
         <aside className="flex flex-col gap-4 xl:sticky xl:top-6 xl:self-start">
           <PolicyLivePreview
             name={name}
@@ -442,6 +426,11 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
             protocol={protocol}
             ports={ports}
             portRanges={portRanges}
+          />
+          <PolicyImpact
+            sourceGroups={sourceGroups}
+            destinationGroups={destinationGroups}
+            destinationResource={destinationResource}
           />
         </aside>
       </div>
@@ -551,6 +540,51 @@ function PostureCheckCard({
         </>
       )}
     </OzCard>
+  );
+}
+
+// FieldLabel — editor-only field caption. Mono caps + faint color +
+// letter-spacing, matching the handoff FieldLabel helper. Hint text
+// flows below in sans like the handoff version. Replaces the generic
+// OzLabel in this surface so the editor reads with a more deliberate
+// type hierarchy than the standard form labels elsewhere.
+function FieldLabel({
+  children,
+  hint,
+  htmlFor,
+  required,
+  optional,
+}: {
+  children: React.ReactNode;
+  hint?: React.ReactNode;
+  htmlFor?: string;
+  required?: boolean;
+  optional?: boolean;
+}) {
+  return (
+    <div className="mb-2">
+      <LabelPrimitive.Root
+        htmlFor={htmlFor}
+        className="inline-flex items-center gap-1.5 font-mono text-[11px] font-medium uppercase leading-none tracking-[0.1em] text-oz2-text-faint"
+      >
+        <span>{children}</span>
+        {required && (
+          <span aria-hidden className="text-oz2-err">
+            *
+          </span>
+        )}
+        {optional && (
+          <span className="font-mono text-[10px] tracking-[0.06em] text-oz2-text-faint/70">
+            optional
+          </span>
+        )}
+      </LabelPrimitive.Root>
+      {hint && (
+        <div className="mt-1.5 font-sans text-[12px] leading-[1.45] text-oz2-text-muted normal-case tracking-normal">
+          {hint}
+        </div>
+      )}
+    </div>
   );
 }
 
