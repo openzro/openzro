@@ -234,14 +234,10 @@ function breadcrumbForPath(path: string | null): OzBreadcrumbSegment[] {
     return [{ label: "Workspace" }, { label: "Setup Keys" }];
   }
   if (path === "/access-control" || path.startsWith("/access-control/")) {
-    return [{ label: "Workspace" }, { label: "Access Control" }];
+    return [{ label: "Security" }, { label: "Access Control" }];
   }
   if (path === "/posture-checks" || path.startsWith("/posture-checks/")) {
-    return [
-      { label: "Workspace" },
-      { label: "Access Control" },
-      { label: "Posture Checks" },
-    ];
+    return [{ label: "Security" }, { label: "Posture Checks" }];
   }
   // /team/users, /team/groups and /team/service-users all sit under the
   // single conceptual "Users & Groups" screen (the page H1 + the
@@ -459,8 +455,15 @@ function buildSidebarSections(
           id: "acl",
           label: "Access Control",
           icon: NAV_ICONS.shield,
-          active: matches("/access-control", "/posture-checks"),
+          active: matches("/access-control"),
           onClick: () => go("/access-control"),
+        },
+        {
+          id: "posture-checks",
+          label: "Posture Checks",
+          icon: NAV_ICONS.shield,
+          active: matches("/posture-checks"),
+          onClick: () => go("/posture-checks"),
         },
         {
           id: "keys",
