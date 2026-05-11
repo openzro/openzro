@@ -69,9 +69,13 @@ export default function PolicyEditorShell({
     window.setTimeout(() => setSaving(false), 6000);
   };
 
+  // `policy` may carry a seed (rules pre-populated by an upstream
+  // flow, e.g. RouteModal's "Create policy for this route" prompt)
+  // without an id. Distinguish seed-create from real edit by id so
+  // header + save button + permission gate read correctly.
+  const isEdit = !!policy?.id;
   const saveDisabled =
-    saving ||
-    (policy ? !permission.policies.update : !permission.policies.create);
+    saving || (isEdit ? !permission.policies.update : !permission.policies.create);
 
   // Topbar slot: Cancel + Save. Mirrors the SetupKey / Network page
   // pattern. The slot is reactive so the disabled state updates as the
@@ -89,7 +93,7 @@ export default function PolicyEditorShell({
         disabled={saveDisabled}
         data-cy="submit-policy"
       >
-        {saving ? "Saving…" : policy ? "Save changes" : "Add policy"}
+        {saving ? "Saving…" : isEdit ? "Save changes" : "Add policy"}
       </OzButton>
     </>,
   );
@@ -106,7 +110,7 @@ export default function PolicyEditorShell({
           Back to Access Control
         </button>
         <h1 className="mt-2 text-[24px] font-semibold tracking-tight">
-          {policy ? "Edit policy" : "New access policy"}
+          {isEdit ? "Edit policy" : "New access policy"}
         </h1>
         <p className="mt-1 max-w-2xl text-[14px] leading-[1.55] text-oz2-text-muted">
           Define how peers reach each other across the mesh. Source groups

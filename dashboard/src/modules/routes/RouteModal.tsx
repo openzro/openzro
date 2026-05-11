@@ -55,7 +55,6 @@ import { OperatingSystem } from "@/interfaces/OperatingSystem";
 import { Peer } from "@/interfaces/Peer";
 import { Policy } from "@/interfaces/Policy";
 import { Route } from "@/interfaces/Route";
-import { AccessControlModalContent } from "@/modules/access-control/AccessControlModal";
 import useGroupHelper from "@/modules/groups/useGroupHelper";
 import { RoutingPeerMasqueradeSwitch } from "@/modules/networks/routing-peers/RoutingPeerMasqueradeSwitch";
 
@@ -65,11 +64,16 @@ type Props = {
   setOpen?: (open: boolean) => void;
 };
 
+// sessionStorage key that /access-control/new reads on mount to
+// pre-fill the form when the operator accepts the post-route prompt
+// "Do you want to create a policy for this route?". Keeps the seed
+// off the URL (the rules JSON would be ugly + leaky in browser
+// history) without needing extra plumbing through router state.
+const POLICY_SEED_KEY = "oz2-policy-seed";
+
 export default function RouteModal({ children, open, setOpen }: Props) {
   const { confirm } = useDialog();
   const router = useRouter();
-  const [routePolicyModal, setRoutePolicyModal] = useState(false);
-  const [newPolicy, setNewPolicy] = useState<Policy>();
 
   const handleCreatePolicyPrompt = async (r: Route) => {
     if (!r?.access_control_groups) return;
@@ -85,7 +89,7 @@ export default function RouteModal({ children, open, setOpen }: Props) {
     if (!choice) return;
 
     const name = `${r.network_id} Policy`;
-    const newPolicy: Policy = {
+    const seed: Policy = {
       name,
       description: "",
       enabled: true,
@@ -104,35 +108,29 @@ export default function RouteModal({ children, open, setOpen }: Props) {
         },
       ],
     };
-    setNewPolicy(newPolicy);
-    setRoutePolicyModal(true);
+
+    try {
+      window.sessionStorage.setItem(POLICY_SEED_KEY, JSON.stringify(seed));
+    } catch {
+      // sessionStorage may be unavailable (private mode quotas, etc.).
+      // The page-side hydration is best-effort, so falling back to a
+      // blank /access-control/new is acceptable degradation.
+    }
+    router.push("/access-control/new");
   };
 
   return (
-    <>
-      <Modal open={open} onOpenChange={setOpen} key={open ? 1 : 0}>
-        {children && <ModalTrigger asChild>{children}</ModalTrigger>}
-        {open && (
-          <RouteModalContent
-            onSuccess={async (r) => {
-              await handleCreatePolicyPrompt(r);
-              setOpen?.(false);
-            }}
-          />
-        )}
-      </Modal>
-
-      <Modal open={routePolicyModal} onOpenChange={setRoutePolicyModal}>
-        {routePolicyModal && newPolicy != undefined && (
-          <AccessControlModalContent
-            onSuccess={() => {
-              router.push("/access-control");
-            }}
-            policy={newPolicy}
-          />
-        )}
-      </Modal>
-    </>
+    <Modal open={open} onOpenChange={setOpen} key={open ? 1 : 0}>
+      {children && <ModalTrigger asChild>{children}</ModalTrigger>}
+      {open && (
+        <RouteModalContent
+          onSuccess={async (r) => {
+            await handleCreatePolicyPrompt(r);
+            setOpen?.(false);
+          }}
+        />
+      )}
+    </Modal>
   );
 }
 
