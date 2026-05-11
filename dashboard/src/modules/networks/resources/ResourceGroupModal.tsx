@@ -1,4 +1,3 @@
-import Button from "@components/Button";
 import {
   Modal,
   ModalClose,
@@ -13,6 +12,7 @@ import { useApiCall } from "@utils/api";
 import { FolderGit2 } from "lucide-react";
 import * as React from "react";
 import { useMemo } from "react";
+import OzButton from "@/components/v2/OzButton";
 import { Network, NetworkResource } from "@/interfaces/Network";
 import useGroupHelper from "@/modules/groups/useGroupHelper";
 
@@ -104,16 +104,16 @@ const ResourceGroupModalContent = ({
       <ModalFooter className={"items-center"}>
         <div className={"flex gap-3 w-full justify-end"}>
           <ModalClose asChild={true}>
-            <Button variant={"secondary"}>Cancel</Button>
+            <OzButton variant={"default"}>Cancel</OzButton>
           </ModalClose>
 
-          <Button
+          <OzButton
             variant={"primary"}
             onClick={updateResource}
             disabled={!canSave}
           >
             Save Groups
-          </Button>
+          </OzButton>
         </div>
       </ModalFooter>
     </ModalContent>
