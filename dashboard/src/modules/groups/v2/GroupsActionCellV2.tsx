@@ -1,7 +1,14 @@
-import FullTooltip from "@components/FullTooltip";
+"use client";
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@components/DropdownMenu";
 import { notify } from "@components/Notification";
 import { useApiCall } from "@utils/api";
-import { PenSquare, Trash2 } from "lucide-react";
+import { MoreVertical, PencilLine, Trash2 } from "lucide-react";
 import React, { useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
 import { useDialog } from "@/contexts/DialogProvider";
@@ -11,23 +18,13 @@ import RenameGroupModal from "@/modules/groups/RenameGroupModal";
 import { useGroupIdentification } from "@/modules/groups/useGroupIdentification";
 import { GroupUsage } from "@/modules/groups/useGroupsUsage";
 
-// GroupsActionCellV2 — v2 paint for the row-end Edit + Delete buttons
-// on /team/groups. Behavior is preserved verbatim from
-// GroupsActionCell:
-//
-//   - Edit opens RenameGroupModal (gated on permission.groups.update,
-//     blocked for the system "All" group, JWT-issued groups, and
-//     SCIM-issued groups via useGroupIdentification).
-//   - Delete fires the confirm dialog and DELETE /groups/:id
-//     (gated on permission.groups.delete + same group-source rules
-//     + the in_use flag derived from any non-zero usage count).
-//   - Each disabled state surfaces its specific reason via the same
-//     FullTooltip pattern; the message strings stay verbatim.
-//
-// Visual pass: 28px row buttons with v2 tokens. Edit is a neutral
-// outline; Delete uses the same hover-red pattern UserActionCellV2
-// landed on (neutral border + red text at rest, soft-red fill +
-// red border on hover). Tokens-only — no alpha modifiers.
+// GroupsActionCellV2 — v2 kebab dropdown for /team/groups rows.
+// Matches the canonical pattern (NameserverActionCellV2,
+// SetupKeyActionCellV2): one MoreVertical button opens a menu with
+// Edit + Delete. Behavior is preserved verbatim — same permission
+// + group-source + in_use gating. Disable-reason text from the old
+// FullTooltip is dropped onto the item's `title` attribute as a
+// browser hint, which is the dropdown-friendly equivalent.
 
 type Props = {
   group: GroupUsage;
@@ -55,9 +52,6 @@ export default function GroupsActionCellV2({
     });
   };
 
-  // One-line breakdown of where the group is referenced, e.g.
-  // "2 policies · 5 peers · 1 setup key" — surfaces inside the
-  // disabled tooltip when the group is in_use.
   const usageBreakdown = useMemo(() => {
     const parts: string[] = [];
     const push = (count: number, singular: string, plural: string) => {
@@ -91,11 +85,6 @@ export default function GroupsActionCellV2({
     issued: group?.issued,
   });
 
-  // The "All" group is a system default — every peer is implicitly
-  // a member, and the bootstrapped "Allow Mesh Traffic" policy
-  // references it by name. The provider silently no-ops PUTs to it,
-  // so allowing the buttons to fire produces a "click Save, nothing
-  // happens" UX. Block both Edit and Delete with an explicit tooltip.
   const isAllGroup = group.name === "All";
 
   const isDeleteDisabled =
@@ -103,7 +92,8 @@ export default function GroupsActionCellV2({
   const isEditDisabled =
     isAllGroup || !isRegularGroup || !permission.groups.update;
 
-  const getDeleteDisabledText = () => {
+  const deleteDisabledText = useMemo(() => {
+    if (!isDeleteDisabled) return undefined;
     if (isAllGroup) {
       return "The All group is a system default and cannot be deleted.";
     }
@@ -116,9 +106,17 @@ export default function GroupsActionCellV2({
       return `In use by ${usageBreakdown}. Remove these references first.`;
     }
     return "Remove dependencies to this group to delete it.";
-  };
+  }, [
+    isDeleteDisabled,
+    isAllGroup,
+    isRegularGroup,
+    isJWTGroup,
+    in_use,
+    usageBreakdown,
+  ]);
 
-  const getEditDisabledText = () => {
+  const editDisabledText = useMemo(() => {
+    if (!isEditDisabled) return undefined;
     if (isAllGroup) {
       return "The All group is a system default and cannot be renamed.";
     }
@@ -129,13 +127,10 @@ export default function GroupsActionCellV2({
       return "This group is issued by an IdP and cannot be renamed.";
     }
     return "You don't have permission to rename groups.";
-  };
+  }, [isEditDisabled, isAllGroup, isJWTGroup, isRegularGroup]);
 
   return (
-    <div
-      className="flex items-center justify-end gap-2 pr-3"
-      data-stop-row-click
-    >
+    <div className="flex justify-end pr-2" data-stop-row-click>
       {renameModal && (
         <RenameGroupModal
           group={group}
@@ -144,42 +139,53 @@ export default function GroupsActionCellV2({
         />
       )}
 
-      <FullTooltip
-        content={<div className="max-w-xs text-xs">{getEditDisabledText()}</div>}
-        interactive={false}
-        disabled={!isEditDisabled}
-      >
-        <button
-          type="button"
-          onClick={() => setRenameModal(true)}
-          disabled={isEditDisabled}
-          data-cy="rename-group"
-          aria-label={`Rename ${group.name}`}
-          className="inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-[8px] border border-oz2-border bg-transparent px-2.5 text-[12.5px] font-medium text-oz2-text-2 transition-colors hover:bg-oz2-hover hover:border-oz2-border-strong disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:border-oz2-border"
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger
+          asChild
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+          }}
         >
-          <PenSquare size={13} />
-          Edit
-        </button>
-      </FullTooltip>
-
-      <FullTooltip
-        content={
-          <div className="max-w-xs text-xs">{getDeleteDisabledText()}</div>
-        }
-        interactive={false}
-        disabled={!isDeleteDisabled}
-      >
-        <button
-          type="button"
-          onClick={handleConfirm}
-          disabled={isDeleteDisabled}
-          aria-label={`Delete ${group.name}`}
-          className="inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-[8px] border border-oz2-border bg-transparent px-2.5 text-[12.5px] font-medium text-oz2-err transition-colors hover:border-oz2-err hover:bg-oz2-err-bg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-oz2-border disabled:hover:bg-transparent"
-        >
-          <Trash2 size={13} />
-          Delete
-        </button>
-      </FullTooltip>
+          <button
+            type="button"
+            aria-label="Row actions"
+            className="grid h-8 w-8 place-items-center rounded-oz2-input border border-oz2-border bg-oz2-surface text-oz2-text-2 transition-colors hover:bg-oz2-hover hover:border-oz2-border-strong"
+          >
+            <MoreVertical size={14} className="shrink-0" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuItem
+            disabled={isEditDisabled}
+            title={editDisabledText}
+            data-cy="rename-group"
+            onClick={(e) => {
+              e.stopPropagation();
+              setRenameModal(true);
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <PencilLine size={14} className="shrink-0" />
+              Edit
+            </div>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={isDeleteDisabled}
+            title={deleteDisabledText}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleConfirm();
+            }}
+            variant="danger"
+          >
+            <div className="flex items-center gap-3">
+              <Trash2 size={14} className="shrink-0" />
+              Delete
+            </div>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

@@ -1,5 +1,11 @@
 "use client";
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@components/DropdownMenu";
 import { Modal } from "@components/modal/Modal";
 import { notify } from "@components/Notification";
 import { TooltipProvider } from "@components/Tooltip";
@@ -24,6 +30,7 @@ import {
   Bot,
   Info,
   KeyRound,
+  MoreVertical,
   PencilLine,
   PlusCircle,
   ShieldCheck,
@@ -140,8 +147,7 @@ export default function ServiceUsersTableV2({ users, isLoading }: Props) {
       },
       {
         id: "actions",
-        // Two 28-square icon buttons + gutter — narrow column.
-        size: 110,
+        size: 64,
         enableSorting: false,
         header: () => null,
         cell: ({ row }) => <ServiceUserActions user={row.original} />,
@@ -337,11 +343,11 @@ export default function ServiceUsersTableV2({ users, isLoading }: Props) {
   );
 }
 
-// ServiceUserActions — icon-only Edit + Delete pair. Edit (pencil)
-// navigates to the detail screen mirroring the row-click target;
-// Delete (trash) runs the confirm-dialog flow used by UserActionCellV2.
-// Buttons carry `data-stop-row-click` so they don't double-fire the
-// row's onClick.
+// ServiceUserActions — kebab dropdown matching the canonical row-action
+// pattern (NameserverActionCellV2, SetupKeyActionCellV2, etc.). Edit
+// navigates to the detail screen; Delete runs the confirm-dialog flow.
+// Dropdown trigger carries `data-stop-row-click` so opening the menu
+// doesn't double-fire the row's onClick.
 function ServiceUserActions({ user }: { user: User }) {
   const { confirm } = useDialog();
   const { permission } = usePermissions();
@@ -375,28 +381,51 @@ function ServiceUserActions({ user }: { user: User }) {
   };
 
   return (
-    <div
-      className="flex items-center justify-end gap-1.5 pr-3"
-      data-stop-row-click
-    >
-      <button
-        type="button"
-        onClick={onEdit}
-        aria-label={`Edit ${user.name || "service user"}`}
-        className="grid h-7 w-7 place-items-center rounded-[8px] border border-oz2-border bg-oz2-surface text-oz2-text-2 transition-colors hover:border-oz2-border-strong hover:bg-oz2-hover hover:text-oz2-text"
-      >
-        <PencilLine size={13} />
-      </button>
-      <button
-        type="button"
-        onClick={onDelete}
-        disabled={!permission.users.delete}
-        data-cy="delete-user"
-        aria-label={`Delete ${user.name || "service user"}`}
-        className="grid h-7 w-7 place-items-center rounded-[8px] border border-oz2-border bg-transparent text-oz2-err transition-colors hover:border-oz2-err hover:bg-oz2-err-bg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-oz2-border disabled:hover:bg-transparent"
-      >
-        <Trash2 size={13} />
-      </button>
+    <div className="flex justify-end pr-2" data-stop-row-click>
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger
+          asChild
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+          }}
+        >
+          <button
+            type="button"
+            aria-label="Row actions"
+            className="grid h-8 w-8 place-items-center rounded-oz2-input border border-oz2-border bg-oz2-surface text-oz2-text-2 transition-colors hover:bg-oz2-hover hover:border-oz2-border-strong"
+          >
+            <MoreVertical size={14} className="shrink-0" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit();
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <PencilLine size={14} className="shrink-0" />
+              Edit
+            </div>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={!permission.users.delete}
+            data-cy="delete-user"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            variant="danger"
+          >
+            <div className="flex items-center gap-3">
+              <Trash2 size={14} className="shrink-0" />
+              Delete
+            </div>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

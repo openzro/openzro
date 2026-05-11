@@ -214,10 +214,7 @@ export default function GroupsTableV2({ isLoading }: Props) {
       }),
       {
         id: "actions",
-        // Wider than other v2 tables' action columns because two row
-        // buttons sit side-by-side (Edit + Delete). Same sizing as
-        // /team/users for visual rhythm across the Identity tabs.
-        size: 200,
+        size: 64,
         enableSorting: false,
         header: () => null,
         cell: ({ row }) => (
