@@ -29,7 +29,11 @@ const OzSelectTrigger = React.forwardRef<
     className={classNames(
       "inline-flex h-[34px] w-full items-center justify-between gap-2 rounded-oz2-input border border-oz2-border bg-oz2-surface px-3 text-[13px] text-oz2-text transition-colors",
       "hover:border-oz2-border-strong",
-      "focus:outline-none focus:border-oz2-acc focus:ring-2 focus:ring-oz2-acc/30",
+      // focus-visible (not focus) — Radix Select keeps focus on the
+      // trigger while the popover is open, so `focus:` left a sticky
+      // violet ring around the trigger after every mouse click. The
+      // keyboard-only ring is preserved via focus-visible.
+      "outline-none focus:outline-none focus-visible:outline-none focus-visible:border-oz2-acc focus-visible:ring-2 focus-visible:ring-oz2-acc/30",
       "disabled:cursor-not-allowed disabled:opacity-60",
       "data-[placeholder]:text-oz2-text-faint",
       className,
