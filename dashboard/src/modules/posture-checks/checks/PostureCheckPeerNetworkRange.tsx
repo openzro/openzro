@@ -1,10 +1,4 @@
-import Button from "@components/Button";
-import HelpText from "@components/HelpText";
-import InlineLink from "@components/InlineLink";
-import { Input } from "@components/Input";
-import { Label } from "@components/Label";
 import { ModalClose, ModalFooter } from "@components/modal/Modal";
-import Paragraph from "@components/Paragraph";
 import { RadioGroup, RadioGroupItem } from "@components/RadioGroup";
 import cidr from "ip-cidr";
 import { isEmpty, uniqueId } from "lodash";
@@ -18,6 +12,9 @@ import {
 } from "lucide-react";
 import * as React from "react";
 import { useMemo, useState } from "react";
+import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
+import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
 import { PeerNetworkRangeCheck } from "@/interfaces/PostureCheck";
 import { PostureCheckCard } from "@/modules/posture-checks/ui/PostureCheckCard";
 
@@ -128,11 +125,11 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
       <div className={"flex flex-col px-8 gap-2 pb-6"}>
         <div className={"flex justify-between items-start gap-10 mt-2"}>
           <div>
-            <Label>Allow or Block Ranges</Label>
-            <HelpText className={""}>
+            <OzLabel>Allow or Block Ranges</OzLabel>
+            <OzHelpText className="mt-1">
               Choose whether you want to allow or block specific peer network
               ranges
-            </HelpText>
+            </OzHelpText>
           </div>
           <RadioGroup value={allowOrDeny} onChange={setAllowOrDeny}>
             <RadioGroupItem value={"allow"} variant={"green"}>
@@ -149,15 +146,14 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
           <div className={"mb-2 flex flex-col gap-2 w-full "}>
             {networkRanges.map((ipRange) => {
               return (
-                <div key={ipRange.id} className={"flex gap-2"}>
+                <div key={ipRange.id} className={"flex gap-2 items-start"}>
                   <div className={"w-full"}>
-                    <Input
-                      customPrefix={<NetworkIcon size={16} />}
+                    <OzInput
+                      prefix={<NetworkIcon size={16} />}
                       placeholder={"e.g., 172.16.0.0/16"}
                       value={ipRange.value}
                       error={cidrErrors.find((e) => e.id === ipRange.id)?.error}
-                      errorTooltip={false}
-                      className={"font-mono !text-[13px] w-full"}
+                      mono
                       onChange={(e) =>
                         handleNetworkRangeChange(ipRange.id, e.target.value)
                       }
@@ -165,49 +161,51 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
                     />
                   </div>
 
-                  <Button
-                    className={"h-[42px]"}
-                    variant={"default-outline"}
+                  <button
+                    type="button"
                     onClick={() => removeNetworkRange(ipRange.id)}
                     disabled={disabled}
+                    className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-oz2-input border border-oz2-border bg-oz2-surface text-oz2-text-2 transition-colors hover:bg-oz2-hover hover:border-oz2-border-strong disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <MinusCircleIcon size={15} />
-                  </Button>
+                  </button>
                 </div>
               );
             })}
           </div>
         )}
-        <Button
-          variant={"dotted"}
-          size={"sm"}
+        <button
+          type="button"
           onClick={addNetworkRange}
           disabled={disabled}
+          className="inline-flex h-[34px] items-center justify-center gap-2 rounded-oz2-input border border-dashed border-oz2-border-strong bg-transparent px-3 text-[13px] font-medium text-oz2-text-muted transition-colors hover:border-oz2-acc hover:bg-oz2-acc-soft/50 hover:text-oz2-acc-text disabled:cursor-not-allowed disabled:opacity-50"
         >
           <PlusCircle size={16} />
           Add Network Range
-        </Button>
+        </button>
       </div>
       <ModalFooter className={"items-center"}>
         <div className={"w-full"}>
-          <Paragraph className={"text-sm mt-auto"}>
-            Learn more about
-            <InlineLink
+          <p className={"text-sm mt-auto text-oz2-text-muted"}>
+            Learn more about{" "}
+            <a
               href={
                 "https://docs.openzro.io/how-to/manage-posture-checks#peer-network-range-check"
               }
               target={"_blank"}
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-oz2-acc-text underline-offset-2 hover:underline"
             >
               Peer Network Range Check
               <ExternalLinkIcon size={12} />
-            </InlineLink>
-          </Paragraph>
+            </a>
+          </p>
         </div>
         <div className={"flex gap-3 w-full justify-end"}>
           <ModalClose asChild={true}>
-            <Button variant={"secondary"}>Cancel</Button>
+            <OzButton variant={"default"}>Cancel</OzButton>
           </ModalClose>
-          <Button
+          <OzButton
             variant={"primary"}
             disabled={hasErrorsOrIsEmpty || disabled}
             onClick={() => {
@@ -224,7 +222,7 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
             }}
           >
             Save
-          </Button>
+          </OzButton>
         </div>
       </ModalFooter>
     </>

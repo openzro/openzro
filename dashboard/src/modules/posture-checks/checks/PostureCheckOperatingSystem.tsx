@@ -1,17 +1,10 @@
-import Button from "@components/Button";
 import FancyToggleSwitch from "@components/FancyToggleSwitch";
-import HelpText from "@components/HelpText";
-import InlineLink from "@components/InlineLink";
-import { Input } from "@components/Input";
-import { Label } from "@components/Label";
 import { ModalClose, ModalFooter } from "@components/modal/Modal";
-import Paragraph from "@components/Paragraph";
 import { RadioGroup, RadioGroupItem } from "@components/RadioGroup";
 import {
   SelectDropdown,
   SelectOption,
 } from "@components/select/SelectDropdown";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/Tabs";
 import { IconMathEqualGreater } from "@tabler/icons-react";
 import { validator } from "@utils/helpers";
 import { isEmpty } from "lodash";
@@ -30,6 +23,15 @@ import AppleIcon from "@/assets/icons/AppleIcon";
 import IOSIcon from "@/assets/icons/IOSIcon";
 import { LinuxIcon } from "@/assets/icons/LinuxIcon";
 import WindowsIcon from "@/assets/icons/WindowsIcon";
+import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
+import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
+import {
+  OzTabs,
+  OzTabsContent,
+  OzTabsList,
+  OzTabsTrigger,
+} from "@/components/v2/OzTabs";
 import { OperatingSystem } from "@/interfaces/OperatingSystem";
 import {
   androidVersions,
@@ -81,6 +83,12 @@ export const PostureCheckOperatingSystem = ({
     </PostureCheckCard>
   );
 };
+
+// OzTabsTrigger className that exposes a named group so the inner
+// OS icon can swap fill on the active tab via group-data syntax.
+const OS_TAB_TRIGGER = "group/trigger";
+const OS_ICON_CLASS =
+  "fill-oz2-text-faint group-data-[state=active]/trigger:fill-oz2-acc transition-all";
 
 const CheckContent = ({ value, onChange, disabled }: Props) => {
   const [tab] = useState(String(OperatingSystem.LINUX));
@@ -135,50 +143,47 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
 
   return (
     <>
-      <Tabs defaultValue={tab}>
-        <TabsList justify={"start"} className={"px-8"}>
-          <TabsTrigger value={String(OperatingSystem.LINUX)}>
-            <LinuxIcon
-              className={
-                "fill-nb-gray-500 group-data-[state=active]/trigger:fill-openzro transition-all"
-              }
-            />
-            Linux
-          </TabsTrigger>
-          <TabsTrigger value={String(OperatingSystem.WINDOWS)}>
-            <WindowsIcon
-              className={
-                "fill-nb-gray-500 group-data-[state=active]/trigger:fill-openzro transition-all"
-              }
-            />
-            Windows
-          </TabsTrigger>
-          <TabsTrigger value={String(OperatingSystem.APPLE)}>
-            <AppleIcon
-              className={
-                "fill-nb-gray-500 group-data-[state=active]/trigger:fill-openzro transition-all"
-              }
-            />
-            macOS
-          </TabsTrigger>
-          <TabsTrigger value={String(OperatingSystem.IOS)}>
-            <IOSIcon
-              className={
-                "fill-nb-gray-500 group-data-[state=active]/trigger:fill-openzro transition-all"
-              }
-            />
-            iOS
-          </TabsTrigger>
-          <TabsTrigger value={String(OperatingSystem.ANDROID)}>
-            <AndroidIcon
-              className={
-                "fill-nb-gray-500 group-data-[state=active]/trigger:fill-openzro transition-all"
-              }
-            />
-            Android
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value={String(OperatingSystem.LINUX)} className={"px-8"}>
+      <OzTabs defaultValue={tab}>
+        <div className="px-8">
+          <OzTabsList>
+            <OzTabsTrigger
+              value={String(OperatingSystem.LINUX)}
+              className={OS_TAB_TRIGGER}
+            >
+              <LinuxIcon className={OS_ICON_CLASS} />
+              Linux
+            </OzTabsTrigger>
+            <OzTabsTrigger
+              value={String(OperatingSystem.WINDOWS)}
+              className={OS_TAB_TRIGGER}
+            >
+              <WindowsIcon className={OS_ICON_CLASS} />
+              Windows
+            </OzTabsTrigger>
+            <OzTabsTrigger
+              value={String(OperatingSystem.APPLE)}
+              className={OS_TAB_TRIGGER}
+            >
+              <AppleIcon className={OS_ICON_CLASS} />
+              macOS
+            </OzTabsTrigger>
+            <OzTabsTrigger
+              value={String(OperatingSystem.IOS)}
+              className={OS_TAB_TRIGGER}
+            >
+              <IOSIcon className={OS_ICON_CLASS} />
+              iOS
+            </OzTabsTrigger>
+            <OzTabsTrigger
+              value={String(OperatingSystem.ANDROID)}
+              className={OS_TAB_TRIGGER}
+            >
+              <AndroidIcon className={OS_ICON_CLASS} />
+              Android
+            </OzTabsTrigger>
+          </OzTabsList>
+        </div>
+        <OzTabsContent value={String(OperatingSystem.LINUX)} className={"px-8 pt-3"}>
           <OperatingSystemTab
             value={linuxVersion}
             onChange={setLinuxVersion}
@@ -186,8 +191,8 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
             onError={setLinuxError}
             disabled={disabled}
           />
-        </TabsContent>
-        <TabsContent value={String(OperatingSystem.WINDOWS)} className={"px-8"}>
+        </OzTabsContent>
+        <OzTabsContent value={String(OperatingSystem.WINDOWS)} className={"px-8 pt-3"}>
           <OperatingSystemTab
             versionList={windowsKernelVersions}
             value={windowsVersion}
@@ -196,8 +201,8 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
             onError={setWindowsError}
             disabled={disabled}
           />
-        </TabsContent>
-        <TabsContent value={String(OperatingSystem.APPLE)} className={"px-8"}>
+        </OzTabsContent>
+        <OzTabsContent value={String(OperatingSystem.APPLE)} className={"px-8 pt-3"}>
           <OperatingSystemTab
             versionList={macOSVersions}
             value={macOSVersion}
@@ -206,8 +211,8 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
             onError={setMacOSError}
             disabled={disabled}
           />
-        </TabsContent>
-        <TabsContent value={String(OperatingSystem.IOS)} className={"px-8"}>
+        </OzTabsContent>
+        <OzTabsContent value={String(OperatingSystem.IOS)} className={"px-8 pt-3"}>
           <OperatingSystemTab
             versionList={iOSVersions}
             value={iOSVersion}
@@ -216,8 +221,8 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
             onError={setIOSError}
             disabled={disabled}
           />
-        </TabsContent>
-        <TabsContent value={String(OperatingSystem.ANDROID)} className={"px-8"}>
+        </OzTabsContent>
+        <OzTabsContent value={String(OperatingSystem.ANDROID)} className={"px-8 pt-3"}>
           <OperatingSystemTab
             versionList={androidVersions}
             value={androidVersion}
@@ -226,29 +231,31 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
             onError={setAndroidError}
             disabled={disabled}
           />
-        </TabsContent>
-      </Tabs>
+        </OzTabsContent>
+      </OzTabs>
       <div className={"h-6"}></div>
       <ModalFooter className={"items-center"}>
         <div className={"w-full"}>
-          <Paragraph className={"text-sm mt-auto"}>
-            Learn more about
-            <InlineLink
+          <p className={"text-sm mt-auto text-oz2-text-muted"}>
+            Learn more about{" "}
+            <a
               href={
                 "https://docs.openzro.io/how-to/manage-posture-checks#operating-system-version-check"
               }
               target={"_blank"}
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-oz2-acc-text underline-offset-2 hover:underline"
             >
               Operating System Check
               <ExternalLinkIcon size={12} />
-            </InlineLink>
-          </Paragraph>
+            </a>
+          </p>
         </div>
         <div className={"flex gap-3 w-full justify-end"}>
           <ModalClose asChild={true}>
-            <Button variant={"secondary"}>Cancel</Button>
+            <OzButton variant={"default"}>Cancel</OzButton>
           </ModalClose>
-          <Button
+          <OzButton
             disabled={!!versionError}
             variant={"primary"}
             onClick={() => {
@@ -278,7 +285,7 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
             }}
           >
             Save
-          </Button>
+          </OzButton>
         </div>
       </ModalFooter>
     </>
@@ -371,13 +378,13 @@ export const OperatingSystemTab = ({
   }, [versionError, onError]);
 
   return (
-    <div className={""}>
+    <div>
       <div className={"flex justify-between items-start gap-10 "}>
         <div>
-          <Label>Allow or Block</Label>
-          <HelpText>
+          <OzLabel>Allow or Block</OzLabel>
+          <OzHelpText className="mt-1">
             Choose whether you want to allow or block the operating system.
-          </HelpText>
+          </OzHelpText>
         </div>
         <RadioGroup value={allow} onChange={changeAllow}>
           <RadioGroupItem value={"allow"} variant={"green"}>
@@ -407,12 +414,15 @@ export const OperatingSystemTab = ({
             disabled={allOrMin === "all" || allow === "block" || disabled}
           />
         ) : (
-          <Input
+          <OzInput
             value={value}
-            customPrefix={prefix}
+            prefix={
+              <span className="text-[12.5px] text-oz2-text-faint">
+                {prefix}
+              </span>
+            }
             placeholder={"e.g., 6.0.0"}
             error={versionError}
-            errorTooltip={true}
             disabled={allOrMin === "all" || allow === "block" || disabled}
             onChange={(v) => {
               onChange(v.target.value);
