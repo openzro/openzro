@@ -21,11 +21,13 @@ export const PostureCheckNameCell = ({ check, small }: Props) => {
       />
     </ActiveInactiveRow>
   ) : (
-    <div className={"flex items-center gap-4 min-w-[350px]"}>
-      <div className={"flex flex-col gap-0.5 min-w-0 max-w-[300px]"}>
-        <div className={"text-sm text-nb-gray-100 truncate"}>{check.name}</div>
+    <div className={"flex items-center gap-4 min-w-0 flex-1"}>
+      <div className={"flex flex-col gap-0.5 min-w-0"}>
+        <div className={"text-[13px] font-medium text-oz2-text truncate"}>
+          {check.name}
+        </div>
         <DescriptionWithTooltip
-          className={"text-xs"}
+          className={"text-[11.5px] text-oz2-text-muted"}
           text={check.description}
           maxChars={30}
         />

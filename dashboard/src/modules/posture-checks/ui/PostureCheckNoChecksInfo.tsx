@@ -1,12 +1,14 @@
-import Button from "@components/Button";
-import Paragraph from "@components/Paragraph";
 import { IconCirclePlus } from "@tabler/icons-react";
 import useFetchApi from "@utils/api";
-import { cn } from "@utils/helpers";
 import { FolderSearch } from "lucide-react";
 import * as React from "react";
+import OzButton from "@/components/v2/OzButton";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { PostureCheck } from "@/interfaces/PostureCheck";
+
+// PostureCheckNoChecksInfo — empty state shown when no posture checks
+// are attached to the policy yet. v2 paint: drops the legacy Button +
+// Paragraph in favor of OzButton sm + sans-text muted body.
 
 export function PostureCheckNoChecksInfo({
   onAddClick,
@@ -16,49 +18,40 @@ export function PostureCheckNoChecksInfo({
   onBrowseClick: () => void;
 }) {
   const { permission } = usePermissions();
-
   const { data: postureChecks } =
     useFetchApi<PostureCheck[]>("/posture-checks");
 
+  const canManage =
+    permission.policies.create && permission.policies.update;
+  const canBrowse =
+    canManage && postureChecks && postureChecks.length > 0;
+
   return (
-    <div>
-      <div
-        className={
-          "mx-auto text-center flex flex-col items-center justify-center"
-        }
-      >
-        <h2 className={"text-lg my-0 leading-[1.5 text-center]"}>
-          {"You haven't added any posture checks yet"}
-        </h2>
-        <Paragraph className={cn("text-sm text-center max-w-md mt-1")}>
-          Add various posture checks to further restrict access in your network.
-          E.g., only clients with a specific Openzro client version, operating
-          system or location are allowed to connect.
-        </Paragraph>
-      </div>
-      <div className={"flex items-center justify-center gap-4 mt-5"}>
-        <Button
-          variant={"secondary"}
-          size={"xs"}
-          disabled={
-            postureChecks?.length == 0 ||
-            !permission.policies.create ||
-            !permission.policies.update
-          }
+    <div className="rounded-oz2-card border border-dashed border-oz2-border bg-oz2-bg-sunken/30 px-6 py-8 text-center">
+      <h2 className="text-[14px] font-semibold text-oz2-text">
+        No posture checks attached
+      </h2>
+      <p className="mx-auto mt-1.5 max-w-md text-[12.5px] leading-[1.55] text-oz2-text-muted">
+        Add posture checks to further restrict access — e.g. require a
+        specific Openzro client version, operating system, or geofence.
+      </p>
+      <div className="mt-5 flex items-center justify-center gap-2">
+        <OzButton
+          variant="default"
           onClick={onBrowseClick}
+          disabled={!canBrowse}
         >
-          <FolderSearch size={14} />
+          <FolderSearch size={13} />
           Browse Checks
-        </Button>
-        <Button
-          variant={"primary"}
-          size={"xs"}
+        </OzButton>
+        <OzButton
+          variant="primary"
           onClick={onAddClick}
-          disabled={!permission.policies.create || !permission.policies.update}
+          disabled={!canManage}
         >
-          <IconCirclePlus size={14} />
+          <IconCirclePlus size={13} />
           New Posture Check
-        </Button>
+        </OzButton>
       </div>
     </div>
   );
