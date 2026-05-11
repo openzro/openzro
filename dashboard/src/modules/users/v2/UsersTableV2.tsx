@@ -214,10 +214,7 @@ export default function UsersTableV2({ users, isLoading }: Props) {
       },
       {
         id: "actions",
-        // Wider than other v2 tables' actions column because two row
-        // buttons can sit side-by-side here (Resend invite + Delete)
-        // for invited hosted users. Non-invited rows just show Delete.
-        size: 200,
+        size: 64,
         enableSorting: false,
         header: () => null,
         cell: ({ row }) => <UserActionCellV2 user={row.original} />,
