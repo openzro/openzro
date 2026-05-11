@@ -355,7 +355,7 @@ export default function AccessControlTableV2({ policies, isLoading }: Props) {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <div className="inline-flex h-[34px] flex-1 min-w-[220px] items-center gap-2 rounded-oz2-input border border-oz2-border bg-oz2-surface px-3">
+              <div className="inline-flex h-[34px] w-[280px] items-center gap-2 rounded-oz2-input border border-oz2-border bg-oz2-surface px-3">
                 <span className="text-oz2-text-faint">{ICONS.search}</span>
                 <input
                   value={search}
