@@ -19,7 +19,6 @@ import Skeleton from "react-loading-skeleton";
 import OzCard from "@/components/v2/OzCard";
 import OzInput from "@/components/v2/OzInput";
 import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
-import OzSwitch from "@/components/v2/OzSwitch";
 import {
   OzSelect,
   OzSelectContent,
@@ -557,8 +556,10 @@ function PostureCheckCard({
 
 // EnableToggleButton — compact bordered tile matching the handoff
 // Identity-card Status widget. Sits in a 160px column next to the
-// policy name. Single visual unit so the operator sees enable/disable
-// state at a glance without a separate label-and-helptext block.
+// policy name. The "switch" affordance inside is a styled span pair,
+// not a real <button> — Radix Switch (used by OzSwitch elsewhere)
+// renders as a button, and nesting button-in-button is invalid HTML
+// and trips React's hydration check.
 function EnableToggleButton({
   value,
   onChange,
@@ -582,15 +583,20 @@ function EnableToggleButton({
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-oz2-acc/40",
       )}
     >
-      <OzSwitch
-        size="sm"
-        checked={value}
-        onCheckedChange={onChange}
-        disabled={disabled}
-        // The outer button already handles the click; let the switch
-        // render its own state without re-firing onChange.
-        onClick={(e) => e.stopPropagation()}
-      />
+      <span
+        aria-hidden
+        className={cn(
+          "inline-flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors",
+          value ? "bg-oz2-acc" : "bg-oz2-border-strong",
+        )}
+      >
+        <span
+          className={cn(
+            "block h-3 w-3 rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.18)] transition-transform",
+            value ? "translate-x-3" : "translate-x-0",
+          )}
+        />
+      </span>
       {value ? "Enabled" : "Disabled"}
     </button>
   );
