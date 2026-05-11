@@ -20,6 +20,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { BookOpen, PlusCircle, Route, ShieldCheck } from "lucide-react";
+import { useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSWRConfig } from "swr";
 import OzButton from "@/components/v2/OzButton";
@@ -36,10 +37,8 @@ import {
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { Network } from "@/interfaces/Network";
 import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
-import {
-  NetworkProvider,
-  useNetworksContext,
-} from "@/modules/networks/NetworkProvider";
+import NetworkModal from "@/modules/networks/NetworkModal";
+import { NetworkProvider } from "@/modules/networks/NetworkProvider";
 import NetworkActionCell from "@/modules/networks/table/NetworkActionCell";
 import NetworkNameCell from "@/modules/networks/table/NetworkNameCell";
 import { NetworkPolicyCell } from "@/modules/networks/table/NetworkPolicyCell";
@@ -77,6 +76,7 @@ export default function NetworksTableV2({ data, isLoading }: Props) {
 
 function NetworksView({ data, isLoading }: Props) {
   const { mutate } = useSWRConfig();
+  const router = useRouter();
 
   // Mount the Add Network trigger into the V2 topbar's right slot so
   // the action lives next to the theme toggle (matches PeersTableV2).
@@ -295,7 +295,20 @@ function NetworksView({ data, isLoading }: Props) {
             </OzTableHeader>
             <OzTableBody>
               {table.getRowModel().rows.map((row) => (
-                <OzTableRow key={row.id}>
+                <OzTableRow
+                  key={row.id}
+                  className="cursor-pointer"
+                  onClick={(e) => {
+                    // Skip when the click comes from a button, link,
+                    // dropdown, or modal trigger — the row navigation
+                    // shouldn't override per-cell affordances (kebab
+                    // actions, NetworkInformationSquare button, etc.).
+                    const target = e.target as HTMLElement;
+                    if (target.closest("button, a, input, [role=dialog], [role=menu]"))
+                      return;
+                    router.push(`/network?id=${row.original.id}`);
+                  }}
+                >
                   {row.getVisibleCells().map((cell) => (
                     <OzTableCell key={cell.id}>
                       {flexRender(
@@ -395,21 +408,28 @@ function NetworksEmptyState() {
   );
 }
 
-// ─── Add Network button (in-page, since it needs NetworksContext) ────────
+// AddNetworkButtonV2 owns its own Modal state. It can't read
+// NetworksContext.openCreateNetworkModal because the button is
+// rendered via useV2TopbarRight — the JSX node is mounted inside
+// V2DashboardChrome's tree (the topbar slot), which sits OUTSIDE
+// NetworkProvider. Same self-contained shape as AddPeerButtonV2.
 
 function AddNetworkButtonV2() {
-  const { openCreateNetworkModal } = useNetworksContext();
   const { permission } = usePermissions();
+  const [open, setOpen] = useState(false);
   return (
-    <OzButton
-      variant="primary"
-      onClick={openCreateNetworkModal}
-      disabled={!permission.networks.create}
-      type="button"
-    >
-      <PlusCircle size={14} />
-      Add Network
-    </OzButton>
+    <>
+      <OzButton
+        variant="primary"
+        onClick={() => setOpen(true)}
+        disabled={!permission.networks.create}
+        type="button"
+      >
+        <PlusCircle size={14} />
+        Add Network
+      </OzButton>
+      <NetworkModal open={open} setOpen={setOpen} />
+    </>
   );
 }
 
