@@ -1,35 +1,54 @@
 "use client";
 
 import InlineLink from "@components/InlineLink";
+import SkeletonTable, {
+  SkeletonTableHeader,
+} from "@components/skeletons/SkeletonTable";
 import FullScreenLoading from "@components/ui/FullScreenLoading";
 import useRedirect from "@hooks/useRedirect";
 import useFetchApi from "@utils/api";
 import { cn } from "@utils/helpers";
 import {
   ArrowUpRightIcon,
+  DatabaseIcon,
   HelpCircle,
   PencilLineIcon,
+  PlusCircle,
   ServerIcon,
   ShieldCheckIcon,
   ShieldXIcon,
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import React, { useMemo, useState } from "react";
+import React, { Suspense, useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
+import OzButton from "@/components/v2/OzButton";
 import OzCard from "@/components/v2/OzCard";
+import {
+  OzTabs,
+  OzTabsContent,
+  OzTabsList,
+  OzTabsTrigger,
+} from "@/components/v2/OzTabs";
 import { usePermissions } from "@/contexts/PermissionsProvider";
-import { Network } from "@/interfaces/Network";
+import {
+  Network,
+  NetworkResource,
+  NetworkRouter,
+} from "@/interfaces/Network";
 import { NetworkInformationSquare } from "@/modules/networks/misc/NetworkInformationSquare";
 import NetworkModal from "@/modules/networks/NetworkModal";
-import { NetworkProvider } from "@/modules/networks/NetworkProvider";
-import { ResourcesSection } from "@/modules/networks/resources/ResourcesSection";
-import { NetworkRoutingPeersSection } from "@/modules/networks/routing-peers/NetworkRoutingPeersSection";
+import {
+  NetworkProvider,
+  useNetworksContext,
+} from "@/modules/networks/NetworkProvider";
+import ResourcesTable from "@/modules/networks/resources/ResourcesTable";
+import NetworkRoutingPeersTable from "@/modules/networks/routing-peers/NetworkRoutingPeersTable";
 
-// /network — v2 chrome entry. Body keeps the existing
-// ResourcesSection + NetworkRoutingPeersSection composition (those
-// are sub-modules with their own state); only the wrapping page
-// chrome flips from PageContainer + Breadcrumbs + Card.List to v2
-// header + OzCard for the info row. Modal mount unchanged.
+// /network — v2 chrome entry. Body groups Resources + Routing Peers
+// into a single OzTabs so the operator scans one list at a time
+// instead of scrolling through both stacked. Tab labels carry the
+// counts so the "is this peer/resource set healthy" question is
+// answerable without entering the tab.
 
 export default function NetworkDetailPage() {
   const queryParameter = useSearchParams();
@@ -59,7 +78,7 @@ function NetworkOverview({ network }: Readonly<{ network: Network }>) {
 
   return (
     <NetworkProvider network={network}>
-      <div className="space-y-6 p-8">
+      <div className="space-y-6 p-8 pb-0">
         <header className="flex items-center gap-3">
           <NetworkInformationSquare
             name={network.name}
@@ -90,9 +109,141 @@ function NetworkOverview({ network }: Readonly<{ network: Network }>) {
         <NetworkInformationCard network={network} />
       </div>
 
-      <ResourcesSection network={network} />
-      <NetworkRoutingPeersSection network={network} />
+      <NetworkSectionTabs network={network} />
     </NetworkProvider>
+  );
+}
+
+function NetworkSectionTabs({ network }: Readonly<{ network: Network }>) {
+  const { data: resources, isLoading: resLoading } = useFetchApi<
+    NetworkResource[]
+  >(`/networks/${network.id}/resources`);
+  const { data: routers, isLoading: rtLoading } = useFetchApi<NetworkRouter[]>(
+    `/networks/${network.id}/routers`,
+  );
+
+  return (
+    <OzTabs defaultValue="resources">
+      <div className="px-8 pb-3 pt-6">
+        <OzTabsList>
+          <OzTabsTrigger value="resources">
+            <DatabaseIcon
+              size={14}
+              className="text-oz2-text-faint group-data-[state=active]/trigger:text-oz2-acc transition-colors"
+            />
+            Resources
+            <span className="font-mono text-[11px] text-oz2-text-faint">
+              {resources?.length ?? 0}
+            </span>
+          </OzTabsTrigger>
+          <OzTabsTrigger value="routing-peers">
+            <ServerIcon
+              size={14}
+              className="text-oz2-text-faint group-data-[state=active]/trigger:text-oz2-acc transition-colors"
+            />
+            Routing Peers
+            <span className="font-mono text-[11px] text-oz2-text-faint">
+              {routers?.length ?? 0}
+            </span>
+          </OzTabsTrigger>
+        </OzTabsList>
+      </div>
+
+      <OzTabsContent value="resources" className="px-8 pb-8">
+        <ResourcesTabPanel
+          network={network}
+          resources={resources}
+          isLoading={resLoading}
+        />
+      </OzTabsContent>
+      <OzTabsContent
+        value="routing-peers"
+        id="routing-peers"
+        className="px-8 pb-8"
+      >
+        <RoutingPeersTabPanel
+          network={network}
+          routers={routers}
+          isLoading={rtLoading}
+        />
+      </OzTabsContent>
+    </OzTabs>
+  );
+}
+
+function ResourcesTabPanel({
+  network,
+  resources,
+  isLoading,
+}: {
+  network: Network;
+  resources: NetworkResource[] | undefined;
+  isLoading: boolean;
+}) {
+  return (
+    <div className="max-w-6xl space-y-4">
+      <p className="max-w-2xl text-[13px] leading-[1.55] text-oz2-text-muted">
+        Add and manage the addresses (single IP, subnet, or domain) that peers
+        in this network are allowed to reach.
+      </p>
+      <Suspense
+        fallback={
+          <div>
+            <SkeletonTableHeader className="!p-0" />
+            <div className="mt-8 w-full">
+              <SkeletonTable withHeader={false} />
+            </div>
+          </div>
+        }
+      >
+        <ResourcesTable isLoading={isLoading} resources={resources} />
+      </Suspense>
+    </div>
+  );
+}
+
+function RoutingPeersTabPanel({
+  network,
+  routers,
+  isLoading,
+}: {
+  network: Network;
+  routers: NetworkRouter[] | undefined;
+  isLoading: boolean;
+}) {
+  const { permission } = usePermissions();
+  const { openAddRoutingPeerModal } = useNetworksContext();
+
+  return (
+    <div className="max-w-6xl space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <p className="max-w-2xl text-[13px] leading-[1.55] text-oz2-text-muted">
+          Peers that proxy traffic from the mesh into the resources of this
+          network. Run 2+ in different fault domains for high availability.
+        </p>
+        <OzButton
+          variant="primary"
+          type="button"
+          onClick={() => openAddRoutingPeerModal(network)}
+          disabled={!permission.networks.update}
+        >
+          <PlusCircle size={14} />
+          Add Routing Peer
+        </OzButton>
+      </div>
+      <Suspense
+        fallback={
+          <div>
+            <SkeletonTableHeader className="!p-0" />
+            <div className="mt-8 w-full">
+              <SkeletonTable withHeader={false} />
+            </div>
+          </div>
+        }
+      >
+        <NetworkRoutingPeersTable isLoading={isLoading} routers={routers} />
+      </Suspense>
+    </div>
   );
 }
 
@@ -135,9 +286,9 @@ function NetworkInformationCard({ network }: Readonly<{ network: Network }>) {
             title={
               typeof haText === "string"
                 ? haText
-                : (isHighlyAvailable
-                    ? "High availability is active. You can add more routing peers."
-                    : "High availability is inactive. Add more routing peers.")
+                : isHighlyAvailable
+                  ? "High availability is active. You can add more routing peers."
+                  : "High availability is inactive. Add more routing peers."
             }
           >
             <span
