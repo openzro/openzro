@@ -52,11 +52,13 @@ const OzSelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={classNames(
-        // outline-none — Radix moves focus to Content on open;
-        // without this the browser's default focus outline (blue,
-        // square-cornered) wraps the popover and bleeds past the
-        // rounded card radius.
-        "relative z-50 min-w-[8rem] overflow-hidden rounded-oz2-card border border-oz2-border bg-oz2-bg-elev text-oz2-text shadow-oz2-md outline-none focus:outline-none focus-visible:outline-none",
+        // Radix moves focus to Content on open; without arbitrary
+        // `[outline:none]` (real `outline: none`) the browser's
+        // default focus outline (blue, square-cornered) bleeds past
+        // the rounded card. Tailwind's `outline-none` is actually
+        // `outline: 2px solid transparent` and doesn't reliably
+        // suppress the user-agent ring on every browser/state.
+        "relative z-50 min-w-[8rem] overflow-hidden rounded-oz2-card border border-oz2-border bg-oz2-bg-elev text-oz2-text shadow-oz2-md [outline:none] focus:[outline:none] focus-visible:[outline:none]",
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
         position === "popper" &&
           "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
