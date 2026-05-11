@@ -171,12 +171,12 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
       !permission.policies.update || !permission.policies.create;
 
     return (
-      // 2-col layout — form cards on the left, sidebar on the right.
-      // Sidebar hosts Posture Checks for pass 1 and gains a Live
-      // Preview + Impact stack in pass 2. Collapses to a single column
-      // below xl so the cards stay readable on narrower screens.
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="flex flex-col gap-4 min-w-0">
+      // Single-column stack for pass 1. The Posture Checks card hosts
+      // a minimal table that wants real width — squeezing it into a
+      // 340px sidebar made the table's headers and labels wrap
+      // per-word. Pass 2 reintroduces a right rail with Live Preview
+      // + Impact (both naturally narrow content) where 340px works.
+      <div className="flex flex-col gap-4">
         {/* Card 1 — Identity. Mirrors handoff Identity: name + status
             tile side-by-side at the top, description spans the row
             below. Trades the modal's stacked-everything layout for
@@ -187,9 +187,6 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
               <OzLabel htmlFor="policy-name" required>
                 Policy name
               </OzLabel>
-              <OzHelpText className="mb-2">
-                Set an easily identifiable name for your policy.
-              </OzHelpText>
               <OzInput
                 id="policy-name"
                 autoFocus={!policy}
@@ -204,7 +201,6 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
 
             <div>
               <OzLabel>Status</OzLabel>
-              <OzHelpText className="mb-2 invisible">.</OzHelpText>
               <EnableToggleButton
                 value={enabled}
                 onChange={setEnabled}
@@ -420,19 +416,15 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
           </div>
         </OzCard>
 
-        </div>
-
-        {/* Right sidebar. Pass 1 carries Posture Checks alone; pass 2
-            slots a Live Preview + Impact pair on top, sliding Posture
-            down or back into the form col. Sticky so it stays in
-            reach while the form cards scroll. */}
-        <aside className="flex flex-col gap-4 xl:sticky xl:top-6 xl:self-start">
-          <PostureCheckCard
-            postureChecks={postureChecks}
-            setPostureChecks={setPostureChecks}
-            isLoading={isPostureChecksLoading}
-          />
-        </aside>
+        {/* Card 4 — Posture Checks. Lives in the form column at full
+            width because its minimal table needs real space; the sidebar
+            slot reappears in pass 2 with Live Preview + Impact, which
+            tolerate a narrow column much better. */}
+        <PostureCheckCard
+          postureChecks={postureChecks}
+          setPostureChecks={setPostureChecks}
+          isLoading={isPostureChecksLoading}
+        />
       </div>
     );
   },

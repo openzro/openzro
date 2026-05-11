@@ -123,10 +123,13 @@ export default function PolicyEditorShell({
         </p>
       </header>
 
-      {/* max-w-7xl fits the form col + the 340px sidebar at xl with
-          comfortable breathing room. The 2-col grid lives inside the
-          body, so the shell only caps the overall page width. */}
-      <div className="max-w-7xl">
+      {/* Pass 1 stacks everything in a single column — Posture Checks'
+          minimal table needs full width to render properly. max-w-5xl
+          (1024px) gives Identity/Source-Dest/Protocol-Ports/Posture
+          comfortable proportions without sprawling. Pass 2 will widen
+          the page and reintroduce a 380px right rail for Live Preview
+          + Impact. */}
+      <div className="max-w-5xl">
         <PolicyEditorBody
           ref={editorRef}
           policy={policy}
