@@ -27,11 +27,9 @@ export const PostureCheckChecksCell = ({
     <div className={"flex"} onClick={onClick}>
       <div
         className={cn(
-          "flex items-center gap-3 py-1 rounded-full px-1 transition-all border",
-          "bg-neutral-100 border-neutral-200",
-          "dark:bg-nb-gray-900/80 dark:border-nb-gray-800/50",
-          !disableHover &&
-            "hover:bg-neutral-200 dark:hover:bg-nb-gray-800",
+          "flex items-center gap-3 py-1 rounded-full px-1 transition-colors border",
+          "bg-oz2-surface border-oz2-border-soft",
+          !disableHover && "hover:bg-oz2-hover",
           className,
         )}
       >
