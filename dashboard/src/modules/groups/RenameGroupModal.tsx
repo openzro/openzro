@@ -1,9 +1,5 @@
 "use client";
 
-import Button from "@components/Button";
-import HelpText from "@components/HelpText";
-import { Input } from "@components/Input";
-import { Label } from "@components/Label";
 import {
   Modal,
   ModalClose,
@@ -15,6 +11,9 @@ import { notify } from "@components/Notification";
 import { FolderGit2Icon, FolderInput } from "lucide-react";
 import React, { useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
+import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
+import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
 import { useGroups } from "@/contexts/GroupsProvider";
 import { GroupUsage } from "@/modules/groups/useGroupsUsage";
 
@@ -104,14 +103,15 @@ function RenameGroupModalContent({
       />
 
       <div className={"px-8 pb-6 pt-2"}>
-        <Label>Name</Label>
-        <HelpText>
+        <OzLabel htmlFor="rename-group-name">Name</OzLabel>
+        <OzHelpText className="mb-2">
           Pick a short, lowercase identifier — e.g. <code>devs</code>,{" "}
           <code>prod-servers</code>.
-        </HelpText>
-        <Input
+        </OzHelpText>
+        <OzInput
+          id="rename-group-name"
           autoFocus
-          customPrefix={<FolderInput size={16} />}
+          prefix={<FolderInput size={16} />}
           placeholder={"e.g., devs"}
           value={name}
           data-cy={"group-name"}
@@ -130,16 +130,16 @@ function RenameGroupModalContent({
         <div className={"w-full"} />
         <div className={"flex gap-3 w-full justify-end"}>
           <ModalClose asChild={true}>
-            <Button variant={"secondary"}>Cancel</Button>
+            <OzButton variant={"default"}>Cancel</OzButton>
           </ModalClose>
-          <Button
+          <OzButton
             variant={"primary"}
             disabled={isDisabled}
             onClick={handleRename}
             data-cy={"rename-group-submit"}
           >
             Save Changes
-          </Button>
+          </OzButton>
         </div>
       </ModalFooter>
     </ModalContent>

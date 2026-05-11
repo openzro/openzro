@@ -1,9 +1,5 @@
 "use client";
 
-import Button from "@components/Button";
-import HelpText from "@components/HelpText";
-import { Input } from "@components/Input";
-import { Label } from "@components/Label";
 import {
   Modal,
   ModalClose,
@@ -12,12 +8,13 @@ import {
 } from "@components/modal/Modal";
 import ModalHeader from "@components/modal/ModalHeader";
 import { notify } from "@components/Notification";
-import Paragraph from "@components/Paragraph";
-import { Textarea } from "@components/Textarea";
 import { useApiCall } from "@utils/api";
 import { ShieldHalf } from "lucide-react";
 import React, { useState } from "react";
 import { useSWRConfig } from "swr";
+import OzButton from "@/components/v2/OzButton";
+import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
+import OzTextarea from "@/components/v2/OzTextarea";
 import { AdmissionBypass } from "@/interfaces/AdmissionBypass";
 
 type Props = {
@@ -103,8 +100,9 @@ export default function AdmissionBypassModal({
 
         <div className={"flex flex-col gap-4 px-8 pb-2"}>
           <div>
-            <Label>Reason</Label>
-            <Textarea
+            <OzLabel htmlFor="admission-bypass-reason">Reason</OzLabel>
+            <OzTextarea
+              id="admission-bypass-reason"
               rows={3}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
@@ -112,59 +110,62 @@ export default function AdmissionBypassModal({
                 "e.g. Intune re-enrol pending — board meeting at 14:00"
               }
             />
-            <HelpText>
+            <OzHelpText className="mt-1.5">
               Required for the audit trail. Free text — make it
               specific enough that an auditor reviewing this row in
               six months can reconstruct the situation.
-            </HelpText>
+            </OzHelpText>
           </div>
 
           <div>
-            <Label>Expiry</Label>
+            <OzLabel>Expiry</OzLabel>
             <div className={"mt-2 grid grid-cols-5 gap-2"}>
-              {PRESETS.map((p) => (
-                <button
-                  key={p.seconds}
-                  type={"button"}
-                  onClick={() => setPresetSeconds(p.seconds)}
-                  className={
-                    "rounded-md border px-2 py-1.5 text-xs transition " +
-                    (presetSeconds === p.seconds
-                      ? "border-violet-500 bg-violet-500/10 text-violet-200"
-                      : "border-nb-gray-800 hover:border-nb-gray-700 text-nb-gray-200")
-                  }
-                >
-                  {p.label}
-                </button>
-              ))}
+              {PRESETS.map((p) => {
+                const active = presetSeconds === p.seconds;
+                return (
+                  <button
+                    key={p.seconds}
+                    type={"button"}
+                    onClick={() => setPresetSeconds(p.seconds)}
+                    className={
+                      "rounded-oz2-input border px-2 py-1.5 text-[12px] font-medium transition-colors " +
+                      (active
+                        ? "border-oz2-acc bg-oz2-acc-soft text-oz2-acc-text"
+                        : "border-oz2-border bg-oz2-surface text-oz2-text-2 hover:border-oz2-border-strong hover:bg-oz2-hover")
+                    }
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
             </div>
-            <HelpText>
+            <OzHelpText className="mt-1.5">
               No-expiry bypasses are not permitted. Maximum is 30
               days; longer windows must be re-granted.
-            </HelpText>
+            </OzHelpText>
           </div>
 
-          <Paragraph className={"text-xs text-nb-gray-300"}>
+          <p className={"text-[12px] leading-[1.5] text-oz2-text-muted"}>
             The bypass applies only to the admission gate. Per-policy
             posture checks still run, so the peer continues to
             respect the ACL rules of every policy whose source
             posture-check list it fails.
-          </Paragraph>
+          </p>
         </div>
 
         <ModalFooter>
           <ModalClose asChild>
-            <Button variant={"secondary"} disabled={saving}>
+            <OzButton variant={"default"} disabled={saving}>
               Cancel
-            </Button>
+            </OzButton>
           </ModalClose>
-          <Button
+          <OzButton
             variant={"primary"}
             onClick={onSave}
             disabled={saving || !reason.trim()}
           >
             {saving ? "Granting…" : "Grant bypass"}
-          </Button>
+          </OzButton>
         </ModalFooter>
       </ModalContent>
     </Modal>
