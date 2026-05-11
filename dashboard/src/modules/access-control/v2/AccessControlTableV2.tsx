@@ -1,6 +1,5 @@
 "use client";
 
-import { Modal } from "@components/modal/Modal";
 import {
   Tooltip,
   TooltipContent,
@@ -40,7 +39,6 @@ import {
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { Policy } from "@/interfaces/Policy";
 import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
-import { AccessControlModalContent } from "@/modules/access-control/AccessControlModal";
 import AccessControlActionCellV2 from "@/modules/access-control/v2/cells/AccessControlActionCellV2";
 import AccessControlActiveCell from "@/modules/access-control/table/AccessControlActiveCell";
 import AccessControlDestinationsCell from "@/modules/access-control/table/AccessControlDestinationsCell";
@@ -83,18 +81,18 @@ export default function AccessControlTableV2({ policies, isLoading }: Props) {
   const params = useSearchParams();
   const idParam = params.get("id") ?? undefined;
 
-  // Create flow stays on the modal — a blank form has no preview /
-  // context to justify a full page, and the lighter affordance lets
-  // operators sketch a policy without losing the table view behind.
-  // Edit flow lifts to /access-control/edit?id=…, where there is real
-  // policy state for the right-rail panels to make use of.
-  const [createOpen, setCreateOpen] = useState(false);
+  // Both create and edit flows live on dedicated pages now —
+  // /access-control/new and /access-control/edit?id=… — so the table
+  // is just a list with row actions. The Live Preview + Impact rail
+  // makes the page genuinely useful during create too (operator
+  // watches the policy take shape as they fill the form), which is
+  // why the modal-based create path is gone.
 
   useV2TopbarRight(
     <OzButton
       variant="primary"
       type="button"
-      onClick={() => setCreateOpen(true)}
+      onClick={() => router.push("/access-control/new")}
       disabled={!permission.policies.create}
     >
       <PlusCircle size={14} />
@@ -294,25 +292,10 @@ export default function AccessControlTableV2({ policies, isLoading }: Props) {
           </p>
         </header>
 
-        {/* Create modal — opened from the topbar CTA or the cold-start
-            hero. Rendered inline so AccessControlModalContent resolves
-            usePolicies() / useGroups() from this subtree's providers. */}
-        <Modal
-          open={createOpen}
-          onOpenChange={setCreateOpen}
-          key={createOpen ? "create-open" : "create-closed"}
-        >
-          {createOpen && (
-            <AccessControlModalContent
-              onSuccess={() => setCreateOpen(false)}
-            />
-          )}
-        </Modal>
-
         {isColdStart ? (
           <AccessControlEmptyState
             canCreate={permission.policies.create}
-            onCreate={() => setCreateOpen(true)}
+            onCreate={() => router.push("/access-control/new")}
           />
         ) : (
           <>
