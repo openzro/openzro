@@ -43,12 +43,12 @@ import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
 import EmptyRow from "@/modules/common-table-rows/EmptyRow";
 import ExpirationDateRow from "@/modules/common-table-rows/ExpirationDateRow";
 import LastTimeRow from "@/modules/common-table-rows/LastTimeRow";
-import SetupKeyActionCellV2 from "@/modules/setup-keys/v2/cells/SetupKeyActionCellV2";
 import SetupKeyGroupsCell from "@/modules/setup-keys/SetupKeyGroupsCell";
 import SetupKeyModal from "@/modules/setup-keys/SetupKeyModal";
 import SetupKeyNameCell from "@/modules/setup-keys/SetupKeyNameCell";
 import SetupKeyStatusCell from "@/modules/setup-keys/SetupKeyStatusCell";
 import SetupKeyUsageCell from "@/modules/setup-keys/SetupKeyUsageCell";
+import SetupKeyActionCellV2 from "@/modules/setup-keys/v2/cells/SetupKeyActionCellV2";
 
 // SetupKeysTableV2 — phase-5.4 v2 paint over real /api/setup-keys data.
 // Mirrors PeersTableV2/NetworksTableV2 chrome (header + stat badges +

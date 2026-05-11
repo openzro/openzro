@@ -6,12 +6,6 @@ import InlineLink from "@components/InlineLink";
 import { Popover, PopoverContent, PopoverTrigger } from "@components/Popover";
 import { Radio, RadioItem } from "@components/Radio";
 import { ScrollArea } from "@components/ScrollArea";
-import {
-  OzTabs as Tabs,
-  OzTabsContent as TabsContent,
-  OzTabsList as TabsList,
-  OzTabsTrigger as TabsTrigger,
-} from "@/components/v2/OzTabs";
 import { AccessControlGroupCount } from "@components/ui/AccessControlGroupCount";
 import GroupBadge from "@components/ui/GroupBadge";
 import GroupBadgeWithEditPeers from "@components/ui/GroupBadgeWithEditPeers";
@@ -40,6 +34,12 @@ import * as React from "react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import Skeleton from "react-loading-skeleton";
 import OzCheckbox from "@/components/v2/OzCheckbox";
+import {
+  OzTabs as Tabs,
+  OzTabsContent as TabsContent,
+  OzTabsList as TabsList,
+  OzTabsTrigger as TabsTrigger,
+} from "@/components/v2/OzTabs";
 import { useGroups } from "@/contexts/GroupsProvider";
 import { useElementSize } from "@/hooks/useElementSize";
 import type { Group, GroupPeer, GroupResource } from "@/interfaces/Group";

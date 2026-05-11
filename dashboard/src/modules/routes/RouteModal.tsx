@@ -14,16 +14,6 @@ import ModalHeader from "@components/modal/ModalHeader";
 import { PeerGroupSelector } from "@components/PeerGroupSelector";
 import { PeerSelector } from "@components/PeerSelector";
 import { SegmentedTabs } from "@components/SegmentedTabs";
-import OzButton from "@/components/v2/OzButton";
-import OzInput from "@/components/v2/OzInput";
-import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
-import {
-  OzTabs as Tabs,
-  OzTabsContent as TabsContent,
-  OzTabsList as TabsList,
-  OzTabsTrigger as TabsTrigger,
-} from "@/components/v2/OzTabs";
-import OzTextarea from "@/components/v2/OzTextarea";
 import InputDomain, { domainReducer } from "@components/ui/InputDomain";
 import { getOperatingSystem } from "@hooks/useOperatingSystem";
 import { IconDirectionSign } from "@tabler/icons-react";
@@ -49,6 +39,16 @@ import {
 import { useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import NetworkRoutesIcon from "@/assets/icons/NetworkRoutesIcon";
+import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
+import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
+import {
+  OzTabs as Tabs,
+  OzTabsContent as TabsContent,
+  OzTabsList as TabsList,
+  OzTabsTrigger as TabsTrigger,
+} from "@/components/v2/OzTabs";
+import OzTextarea from "@/components/v2/OzTextarea";
 import { useDialog } from "@/contexts/DialogProvider";
 import { useRoutes } from "@/contexts/RoutesProvider";
 import { OperatingSystem } from "@/interfaces/OperatingSystem";

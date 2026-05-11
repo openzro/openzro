@@ -92,9 +92,9 @@ OzTableCell.displayName = "OzTableCell";
 
 export {
   OzTable,
-  OzTableHeader,
   OzTableBody,
-  OzTableRow,
-  OzTableHead,
   OzTableCell,
+  OzTableHead,
+  OzTableHeader,
+  OzTableRow,
 };
