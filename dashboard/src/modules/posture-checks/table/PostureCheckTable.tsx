@@ -36,11 +36,12 @@ import {
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { Policy } from "@/interfaces/Policy";
 import { PostureCheck } from "@/interfaces/PostureCheck";
+import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
 import PostureCheckModal from "@/modules/posture-checks/modal/PostureCheckModal";
-import { PostureCheckActionCell } from "@/modules/posture-checks/table/cells/PostureCheckActionCell";
-import { PostureCheckChecksCell } from "@/modules/posture-checks/table/cells/PostureCheckChecksCell";
-import { PostureCheckNameCell } from "@/modules/posture-checks/table/cells/PostureCheckNameCell";
-import { PostureCheckPolicyUsageCell } from "@/modules/posture-checks/table/cells/PostureCheckPolicyUsageCell";
+import { PostureCheckActionCellV2 } from "@/modules/posture-checks/table/cells/v2/PostureCheckActionCellV2";
+import { PostureCheckChecksCellV2 } from "@/modules/posture-checks/table/cells/v2/PostureCheckChecksCellV2";
+import { PostureCheckNameCellV2 } from "@/modules/posture-checks/table/cells/v2/PostureCheckNameCellV2";
+import { PostureCheckPolicyUsageCellV2 } from "@/modules/posture-checks/table/cells/v2/PostureCheckPolicyUsageCellV2";
 
 type Props = {
   isLoading: boolean;
@@ -114,6 +115,22 @@ export default function PostureCheckTable({
   const [postureCheckModal, setPostureCheckModal] = useState(false);
   const [currentRow, setCurrentRow] = useState<RowData | undefined>();
 
+  const openCreate = () => {
+    setCurrentRow(undefined);
+    setPostureCheckModal(true);
+  };
+
+  // Mount Add Posture Check trigger into the V2 topbar's right slot,
+  // matching the placement other v2 list screens use. The button
+  // reuses the table's existing modal state via openCreate so the
+  // create flow stays consolidated.
+  useV2TopbarRight(
+    <AddPostureCheckButtonV2
+      canCreate={permission.policies.create && permission.policies.update}
+      onCreate={openCreate}
+    />,
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return data.filter((row) => {
@@ -144,14 +161,14 @@ export default function PostureCheckTable({
         accessorFn: (row) => row.name ?? "",
         sortingFn: "text",
         header: ({ column }) => <SortHeader column={column} label="Name" />,
-        cell: ({ row }) => <PostureCheckNameCell check={row.original} />,
+        cell: ({ row }) => <PostureCheckNameCellV2 check={row.original} />,
       },
       {
         id: "checks",
         accessorFn: (row) => Object.keys(row.checks ?? {}).length,
         sortingFn: "basic",
         header: ({ column }) => <SortHeader column={column} label="Checks" />,
-        cell: ({ row }) => <PostureCheckChecksCell check={row.original} />,
+        cell: ({ row }) => <PostureCheckChecksCellV2 check={row.original} />,
       },
       {
         id: "access_control_usage",
@@ -162,7 +179,7 @@ export default function PostureCheckTable({
           </span>
         ),
         cell: ({ row }) => (
-          <PostureCheckPolicyUsageCell check={row.original} />
+          <PostureCheckPolicyUsageCellV2 check={row.original} />
         ),
       },
       {
@@ -176,7 +193,15 @@ export default function PostureCheckTable({
         size: 60,
         enableSorting: false,
         header: () => null,
-        cell: ({ row }) => <PostureCheckActionCell check={row.original} />,
+        cell: ({ row }) => (
+          <PostureCheckActionCellV2
+            check={row.original}
+            onEdit={() => {
+              setCurrentRow(row.original);
+              setPostureCheckModal(true);
+            }}
+          />
+        ),
       },
     ],
     [],
@@ -210,11 +235,6 @@ export default function PostureCheckTable({
 
   const handleRowClick = (row: RowData) => {
     setCurrentRow(row);
-    setPostureCheckModal(true);
-  };
-
-  const openCreate = () => {
-    setCurrentRow(undefined);
     setPostureCheckModal(true);
   };
 
@@ -285,18 +305,6 @@ export default function PostureCheckTable({
             <span className="ml-auto font-mono text-[11px] uppercase tracking-[0.04em] text-oz2-text-faint">
               {counts.total} check{counts.total === 1 ? "" : "s"}
             </span>
-
-            <OzButton
-              variant="primary"
-              type="button"
-              onClick={openCreate}
-              disabled={
-                !permission.policies.create || !permission.policies.update
-              }
-            >
-              <PlusCircle size={14} />
-              Add Posture Check
-            </OzButton>
           </div>
 
           <OzCard flush>
@@ -385,6 +393,26 @@ export default function PostureCheckTable({
         </div>
       )}
     </TooltipProvider>
+  );
+}
+
+function AddPostureCheckButtonV2({
+  canCreate,
+  onCreate,
+}: {
+  canCreate: boolean;
+  onCreate: () => void;
+}) {
+  return (
+    <OzButton
+      variant="primary"
+      type="button"
+      onClick={onCreate}
+      disabled={!canCreate}
+    >
+      <PlusCircle size={14} />
+      Add Posture Check
+    </OzButton>
   );
 }
 
