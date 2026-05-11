@@ -1,6 +1,5 @@
 "use client";
 
-import { Modal } from "@components/modal/Modal";
 import {
   Tooltip,
   TooltipContent,
@@ -23,7 +22,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { BookOpen, Network, PlusCircle, ShieldCheck } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSWRConfig } from "swr";
 import OzButton from "@/components/v2/OzButton";
@@ -40,10 +39,6 @@ import {
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { Policy } from "@/interfaces/Policy";
 import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
-import {
-  AccessControlModalContent,
-  AccessControlUpdateModal,
-} from "@/modules/access-control/AccessControlModal";
 import AccessControlActionCellV2 from "@/modules/access-control/v2/cells/AccessControlActionCellV2";
 import AccessControlActiveCell from "@/modules/access-control/table/AccessControlActiveCell";
 import AccessControlDestinationsCell from "@/modules/access-control/table/AccessControlDestinationsCell";
@@ -80,29 +75,23 @@ const NOOP_FILTER_FNS = {
 const NOOP_SORTING_FNS = { checkbox: noopSort };
 
 export default function AccessControlTableV2({ policies, isLoading }: Props) {
+  const router = useRouter();
   const { mutate } = useSWRConfig();
   const { permission } = usePermissions();
   const params = useSearchParams();
   const idParam = params.get("id") ?? undefined;
 
-  // Create-modal state lives at the view level so the topbar slot CTA
-  // and the cold-start hero CTA both open the same modal instance.
-  // AccessControlModalContent is rendered inline inside the page so it
-  // resolves usePolicies() / useGroups() from the providers wrapping
-  // this component (the page wraps both).
-  const [createOpen, setCreateOpen] = useState(false);
-
-  // Edit modal — opened by a row click. Mirrors the legacy
-  // AccessControlTable behavior, including the cell-name passthrough
-  // so the form scrolls to the clicked column on mount.
-  const [editPolicy, setEditPolicy] = useState<Policy | null>(null);
-  const [editCell, setEditCell] = useState<string>("");
+  // Create + edit flows now navigate to dedicated pages
+  // (/access-control/new and /access-control/[id]); the table no
+  // longer owns modal state for either path. The legacy modal lives
+  // on for the inline "Create policy for this route" flow inside
+  // RouteModal, but that path does not touch this component.
 
   useV2TopbarRight(
     <OzButton
       variant="primary"
       type="button"
-      onClick={() => setCreateOpen(true)}
+      onClick={() => router.push("/access-control/new")}
       disabled={!permission.policies.create}
     >
       <PlusCircle size={14} />
@@ -225,10 +214,7 @@ export default function AccessControlTableV2({ policies, isLoading }: Props) {
         cell: ({ row }) => (
           <AccessControlActionCellV2
             policy={row.original}
-            onEdit={() => {
-              setEditPolicy(row.original);
-              setEditCell("");
-            }}
+            onEdit={() => router.push(`/access-control/${row.original.id}`)}
           />
         ),
       },
@@ -258,20 +244,16 @@ export default function AccessControlTableV2({ policies, isLoading }: Props) {
     );
   };
 
-  // Row click → open AccessControlUpdateModal with the cell name so
-  // the form scrolls to that field (mirrors legacy onRowClick wiring).
-  // Skip the click when the user actually clicked an interactive child
-  // (button, toggle, link) so we don't double-fire — those targets
-  // already handle their own action.
+  // Row click → navigate to the dedicated editor page. Skip when the
+  // user clicked an interactive child (button, toggle, link) so kebab
+  // menus and inline switches don't double-fire — those targets handle
+  // their own action.
   const handleRowClick = (row: Row<Policy>, event: React.MouseEvent) => {
     const target = event.target as HTMLElement;
     if (target.closest("button, a, [role='switch'], input, [data-stop-row-click]")) {
       return;
     }
-    const cellEl = target.closest("td");
-    const cellId = cellEl?.getAttribute("data-cell-id") ?? "";
-    setEditPolicy(row.original);
-    setEditCell(cellId);
+    router.push(`/access-control/${row.original.id}`);
   };
 
   const pageInfo = table.getState().pagination;
@@ -307,41 +289,10 @@ export default function AccessControlTableV2({ policies, isLoading }: Props) {
           </p>
         </header>
 
-        {/* Create modal — controlled, opened from the topbar CTA or the
-            cold-start hero CTA. Rendered inline so usePolicies() etc.
-            resolve from the page-level providers. */}
-        <Modal
-          open={createOpen}
-          onOpenChange={setCreateOpen}
-          key={createOpen ? "create-open" : "create-closed"}
-        >
-          {createOpen && (
-            <AccessControlModalContent
-              onSuccess={() => setCreateOpen(false)}
-            />
-          )}
-        </Modal>
-
-        {/* Edit modal — opened by row click. AccessControlUpdateModal
-            already manages its own Modal wrapper. */}
-        {editPolicy && (
-          <AccessControlUpdateModal
-            policy={editPolicy}
-            open={Boolean(editPolicy)}
-            onOpenChange={(next) => {
-              if (!next) {
-                setEditPolicy(null);
-                setEditCell("");
-              }
-            }}
-            cell={editCell}
-          />
-        )}
-
         {isColdStart ? (
           <AccessControlEmptyState
             canCreate={permission.policies.create}
-            onCreate={() => setCreateOpen(true)}
+            onCreate={() => router.push("/access-control/new")}
           />
         ) : (
           <>
