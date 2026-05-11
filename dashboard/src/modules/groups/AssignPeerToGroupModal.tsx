@@ -1,4 +1,3 @@
-import Button from "@components/Button";
 import { Checkbox } from "@components/Checkbox";
 import { Modal, ModalContent } from "@components/modal/Modal";
 import ModalHeader from "@components/modal/ModalHeader";
@@ -14,6 +13,7 @@ import * as React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { useSWRConfig } from "swr";
 import PeerIcon from "@/assets/icons/PeerIcon";
+import OzButton from "@/components/v2/OzButton";
 import { DataTable } from "@/components/table/DataTable";
 import { Group, GroupPeer } from "@/interfaces/Group";
 import { Peer } from "@/interfaces/Peer";
@@ -265,7 +265,7 @@ export const AssignGroupToPeerModalContent = ({
                 )}
               </div>
               {!isAllGroup && (
-                <Button
+                <OzButton
                   variant={"primary"}
                   className={"ml-auto"}
                   disabled={peers?.length === 0}
@@ -277,7 +277,7 @@ export const AssignGroupToPeerModalContent = ({
                   }}
                 >
                   Confirm Changes
-                </Button>
+                </OzButton>
               )}
             </div>
           )}
