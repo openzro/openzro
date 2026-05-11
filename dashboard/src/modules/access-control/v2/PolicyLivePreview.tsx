@@ -2,10 +2,10 @@
 
 import { cn } from "@utils/helpers";
 import * as React from "react";
+import { Direction } from "@/components/ui/PolicyDirection";
 import OzCard from "@/components/v2/OzCard";
 import { Group } from "@/interfaces/Group";
 import { PolicyRuleResource, PortRange, Protocol } from "@/interfaces/Policy";
-import { Direction } from "@/components/ui/PolicyDirection";
 
 // PolicyLivePreview — sticky side-rail visualization of the policy
 // currently being edited. Mirrors the handoff "Live preview" card
