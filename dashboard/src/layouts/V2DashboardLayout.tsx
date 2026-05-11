@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@components/DropdownMenu";
-import { LogOutIcon, User2 } from "lucide-react";
+import { LogOutIcon, SearchIcon, User2 } from "lucide-react";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -30,6 +30,7 @@ import GroupsProvider from "@/contexts/GroupsProvider";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import UsersProvider, { useLoggedInUser } from "@/contexts/UsersProvider";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { GlobalSearchModal } from "@/modules/search/GlobalSearchModal";
 
 // Slot context for the v2 topbar's right side. Pages call
 // useV2TopbarRight(<MyAction />) once on mount to inject a per-page
@@ -99,6 +100,28 @@ function V2DashboardChrome({ children }: { children: React.ReactNode }) {
     "ozv2-sidebar-collapsed",
     false,
   );
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Global Ctrl+K / Cmd+K shortcut for the GlobalSearchModal — matches
+  // the handoff sidebar input's ⌘K kbd hint. Ignored when the operator
+  // is typing into another input/textarea/contenteditable so the
+  // shortcut never steals a keystroke from a focused form field.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.key === "k" || e.key === "K")) return;
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
+      const editable =
+        tag === "input" ||
+        tag === "textarea" ||
+        (e.target as HTMLElement | null)?.isContentEditable;
+      if (editable) return;
+      e.preventDefault();
+      setSearchOpen((prev) => !prev);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Gate the toggle on `mounted` so SSR/CSR markup match —
   // next-themes' resolvedTheme is undefined during SSR.
@@ -152,6 +175,7 @@ function V2DashboardChrome({ children }: { children: React.ReactNode }) {
               )
             }
             sections={sections}
+            search={<SearchTrigger onClick={() => setSearchOpen(true)} />}
             footer={<UserFooter collapsed={sidebarCollapsed} />}
           />
         }
@@ -192,7 +216,36 @@ function V2DashboardChrome({ children }: { children: React.ReactNode }) {
       >
         {children}
       </OzShell>
+      <GlobalSearchModal open={searchOpen} setOpen={setSearchOpen} />
     </TopbarSlotContext.Provider>
+  );
+}
+
+// SearchTrigger — looks like an inline input in the sidebar slot but
+// is actually a button: clicking it (or Ctrl+K) opens the
+// GlobalSearchModal which owns the real cmdk-style search. The kbd
+// hint mirrors the handoff and helps the operator discover the
+// shortcut.
+function SearchTrigger({ onClick }: { onClick: () => void }) {
+  const [mac, setMac] = React.useState(false);
+  React.useEffect(() => {
+    if (typeof navigator === "undefined") return;
+    setMac(/Mac|iPod|iPhone|iPad/.test(navigator.platform));
+  }, []);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Search (Ctrl+K)"
+      className="flex h-9 w-full items-center gap-2 rounded-oz2-input border border-oz2-border bg-oz2-surface px-3 text-[13px] text-oz2-text-faint transition-colors hover:border-oz2-border-strong hover:bg-oz2-hover"
+    >
+      <SearchIcon size={14} className="shrink-0" />
+      <span className="flex-1 text-left">Search…</span>
+      <kbd className="inline-flex items-center gap-0.5 rounded-[5px] border border-oz2-border-soft bg-oz2-bg-sunken px-1.5 py-[2px] font-mono text-[10.5px] text-oz2-text-faint">
+        {mac ? "⌘" : "Ctrl"}
+        <span className="px-px">K</span>
+      </kbd>
+    </button>
   );
 }
 
