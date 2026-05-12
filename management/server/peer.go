@@ -1287,6 +1287,15 @@ func (am *DefaultAccountManager) UpdateAccountPeers(ctx context.Context, account
 		return
 	}
 
+	// ADR-0018: rebuild the server-side flow policy resolver's
+	// index for this account on every graph change. UpdateAccountPeers
+	// is the chokepoint every policy / peer / group / resource edit
+	// already passes through, so a single hook here keeps the
+	// resolver in sync without spreading new call sites.
+	if am.flowPolicyIndex != nil {
+		am.flowPolicyIndex.Rebuild(accountID, account)
+	}
+
 	globalStart := time.Now()
 
 	hasPeersConnected := false
