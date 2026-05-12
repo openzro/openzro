@@ -134,6 +134,9 @@ func (h *handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 			}
 			extra.FlowExcludedPorts = ports
 		}
+		if req.Settings.Extra.NetworkTrafficDefaultRange != nil {
+			extra.FlowTrafficDefaultRange = *req.Settings.Extra.NetworkTrafficDefaultRange
+		}
 		settings.Extra = &extra
 	}
 
@@ -284,6 +287,10 @@ func toAccountResponse(accountID string, settings *types.Settings, meta *types.A
 				})
 			}
 			apiSettings.Extra.NetworkTrafficExcludedPorts = &ports
+		}
+		if settings.Extra.FlowTrafficDefaultRange != "" {
+			r := settings.Extra.FlowTrafficDefaultRange
+			apiSettings.Extra.NetworkTrafficDefaultRange = &r
 		}
 	}
 

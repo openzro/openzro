@@ -215,6 +215,23 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/FlowPortFilter'
+        network_traffic_default_range:
+          description: |
+            Pre-fills the date filter on the Flow Traffic dashboard page so
+            opening it does not request every event that fits in the
+            10 000-event API ceiling. Recognised values: "1h", "6h", "24h",
+            "7d", "30d", "all". Empty or unrecognised values keep the
+            "no time filter" behaviour. Operators can still override per
+            session via the date picker on the page itself.
+          type: string
+          example: "24h"
+          enum:
+            - 1h
+            - 6h
+            - 24h
+            - 7d
+            - 30d
+            - all
       required:
         - peer_approval_enabled
         - network_traffic_logs_enabled

@@ -399,3 +399,66 @@ func TestAccounts_PutPreservesUnexposedFlowFlags(t *testing.T) {
 		assert.True(t, captured.Extra.FlowENCollectionEnabled, "FlowENCollectionEnabled must persist across a PUT that does not mention it")
 	}
 }
+
+// TestAccounts_PutRoundTripsFlowTrafficDefaultRange covers the new
+// operator-controlled UX setting: pre-fill the date filter on the
+// Flow Traffic dashboard page. Without round-trip the operator
+// would set it in the UI, save, refresh, and see it disappear —
+// same failure shape as the FlowDnsCollectionEnabled bug we fixed
+// earlier.
+func TestAccounts_PutRoundTripsFlowTrafficDefaultRange(t *testing.T) {
+	accountID := "test_account"
+	adminUser := types.NewAdminUser("test_user")
+
+	account := &types.Account{
+		Id:      accountID,
+		Domain:  "example.org",
+		Network: types.NewNetwork(),
+		Users: map[string]*types.User{
+			adminUser.Id: adminUser,
+		},
+		Settings: &types.Settings{
+			PeerLoginExpirationEnabled: false,
+			PeerLoginExpiration:        time.Hour,
+			Extra:                      &types.ExtraSettings{},
+		},
+	}
+	handler := initAccountsTestData(t, account)
+
+	var captured *types.Settings
+	if m, ok := handler.accountManager.(*mock_server.MockAccountManager); ok {
+		m.UpdateAccountSettingsFunc = func(ctx context.Context, accountID, userID string, newSettings *types.Settings) (*types.Settings, error) {
+			captured = newSettings
+			return newSettings, nil
+		}
+	}
+
+	body := `{"settings":{"peer_login_expiration":3600,"peer_login_expiration_enabled":false,"extra":{"network_traffic_logs_enabled":true,"network_traffic_packet_counter_enabled":true,"network_traffic_default_range":"24h"}}}`
+
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/accounts/"+accountID, bytes.NewBufferString(body))
+	req = nbcontext.SetUserAuthInRequest(req, nbcontext.UserAuth{
+		UserId:    adminUser.Id,
+		AccountId: accountID,
+		Domain:    "example.org",
+	})
+
+	router := mux.NewRouter()
+	router.HandleFunc("/api/accounts/{accountId}", handler.updateAccount).Methods("PUT")
+	router.ServeHTTP(recorder, req)
+
+	assert.Equal(t, http.StatusOK, recorder.Code, "body=%s", recorder.Body.String())
+
+	res := recorder.Result()
+	defer res.Body.Close()
+	content, _ := io.ReadAll(res.Body)
+	var got api.Account
+	assert.NoError(t, json.Unmarshal(content, &got))
+
+	if assert.NotNil(t, got.Settings.Extra) && assert.NotNil(t, got.Settings.Extra.NetworkTrafficDefaultRange) {
+		assert.Equal(t, "24h", *got.Settings.Extra.NetworkTrafficDefaultRange)
+	}
+	if assert.NotNil(t, captured) && assert.NotNil(t, captured.Extra) {
+		assert.Equal(t, "24h", captured.Extra.FlowTrafficDefaultRange)
+	}
+}

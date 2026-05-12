@@ -157,6 +157,19 @@ type ExtraSettings struct {
 	// uninteresting flow events — internal heartbeats, custom multicast,
 	// app-specific service discovery on a non-IANA port, etc.
 	FlowExcludedPorts []FlowPortFilter `gorm:"serializer:json"`
+
+	// FlowTrafficDefaultRange pre-fills the date filter on the Flow
+	// Traffic page so a fresh dashboard load doesn't hammer the API
+	// for everything that fits in the 10 000-event cap. Stored as a
+	// short string (enum). Recognised values:
+	//
+	//   "1h"   "6h"   "24h"   "7d"   "30d"   "all" (or empty)
+	//
+	// Empty / unrecognised values keep the pre-setting behaviour
+	// (no time filter — bounded only by the hot store retention and
+	// the API's 10 000-event ceiling). Operators can still override
+	// per-session via the date picker; this is just the initial value.
+	FlowTrafficDefaultRange string
 }
 
 // FlowPortFilter is a single (port, protocol) pair the client drops at
@@ -181,5 +194,6 @@ func (e *ExtraSettings) Copy() *ExtraSettings {
 		FlowEventsGroups:             append([]string(nil), e.FlowEventsGroups...),
 		FlowDisableDefaultPortFilter: e.FlowDisableDefaultPortFilter,
 		FlowExcludedPorts:            append([]FlowPortFilter(nil), e.FlowExcludedPorts...),
+		FlowTrafficDefaultRange:      e.FlowTrafficDefaultRange,
 	}
 }
