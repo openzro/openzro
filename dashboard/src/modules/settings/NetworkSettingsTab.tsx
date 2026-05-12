@@ -9,11 +9,18 @@ import { useApiCall } from "@utils/api";
 import loadConfig from "@utils/config";
 import { validator } from "@utils/helpers";
 import { API_ORIGIN, isOpenzroHosted } from "@utils/openzro";
-import { ExternalLinkIcon, Filter } from "lucide-react";
+import { Clock, ExternalLinkIcon, Filter } from "lucide-react";
 import React, { useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
 import OzButton from "@/components/v2/OzButton";
 import OzInput from "@/components/v2/OzInput";
+import {
+  OzSelect,
+  OzSelectContent,
+  OzSelectItem,
+  OzSelectTrigger,
+  OzSelectValue,
+} from "@/components/v2/OzSelect";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { Account } from "@/interfaces/Account";
 import useGroupHelper from "@/modules/groups/useGroupHelper";
@@ -33,6 +40,27 @@ type Props = {
 // 2. mgmt host is a subdomain of input — proxy owns the parent zone
 //    AND every child, including the mgmt host.
 // Returns the offending host so the error message can name it.
+// flowRangeLabel maps the operator-facing enum value to the
+// human-readable label used in toast notifications when the setting
+// changes. Keep aligned with the OzSelectItem entries below — the
+// select's display value uses the same words.
+function flowRangeLabel(value: string): string {
+  switch (value) {
+    case "1h":
+      return "hour";
+    case "6h":
+      return "6 hours";
+    case "24h":
+      return "24 hours";
+    case "7d":
+      return "7 days";
+    case "30d":
+      return "30 days";
+    default:
+      return value;
+  }
+}
+
 function collidesWithControlPlane(input: string): string | null {
   const cfg = loadConfig();
   const candidates: string[] = [];
@@ -86,6 +114,16 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
     account.settings.extra?.network_traffic_packet_counter_enabled ?? true,
   );
 
+  // Pre-fills the date filter on the Flow Traffic page. Empty / "all"
+  // keeps the no-filter behaviour (the historical default for existing
+  // accounts). "24h" is what we suggest for fresh deployments but the
+  // operator-side default lives in the backend chart; if they never
+  // touched it, the value here is undefined and the dropdown shows
+  // "All time".
+  const [flowDefaultRange, setFlowDefaultRange] = useState<string>(
+    account.settings.extra?.network_traffic_default_range ?? "all",
+  );
+
   const [flowGroups, setFlowGroups, { save: saveFlowGroups }] = useGroupHelper(
     {
       initial: account.settings.extra?.network_traffic_logs_groups ?? [],
@@ -116,6 +154,7 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
     overrides: {
       enabled?: boolean;
       packetCounter?: boolean;
+      defaultRange?: string;
       successMessage: string;
       loadingMessage: string;
     },
@@ -124,6 +163,7 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
     const groupIDs = persistedGroups.map((g) => g.id);
     const nextEnabled = overrides.enabled ?? flowEnabled;
     const nextPacketCounter = overrides.packetCounter ?? flowPacketCounter;
+    const nextDefaultRange = overrides.defaultRange ?? flowDefaultRange;
     notify({
       title: "Network Traffic Events",
       description: overrides.successMessage,
@@ -137,12 +177,14 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
               network_traffic_logs_enabled: nextEnabled,
               network_traffic_packet_counter_enabled: nextPacketCounter,
               network_traffic_logs_groups: groupIDs,
+              network_traffic_default_range: nextDefaultRange,
             },
           },
         })
         .then(() => {
           setFlowEnabled(nextEnabled);
           setFlowPacketCounter(nextPacketCounter);
+          setFlowDefaultRange(nextDefaultRange);
           setFlowGroups(persistedGroups);
           mutate("/accounts");
         }),
@@ -175,6 +217,16 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
             }.`
           : "Traffic events now apply to all peers.",
       loadingMessage: "Updating traffic events scope...",
+    });
+
+  const changeFlowDefaultRange = (next: string) =>
+    persistFlowExtra({
+      defaultRange: next,
+      successMessage:
+        next === "all"
+          ? "Flow Traffic now opens with no time filter by default."
+          : `Flow Traffic now opens with the last ${flowRangeLabel(next)} pre-selected.`,
+      loadingMessage: "Updating Flow Traffic default range...",
     });
 
   const toggleNetworkDNSSetting = async (toggle: boolean) => {
@@ -348,6 +400,43 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
               label="Count bytes and packets"
               desc="Turns on kernel conntrack accounting on every peer so each flow row carries real rx/tx byte and packet totals. Required for the volume column in Flow Traffic to be non-zero. Slight per-flow CPU cost."
             />
+
+            <div
+              className={
+                "flex flex-col gap-2 rounded-oz2-card border border-oz2-border-soft bg-oz2-bg-sunken p-4 " +
+                (editDisabled ? "opacity-60" : "")
+              }
+            >
+              <div>
+                <div className="inline-flex items-center gap-2 text-[13px] font-medium text-oz2-text-2">
+                  <Clock size={13} />
+                  Default time range on Flow Traffic
+                </div>
+                <p className="mt-[3px] text-[11.5px] leading-[1.45] text-oz2-text-faint">
+                  Pre-fills the date filter when opening the page so the
+                  dashboard does not request every event within the
+                  10 000-event API cap on first load. Operators can still
+                  override per session via the date picker.
+                </p>
+              </div>
+              <OzSelect
+                value={flowDefaultRange}
+                onValueChange={changeFlowDefaultRange}
+                disabled={editDisabled}
+              >
+                <OzSelectTrigger className="h-[34px] max-w-[280px]">
+                  <OzSelectValue placeholder="Pick a default range" />
+                </OzSelectTrigger>
+                <OzSelectContent>
+                  <OzSelectItem value="1h">Last hour</OzSelectItem>
+                  <OzSelectItem value="6h">Last 6 hours</OzSelectItem>
+                  <OzSelectItem value="24h">Last 24 hours</OzSelectItem>
+                  <OzSelectItem value="7d">Last 7 days</OzSelectItem>
+                  <OzSelectItem value="30d">Last 30 days</OzSelectItem>
+                  <OzSelectItem value="all">All time (no filter)</OzSelectItem>
+                </OzSelectContent>
+              </OzSelect>
+            </div>
 
             <div
               className={

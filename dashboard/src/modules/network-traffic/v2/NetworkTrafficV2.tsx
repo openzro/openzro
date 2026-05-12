@@ -18,6 +18,7 @@ import OzCard from "@/components/v2/OzCard";
 import OzEmptyState from "@/components/v2/OzEmptyState";
 import OzPill, { type OzPillVariants } from "@/components/v2/OzPill";
 import { usePeers } from "@/contexts/PeersProvider";
+import { Account } from "@/interfaces/Account";
 import { NetworkResource } from "@/interfaces/Network";
 import {
   NetworkTrafficEvent,
@@ -46,6 +47,29 @@ import { OSLogo } from "@/modules/peers/PeerOSCell";
 // Behavior preserved verbatim from the legacy NetworkTrafficTimeline.
 
 const PAGE_SIZE = 25;
+
+// defaultRangeFromSetting turns the operator-level
+// network_traffic_default_range enum string into a DateRange the date
+// picker accepts. "all" (and any unrecognised value) returns
+// undefined so the page falls back to "no filter" — its historical
+// behaviour. Unknown strings explicitly bypass instead of throwing so
+// a future enum value rolled out on the management side doesn't crash
+// older dashboards.
+function defaultRangeFromSetting(value: string): DateRange | undefined {
+  const hoursByValue: Record<string, number> = {
+    "1h": 1,
+    "6h": 6,
+    "24h": 24,
+    "7d": 24 * 7,
+    "30d": 24 * 30,
+  };
+  const hours = hoursByValue[value];
+  if (!hours) return undefined;
+  return {
+    from: dayjs().subtract(hours, "hour").toDate(),
+    to: dayjs().toDate(),
+  };
+}
 
 // Grid template echoes the legacy table layout — wide Event column
 // for the timeline narrative + four right-side columns plus Status.
@@ -140,12 +164,33 @@ export default function NetworkTrafficV2() {
   const { data: resources } = useFetchApi<NetworkResource[]>(
     "/networks/resources",
   );
+  // Read the operator-level default range from account settings. The
+  // /accounts endpoint returns an array (single tenant on self-hosted),
+  // hence the [0]. Initial render before the fetch resolves uses no
+  // filter; once the value lands, defaultRangeFromSetting may flip
+  // `range` to a windowed shape.
+  const { data: accounts } = useFetchApi<Account[]>("/accounts");
 
   const [search, setSearch] = useState("");
   const [range, setRange] = useState<DateRange | undefined>();
   const [peerFilter, setPeerFilter] = useState<string | undefined>();
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const [refreshing, setRefreshing] = useState(false);
+  // Tracks whether we have already applied the operator-level default
+  // range to this page session. Without this, every re-fetch of
+  // /accounts would re-stomp on operator-side range changes made via
+  // the date picker.
+  const [defaultApplied, setDefaultApplied] = useState(false);
+
+  // Apply the operator's default range exactly once per page mount.
+  useEffect(() => {
+    if (defaultApplied) return;
+    const pref = accounts?.[0]?.settings?.extra?.network_traffic_default_range;
+    if (!pref) return;
+    setDefaultApplied(true);
+    const windowed = defaultRangeFromSetting(pref);
+    if (windowed) setRange(windowed);
+  }, [accounts, defaultApplied]);
 
   useEffect(() => {
     setPageSize(PAGE_SIZE);
@@ -161,7 +206,7 @@ export default function NetworkTrafficV2() {
     // without an explicit limit here the dashboard would cap at
     // ~60-70 grouped flows regardless of what the operator picks
     // in the Rows page-size dropdown (which is purely client-side
-    // slicing of what's already fetched). 10 000 covers Cora-tier
+    // slicing of what's already fetched). 10 000 covers medium-tier
     // accounts with active traffic for several hours, max payload
     // ~1 MB, well below the API's own cap (50 000).
     params.set("limit", "10000");

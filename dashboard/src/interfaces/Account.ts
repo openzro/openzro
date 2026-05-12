@@ -14,6 +14,10 @@ export interface Account {
       // peers whose groups intersect this list will capture and report
       // flow events. Empty / undefined = every peer reports.
       network_traffic_logs_groups?: string[];
+      // Pre-fills the date filter on Flow Traffic. Recognised values:
+      // "1h" | "6h" | "24h" | "7d" | "30d" | "all". Empty / "all" keeps
+      // the no-filter behaviour.
+      network_traffic_default_range?: string;
     };
     peer_login_expiration_enabled: boolean;
     peer_login_expiration: number;
