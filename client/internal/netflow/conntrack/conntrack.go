@@ -127,6 +127,16 @@ func (c *ConnTrack) Start(enableCounters bool) error {
 		return fmt.Errorf("start conntrack listener: %w", err)
 	}
 
+	// Drain any stale stop sentinel left over from a previous Stop().
+	// c.done is buffered at capacity 1; without this drain the new
+	// receiver goroutine would read the leftover signal on its first
+	// iteration and exit immediately, leaving kernel conntrack events
+	// pouring into a dead channel until the daemon was restarted.
+	select {
+	case <-c.done:
+	default:
+	}
+
 	c.started = true
 
 	go c.receiverRoutine(events, errChan)
