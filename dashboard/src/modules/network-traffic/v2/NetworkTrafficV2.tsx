@@ -3,6 +3,7 @@
 import useFetchApi from "@utils/api";
 import dayjs from "dayjs";
 import {
+  AlertTriangleIcon,
   ArrowDown,
   ArrowUp,
   Ban,
@@ -14,6 +15,7 @@ import {
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { DateRange } from "react-day-picker";
 import RoundedFlag from "@/assets/countries/RoundedFlag";
+import FullTooltip from "@/components/FullTooltip";
 import OzCard from "@/components/v2/OzCard";
 import OzEmptyState from "@/components/v2/OzEmptyState";
 import OzPill, { type OzPillVariants } from "@/components/v2/OzPill";
@@ -84,6 +86,11 @@ type FlowGroup = {
   destPeer?: Peer;
   sourceResource?: NetworkResource;
   destResource?: NetworkResource;
+  // All NetworkResources whose address resolves to the same IP as
+  // the flow's destination — populated by groupFlows from the
+  // dst_ip → resources lookup table. Length>1 triggers the
+  // ambiguity badge in PeerCell.
+  destResourceMatches?: NetworkResource[];
   policy?: Policy;
   totalRx: number;
   totalTx: number;
@@ -554,6 +561,7 @@ function RowCells({ row }: { row: Row }) {
             peer={row.group.destPeer}
             resource={row.group.destResource}
             ip={firstEvent.dest_ip}
+            ambiguousResources={row.group.destResourceMatches}
           />
         )}
       </div>
@@ -655,13 +663,29 @@ function PeerCell({
   peer,
   resource,
   ip,
+  ambiguousResources,
 }: {
   peer?: Peer;
   resource?: NetworkResource;
   ip: string;
+  // Other resources whose address resolves to the same IP. When non-
+  // empty (>1 total share this IP), the label is replaced by the IP
+  // itself and a small badge surfaces the share count. The agent only
+  // tags an event with one resource_id at capture time, so without
+  // this disambiguation the cell would show whichever was picked —
+  // potentially misleading on shared LBs where year=…/cluster ingress
+  // hosts multiple hostnames behind one IP.
+  ambiguousResources?: NetworkResource[];
 }) {
+  const isAmbiguous = (ambiguousResources?.length ?? 0) > 1;
   const fallback = resource?.address ?? (peer ? undefined : "external");
-  const label = peer?.name ?? fallback ?? ip;
+  const label = peer
+    ? peer.name
+    : isAmbiguous
+      ? ip
+      : (fallback ?? ip);
+  const sub = peer || isAmbiguous ? ip : null;
+
   return (
     <div className="flex min-w-0 items-center gap-2">
       <span className="relative grid h-7 w-7 shrink-0 place-items-center rounded-md border border-oz2-border bg-oz2-bg-sunken">
@@ -675,8 +699,45 @@ function PeerCell({
         )}
       </span>
       <div className="flex min-w-0 flex-col">
-        <span className="truncate text-[13px] text-oz2-text">{label}</span>
-        <span className="font-mono text-[11px] text-oz2-text-faint">{ip}</span>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate text-[13px] text-oz2-text">{label}</span>
+          {isAmbiguous && (
+            <FullTooltip
+              content={
+                <div className="max-w-[300px]">
+                  <p className="text-[11.5px] font-medium text-oz2-text">
+                    This IP is shared by {ambiguousResources!.length} hosts:
+                  </p>
+                  <ul className="mt-1.5 space-y-0.5 font-mono text-[11px] text-oz2-text-2">
+                    {ambiguousResources!.map((r) => (
+                      <li key={r.id}>• {r.address}</li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-[10.5px] leading-[1.45] text-oz2-text-faint">
+                    The agent can&apos;t distinguish between them at the
+                    dataplane layer — HTTP Host header decides at L7. Check
+                    the ingress access log to see what was actually requested.
+                  </p>
+                </div>
+              }
+              side="top"
+              align="start"
+            >
+              <span
+                className="inline-flex cursor-help items-center gap-1 rounded-md border border-oz2-warn/40 bg-oz2-warn/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-oz2-warn"
+                aria-label={`Shared IP with ${ambiguousResources!.length} hosts`}
+              >
+                <AlertTriangleIcon size={9} />
+                {ambiguousResources!.length}
+              </span>
+            </FullTooltip>
+          )}
+        </div>
+        {sub && (
+          <span className="font-mono text-[11px] text-oz2-text-faint">
+            {sub}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -760,8 +821,22 @@ function groupFlows(
     if (p.id) policyByID.set(p.id, p);
   }
   const resourceByID = new Map<string, NetworkResource>();
+  const resourcesByAddress = new Map<string, NetworkResource[]>();
   for (const r of resources) {
     if (r.id) resourceByID.set(r.id, r);
+    if (r.address) {
+      // For Subnet / Host resources, address is the IP / CIDR
+      // operators see in the UI. For Domain resources, address is
+      // the FQDN string and we cannot do dst_ip → domain matching
+      // here (the IP that lands in the flow event was resolved on
+      // the management side at policy-push time, not by the
+      // dashboard). The agent-stamped dest_resource_id still flows
+      // through; ambiguity only catches the multi-host overlap on
+      // single-IP resources, which is the common shared-LB case.
+      const list = resourcesByAddress.get(r.address) ?? [];
+      list.push(r);
+      resourcesByAddress.set(r.address, list);
+    }
   }
 
   const grouped = new Map<string, FlowGroup>();
@@ -781,6 +856,11 @@ function groupFlows(
     const key = e.flow_id || e.event_id;
     let g = grouped.get(key);
     if (!g) {
+      // Resources that share the destination IP of THIS flow. Length
+      // 1 → unambiguous (PeerCell shows the single hostname). Length
+      // >1 → ambiguous (PeerCell shows the IP + N badge with
+      // tooltip listing the alternates).
+      const destResourceMatches = resourcesByAddress.get(e.dest_ip);
       g = {
         flowID: key,
         events: [],
@@ -789,6 +869,7 @@ function groupFlows(
         destPeer: dest,
         sourceResource,
         destResource,
+        destResourceMatches,
         policy: e.rule_id ? policyByID.get(e.rule_id) : undefined,
         totalRx: 0,
         totalTx: 0,
