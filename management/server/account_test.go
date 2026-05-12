@@ -986,6 +986,32 @@ func TestAccountManager_DeleteAccount(t *testing.T) {
 	assert.Len(t, pats, 0)
 }
 
+// TestAccountManager_DeleteAccount_ForgetsFlowPolicyIndex pins the
+// ADR-0018 invalidation hook on the delete path. Without it, the
+// resolver's per-account cache map grows monotonically with account
+// churn (5-50MB per entry typical) — fine on production self-hosted
+// where account creation is rare, problematic on multi-tenant or
+// lab-style churn where accounts come and go.
+func TestAccountManager_DeleteAccount_ForgetsFlowPolicyIndex(t *testing.T) {
+	manager, err := createManager(t)
+	require.NoError(t, err)
+
+	idx := &fakeFlowPolicyIndex{}
+	manager.SetFlowPolicyIndex(idx)
+
+	accountID := "test_delete_forgets_idx"
+	userID := "account_creator"
+	_, err = createAccount(manager, accountID, userID, "")
+	require.NoError(t, err)
+
+	require.NoError(t, manager.DeleteAccount(context.Background(), accountID, userID))
+
+	idx.mu.Lock()
+	defer idx.mu.Unlock()
+	assert.Equal(t, []string{accountID}, idx.forgets,
+		"DeleteAccount must invoke Forget on the flow policy index so the cache releases memory")
+}
+
 func BenchmarkTest_GetAccountWithclaims(b *testing.B) {
 	claims := nbcontext.UserAuth{
 		Domain:         "example.com",

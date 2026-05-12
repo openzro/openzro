@@ -818,6 +818,17 @@ func (am *DefaultAccountManager) DeleteAccount(ctx context.Context, accountID, u
 	// cancel peer login expiry job
 	am.peerLoginExpiry.Cancel(ctx, []string{account.Id})
 
+	// ADR-0018: release the flow policy resolver's in-memory index
+	// for the deleted account. Without this, the resolver's cache
+	// grows monotonically with account churn (each entry can be
+	// 5-50MB at typical scale) — fine on production self-hosted
+	// where accounts rarely go away, problematic on multi-tenant or
+	// lab churn. Forget is a no-op when the resolver was never
+	// wired or never saw this account.
+	if am.flowPolicyIndex != nil {
+		am.flowPolicyIndex.Forget(accountID)
+	}
+
 	meta := map[string]any{"account_id": account.Id, "domain": account.Domain, "created_at": account.CreatedAt}
 	am.StoreEvent(ctx, userID, accountID, accountID, activity.AccountDeleted, meta)
 
