@@ -679,12 +679,17 @@ function PeerCell({
 }) {
   const isAmbiguous = (ambiguousResources?.length ?? 0) > 1;
   const fallback = resource?.address ?? (peer ? undefined : "external");
+  // Label keeps hostname/peer name in non-ambiguous flows (the
+  // common, useful case); switches to the IP only when we can prove
+  // the hostname is one of many sharing the IP. IP subtitle stays
+  // unconditional so the operator always has the raw datapoint to
+  // cross-check against the ingress access log.
   const label = peer
     ? peer.name
     : isAmbiguous
       ? ip
       : (fallback ?? ip);
-  const sub = peer || isAmbiguous ? ip : null;
+  const sub = label !== ip ? ip : null;
 
   return (
     <div className="flex min-w-0 items-center gap-2">
@@ -826,17 +831,31 @@ function groupFlows(
     if (r.id) resourceByID.set(r.id, r);
     if (r.address) {
       // For Subnet / Host resources, address is the IP / CIDR
-      // operators see in the UI. For Domain resources, address is
-      // the FQDN string and we cannot do dst_ip → domain matching
-      // here (the IP that lands in the flow event was resolved on
-      // the management side at policy-push time, not by the
-      // dashboard). The agent-stamped dest_resource_id still flows
-      // through; ambiguity only catches the multi-host overlap on
-      // single-IP resources, which is the common shared-LB case.
+      // operators see in the UI. Multiple resources with the same
+      // address string mean explicit operator-side duplication.
+      // (Domain resources resolve to IPs on the management side at
+      // policy-push time and are caught by the event-based map below
+      // — not here.)
       const list = resourcesByAddress.get(r.address) ?? [];
       list.push(r);
       resourcesByAddress.set(r.address, list);
     }
+  }
+
+  // Event-based ambiguity discovery: when the loaded flows show the
+  // SAME dst_ip being attributed to multiple resource_ids by the
+  // agents, those resource_ids share the IP at the dataplane layer.
+  // This is the only reliable signal we have for Domain-type
+  // resources whose resolved IP lives on the management side and is
+  // not exposed in /networks/resources yet (TODO: add resolved_addresses
+  // to the API so we can detect this proactively even before traffic
+  // arrives).
+  const resourceIDsByDestIP = new Map<string, Set<string>>();
+  for (const e of events) {
+    if (!e.dest_resource_id || !e.dest_ip) continue;
+    const set = resourceIDsByDestIP.get(e.dest_ip) ?? new Set<string>();
+    set.add(e.dest_resource_id);
+    resourceIDsByDestIP.set(e.dest_ip, set);
   }
 
   const grouped = new Map<string, FlowGroup>();
@@ -856,11 +875,35 @@ function groupFlows(
     const key = e.flow_id || e.event_id;
     let g = grouped.get(key);
     if (!g) {
-      // Resources that share the destination IP of THIS flow. Length
-      // 1 → unambiguous (PeerCell shows the single hostname). Length
-      // >1 → ambiguous (PeerCell shows the IP + N badge with
-      // tooltip listing the alternates).
-      const destResourceMatches = resourcesByAddress.get(e.dest_ip);
+      // Resources that share the destination IP of THIS flow. Two
+      // sources are combined and de-duplicated:
+      //
+      //   (a) resources whose `address` field exactly matches the
+      //       dst_ip — catches Subnet/Host duplicates configured
+      //       on purpose by the operator.
+      //   (b) resources whose ID was attributed to the same dst_ip
+      //       across the loaded events — catches the shared-LB case
+      //       on Domain resources, where the FQDN→IP mapping lives
+      //       on the management side and isn't visible here.
+      //
+      // Length >1 triggers the ambiguity badge in PeerCell.
+      const direct = resourcesByAddress.get(e.dest_ip) ?? [];
+      const sharedIDs = resourceIDsByDestIP.get(e.dest_ip);
+      const sharedResources: NetworkResource[] = [];
+      if (sharedIDs && sharedIDs.size > 1) {
+        for (const id of sharedIDs) {
+          const r = resourceByID.get(id);
+          if (r) sharedResources.push(r);
+        }
+      }
+      const seen = new Set<string>();
+      const destResourceMatches: NetworkResource[] = [];
+      for (const r of [...direct, ...sharedResources]) {
+        if (r.id && !seen.has(r.id)) {
+          seen.add(r.id);
+          destResourceMatches.push(r);
+        }
+      }
       g = {
         flowID: key,
         events: [],
