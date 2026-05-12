@@ -11,7 +11,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	firewall "github.com/openzro/openzro/client/firewall/manager"
-	"github.com/openzro/openzro/client/firewall/policymark"
 	"github.com/openzro/openzro/client/internal/statemanager"
 	nbnet "github.com/openzro/openzro/util/net"
 )
@@ -87,26 +86,16 @@ func (m *aclManager) AddPeerFiltering(
 	chain := chainNameInputRules
 
 	ipsetName = transformIPsetName(ipsetName, sPort, dPort)
-	matchSpec := filterRuleSpecs(ip, string(protocol), sPort, dPort, action, ipsetName)
+	specs := filterRuleSpecs(ip, string(protocol), sPort, dPort, action, ipsetName)
 
-	mangleSpecs := slices.Clone(matchSpec)
+	mangleSpecs := slices.Clone(specs)
 	mangleSpecs = append(mangleSpecs,
 		"-i", m.wgIface.Name(),
 		"-m", "addrtype", "--dst-type", "LOCAL",
 		"-j", "MARK", "--set-xmark", fmt.Sprintf("%#x", nbnet.PreroutingFwmarkRedirected),
 	)
 
-	// ADR-0013: stamp rule_index on the high bits of the ct mark
-	// so the netflow conntrack collector can resolve the originating
-	// PolicyID. nftables has the same logic in
-	// client/firewall/nftables/acl_linux.go (expr.Bitwise). We
-	// install a separate non-terminal CONNMARK rule before the
-	// terminal verdict because iptables targets are not chainable
-	// within a single rule.
-	ruleIndex := policymark.Default().Index(id)
-	connmarkSpecs := connmarkSpecsFor(matchSpec, ruleIndex, action)
-
-	specs := append(slices.Clone(matchSpec), "-j", actionToStr(action))
+	specs = append(specs, "-j", actionToStr(action))
 	if ipsetName != "" {
 		if ipList, ipsetExists := m.ipsetStore.ipset(ipsetName); ipsetExists {
 			if err := ipset.Add(ipsetName, ip.String()); err != nil {
@@ -146,16 +135,6 @@ func (m *aclManager) AddPeerFiltering(
 		return nil, fmt.Errorf("rule already exists")
 	}
 
-	// CONNMARK must precede the verdict in the chain so the stamp
-	// is applied before ACCEPT terminates iteration. The verdict
-	// rule is appended right after.
-	if connmarkSpecs != nil {
-		if err := m.iptablesClient.Append(tableFilter, chain, connmarkSpecs...); err != nil {
-			log.Errorf("failed to add connmark rule: %v", err)
-			connmarkSpecs = nil
-		}
-	}
-
 	if err := m.iptablesClient.Append(tableFilter, chain, specs...); err != nil {
 		return nil, err
 	}
@@ -166,13 +145,12 @@ func (m *aclManager) AddPeerFiltering(
 	}
 
 	rule := &Rule{
-		ruleID:        uuid.New().String(),
-		specs:         specs,
-		connmarkSpecs: connmarkSpecs,
-		mangleSpecs:   mangleSpecs,
-		ipsetName:     ipsetName,
-		ip:            ip.String(),
-		chain:         chain,
+		ruleID:      uuid.New().String(),
+		specs:       specs,
+		mangleSpecs: mangleSpecs,
+		ipsetName:   ipsetName,
+		ip:          ip.String(),
+		chain:       chain,
 	}
 
 	m.updateState()
@@ -213,12 +191,6 @@ func (m *aclManager) DeletePeerRule(rule firewall.Rule) error {
 
 	if err := m.iptablesClient.Delete(tableName, r.chain, r.specs...); err != nil {
 		return fmt.Errorf("failed to delete rule: %s, %v: %w", r.chain, r.specs, err)
-	}
-
-	if r.connmarkSpecs != nil {
-		if err := m.iptablesClient.Delete(tableName, r.chain, r.connmarkSpecs...); err != nil {
-			log.Errorf("failed to delete connmark rule: %v", err)
-		}
 	}
 
 	if r.mangleSpecs != nil {
