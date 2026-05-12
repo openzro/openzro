@@ -25,7 +25,13 @@ import (
 
 // Manager handles netflow tracking and logging
 type Manager struct {
-	mux            sync.Mutex
+	mux sync.Mutex
+	// shutdownWg tracks the sender + receiveACKs goroutines so Close()
+	// can wait for them to exit before returning. Without this, a
+	// Close was fire-and-forget — the daemon could exit while the
+	// gRPC stream still had pending Send calls, leaking buffered
+	// events at every restart and producing flaky teardown in tests.
+	shutdownWg     sync.WaitGroup
 	logger         nftypes.FlowLogger
 	flowConfig     *nftypes.FlowConfig
 	conntrack      nftypes.ConnTracker
@@ -112,8 +118,15 @@ func (m *Manager) resetClient() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
 
-	go m.receiveACKs(ctx, flowClient)
-	go m.startSender(ctx)
+	m.shutdownWg.Add(2)
+	go func() {
+		defer m.shutdownWg.Done()
+		m.receiveACKs(ctx, flowClient)
+	}()
+	go func() {
+		defer m.shutdownWg.Done()
+		m.startSender(ctx)
+	}()
 
 	return nil
 }
@@ -181,14 +194,18 @@ func (m *Manager) Update(update *nftypes.FlowConfig) error {
 	return m.disableFlow()
 }
 
-// Close cleans up all resources
+// Close cleans up all resources. Unlocks the mux before waiting on
+// shutdownWg so the in-flight sender/receiver goroutines can finish
+// their teardown — both call back into methods that take the mux,
+// and holding it through Wait would deadlock.
 func (m *Manager) Close() {
 	m.mux.Lock()
-	defer m.mux.Unlock()
-
 	if err := m.disableFlow(); err != nil {
 		log.Warnf("failed to disable flow manager: %v", err)
 	}
+	m.mux.Unlock()
+
+	m.shutdownWg.Wait()
 }
 
 // GetLogger returns the flow logger
