@@ -29,7 +29,14 @@ type GRPCClient struct {
 	realClient proto.FlowServiceClient
 	clientConn *grpc.ClientConn
 	stream     proto.FlowService_EventsClient
-	streamMu   sync.Mutex
+	// receiving guards against two Receive goroutines racing on the
+	// same client. resetClient in the netflow manager spawns a new
+	// receiver every time the Sync push reports needsNewClient=true;
+	// if the previous receiver hasn't unwound yet, the second one
+	// would open a parallel gRPC stream, double-consume acks, and
+	// fight over c.stream. The flag is checked under streamMu.
+	receiving bool
+	streamMu  sync.Mutex
 }
 
 func NewClient(addr, payload, signature string, interval time.Duration) (*GRPCClient, error) {
@@ -86,7 +93,26 @@ func (c *GRPCClient) Close() error {
 	return nil
 }
 
+// ErrConcurrentReceive is returned when a second goroutine tries to
+// call Receive on a client that is already serving one. Callers
+// should treat this as a programming error — there is no legitimate
+// path that calls Receive twice in parallel on the same client.
+var ErrConcurrentReceive = errors.New("flow client: concurrent Receive calls are not supported")
+
 func (c *GRPCClient) Receive(ctx context.Context, interval time.Duration, msgHandler func(msg *proto.FlowEventAck) error) error {
+	c.streamMu.Lock()
+	if c.receiving {
+		c.streamMu.Unlock()
+		return ErrConcurrentReceive
+	}
+	c.receiving = true
+	c.streamMu.Unlock()
+	defer func() {
+		c.streamMu.Lock()
+		c.receiving = false
+		c.streamMu.Unlock()
+	}()
+
 	backOff := defaultBackoff(ctx, interval)
 	operation := func() error {
 		if err := c.establishStreamAndReceive(ctx, msgHandler); err != nil {

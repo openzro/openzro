@@ -254,3 +254,58 @@ func TestSend(t *testing.T) {
 		t.Fatal("timeout waiting for ack to be received by flow")
 	}
 }
+
+// TestReceive_RejectsConcurrentCall is a regression test for the
+// double-Receive bug: nothing in the API prevented two goroutines
+// from each opening a fresh stream against the same GRPCClient.
+// The realistic trigger is the netflow manager's resetClient path
+// — when a config Update flips URL or token, a new receiver
+// goroutine spawns before the previous one has unwound, and both
+// race on the shared `stream` pointer + ack handling. Production
+// users saw duplicate ACK processing and warnings about
+// "stream not initialized".
+//
+// Post-fix: the second Receive returns ErrConcurrentReceive
+// immediately, leaving the first stream untouched.
+func TestReceive_RejectsConcurrentCall(t *testing.T) {
+	server := newTestServer(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
+
+	client, err := flow.NewClient("http://"+server.addr, "test-payload", "test-signature", 1*time.Second)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = client.Close() })
+
+	firstActive := make(chan struct{})
+	firstDone := make(chan struct{})
+
+	go func() {
+		defer close(firstDone)
+		// Signal that we are inside Receive — the server-side stream
+		// handler runs once the initiator handshake clears, by which
+		// time the receiving flag is set.
+		go func() {
+			time.Sleep(200 * time.Millisecond)
+			close(firstActive)
+		}()
+		err := client.Receive(ctx, time.Second, func(*proto.FlowEventAck) error { return nil })
+		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+			t.Logf("first receive returned: %v", err)
+		}
+	}()
+
+	<-firstActive
+
+	// Second concurrent call should be refused immediately.
+	err = client.Receive(ctx, time.Second, func(*proto.FlowEventAck) error { return nil })
+	require.ErrorIs(t, err, flow.ErrConcurrentReceive, "second concurrent Receive must be refused")
+
+	// Tear down by cancelling — first goroutine should exit cleanly.
+	cancel()
+	select {
+	case <-firstDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("first Receive did not unwind after context cancel")
+	}
+}
