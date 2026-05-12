@@ -67,6 +67,16 @@ builds:
     ldflags:
       - -s -w -X github.com/openzro/openzro/version.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
     mod_timestamp: "{{ .CommitTimestamp }}"
+    # archive_duckdb pulls in github.com/marcboeker/go-duckdb (CGo)
+    # so the management binary can read the cold-archive Parquet
+    # bucket configured via OPENZRO_FLOW_ARCHIVE_S3_BUCKET /
+    # OPENZRO_FLOW_ARCHIVE_GCS_BUCKET. Without the tag, the
+    # federated read path falls back to hot-only and the dashboard
+    # cannot reach events older than OPENZRO_FLOW_RETENTION. CGO_ENABLED
+    # is already on for this build, so the only cost is +~30MB of
+    # embedded engine. See ADR-0012.
+    tags:
+      - archive_duckdb
 
   - id: openzro-signal
     dir: signal
