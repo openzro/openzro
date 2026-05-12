@@ -155,8 +155,18 @@ export default function NetworkTrafficV2() {
     const params = new URLSearchParams();
     if (range?.from) params.set("since", range.from.toISOString());
     if (range?.to) params.set("until", range.to.toISOString());
+    // Ask the API for enough events to fill realistic dashboard
+    // windows. Default API page size is 100 (see
+    // management/server/http/handlers/network_events_handler.go);
+    // without an explicit limit here the dashboard would cap at
+    // ~60-70 grouped flows regardless of what the operator picks
+    // in the Rows page-size dropdown (which is purely client-side
+    // slicing of what's already fetched). 10 000 covers Cora-tier
+    // accounts with active traffic for several hours, max payload
+    // ~1 MB, well below the API's own cap (50 000).
+    params.set("limit", "10000");
     const qs = params.toString();
-    return qs ? `/network-traffic-events?${qs}` : "/network-traffic-events";
+    return `/network-traffic-events?${qs}`;
   }, [range]);
 
   const {
