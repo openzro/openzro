@@ -3,6 +3,7 @@ package flow_exports
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -10,6 +11,25 @@ import (
 	"github.com/openzro/openzro/flow/sinks"
 	"github.com/openzro/openzro/flow/store"
 )
+
+// envArchiveFormat mirrors the same env var the boot-time sinks
+// factory reads (flow/sinks/factory.go). Dashboard-configured GCS
+// and S3 exports inherit the operator-level default unless they
+// override it on the row itself — see archiveFormatFor.
+const envArchiveFormat = "OPENZRO_FLOW_ARCHIVE_FORMAT"
+
+// archiveFormatFor returns the format string to pass to the sink
+// constructor for a dashboard-configured GCS / S3 export. Row-level
+// overrides win when set; otherwise we fall through to the
+// OPENZRO_FLOW_ARCHIVE_FORMAT env var (the same operator-level knob
+// the boot-time sinks already honour); empty fallback lets the sink
+// itself default to ndjson as it has historically.
+func archiveFormatFor(rowFormat string) string {
+	if rowFormat != "" {
+		return rowFormat
+	}
+	return os.Getenv(envArchiveFormat)
+}
 
 // Manager glues persisted exports to the running FlowService. It
 // owns:
@@ -167,6 +187,7 @@ func (m *Manager) buildSink(ctx context.Context, row *FlowExport) (store.Sink, e
 			FlushInterval:    c.FlushInterval,
 			MaxEventsPerFile: c.MaxEventsPerFile,
 			BufferSize:       c.BufferSize,
+			Format:           archiveFormatFor(c.Format),
 		})
 
 	case TypeHTTP:
@@ -200,6 +221,7 @@ func (m *Manager) buildSink(ctx context.Context, row *FlowExport) (store.Sink, e
 			FlushInterval:    c.FlushInterval,
 			MaxEventsPerFile: c.MaxEventsPerFile,
 			BufferSize:       c.BufferSize,
+			Format:           archiveFormatFor(c.Format),
 		}
 		if c.CredentialsJSON != "" {
 			gcsCfg.CredentialsJSON = []byte(c.CredentialsJSON)

@@ -115,6 +115,12 @@ type S3DestConfig struct {
 	FlushInterval    time.Duration `json:"flush_interval,omitempty"`
 	MaxEventsPerFile int           `json:"max_events_per_file,omitempty"`
 	BufferSize       int           `json:"buffer_size,omitempty"`
+	// Format selects the file format: "parquet" or "ndjson". Empty
+	// inherits the OPENZRO_FLOW_ARCHIVE_FORMAT env var (operator-level
+	// default — see flow_exports/manager.go::archiveFormatFor). Older
+	// rows persisted before this field existed deserialize with
+	// Format="" and pick up the env default transparently.
+	Format string `json:"format,omitempty"`
 }
 
 func (c S3DestConfig) PublicView() S3DestConfigPublic {
@@ -228,6 +234,12 @@ type GCSDestConfig struct {
 	FlushInterval    time.Duration `json:"flush_interval,omitempty"`
 	MaxEventsPerFile int           `json:"max_events_per_file,omitempty"`
 	BufferSize       int           `json:"buffer_size,omitempty"`
+	// Format selects the file format: "parquet" or "ndjson". Empty
+	// inherits the OPENZRO_FLOW_ARCHIVE_FORMAT env var (operator-level
+	// default — see flow_exports/manager.go::archiveFormatFor). Older
+	// rows persisted before this field existed deserialize with
+	// Format="" and pick up the env default transparently.
+	Format string `json:"format,omitempty"`
 }
 
 func (c GCSDestConfig) PublicView() GCSDestConfigPublic {
