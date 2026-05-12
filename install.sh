@@ -32,66 +32,76 @@ fi
 get_release() {
     local RELEASE=$1
     if [ "$RELEASE" = "latest" ]; then
-        local TAG="latest"
-        local URL="https://pkg.openzro.io/releases/latest"
+        # /releases/latest excludes prereleases (everything pre-1.0 is
+        # tagged as prerelease), and /releases sorts by tag_name
+        # lexicographically — *not* by date — so v0.53.1-alpha.9
+        # ranks "newer" than v0.53.1-alpha.14. Pull a page of recent
+        # releases and pick the highest tag with `sort -V` (version
+        # sort), which handles pre-release suffixes correctly. Both
+        # GNU sort (Linux) and BSD sort (macOS 11+) support -V.
+        local URL="https://api.github.com/repos/${OWNER}/${REPO}/releases?per_page=100"
+        if [ -n "$GITHUB_TOKEN" ]; then
+              curl -H "Authorization: token ${GITHUB_TOKEN}" -s "${URL}" \
+                  | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' \
+                  | sort -V | tail -1
+        else
+              curl -s "${URL}" \
+                  | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' \
+                  | sort -V | tail -1
+        fi
     else
-        local TAG="tags/${RELEASE}"
-        local URL="https://api.github.com/repos/${OWNER}/${REPO}/releases/${TAG}"
-    fi
-    if [ -n "$GITHUB_TOKEN" ]; then
-          curl -H  "Authorization: token ${GITHUB_TOKEN}" -s "${URL}" \
-              | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'
-    else
-          curl -s "${URL}" \
-              | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'
+        local URL="https://api.github.com/repos/${OWNER}/${REPO}/releases/tags/${RELEASE}"
+        if [ -n "$GITHUB_TOKEN" ]; then
+              curl -H "Authorization: token ${GITHUB_TOKEN}" -s "${URL}" \
+                  | grep -m1 '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'
+        else
+              curl -s "${URL}" \
+                  | grep -m1 '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'
+        fi
     fi
 }
 
 download_release_binary() {
     VERSION=$(get_release "$OPENZRO_RELEASE")
+    if [ -z "$VERSION" ]; then
+        echo "Could not resolve openzro release tag from GitHub API." >&2
+        echo "Common causes:" >&2
+        echo "  - unauthenticated rate limit hit (60 req/hour); set GITHUB_TOKEN" >&2
+        echo "  - network blocks api.github.com" >&2
+        echo "  - OPENZRO_RELEASE='$OPENZRO_RELEASE' tag does not exist" >&2
+        exit 1
+    fi
     BASE_URL="https://github.com/${OWNER}/${REPO}/releases/download"
-    BINARY_BASE_NAME="${VERSION#v}_${OS_TYPE}_${ARCH}.tar.gz"
 
-    # for Darwin, download the signed Openzro-UI
+    # The desktop UI on macOS is a single universal artifact (built by
+    # .goreleaser.ui-darwin.yaml — fyne signtool would normally also
+    # produce a *_signed.zip, but we don't ship signed UI yet — that
+    # waits on SignPath/Apple Developer enrollment). Everywhere else
+    # (CLI on any OS, UI on Linux) follows the per-arch tar.gz pattern.
     if [ "$OS_TYPE" = "darwin" ] && [ "$1" = "$UI_APP" ]; then
-        BINARY_BASE_NAME="${VERSION#v}_${OS_TYPE}_${ARCH}_signed.zip"
-    fi
-
-    if [ "$1" = "$UI_APP" ]; then
-       BINARY_NAME="$1-${OS_TYPE}_${BINARY_BASE_NAME}"
-       if [ "$OS_TYPE" = "darwin" ]; then
-         BINARY_NAME="$1_${BINARY_BASE_NAME}"
-       fi
+        BINARY_BASE_NAME="${VERSION#v}_darwin_universal.tar.gz"
     else
-       BINARY_NAME="$1_${BINARY_BASE_NAME}"
+        BINARY_BASE_NAME="${VERSION#v}_${OS_TYPE}_${ARCH}.tar.gz"
     fi
 
+    BINARY_NAME="$1_${BINARY_BASE_NAME}"
     DOWNLOAD_URL="${BASE_URL}/${VERSION}/${BINARY_NAME}"
 
     echo "Installing $1 from $DOWNLOAD_URL"
     if [ -n "$GITHUB_TOKEN" ]; then
-      cd /tmp && curl -H  "Authorization: token ${GITHUB_TOKEN}" -LO "$DOWNLOAD_URL"
+      cd /tmp && curl -fLO -H "Authorization: token ${GITHUB_TOKEN}" "$DOWNLOAD_URL"
     else
-      cd /tmp && curl -LO "$DOWNLOAD_URL" || curl -LO --dns-servers 8.8.8.8 "$DOWNLOAD_URL"
+      cd /tmp && curl -fLO "$DOWNLOAD_URL"
     fi
 
-
-    if [ "$OS_TYPE" = "darwin" ] && [ "$1" = "$UI_APP" ]; then
-        INSTALL_DIR="/Applications/Openzro UI.app"
-
-        if test -d "$INSTALL_DIR" ; then
-          echo "removing $INSTALL_DIR"
-          rm -rfv "$INSTALL_DIR"
-        fi
-
-        # Unzip the app and move to INSTALL_DIR
-        unzip -q -o "$BINARY_NAME"
-        mv -v "openzro_ui_${OS_TYPE}/" "$INSTALL_DIR/" || mv -v "openzro_ui_${OS_TYPE}_${ARCH}/" "$INSTALL_DIR/"
-    else
-        ${SUDO} mkdir -p "$INSTALL_DIR"
-        tar -xzvf "$BINARY_NAME"
-        ${SUDO} mv "${1%_"${BINARY_BASE_NAME}"}" "$INSTALL_DIR/"
-    fi
+    # The darwin UI archive ships just the openzro-ui binary, not a
+    # .app bundle — fyne package + signing is gated on SignPath/Apple
+    # enrollment. Drop the binary in /usr/local/bin alongside the CLI;
+    # users invoke `openzro-ui` from a terminal until we ship the
+    # signed .app.
+    ${SUDO} mkdir -p "$INSTALL_DIR"
+    tar -xzvf "$BINARY_NAME"
+    ${SUDO} mv "${1%_"${BINARY_BASE_NAME}"}" "$INSTALL_DIR/"
 }
 
 add_apt_repo() {
@@ -121,53 +131,58 @@ add_apt_repo() {
 }
 
 add_rpm_repo() {
-# Repo metadata (repomd.xml) is signed by publish-packages.sh,
-# but individual .rpm packages aren't yet (rpm --addsign is a
-# planned addition — see #TBD). Until then:
-#   gpgcheck=0      — skip per-package signature check
-#   repo_gpgcheck=1 — DO verify the repomd.xml.asc signature
-# This still gives users origin verification (they trust the
-# signed metadata + sha256-pinned rpms inside it). When package
-# signing lands, flip both to 1 simultaneously with the bump.
+# Full-chain GPG verification — publish-packages.sh signs both
+# the individual .rpm files (via rpmsign --addsign) and the
+# repodata/repomd.xml. dnf/yum/zypper verify both:
+#   gpgcheck=1      — each .rpm signature
+#   repo_gpgcheck=1 — repodata/repomd.xml.asc signature
 cat <<-EOF | ${SUDO} tee /etc/yum.repos.d/openzro.repo
 [Openzro]
 name=Openzro
 baseurl=https://pkg.openzro.io/rpm/\$basearch
 enabled=1
-gpgcheck=0
+gpgcheck=1
 gpgkey=https://pkg.openzro.io/openzro-archive-key.asc
 repo_gpgcheck=1
 EOF
 }
 
-install_aur_package() {
-    INSTALL_PKGS="git base-devel go"
-    REMOVE_PKGS=""
+add_pacman_repo() {
+    # pkg.openzro.io publishes a signed pacman repo at /pacman/<arch>/.
+    # Older versions of this script built openzro from AUR with
+    # makepkg — that path is removed; the AUR package is currently
+    # not maintained, and the upstream repo is the supported flow.
+    ${SUDO} pacman -Sy --noconfirm --needed gnupg curl
 
-    # Check if dependencies are installed
-    for PKG in $INSTALL_PKGS; do
-        if ! pacman -Q "$PKG" > /dev/null 2>&1; then
-            # Install missing package(s)
-            ${SUDO} pacman -S "$PKG" --noconfirm
+    ${SUDO} pacman-key --init >/dev/null 2>&1 || true
 
-            # Add installed package for clean up later
-            REMOVE_PKGS="$REMOVE_PKGS $PKG"
-        fi
-    done
-
-    # Build package from AUR
-    cd /tmp && git clone https://aur.archlinux.org/openzro.git
-    cd openzro && makepkg -sri --noconfirm
-
-    if ! $SKIP_UI_APP; then
-        cd /tmp && git clone https://aur.archlinux.org/openzro-ui.git
-        cd openzro-ui && makepkg -sri --noconfirm
+    # Fetch the public key, extract its fingerprint, import + locally
+    # sign so pacman trusts it for SigLevel = Required.
+    TMP_KEY=$(mktemp)
+    curl -fsSL https://pkg.openzro.io/openzro-archive-key.asc -o "$TMP_KEY"
+    FP=$(gpg --show-keys --with-colons --import-options show-only "$TMP_KEY" \
+         | awk -F: '/^fpr:/ {print $10; exit}')
+    if [ -z "$FP" ]; then
+        echo "Could not determine GPG fingerprint for openZro repo key"
+        rm -f "$TMP_KEY"
+        exit 1
     fi
+    ${SUDO} pacman-key -a "$TMP_KEY"
+    ${SUDO} pacman-key --lsign-key "$FP"
+    rm -f "$TMP_KEY"
 
-    if [ -n "$REMOVE_PKGS" ]; then
-      # Clean up the installed packages
-      ${SUDO} pacman -Rs "$REMOVE_PKGS" --noconfirm
+    # Drop in the repo definition. /etc/pacman.conf has no .d
+    # directory; we append once and skip on re-runs.
+    if ! grep -q '^\[openzro\]' /etc/pacman.conf; then
+        PAC_ARCH="$(uname -m)"
+        ${SUDO} tee -a /etc/pacman.conf > /dev/null <<EOF
+
+[openzro]
+SigLevel = Required DatabaseRequired
+Server = https://pkg.openzro.io/pacman/$PAC_ARCH
+EOF
     fi
+    ${SUDO} pacman -Sy
 }
 
 prepare_tun_module() {
@@ -213,14 +228,18 @@ install_native_binaries() {
 
 # Handle macOS .pkg installer
 install_pkg() {
-  case "$(uname -m)" in
-    x86_64) ARCH="amd64" ;;
-    arm64|aarch64) ARCH="arm64" ;;
-    *) echo "Unsupported macOS arch: $(uname -m)" >&2; exit 1 ;;
-  esac
+  VERSION=$(get_release "$OPENZRO_RELEASE")
+  if [ -z "$VERSION" ]; then
+      echo "Could not resolve openzro release tag from GitHub API" >&2
+      exit 1
+  fi
 
-  PKG_URL=$(curl -sIL -o /dev/null -w '%{url_effective}' "https://pkg.openzro.io/macos/${ARCH}")
-  echo "Downloading Openzro macOS installer from https://pkg.openzro.io/macos/${ARCH}"
+  # goreleaser produces a single universal .pkg covering both
+  # x86_64 and arm64 macs.
+  PKG_NAME="openzro_${VERSION#v}_darwin_universal.pkg"
+  PKG_URL="https://github.com/${OWNER}/${REPO}/releases/download/${VERSION}/${PKG_NAME}"
+
+  echo "Downloading openZro macOS installer from ${PKG_URL}"
   curl -fsSL -o /tmp/openzro.pkg "${PKG_URL}"
   ${SUDO} installer -pkg /tmp/openzro.pkg -target /
   rm -f /tmp/openzro.pkg
@@ -288,10 +307,15 @@ install_openzro() {
         fi
     ;;
     pacman)
-        ${SUDO} pacman -Syy
-        install_aur_package
-        # in-line with the docs at https://wiki.archlinux.org/title/Openzro
-        ${SUDO} systemctl enable --now openzro@main.service
+        add_pacman_repo
+        ${SUDO} pacman -S --noconfirm openzro
+        # openzro-ui is not yet packaged for pacman; users who want
+        # the UI on Arch can grab the binary from the GitHub release
+        # tarball or use AUR once the package is published.
+        if ! $SKIP_UI_APP; then
+            echo "Note: openzro-ui is not packaged for pacman yet."
+            echo "      Skipping UI install; CLI 'openzro' is available."
+        fi
     ;;
     pkg)
         # Check if the package is already installed

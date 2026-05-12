@@ -40,10 +40,22 @@ sudo dnf install openzro</pre>
 sudo rpm --import https://pkg.openzro.io/openzro-archive-key.asc
 sudo zypper install openzro</pre>
 
-<h2>One-line install (covers Arch, CachyOS, Gentoo, …)</h2>
+<h2>pacman (Arch, CachyOS, Manjaro, EndeavourOS)</h2>
+<pre>curl -fsSL https://pkg.openzro.io/openzro-archive-key.asc \
+  | sudo pacman-key -a -
+sudo pacman-key --lsign-key dev@openzro.io
+sudo tee -a /etc/pacman.conf &lt;&lt;EOF
+[openzro]
+SigLevel = Required DatabaseRequired
+Server = https://pkg.openzro.io/pacman/\$arch
+EOF
+sudo pacman -Sy
+sudo pacman -S openzro</pre>
+
+<h2>One-line install (covers Gentoo, Alpine, …)</h2>
 <p>For distros not covered by the package repos above, the
 <code>install.sh</code> script auto-detects your distro and falls
-through APT, YUM/DNF, zypper, pacman/AUR, or the binary tarball:</p>
+through APT, YUM/DNF, zypper, pacman, or the binary tarball:</p>
 <pre>curl -fsSL https://pkg.openzro.io/install.sh | sh</pre>
 <p>The script source is at
 <a href="https://github.com/openzro/openzro/blob/main/release_files/install.sh"><code>release_files/install.sh</code></a>
