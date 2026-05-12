@@ -135,7 +135,7 @@ export default function V2PreviewPage() {
           footer={
             <div className="flex items-center gap-2.5">
               <span className="grid h-7 w-7 place-items-center rounded-full bg-oz2-acc-soft text-[12px] font-semibold text-oz2-acc-text">
-                KR
+                AL
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[12.5px] font-medium text-oz2-text">

@@ -33,7 +33,7 @@ func (a *accountIndex) candidatesForPeer(peerID string) []*policyCandidate {
 // Rebuild reconstructs the resolver's index for the given account.
 // Called by the management's account event hooks whenever the graph
 // changes (policy save / delete, peer add / remove, group edit,
-// resource edit). Cheap to run — typical Acme-class account is well
+// resource edit). Cheap to run — typical medium-tier account is well
 // under 100ms — and atomic for readers: the new index swaps in
 // under the resolver's write lock, no half-built state visible.
 func (r *Resolver) Rebuild(accountID string, account *types.Account) {

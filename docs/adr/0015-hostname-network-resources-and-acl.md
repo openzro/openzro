@@ -10,7 +10,7 @@ this ADR.
 
 ## Context
 
-A Acme operator reported a hard freeze ("trava tudo") on the openZro
+An operator reported a hard freeze ("trava tudo") on the openZro
 client whenever they accessed a host their newly-created Network
 Resource was supposed to route. The freeze was reproducible: open
 `https://ci.example.com` in the browser → the dashboard
@@ -19,7 +19,7 @@ endpoint stopped responding within a couple of seconds; only a
 manual `wt0` cycle restored connectivity, until the next access to
 `ci.example.com` triggered the loop again.
 
-Acme's deployment puts every infra hostname under a single GKE
+an operator's self-hosted deployment puts every infra hostname under a single GKE
 nginx-ingress LoadBalancer at `198.51.100.42`:
 
 - `mgmt.example.com`, `access.example.com`, `dash.example.com`,
@@ -67,7 +67,7 @@ were correct, both handlers should freeze identically. The
 operator confirmed the freeze persisted after the toggle flip.
 
 What actually fixed it was creating an Access Control policy
-covering `acme` → `All` for TCP/80,443. Once that policy was
+covering `users` → `All` for TCP/80,443. Once that policy was
 active, the freeze went away — with the toggle in **either**
 state, with the Network Resource still in place, with the same
 shared LB IP, with the same /32 PBR captures.
@@ -146,7 +146,7 @@ the dashboard backend has no such restriction.
    No silent default; explicit policy per use case.
 
 4. **Do not change the zero-trust default**. A blanket
-   `acme → All TCP/*` policy would have hidden the symptom but
+   `users → All TCP/*` policy would have hidden the symptom but
    undermines the security posture. Instead, tighten the
    recommendation: scope policies to the routing peer group, not
    `All`, so the operator's intent is auditable.
@@ -171,7 +171,7 @@ HTTPS host served by a routing peer:
 
 | Sources | Destinations | Protocol | Ports | Why |
 |---|---|---|---|---|
-| user group (e.g. `acme`) | routing-peer group (e.g. `prod-admin-us`) | TCP | 80, 443 | The actual app traffic |
+| user group (e.g. `users`) | routing-peer group (e.g. `prod-admin-us`) | TCP | 80, 443 | The actual app traffic |
 | user group | routing-peer group | TCP | 22 | SSH if relevant |
 | user group | routing-peer group | ICMP | — | Connectivity probes |
 
@@ -250,6 +250,6 @@ on its own merits.
   causing the freeze.
 - Actual failing path: ACL evaluation between client peer and
   routing-peer group, dropped at the management firewall.
-- Acme reproduction artefacts: shared GKE LB IP `198.51.100.42`
+- Reproduction artefacts: shared GKE LB IP `198.51.100.42`
   serving every `*.example.com` host except `mgmt-grpc.example.com`
   (own LB by [ADR-0014](0014-coordinated-multi-pod-relay.md)).

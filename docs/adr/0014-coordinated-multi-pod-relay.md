@@ -36,7 +36,7 @@ Upstream maintainer braginini confirmed the gating in
 
 For openZro, the upstream pattern is enough for self-hosters who run
 a region per location and accept that scaling vertically is the
-ceiling. Acme's BR setup fits that profile exactly — one relay VM
+ceiling. an operator's self-hosted setup fits that profile exactly — one relay VM
 in `southamerica-east1`, no K8s on the data plane side. **No
 implementation work is required for that case.**
 
@@ -347,7 +347,7 @@ container picks up `POD_IP` and `POD_NAME` via the downward API.
 
 - **VM / bare-metal multi-pod.** Operators in those environments
   use the per-region pattern from [ADR-0009](0009-bare-metal-ansible-and-ha.md).
-  Acme's BR data plane is in this category and **never invokes the
+  the operator's data plane is in this category and **never invokes the
   code in this ADR**.
 - **Cross-region multi-pod.** Each region runs its own coordinated
   cluster (or a single-pod cluster — see flag `cluster.discovery`).

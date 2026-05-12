@@ -36,7 +36,7 @@ map computation (see
 which itself runs in response to peer sync, policy changes, peer
 adds/removes, etc.
 
-A Acme operator asked for a check that says **"group X can only
+An operator asked for a check that says **"group X can only
 reach internal-system between 09:00 and 17:00 on weekdays"** — i.e.
 a posture predicate that depends on wall-clock time. The use case
 is small but recurrent (compliance-driven schedule restrictions,
@@ -387,7 +387,7 @@ against the existing five check types.
 
 - Differentiates openZro from upstream NetBird (which has no
   time-based gating).
-- Closes a Acme-asked compliance feature that maps directly to
+- Closes a an operator-requested compliance feature that maps directly to
   Bacen Res. BCB nº 4.893's "least-privilege at the right time"
   ([docs/compliance/bacen-4893-mapping.md](../../docs/compliance/bacen-4893-mapping.md)).
 - Reuses 100% of the posture-check authoring + audit surface,

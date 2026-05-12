@@ -27,7 +27,7 @@ That works for three of the four paths flow events come from:
 | Userspace filter (macOS / Windows / userspace-bind) | [`uspfilter/filter.go`](../../client/firewall/uspfilter/filter.go) — direct PolicyID on rule | ✓ in-band |
 | Linux kernel firewall, **outbound from initiator** | nowhere — packets only hit OUTPUT + POSTROUTING mangle | ✗ empty |
 
-The fourth path is the one a Acme operator surfaced. They open the
+The fourth path is the one an operator surfaced. They open the
 Network Traffic page and see the Policy column blank for every
 flow their machine reported (events where their peer is the
 **initiator** of an outbound connection to a Network Resource via a
@@ -159,7 +159,7 @@ func (r *FlowPolicyResolver) Resolve(accountID, peerID string,
 Lookup cost per event:
 - O(1) hash to fetch the peer's candidate list.
 - O(candidates) linear scan with a couple of inline predicate checks.
-- Realistic worst-case in our largest Acme-style account today
+- Realistic worst-case in our largest medium-tier account
   (~200 peers, ~30 policies, ~10 candidates per peer) is one
   cache line + a handful of comparisons ≈ **1µs per resolution**.
 
@@ -172,7 +172,7 @@ Set against the existing ingest cost (DB write dominates at
 |---|---|---|---|
 | Tiny | 50-200 | <0.1ms | <0.1% |
 | Small team | 500-2k | ~1-2ms | <0.5% |
-| Medium (Acme today) | 5k-20k | ~10-30ms | ~1-3% |
+| Medium (the operator) | 5k-20k | ~10-30ms | ~1-3% |
 | Large | 50k+ | ~100-200ms | ~10-20% |
 
 Memory budget at Medium tier: ~5-15MB of index per account.
@@ -334,7 +334,7 @@ chart (steps 5-6). Step 1 dominates; steps 2-4 are wiring.
   the management considers policy-driven, regardless of which
   side of the conn the peer was on.
 - **Parity with NetBird Cloud's enterprise audit feature**,
-  without leaving our self-hosted scope. Acme-class operators
+  without leaving our self-hosted scope. medium-tier operators
   get the same dashboard utility paying nobody.
 - **Agent-side stamping stays untouched** — the ~75% of paths
   where it already works skip the resolver entirely.

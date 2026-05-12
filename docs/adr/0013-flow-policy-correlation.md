@@ -21,7 +21,7 @@ the packet — it only carries the `ct mark` (a 32-bit field per
 conntrack entry).
 
 The result: for the operator running the typical Linux deployment
-(Acme's gateways in GCP-SP, every Ubuntu home/server peer, every
+(the operator's gateways, every Ubuntu home/server peer, every
 Debian routing peer), the Network Traffic page shows IPs and ports
 but no policy name. The "Allow Mesh Traffic" default policy never
 correlates. NetBird OSS upstream has the same gap; it is the kind of
