@@ -283,3 +283,122 @@ func newNetworkResource(id string, groupIDs []string, prefix netip.Prefix) *reso
 		Enabled:  true,
 	}
 }
+
+// TestResolve_BidirectionalReverseAttribution covers the case that
+// the v1 resolver missed: when a policy is bidirectional, the
+// dataplane installs reverse-direction firewall rules so peers in
+// the destination group can initiate to peers in the source group.
+// The original resolver only indexed the forward direction and
+// returned empty for these reverse flows. Mirrors account.go:998.
+func TestResolve_BidirectionalReverseAttribution(t *testing.T) {
+	acc := fixtureAccount()
+	// Make the existing TCP policy bidirectional. Now traffic from
+	// peer-c (in group-servers, the destination side) to peer-a (in
+	// group-laptops, the source side) on port 443 should attribute
+	// to this policy too.
+	acc.Policies[0].Rules[0].Bidirectional = true
+
+	r := New()
+	r.Rebuild("acc-1", acc)
+
+	reverse := newEvent("peer-c", "10.0.0.1", 443, 6) // peer-c → peer-a
+	require.True(t, r.Resolve("acc-1", reverse),
+		"bidirectional reverse: dest-side peer initiating to source-side peer must resolve")
+	assert.Equal(t, "p-allow-tcp-2026-05-01", string(reverse.RuleID))
+
+	// Forward direction must still resolve unchanged.
+	forward := newEvent("peer-a", "10.0.0.3", 443, 6)
+	require.True(t, r.Resolve("acc-1", forward))
+	assert.Equal(t, "p-allow-tcp-2026-05-01", string(forward.RuleID))
+}
+
+// TestResolve_NonBidirectionalDoesNotReverseAttribute is the
+// regression counterpart: a unidirectional policy MUST NOT
+// attribute reverse-direction flows. The dataplane only installs
+// rules in the forward direction, so traffic dest→source on a
+// unidirectional rule is permitted by some OTHER policy (or
+// dropped); attributing it to a unidirectional rule's policy
+// would be a fabricated correlation.
+func TestResolve_NonBidirectionalDoesNotReverseAttribute(t *testing.T) {
+	acc := fixtureAccount()
+	// Explicitly unidirectional (the default — fixtureAccount leaves
+	// Bidirectional unset = false).
+	acc.Policies[0].Rules[0].Bidirectional = false
+
+	r := New()
+	r.Rebuild("acc-1", acc)
+
+	reverse := newEvent("peer-c", "10.0.0.1", 443, 6) // peer-c → peer-a
+	assert.False(t, r.Resolve("acc-1", reverse),
+		"unidirectional policy must not attribute reverse-direction flows")
+	assert.Empty(t, reverse.RuleID)
+}
+
+// TestResolve_DestinationResourceDirect covers the rule shape where
+// the destination is a direct NetworkResource reference (not via a
+// group). The dataplane allows either Destinations OR
+// DestinationResource — see policies_handler.go:161. Both should
+// resolve.
+func TestResolve_DestinationResourceDirect(t *testing.T) {
+	acc := fixtureAccount()
+	subnet := netip.MustParsePrefix("10.50.0.0/24")
+	res := newNetworkResource("res-direct", nil, subnet)
+	acc.NetworkResources = append(acc.NetworkResources, res)
+
+	// Replace the rule's group destination with a direct resource ref.
+	acc.Policies[0].Rules[0].Destinations = nil
+	acc.Policies[0].Rules[0].DestinationResource = types.Resource{
+		ID:   "res-direct",
+		Type: "subnet",
+	}
+
+	r := New()
+	r.Rebuild("acc-1", acc)
+
+	ev := newEvent("peer-a", "10.50.0.42", 443, 6)
+	require.True(t, r.Resolve("acc-1", ev),
+		"direct DestinationResource reference must attribute matching flows")
+	assert.Equal(t, "p-allow-tcp-2026-05-01", string(ev.RuleID))
+}
+
+// TestResolve_DisabledPolicyIgnored guards against attributing
+// flows to a policy whose top-level Enabled flag is false. The
+// dataplane skips disabled policies entirely; the resolver must
+// too. (We were already filtering disabled RULES; this adds the
+// policy-level check.)
+func TestResolve_DisabledPolicyIgnored(t *testing.T) {
+	acc := fixtureAccount()
+	acc.Policies[0].Enabled = false
+
+	r := New()
+	r.Rebuild("acc-1", acc)
+
+	ev := newEvent("peer-a", "10.0.0.3", 443, 6)
+	assert.False(t, r.Resolve("acc-1", ev),
+		"disabled policy must not produce any attribution")
+}
+
+// TestResolve_BidirectionalWithResourceReverse stresses the reverse
+// path with a NetworkResource folded into the rule's source-side
+// groups via resource.GroupIDs. When bidirectional, the reverse
+// direction's destinations come from rule.Sources / rule.SourceResource
+// — the SAME slot the dataplane uses for the forward direction's
+// source peers + their resources.
+func TestResolve_BidirectionalWithResourceReverse(t *testing.T) {
+	acc := fixtureAccount()
+	subnet := netip.MustParsePrefix("172.16.0.0/24")
+	res := newNetworkResource("res-svc", []string{"group-laptops"}, subnet)
+	acc.NetworkResources = append(acc.NetworkResources, res)
+
+	acc.Policies[0].Rules[0].Bidirectional = true
+
+	r := New()
+	r.Rebuild("acc-1", acc)
+
+	// peer-c (in group-servers / dest) reaching the laptop-subnet
+	// (172.16.0.0/24, folded into group-laptops on the source side).
+	ev := newEvent("peer-c", "172.16.0.99", 443, 6)
+	require.True(t, r.Resolve("acc-1", ev),
+		"bidirectional reverse must walk source-side resources too")
+	assert.Equal(t, "p-allow-tcp-2026-05-01", string(ev.RuleID))
+}
