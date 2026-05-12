@@ -24,8 +24,9 @@ management/management
 client/client
 client/client.exe
 *.syso
-# go run output of the dev seed binary (host-arch ELF, kept off-tree)
+# go run output of the dev seed binaries (host-arch ELF, kept off-tree)
 /dev-seed-flow-events
+/dev-seed-peers
 client/.distfiles/
 infrastructure_files/setup.env
 infrastructure_files/setup-*.env

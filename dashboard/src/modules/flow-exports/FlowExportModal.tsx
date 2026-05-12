@@ -1,8 +1,5 @@
 "use client";
 
-import Button from "@components/Button";
-import { Input } from "@components/Input";
-import { Label } from "@components/Label";
 import {
   Modal,
   ModalClose,
@@ -11,11 +8,21 @@ import {
 } from "@components/modal/Modal";
 import ModalHeader from "@components/modal/ModalHeader";
 import { notify } from "@components/Notification";
-import Paragraph from "@components/Paragraph";
 import { useApiCall } from "@utils/api";
 import { CableIcon } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { useSWRConfig } from "swr";
+import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
+import OzLabel from "@/components/v2/OzLabel";
+import {
+  OzSelect,
+  OzSelectContent,
+  OzSelectItem,
+  OzSelectTrigger,
+  OzSelectValue,
+} from "@/components/v2/OzSelect";
+import OzTextarea from "@/components/v2/OzTextarea";
 import {
   FlowExport,
   FlowExportInput,
@@ -268,8 +275,9 @@ export default function FlowExportModal({
 
         <div className="px-8 pt-3 pb-6 grid gap-4">
           <div>
-            <Label>Name</Label>
-            <Input
+            <OzLabel htmlFor="flow-export-name">Name</OzLabel>
+            <OzInput
+              id="flow-export-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="prod-elastic"
@@ -277,21 +285,31 @@ export default function FlowExportModal({
           </div>
 
           <div>
-            <Label>Type</Label>
-            <select
+            <OzLabel>Type</OzLabel>
+            <OzSelect
               value={type}
+              onValueChange={(v) => setType(v as FlowExportType)}
               disabled={isEdit}
-              onChange={(e) => setType(e.target.value as FlowExportType)}
-              className="w-full rounded-md border border-nb-gray-700 bg-nb-gray-940 px-3 py-2 text-sm"
             >
-              <option value="elastic">Elasticsearch (SIEM)</option>
-              <option value="datadog">Datadog Logs Intake (SIEM/NPM)</option>
-              <option value="s3">
-                S3 / R2 / B2 / GCS Interop / MinIO (cold archive)
-              </option>
-              <option value="gcs">Google Cloud Storage native (cold archive)</option>
-              <option value="http">HTTP webhook</option>
-            </select>
+              <OzSelectTrigger>
+                <OzSelectValue />
+              </OzSelectTrigger>
+              <OzSelectContent>
+                <OzSelectItem value="elastic">
+                  Elasticsearch (SIEM)
+                </OzSelectItem>
+                <OzSelectItem value="datadog">
+                  Datadog Logs Intake (SIEM/NPM)
+                </OzSelectItem>
+                <OzSelectItem value="s3">
+                  S3 / R2 / B2 / GCS Interop / MinIO (cold archive)
+                </OzSelectItem>
+                <OzSelectItem value="gcs">
+                  Google Cloud Storage native (cold archive)
+                </OzSelectItem>
+                <OzSelectItem value="http">HTTP webhook</OzSelectItem>
+              </OzSelectContent>
+            </OzSelect>
           </div>
 
           {type === "elastic" && (
@@ -330,8 +348,9 @@ export default function FlowExportModal({
 
           {type === "http" && (
             <div>
-              <Label>URL</Label>
-              <Input
+              <OzLabel htmlFor="flow-http-url">URL</OzLabel>
+              <OzInput
+                id="flow-http-url"
                 value={httpURL}
                 onChange={(e) => setHTTPURL(e.target.value)}
                 placeholder="https://example.com/ingest"
@@ -342,26 +361,30 @@ export default function FlowExportModal({
           {type === "datadog" && (
             <>
               <div>
-                <Label>Site</Label>
-                <select
-                  value={ddSite}
-                  onChange={(e) => setDdSite(e.target.value)}
-                  className="w-full rounded-md border border-nb-gray-700 bg-nb-gray-940 px-3 py-2 text-sm"
-                >
-                  <option value="us1">US1 (datadoghq.com)</option>
-                  <option value="us3">US3</option>
-                  <option value="us5">US5</option>
-                  <option value="eu1">EU1 (datadoghq.eu)</option>
-                  <option value="ap1">AP1</option>
-                </select>
-                <Paragraph className="text-xs text-nb-gray-400 mt-1">
+                <OzLabel>Site</OzLabel>
+                <OzSelect value={ddSite} onValueChange={setDdSite}>
+                  <OzSelectTrigger>
+                    <OzSelectValue />
+                  </OzSelectTrigger>
+                  <OzSelectContent>
+                    <OzSelectItem value="us1">
+                      US1 (datadoghq.com)
+                    </OzSelectItem>
+                    <OzSelectItem value="us3">US3</OzSelectItem>
+                    <OzSelectItem value="us5">US5</OzSelectItem>
+                    <OzSelectItem value="eu1">EU1 (datadoghq.eu)</OzSelectItem>
+                    <OzSelectItem value="ap1">AP1</OzSelectItem>
+                  </OzSelectContent>
+                </OzSelect>
+                <p className="text-xs text-oz2-text-muted mt-1.5">
                   Pick the site your Datadog org lives on — sending to
                   the wrong site silently 401s.
-                </Paragraph>
+                </p>
               </div>
               <div>
-                <Label>API key</Label>
-                <Input
+                <OzLabel htmlFor="flow-dd-key">API key</OzLabel>
+                <OzInput
+                  id="flow-dd-key"
                   type="password"
                   value={ddAPIKey}
                   onChange={(e) => setDdAPIKey(e.target.value)}
@@ -370,16 +393,18 @@ export default function FlowExportModal({
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Service</Label>
-                  <Input
+                  <OzLabel htmlFor="flow-dd-service">Service</OzLabel>
+                  <OzInput
+                    id="flow-dd-service"
                     value={ddService}
                     onChange={(e) => setDdService(e.target.value)}
                     placeholder="openzro-flow"
                   />
                 </div>
                 <div>
-                  <Label>Tags</Label>
-                  <Input
+                  <OzLabel htmlFor="flow-dd-tags">Tags</OzLabel>
+                  <OzInput
+                    id="flow-dd-tags"
                     value={ddTags}
                     onChange={(e) => setDdTags(e.target.value)}
                     placeholder="env:prod,team:secops"
@@ -387,15 +412,18 @@ export default function FlowExportModal({
                 </div>
               </div>
               <div>
-                <Label>URL override (optional)</Label>
-                <Input
+                <OzLabel htmlFor="flow-dd-url" optional>
+                  URL override
+                </OzLabel>
+                <OzInput
+                  id="flow-dd-url"
                   value={ddURL}
                   onChange={(e) => setDdURL(e.target.value)}
                   placeholder="https://datadog-proxy.internal"
                 />
-                <Paragraph className="text-xs text-nb-gray-400 mt-1">
+                <p className="text-xs text-oz2-text-muted mt-1.5">
                   Only when proxying through an internal log forwarder.
-                </Paragraph>
+                </p>
               </div>
             </>
           )}
@@ -403,58 +431,74 @@ export default function FlowExportModal({
           {type === "gcs" && (
             <>
               <div>
-                <Label>Bucket</Label>
-                <Input
+                <OzLabel htmlFor="flow-gcs-bucket">Bucket</OzLabel>
+                <OzInput
+                  id="flow-gcs-bucket"
                   value={gcsBucket}
                   onChange={(e) => setGcsBucket(e.target.value)}
                   placeholder="openzro-flow-archive"
                 />
               </div>
               <div>
-                <Label>Prefix (optional)</Label>
-                <Input
+                <OzLabel htmlFor="flow-gcs-prefix" optional>
+                  Prefix
+                </OzLabel>
+                <OzInput
+                  id="flow-gcs-prefix"
                   value={gcsPrefix}
                   onChange={(e) => setGcsPrefix(e.target.value)}
                   placeholder="openzro/prod"
                 />
               </div>
               <div>
-                <Label>Project ID (optional)</Label>
-                <Input
+                <OzLabel htmlFor="flow-gcs-project" optional>
+                  Project ID
+                </OzLabel>
+                <OzInput
+                  id="flow-gcs-project"
                   value={gcsProjectID}
                   onChange={(e) => setGcsProjectID(e.target.value)}
                   placeholder="my-gcp-project"
                 />
               </div>
               <div>
-                <Label>Authentication</Label>
-                <select
+                <OzLabel>Authentication</OzLabel>
+                <OzSelect
                   value={gcsAuthMode}
-                  onChange={(e) =>
-                    setGcsAuthMode(
-                      e.target.value as "adc" | "file" | "json",
-                    )
+                  onValueChange={(v) =>
+                    setGcsAuthMode(v as "adc" | "file" | "json")
                   }
-                  className="w-full rounded-md border border-nb-gray-700 bg-nb-gray-940 px-3 py-2 text-sm"
                 >
-                  <option value="adc">
-                    Application Default Credentials (Workload Identity, GKE,
-                    Cloud Run, gcloud)
-                  </option>
-                  <option value="file">Service Account JSON (file path)</option>
-                  <option value="json">Service Account JSON (inline)</option>
-                </select>
-                <Paragraph className="text-xs text-nb-gray-400 mt-1">
+                  <OzSelectTrigger>
+                    <OzSelectValue />
+                  </OzSelectTrigger>
+                  <OzSelectContent>
+                    <OzSelectItem value="adc">
+                      Application Default Credentials (Workload Identity, GKE,
+                      Cloud Run, gcloud)
+                    </OzSelectItem>
+                    <OzSelectItem value="file">
+                      Service Account JSON (file path)
+                    </OzSelectItem>
+                    <OzSelectItem value="json">
+                      Service Account JSON (inline)
+                    </OzSelectItem>
+                  </OzSelectContent>
+                </OzSelect>
+                <p className="text-xs text-oz2-text-muted mt-1.5">
                   ADC is the recommended posture inside GCP — no
                   credential files in the container, IAM bound to the
                   workload identity. Self-host outside GCP uses the
                   file or inline JSON.
-                </Paragraph>
+                </p>
               </div>
               {gcsAuthMode === "file" && (
                 <div>
-                  <Label>Credentials file path</Label>
-                  <Input
+                  <OzLabel htmlFor="flow-gcs-cred-file">
+                    Credentials file path
+                  </OzLabel>
+                  <OzInput
+                    id="flow-gcs-cred-file"
                     value={gcsCredFile}
                     onChange={(e) => setGcsCredFile(e.target.value)}
                     placeholder={
@@ -467,15 +511,18 @@ export default function FlowExportModal({
               )}
               {gcsAuthMode === "json" && (
                 <div>
-                  <Label>Service account JSON</Label>
-                  <textarea
+                  <OzLabel htmlFor="flow-gcs-cred-json">
+                    Service account JSON
+                  </OzLabel>
+                  <OzTextarea
+                    id="flow-gcs-cred-json"
                     value={gcsCredJSON}
                     onChange={(e) => setGcsCredJSON(e.target.value)}
                     placeholder={
                       isEdit ? "(unchanged)" : '{"type":"service_account",...}'
                     }
                     rows={6}
-                    className="w-full rounded-md border border-nb-gray-700 bg-nb-gray-940 px-3 py-2 text-xs font-mono"
+                    className="font-mono text-xs"
                   />
                 </div>
               )}
@@ -485,11 +532,11 @@ export default function FlowExportModal({
 
         <ModalFooter className="items-center gap-3">
           <ModalClose asChild>
-            <Button variant="secondary">Cancel</Button>
+            <OzButton variant="default">Cancel</OzButton>
           </ModalClose>
-          <Button variant="primary" onClick={onSave} disabled={saving}>
+          <OzButton variant="primary" onClick={onSave} disabled={saving}>
             {saving ? "Saving..." : isEdit ? "Save changes" : "Create"}
-          </Button>
+          </OzButton>
         </ModalFooter>
       </ModalContent>
     </Modal>
@@ -524,28 +571,33 @@ function ElasticForm({
   return (
     <>
       <div>
-        <Label>Cluster URL</Label>
-        <Input
+        <OzLabel htmlFor="flow-elastic-url">Cluster URL</OzLabel>
+        <OzInput
+          id="flow-elastic-url"
           value={url}
           onChange={(e) => setURL(e.target.value)}
           placeholder="https://es.example.com:9200"
         />
       </div>
       <div>
-        <Label>Index (optional)</Label>
-        <Input
+        <OzLabel htmlFor="flow-elastic-index" optional>
+          Index
+        </OzLabel>
+        <OzInput
+          id="flow-elastic-index"
           value={index}
           onChange={(e) => setIndex(e.target.value)}
           placeholder="openzro-flow"
         />
       </div>
-      <Paragraph className="text-xs text-nb-gray-300">
+      <p className="text-xs text-oz2-text-muted">
         Provide an API key (preferred) OR a username + password.
         {isEdit && " Leave blank to keep the existing credential."}
-      </Paragraph>
+      </p>
       <div>
-        <Label>API key</Label>
-        <Input
+        <OzLabel htmlFor="flow-elastic-key">API key</OzLabel>
+        <OzInput
+          id="flow-elastic-key"
           type="password"
           value={apiKey}
           onChange={(e) => setAPIKey(e.target.value)}
@@ -554,15 +606,18 @@ function ElasticForm({
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <Label>Username</Label>
-          <Input
+          <OzLabel htmlFor="flow-elastic-user">Username</OzLabel>
+          <OzInput
+            id="flow-elastic-user"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
+            placeholder={isEdit ? "(unchanged)" : ""}
           />
         </div>
         <div>
-          <Label>Password</Label>
-          <Input
+          <OzLabel htmlFor="flow-elastic-pass">Password</OzLabel>
+          <OzInput
+            id="flow-elastic-pass"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -633,10 +688,12 @@ function S3Form({
   setPrefix: (v: string) => void;
   isEdit: boolean;
 }) {
+  const [preset, setPreset] = useState("aws");
   const onPresetChange = (id: string) => {
-    const preset = s3Presets.find((p) => p.id === id);
-    if (!preset) return;
-    setEndpoint(preset.endpoint);
+    setPreset(id);
+    const next = s3Presets.find((p) => p.id === id);
+    if (!next) return;
+    setEndpoint(next.endpoint);
     if (id === "gcs" && !region) setRegion("auto");
     if (id === "r2" && !region) setRegion("auto");
   };
@@ -644,26 +701,28 @@ function S3Form({
   return (
     <>
       <div>
-        <Label>Provider</Label>
-        <select
-          onChange={(e) => onPresetChange(e.target.value)}
-          className="w-full rounded-md border border-nb-gray-700 bg-nb-gray-940 px-3 py-2 text-sm"
-          defaultValue="aws"
-        >
-          {s3Presets.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.label}
-            </option>
-          ))}
-        </select>
-        <Paragraph className="text-xs text-nb-gray-400 mt-1">
+        <OzLabel>Provider</OzLabel>
+        <OzSelect value={preset} onValueChange={onPresetChange}>
+          <OzSelectTrigger>
+            <OzSelectValue />
+          </OzSelectTrigger>
+          <OzSelectContent>
+            {s3Presets.map((p) => (
+              <OzSelectItem key={p.id} value={p.id}>
+                {p.label}
+              </OzSelectItem>
+            ))}
+          </OzSelectContent>
+        </OzSelect>
+        <p className="text-xs text-oz2-text-muted mt-1.5">
           GCS works via Cloud Storage&apos;s Interoperability mode —
           enable it in the GCP console and mint an HMAC key.
-        </Paragraph>
+        </p>
       </div>
       <div>
-        <Label>Bucket</Label>
-        <Input
+        <OzLabel htmlFor="flow-s3-bucket">Bucket</OzLabel>
+        <OzInput
+          id="flow-s3-bucket"
           value={bucket}
           onChange={(e) => setBucket(e.target.value)}
           placeholder="openzro-flow-archive"
@@ -671,41 +730,47 @@ function S3Form({
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <Label>Region</Label>
-          <Input
+          <OzLabel htmlFor="flow-s3-region">Region</OzLabel>
+          <OzInput
+            id="flow-s3-region"
             value={region}
             onChange={(e) => setRegion(e.target.value)}
             placeholder="us-east-1"
           />
         </div>
         <div>
-          <Label>Endpoint (optional for AWS)</Label>
-          <Input
+          <OzLabel htmlFor="flow-s3-endpoint" optional>
+            Endpoint (AWS uses default)
+          </OzLabel>
+          <OzInput
+            id="flow-s3-endpoint"
             value={endpoint}
             onChange={(e) => setEndpoint(e.target.value)}
             placeholder="https://storage.googleapis.com"
           />
         </div>
       </div>
-      <Paragraph className="text-xs text-nb-gray-300">
+      <p className="text-xs text-oz2-text-muted">
         Provide HMAC-style credentials, or leave blank for AWS to use
         the SDK default credential chain (env vars, profile, IAM role).
         For GCS Interop and Cloudflare R2, the access/secret keys are
         required.
         {isEdit && " Leave blank to keep the existing values."}
-      </Paragraph>
+      </p>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <Label>Access key</Label>
-          <Input
+          <OzLabel htmlFor="flow-s3-access">Access key</OzLabel>
+          <OzInput
+            id="flow-s3-access"
             value={accessKey}
             onChange={(e) => setAccessKey(e.target.value)}
             placeholder={isEdit ? "(unchanged)" : ""}
           />
         </div>
         <div>
-          <Label>Secret key</Label>
-          <Input
+          <OzLabel htmlFor="flow-s3-secret">Secret key</OzLabel>
+          <OzInput
+            id="flow-s3-secret"
             type="password"
             value={secretKey}
             onChange={(e) => setSecretKey(e.target.value)}
@@ -714,8 +779,11 @@ function S3Form({
         </div>
       </div>
       <div>
-        <Label>Prefix (optional)</Label>
-        <Input
+        <OzLabel htmlFor="flow-s3-prefix" optional>
+          Prefix
+        </OzLabel>
+        <OzInput
+          id="flow-s3-prefix"
           value={prefix}
           onChange={(e) => setPrefix(e.target.value)}
           placeholder="openzro/prod"

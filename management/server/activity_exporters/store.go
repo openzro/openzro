@@ -144,6 +144,13 @@ func (in *SaveInput) MergeIncomingSecret(prev any) {
 			if in.Elastic.APIKey == "" {
 				in.Elastic.APIKey = pc.APIKey
 			}
+			// Username is not strictly a secret but the public projection
+			// only exposes AuthMode, so the dashboard cannot pre-fill it
+			// either. Treat empty-on-update as "leave as is" to match the
+			// Password/APIKey convention.
+			if in.Elastic.Username == "" {
+				in.Elastic.Username = pc.Username
+			}
 			if in.Elastic.Password == "" {
 				in.Elastic.Password = pc.Password
 			}

@@ -1,10 +1,5 @@
 "use client";
 
-import Button from "@components/Button";
-import HelpText from "@components/HelpText";
-import InlineLink from "@components/InlineLink";
-import { Input } from "@components/Input";
-import { Label } from "@components/Label";
 import {
   Modal,
   ModalClose,
@@ -13,13 +8,15 @@ import {
 } from "@components/modal/Modal";
 import ModalHeader from "@components/modal/ModalHeader";
 import { notify } from "@components/Notification";
-import Paragraph from "@components/Paragraph";
 import Separator from "@components/Separator";
-import { Textarea } from "@components/Textarea";
 import { useApiCall } from "@utils/api";
 import { ExternalLinkIcon, PlusCircle } from "lucide-react";
 import React, { useState } from "react";
 import NetworkRoutesIcon from "@/assets/icons/NetworkRoutesIcon";
+import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
+import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
+import OzTextarea from "@/components/v2/OzTextarea";
 import { Network } from "@/interfaces/Network";
 
 type Props = {
@@ -102,11 +99,14 @@ const Content = ({ network, onCreated, onUpdated }: ContentProps) => {
         color={"openzro"}
       />
       <Separator />
-      <div className={"px-8 flex-col flex gap-6 py-6"}>
+      <div className={"px-8 flex flex-col gap-6 py-6"}>
         <div>
-          <Label>Network Name</Label>
-          <HelpText>Provide a unique name for the network.</HelpText>
-          <Input
+          <OzLabel htmlFor="network-name">Network Name</OzLabel>
+          <OzHelpText className="mb-2">
+            Provide a unique name for the network.
+          </OzHelpText>
+          <OzInput
+            id="network-name"
             tabIndex={0}
             placeholder={"e.g., Office Network"}
             value={name}
@@ -114,12 +114,15 @@ const Content = ({ network, onCreated, onUpdated }: ContentProps) => {
           />
         </div>
         <div>
-          <Label>Description (optional)</Label>
-          <HelpText>
+          <OzLabel htmlFor="network-description" optional>
+            Description
+          </OzLabel>
+          <OzHelpText className="mb-2">
             Write a short description to add more context to this network.
-          </HelpText>
-          <Textarea
-            placeholder={"e.g., Berlin, Münzstraße 12 "}
+          </OzHelpText>
+          <OzTextarea
+            id="network-description"
+            placeholder={"e.g., Berlin, Münzstraße 12"}
             value={description}
             rows={3}
             onChange={(e) => setDescription(e.target.value)}
@@ -129,23 +132,25 @@ const Content = ({ network, onCreated, onUpdated }: ContentProps) => {
 
       <ModalFooter className={"items-center"}>
         <div className={"w-full"}>
-          <Paragraph className={"text-sm mt-auto"}>
-            Learn more about
-            <InlineLink
+          <p className={"text-sm mt-auto text-oz2-text-muted"}>
+            Learn more about{" "}
+            <a
               href={"https://docs.openzro.io/how-to/networks"}
               target={"_blank"}
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-oz2-acc-text underline-offset-2 hover:underline"
             >
               Networks
               <ExternalLinkIcon size={12} />
-            </InlineLink>
-          </Paragraph>
+            </a>
+          </p>
         </div>
         <div className={"flex gap-3 w-full justify-end"}>
           <ModalClose asChild={true}>
-            <Button variant={"secondary"}>Cancel</Button>
+            <OzButton variant={"default"}>Cancel</OzButton>
           </ModalClose>
 
-          <Button
+          <OzButton
             variant={"primary"}
             data-cy={"submit-route"}
             disabled={!name}
@@ -159,7 +164,7 @@ const Content = ({ network, onCreated, onUpdated }: ContentProps) => {
                 Add Network
               </>
             )}
-          </Button>
+          </OzButton>
         </div>
       </ModalFooter>
     </ModalContent>

@@ -29,6 +29,67 @@
   --oz-bg-dark:       var(--oz-ink);
   --oz-border:        var(--oz-violet-200);
 
+  /* ───── v2 design tokens (Notion/Arc-flavored redesign) ─────────
+     New semantic layer that the redesigned primitives consume. The
+     legacy --oz-* tokens above stay UNCHANGED so the 166 components
+     still rendering in the old language don't shift. New components
+     opt in via the `oz-*` Tailwind classes wired in tailwind.config.ts.
+
+     Source: design_handoff_openzro_dashboard/design/tokens.css
+     (Claude Design handoff). Light = warm paper + soft violet
+     accents; dark = violet-anchored, slightly warmer than pure ink. */
+
+  /* Surfaces */
+  --ozv2-bg:           #fbfaf7;        /* warm paper page bg */
+  --ozv2-bg-elev:      #ffffff;        /* elevated surface */
+  --ozv2-bg-soft:      #f3f1ec;        /* sidebar / muted row */
+  --ozv2-bg-sunken:    #f7f5f0;        /* input bg, sub-cards */
+  --ozv2-surface:      #ffffff;        /* card body */
+  --ozv2-surface-2:    #fbfaf7;        /* card alt */
+
+  /* Interaction overlays */
+  --ozv2-hover:        rgba(15,10,31,0.04);
+  --ozv2-active:       rgba(124,58,237,0.08);
+
+  /* Borders */
+  --ozv2-border:        #e9e5db;
+  --ozv2-border-soft:   #f0ede4;
+  --ozv2-border-strong: #d9d3c3;
+
+  /* Text */
+  --ozv2-text:          #1a1623;       /* slightly violet-tinted ink */
+  --ozv2-text-2:        #3d3548;       /* secondary */
+  --ozv2-text-muted:    #6f6577;       /* tertiary */
+  --ozv2-text-faint:    #9c93a3;       /* hints, mono labels */
+  --ozv2-text-on-acc:   #ffffff;
+
+  /* Accent — same v600/v700 anchors as the legacy --oz-primary,
+     restated under the v2 namespace for clarity. */
+  --ozv2-acc:           var(--oz-violet-600);
+  --ozv2-acc-hover:     var(--oz-violet-700);
+  --ozv2-acc-soft:      #efeafd;
+  --ozv2-acc-soft-2:    #e4dcfc;
+  --ozv2-acc-text:      var(--oz-violet-700);
+
+  /* Status (text + bg pairs for filled pills) */
+  --ozv2-ok:            #0e9f6e;
+  --ozv2-warn:          #b45309;
+  --ozv2-err:           #dc2626;
+  --ozv2-ok-bg:         #dcfce7;
+  --ozv2-warn-bg:       #fef3c7;
+  --ozv2-err-bg:        #fee2e2;
+
+  /* Status dots (StatusDot primitive — halo via box-shadow) */
+  --ozv2-dot-on:        #10b981;
+  --ozv2-dot-off:       #a8a29e;
+  --ozv2-dot-warn:      #f59e0b;
+
+  /* Shadows — token-driven elevation */
+  --ozv2-shadow-sm:    0 1px 2px rgba(35,28,55,0.04), 0 1px 1px rgba(35,28,55,0.02);
+  --ozv2-shadow-md:    0 1px 2px rgba(35,28,55,0.04), 0 4px 12px rgba(35,28,55,0.05);
+  --ozv2-shadow-lg:    0 1px 2px rgba(35,28,55,0.04), 0 12px 28px rgba(35,28,55,0.07);
+  --ozv2-shadow-acc:   0 1px 0 rgba(255,255,255,0.18) inset, 0 4px 14px rgba(124,58,237,0.22);
+
   /* nb-gray-* RGB channels, light mode (mirror of dark scale). The
      same `bg-nb-gray-950` class that paints the page bg dark in dark
      mode paints it light here — see tailwind.config.ts where every
@@ -92,6 +153,60 @@
   --nb-gray-940: 19 16 42;
   --nb-gray-950: 15 10 31;     /* deepest surface (page bg, oz-ink) */
   --nb-gray-DEFAULT: 15 10 31;
+
+  /* v2 dark overrides — see :root for the light values + token
+     descriptions. Surfaces, hover/active overlays, borders, text
+     hierarchy and shadows all flip here; the brand violet scale
+     (--oz-violet-*) and the accent semantics (--ozv2-acc) stay
+     anchored to v600 (with v400/v300 used in dark per --ozv2-acc-text). */
+
+  /* Surfaces */
+  --ozv2-bg:           #0d091a;
+  --ozv2-bg-elev:      #14102a;
+  --ozv2-bg-soft:      #100c22;
+  --ozv2-bg-sunken:    #0a0716;
+  --ozv2-surface:      #14102a;
+  --ozv2-surface-2:    #1a1538;
+
+  /* Interaction overlays */
+  --ozv2-hover:        rgba(196,181,253,0.06);
+  --ozv2-active:       rgba(139,92,246,0.16);
+
+  /* Borders */
+  --ozv2-border:        rgba(196,181,253,0.10);
+  --ozv2-border-soft:   rgba(196,181,253,0.06);
+  --ozv2-border-strong: rgba(196,181,253,0.18);
+
+  /* Text */
+  --ozv2-text:          #f4f1fb;
+  --ozv2-text-2:        #d8d2e6;
+  --ozv2-text-muted:    #9d96b0;
+  --ozv2-text-faint:    #6c6481;
+
+  /* Accent — same v400/v300 anchors as the legacy dark --oz-primary */
+  --ozv2-acc:           var(--oz-violet-400);
+  --ozv2-acc-hover:     var(--oz-violet-300);
+  --ozv2-acc-soft:      rgba(139,92,246,0.14);
+  --ozv2-acc-soft-2:    rgba(139,92,246,0.22);
+  --ozv2-acc-text:      var(--oz-violet-300);
+
+  /* Status */
+  --ozv2-ok:            #34d399;
+  --ozv2-warn:          #fbbf24;
+  --ozv2-err:           #f87171;
+  --ozv2-ok-bg:         rgba(16,185,129,0.14);
+  --ozv2-warn-bg:       rgba(245,158,11,0.16);
+  --ozv2-err-bg:        rgba(239,68,68,0.14);
+
+  --ozv2-dot-on:        #34d399;
+  --ozv2-dot-off:       #6c6481;
+  --ozv2-dot-warn:      #fbbf24;
+
+  /* Shadows — inset highlight + deep ambient on dark */
+  --ozv2-shadow-sm:    0 1px 0 rgba(255,255,255,0.02) inset;
+  --ozv2-shadow-md:    0 1px 0 rgba(255,255,255,0.02) inset, 0 8px 20px rgba(0,0,0,0.32);
+  --ozv2-shadow-lg:    0 1px 0 rgba(255,255,255,0.03) inset, 0 18px 40px rgba(0,0,0,0.5);
+  --ozv2-shadow-acc:   0 1px 0 rgba(255,255,255,0.18) inset, 0 4px 14px rgba(139,92,246,0.32);
 }
 
 /* Wordmark: open + Z + ro, with the middle Z heavier and brand-colored. */
@@ -138,6 +253,78 @@
 .oz-btn:focus-visible {
   outline: 2px solid var(--oz-violet-500);
   outline-offset: 2px;
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ * Flowbite focus-ring override — root cause of the "borda azul nos
+ * cantos quebrados" on every search-enabled dropdown, modal input,
+ * etc. The Flowbite plugin (loaded in tailwind.config.ts) injects a
+ * global rule:
+ *
+ *   [type='text']:focus, [type='email']:focus, …, select:focus,
+ *   textarea:focus {
+ *     --tw-ring-color: #1C64F2;   ← Flowbite blue-600
+ *     border-color:    #1C64F2;
+ *     box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow);
+ *   }
+ *
+ * That paints a 1-2px BLUE ring around every focused native form
+ * element across the dashboard — overriding the v2 focus tokens
+ * the per-component wrappers (OzInput / OzSelect / OzTextarea /
+ * PeerGroupSelector / Command popovers) try to apply.
+ *
+ * Strip it. v2 components own their own focus visuals via Tailwind
+ * utilities on the wrapper element (`focus-within:border-oz2-acc`,
+ * `focus-visible:ring-oz2-acc/30`, etc.). Leave outline alone so
+ * screen readers / high-contrast mode still get keyboard-focus
+ * affordance through the host element's `outline:none` or
+ * `focus-visible:` Tailwind rules.
+ * ────────────────────────────────────────────────────────────────── */
+[type='text']:focus,
+[type='email']:focus,
+[type='url']:focus,
+[type='password']:focus,
+[type='number']:focus,
+[type='date']:focus,
+[type='datetime-local']:focus,
+[type='month']:focus,
+[type='search']:focus,
+[type='tel']:focus,
+[type='time']:focus,
+[type='week']:focus,
+[multiple]:focus,
+textarea:focus,
+select:focus {
+  --tw-ring-color: transparent;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-ring-offset-shadow: 0 0 #0000;
+  /* border-color: inherit (the earlier value) fell through to text-
+   * color via the inherit chain, painting a thin dark border with
+   * mis-matched corners on focused cmdk inputs (PeerGroupSelector
+   * search, etc.). Make it explicitly transparent so Flowbite's
+   * default border-width can stay 1px without showing anything.
+   * v2 input wrappers paint their own border-on-focus via Tailwind
+   * focus utilities — they don't rely on this rule for affordance. */
+  border-color: transparent;
+  box-shadow: var(--tw-shadow, 0 0 #0000);
+}
+
+/* cmdk inputs (PeerGroupSelector search, PortSelector search, etc.)
+ * are nested inside an already-bordered popover surface and should
+ * never paint their own border. The above :focus override only fires
+ * while the input is focused — picking a CommandItem briefly steals
+ * focus and Flowbite's base 1px border flashes back in, leaving the
+ * "borda preta com falhas nos cantos" the operator sees. Nuke the
+ * border on cmdk inputs in every state so the surface stays clean.
+ * !important wins against Flowbite's class-level base rule.       */
+input[cmdk-input],
+input[cmdk-input]:focus,
+input[cmdk-input]:focus-visible {
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
 }
 
 h1 {
@@ -290,6 +477,14 @@ p {
 .animate-bg-scroll {
     animation: bg-scroll 4s linear infinite;
 }
+
+/* Slow rotation used by OzEmptyState's dashed mesh rings — the v2 paint
+   wants the motion barely-perceptible, so the rings are tied to one
+   shared keyframe spinning at different durations/directions. */
+@keyframes ozspin {
+    to { transform: rotate(360deg); }
+}
+
 .animate-bg-scroll-faster {
     animation: bg-scroll 1.8s linear infinite;
 }

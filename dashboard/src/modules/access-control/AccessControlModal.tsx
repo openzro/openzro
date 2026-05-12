@@ -1,32 +1,15 @@
 "use client";
 
-import Button from "@components/Button";
 import { Callout } from "@components/Callout";
 import FancyToggleSwitch from "@components/FancyToggleSwitch";
-import HelpText from "@components/HelpText";
-import InlineLink from "@components/InlineLink";
-import { Input } from "@components/Input";
-import { Label } from "@components/Label";
 import {
-  Modal,
   ModalClose,
   ModalContent,
   ModalFooter,
-  ModalTrigger,
 } from "@components/modal/Modal";
 import ModalHeader from "@components/modal/ModalHeader";
-import Paragraph from "@components/Paragraph";
 import { PeerGroupSelector } from "@components/PeerGroupSelector";
 import { PortSelector } from "@components/PortSelector";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@components/Select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/Tabs";
-import { Textarea } from "@components/Textarea";
 import PolicyDirection from "@components/ui/PolicyDirection";
 import { cn } from "@utils/helpers";
 import {
@@ -42,7 +25,25 @@ import {
   Text,
 } from "lucide-react";
 import React, { useMemo, useState } from "react";
+// useState is still used inside AccessControlModalContent (tab + form state).
 import AccessControlIcon from "@/assets/icons/AccessControlIcon";
+import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
+import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
+import {
+  OzSelect,
+  OzSelectContent,
+  OzSelectItem,
+  OzSelectTrigger,
+  OzSelectValue,
+} from "@/components/v2/OzSelect";
+import {
+  OzTabs,
+  OzTabsContent,
+  OzTabsList,
+  OzTabsTrigger,
+} from "@/components/v2/OzTabs";
+import OzTextarea from "@/components/v2/OzTextarea";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { Group } from "@/interfaces/Group";
 import { Policy, Protocol } from "@/interfaces/Policy";
@@ -51,60 +52,13 @@ import { useAccessControl } from "@/modules/access-control/useAccessControl";
 import { PostureCheckTab } from "@/modules/posture-checks/ui/PostureCheckTab";
 import { PostureCheckTabTrigger } from "@/modules/posture-checks/ui/PostureCheckTabTrigger";
 
-type Props = {
-  children?: React.ReactNode;
-};
-
-type UpdateModalProps = {
-  policy: Policy;
-  open: boolean;
-  onOpenChange?: (open: boolean) => void;
-  cell?: string;
-  postureCheckTemplates?: PostureCheck[];
-  onSuccess?: (policy: Policy) => void;
-  useSave?: boolean;
-  allowEditPeers?: boolean;
-};
-
-export default function AccessControlModal({ children }: Readonly<Props>) {
-  const [modal, setModal] = useState(false);
-
-  return (
-    <Modal open={modal} onOpenChange={setModal} key={modal ? 1 : 0}>
-      {children && <ModalTrigger asChild>{children}</ModalTrigger>}
-      {modal && <AccessControlModalContent onSuccess={() => setModal(false)} />}
-    </Modal>
-  );
-}
-
-export function AccessControlUpdateModal({
-  policy,
-  open,
-  onOpenChange,
-  cell,
-  postureCheckTemplates,
-  onSuccess,
-  useSave = true,
-  allowEditPeers,
-}: Readonly<UpdateModalProps>) {
-  return (
-    <Modal open={open} onOpenChange={onOpenChange} key={open ? 1 : 0}>
-      {open && (
-        <AccessControlModalContent
-          onSuccess={(p) => {
-            onOpenChange && onOpenChange(false);
-            onSuccess && onSuccess(p);
-          }}
-          policy={policy}
-          cell={cell}
-          postureCheckTemplates={postureCheckTemplates}
-          useSave={useSave}
-          allowEditPeers={allowEditPeers}
-        />
-      )}
-    </Modal>
-  );
-}
+// Only AccessControlModalContent is exported now. The standalone
+// AccessControlModal + AccessControlUpdateModal wrappers were used by
+// the legacy /access-control table — both are gone. Networks' multi-
+// step wizard (NetworkProvider) still composes this body inline
+// inside its own Modal so the wizard's post-policy "ask for routing
+// peer" continuation stays in the same modal stack instead of
+// navigating away to /access-control/new.
 
 type ModalProps = {
   onSuccess?: (p: Policy) => void;
@@ -214,74 +168,72 @@ export function AccessControlModalContent({
         color={"openzro"}
       />
 
-      <Tabs defaultValue={tab} onValueChange={(v) => setTab(v)} value={tab}>
-        <TabsList justify={"start"} className={"px-8"}>
-          <TabsTrigger value={"policy"}>
-            <ArrowRightLeft size={16} />
-            Policy
-          </TabsTrigger>
-          <PostureCheckTabTrigger disabled={continuePostureChecksDisabled} />
-          <TabsTrigger
-            value={"general"}
-            disabled={continuePostureChecksDisabled}
-          >
-            <Text
-              size={16}
-              className={
-                "text-nb-gray-500 group-data-[state=active]/trigger:text-openzro transition-all"
-              }
-            />
-            Name & Description
-          </TabsTrigger>
-        </TabsList>
+      <OzTabs defaultValue={tab} onValueChange={(v) => setTab(v)} value={tab}>
+        <div className="px-8">
+          <OzTabsList>
+            <OzTabsTrigger value={"policy"}>
+              <ArrowRightLeft size={16} />
+              Policy
+            </OzTabsTrigger>
+            <PostureCheckTabTrigger disabled={continuePostureChecksDisabled} />
+            <OzTabsTrigger
+              value={"general"}
+              disabled={continuePostureChecksDisabled}
+            >
+              <Text size={16} />
+              Name & Description
+            </OzTabsTrigger>
+          </OzTabsList>
+        </div>
 
-        <TabsContent value={"policy"} className={"pb-8"}>
+        <OzTabsContent value={"policy"} className={"pb-8 pt-3"}>
           <div className={"px-8 flex-col flex gap-6"}>
             <div
               className={"flex justify-between items-center"}
               data-cy={"protocol-wrapper"}
             >
               <div>
-                <Label>Protocol</Label>
-                <HelpText className={"max-w-sm"}>
+                <OzLabel>Protocol</OzLabel>
+                <OzHelpText className="max-w-sm mt-1">
                   Allow only specified network protocols. To change traffic
                   direction and ports, select{" "}
-                  <b className={"text-neutral-900 dark:text-white"}>TCP</b> or{" "}
-                  <b className={"text-neutral-900 dark:text-white"}>UDP</b>{" "}
-                  protocol.
-                </HelpText>
+                  <b className={"text-oz2-text"}>TCP</b> or{" "}
+                  <b className={"text-oz2-text"}>UDP</b> protocol.
+                </OzHelpText>
               </div>
-              <Select
-                value={protocol}
-                onValueChange={(v) => handleProtocolChange(v as Protocol)}
-                disabled={
-                  !permission.policies.update || !permission.policies.create
-                }
-              >
-                <SelectTrigger className="w-[140px]">
-                  <div
-                    className={"flex items-center gap-3"}
-                    data-cy={"protocol-select-button"}
-                  >
-                    <Share2 size={15} className={"text-nb-gray-300"} />
-                    <SelectValue placeholder="Select protocol..." />
-                  </div>
-                </SelectTrigger>
-                <SelectContent data-cy={"protocol-selection"}>
-                  <SelectItem value="all">ALL</SelectItem>
-                  <SelectItem value="tcp">TCP</SelectItem>
-                  <SelectItem value="udp">UDP</SelectItem>
-                  <SelectItem value="icmp">ICMP</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="w-[110px] shrink-0">
+                <OzSelect
+                  value={protocol}
+                  onValueChange={(v) => handleProtocolChange(v as Protocol)}
+                  disabled={
+                    !permission.policies.update || !permission.policies.create
+                  }
+                >
+                  <OzSelectTrigger>
+                    <div
+                      className={"flex items-center gap-2"}
+                      data-cy={"protocol-select-button"}
+                    >
+                      <Share2 size={14} className={"text-oz2-text-faint"} />
+                      <OzSelectValue placeholder="Protocol" />
+                    </div>
+                  </OzSelectTrigger>
+                  <OzSelectContent data-cy={"protocol-selection"}>
+                    <OzSelectItem value="all">ALL</OzSelectItem>
+                    <OzSelectItem value="tcp">TCP</OzSelectItem>
+                    <OzSelectItem value="udp">UDP</OzSelectItem>
+                    <OzSelectItem value="icmp">ICMP</OzSelectItem>
+                  </OzSelectContent>
+                </OzSelect>
+              </div>
             </div>
 
             <div className={"flex gap-6 items-center"}>
               <div className={"w-full self-start"}>
-                <Label className={"mb-2"}>
+                <OzLabel className={"mb-2"}>
                   <FolderDown size={15} />
                   Source
-                </Label>
+                </OzLabel>
                 <PeerGroupSelector
                   dataCy={"source-group-selector"}
                   showPeerCount={allowEditPeers}
@@ -305,10 +257,10 @@ export function AccessControlModalContent({
               />
 
               <div className={"w-full self-start"}>
-                <Label className={"mb-2"}>
+                <OzLabel className={"mb-2"}>
                   <FolderInput size={15} />
                   Destination
-                </Label>
+                </OzLabel>
                 <PeerGroupSelector
                   dataCy={"destination-group-selector"}
                   showRoutes={true}
@@ -337,7 +289,7 @@ export function AccessControlModalContent({
                   icon={
                     <AlertCircleIcon
                       size={14}
-                      className={"shrink-0 relative top-[3px] text-openzro"}
+                      className={"shrink-0 relative top-[3px] text-oz2-acc"}
                     />
                   }
                   className="mb-4"
@@ -353,7 +305,7 @@ export function AccessControlModalContent({
                 icon={
                   <AlertCircleIcon
                     size={14}
-                    className={"shrink-0 relative top-[3px] text-openzro"}
+                    className={"shrink-0 relative top-[3px] text-oz2-acc"}
                   />
                 }
                 className="mb-4"
@@ -387,16 +339,16 @@ export function AccessControlModalContent({
               )}
             >
               <div>
-                <Label className={"flex items-center gap-2"}>
+                <OzLabel className={"flex items-center gap-2"}>
                   <Shield size={14} />
                   Ports
-                </Label>
-                <HelpText>
+                </OzLabel>
+                <OzHelpText className="mt-1">
                   Allow network traffic and access only to specified ports.
                   Select ports or port ranges between 1 and 65535.
-                </HelpText>
+                </OzHelpText>
               </div>
-              <div className={""}>
+              <div>
                 <PortSelector
                   showAll={true}
                   ports={ports}
@@ -423,20 +375,21 @@ export function AccessControlModalContent({
               helpText={"Use this switch to enable or disable the policy."}
             />
           </div>
-        </TabsContent>
+        </OzTabsContent>
         <PostureCheckTab
           isLoading={isPostureChecksLoading}
           postureChecks={postureChecks}
           setPostureChecks={setPostureChecks}
         />
-        <TabsContent value={"general"} className={"px-8 pb-6"}>
+        <OzTabsContent value={"general"} className={"px-8 pb-6 pt-3"}>
           <div className={"flex flex-col gap-6"}>
             <div>
-              <Label>Name of the Rule</Label>
-              <HelpText>
+              <OzLabel htmlFor="policy-name">Name of the Rule</OzLabel>
+              <OzHelpText className="mb-2">
                 Set an easily identifiable name for your policy.
-              </HelpText>
-              <Input
+              </OzHelpText>
+              <OzInput
+                id="policy-name"
                 autoFocus={true}
                 tabIndex={0}
                 value={name}
@@ -449,11 +402,14 @@ export function AccessControlModalContent({
               />
             </div>
             <div>
-              <Label>Description (optional)</Label>
-              <HelpText>
+              <OzLabel htmlFor="policy-description" optional>
+                Description
+              </OzLabel>
+              <OzHelpText className="mb-2">
                 Write a short description to add more context to this policy.
-              </HelpText>
-              <Textarea
+              </OzHelpText>
+              <OzTextarea
+                id="policy-description"
                 value={description}
                 data-cy={"policy-description"}
                 onChange={(e) => setDescription(e.target.value)}
@@ -467,67 +423,72 @@ export function AccessControlModalContent({
               />
             </div>
           </div>
-        </TabsContent>
-      </Tabs>
+        </OzTabsContent>
+      </OzTabs>
 
       <ModalFooter className={"items-center"}>
         <div className={"w-full"}>
-          <Paragraph className={"text-sm mt-auto"}>
-            Learn more about
-            <InlineLink
+          <p className={"text-sm mt-auto text-oz2-text-muted"}>
+            Learn more about{" "}
+            <a
               href={"https://docs.openzro.io/how-to/manage-network-access"}
               target={"_blank"}
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-oz2-acc-text underline-offset-2 hover:underline"
             >
               Access Controls
               <ExternalLinkIcon size={12} />
-            </InlineLink>
-          </Paragraph>
+            </a>
+          </p>
         </div>
         <div className={"flex gap-3 w-full justify-end"}>
           {!policy ? (
             <>
               {tab == "policy" && (
                 <ModalClose asChild={true}>
-                  <Button variant={"secondary"}>Cancel</Button>
+                  <OzButton variant={"default"}>Cancel</OzButton>
                 </ModalClose>
               )}
 
               {tab == "posture_checks" && (
-                <Button variant={"secondary"} onClick={() => setTab("policy")}>
+                <OzButton
+                  variant={"default"}
+                  onClick={() => setTab("policy")}
+                >
                   Back
-                </Button>
+                </OzButton>
               )}
 
               {tab == "policy" && (
-                <Button
+                <OzButton
                   variant={"primary"}
                   onClick={() => setTab("posture_checks")}
                   disabled={continuePostureChecksDisabled}
                 >
                   Continue
-                </Button>
+                </OzButton>
               )}
 
               {tab == "posture_checks" && (
-                <Button
+                <OzButton
                   variant={"primary"}
                   onClick={() => setTab("general")}
                   disabled={continuePostureChecksDisabled}
                 >
                   Continue
-                </Button>
+                </OzButton>
               )}
 
               {tab == "general" && (
                 <>
-                  <Button
-                    variant={"secondary"}
+                  <OzButton
+                    variant={"default"}
                     onClick={() => setTab("posture_checks")}
                   >
                     Back
-                  </Button>
+                  </OzButton>
 
-                  <Button
+                  <OzButton
                     variant={"primary"}
                     disabled={submitDisabled || !permission.policies.create}
                     onClick={submit}
@@ -535,16 +496,16 @@ export function AccessControlModalContent({
                   >
                     <PlusCircle size={16} />
                     Add Policy
-                  </Button>
+                  </OzButton>
                 </>
               )}
             </>
           ) : (
             <>
               <ModalClose asChild={true}>
-                <Button variant={"secondary"}>Cancel</Button>
+                <OzButton variant={"default"}>Cancel</OzButton>
               </ModalClose>
-              <Button
+              <OzButton
                 variant={"primary"}
                 disabled={submitDisabled || !permission.policies.update}
                 onClick={() => {
@@ -556,7 +517,7 @@ export function AccessControlModalContent({
                 }}
               >
                 Save Changes
-              </Button>
+              </OzButton>
             </>
           )}
         </div>

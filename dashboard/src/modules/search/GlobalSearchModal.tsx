@@ -1,5 +1,4 @@
 import { DropdownInput } from "@components/DropdownInput";
-import Kbd from "@components/Kbd";
 import { Modal, ModalContent } from "@components/modal/Modal";
 import { VirtualScrollAreaList } from "@components/VirtualScrollAreaList";
 import { useSearch } from "@hooks/useSearch";
@@ -184,7 +183,7 @@ const GlobalSearchModalContent = ({ open, setOpen }: Props) => {
               }}
               renderHeading={(item) => {
                 return (
-                  <div className={"text-xs text-nb-gray-400 px-4 py-2"}>
+                  <div className="px-4 py-2 font-mono text-[10.5px] uppercase tracking-[0.08em] text-oz2-text-faint">
                     {item.type === SearchType.Network &&
                       `Networks (${networksCount})`}
                     {item.type === SearchType.NetworkResource &&
@@ -196,56 +195,40 @@ const GlobalSearchModalContent = ({ open, setOpen }: Props) => {
                 const network = findNetworkByResourceId(item.id);
 
                 return (
-                  <div className={"flex justify-between items-center w-full"}>
-                    <div className={"flex justify-between items-center gap-3"}>
-                      <div
-                        className={
-                          "h-8 w-8 bg-nb-gray-850 group-aria-selected/list-item:bg-nb-gray-700 flex items-center justify-center rounded-md"
-                        }
-                      >
+                  <div className="flex w-full items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-oz2-input bg-oz2-bg-sunken text-oz2-text-2 group-aria-selected/list-item:bg-oz2-acc-soft group-aria-selected/list-item:text-oz2-acc-text transition-colors">
                         {item.type === SearchType.Network && (
-                          <div className={"uppercase font-medium"}>
+                          <span className="font-mono text-[11px] font-medium uppercase tracking-[0.04em]">
                             {item.data.name.substring(0, 2)}
-                          </div>
+                          </span>
                         )}
                         {item.type === SearchType.NetworkResource && (
                           <ResourceIcon type={item.data.type} />
                         )}
                       </div>
-                      <div>
-                        <div>
-                          {item.data.name} {network && ` - ${network.name}`}
+                      <div className="min-w-0">
+                        <div className="truncate text-[13px] text-oz2-text">
+                          {item.data.name}
+                          {network && (
+                            <span className="text-oz2-text-muted"> · {network.name}</span>
+                          )}
                         </div>
-                        <div className={"text-nb-gray-400"}>
+                        <div className="truncate text-[11.5px] text-oz2-text-muted">
                           {item.data.description}
                         </div>
                       </div>
                     </div>
-                    <div className={"flex items-center justify-center gap-4"}>
+                    <div className="flex shrink-0 items-center gap-4">
                       {item.type === SearchType.Network && (
-                        <div>
-                          <div
-                            className={
-                              "text-[0.65rem] text-nb-gray-250 flex items-center gap-2 leading-none"
-                            }
-                          >
-                            <LayersIcon
-                              size={12}
-                              className={"relative -top-[1px]"}
-                            />
-                            {item.data?.resources?.length} Resource(s)
-                          </div>
+                        <div className="inline-flex items-center gap-1.5 text-[11px] leading-none text-oz2-text-muted">
+                          <LayersIcon size={12} />
+                          {item.data?.resources?.length} Resource(s)
                         </div>
                       )}
                       {item.type === SearchType.NetworkResource && (
-                        <div>
-                          <div
-                            className={
-                              "text-[0.62rem] font-mono text-nb-gray-250"
-                            }
-                          >
-                            {item.data?.address}
-                          </div>
+                        <div className="font-mono text-[10.5px] text-oz2-text-muted">
+                          {item.data?.address}
                         </div>
                       )}
                       <div>
@@ -285,62 +268,54 @@ const ResourceIcon = ({ type }: { type: NetworkResource["type"] }) => {
 
 const BlankState = () => {
   return (
-    <div className={"flex items-center justify-center pb-8"}>
-      <div className={"text-center"}>
-        <div className={"flex items-center justify-center mb-3 mt-3 gap-3"}>
-          <div
-            className={
-              "bg-nb-gray-920 h-8 w-8 flex items-center justify-center rounded-md"
-            }
-          >
+    <div className="flex items-center justify-center pb-8">
+      <div className="text-center">
+        <div className="mb-3 mt-3 flex items-center justify-center gap-2">
+          <HintTile>
             <NetworkIcon size={16} />
-          </div>
-          <div
-            className={
-              "bg-nb-gray-920 h-8 w-8 flex items-center justify-center rounded-md"
-            }
-          >
+          </HintTile>
+          <HintTile>
             <WorkflowIcon size={16} />
-          </div>
-          <div
-            className={
-              "bg-nb-gray-920 h-8 w-8 flex items-center justify-center rounded-md"
-            }
-          >
+          </HintTile>
+          <HintTile>
             <GlobeIcon size={16} />
-          </div>
+          </HintTile>
         </div>
 
-        <div className={"text-nb-gray-100 mb-1"}>
+        <div className="mb-1 text-[13.5px] font-medium text-oz2-text">
           Search for Networks and Resources
         </div>
-        <div className={"text-sm text-nb-gray-350 font-light"}>
-          Quickly find networks and associated resources. <br />
-          Start typing to search by name, description or address.
+        <div className="max-w-sm text-[12.5px] leading-[1.55] text-oz2-text-muted">
+          Quickly find networks and associated resources. Start typing to
+          search by name, description or address.
         </div>
       </div>
     </div>
   );
 };
 
+function HintTile({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="grid h-8 w-8 place-items-center rounded-oz2-input bg-oz2-acc-soft text-oz2-acc-text">
+      {children}
+    </div>
+  );
+}
+
 const NotFoundState = () => {
   return (
-    <div className={"flex items-center justify-center pb-8"}>
-      <div className={"text-center"}>
-        <div className={"flex items-center justify-center mb-3 mt-3 gap-3"}>
-          <div
-            className={
-              "bg-nb-gray-920 h-8 w-8 flex items-center justify-center rounded-md"
-            }
-          >
+    <div className="flex items-center justify-center pb-8">
+      <div className="text-center">
+        <div className="mb-3 mt-3 flex items-center justify-center">
+          <div className="grid h-8 w-8 place-items-center rounded-oz2-input bg-oz2-bg-sunken text-oz2-text-muted">
             <TextSearchIcon size={16} />
           </div>
         </div>
 
-        <div className={"text-nb-gray-100 mb-1"}>
+        <div className="mb-1 text-[13.5px] font-medium text-oz2-text">
           Could not find any results
         </div>
-        <div className={"text-sm text-nb-gray-350 font-light max-w-xs"}>
+        <div className="max-w-xs text-[12.5px] leading-[1.55] text-oz2-text-muted">
           {`We couldn't find any results. Please try a different search term.`}
         </div>
       </div>
@@ -358,34 +333,61 @@ const LoadingState = () => {
   );
 };
 
+// Bottom-of-modal hint strip teaching the four operations the
+// operator can do from here: ↑↓ to scan results, ↵ to open, esc to
+// dismiss, and the global ⌘K / Ctrl+K toggle. Platform-aware so the
+// hint matches the actual key the user has to press.
 const KeyboardShortcutsFooter = () => {
+  const [mac, setMac] = React.useState(false);
+  React.useEffect(() => {
+    if (typeof navigator === "undefined") return;
+    setMac(/Mac|iPod|iPhone|iPad/.test(navigator.platform));
+  }, []);
   return (
-    <div
-      className={
-        "bg-nb-gray-940 border-t border-nb-gray-910 px-4 py-3 text-xs text-nb-gray-300 flex items-center gap-5"
-      }
-    >
-      <div className={"flex items-center gap-1.5"}>
-        <Kbd variant={"darker"}>
-          <ArrowUpIcon size={12} />
-        </Kbd>
-        <Kbd variant={"darker"}>
-          <ArrowDownIcon size={12} />
-        </Kbd>
-        <div className={"ml-1"}>Navigate</div>
-      </div>
-      <div className={"flex items-center gap-1.5"}>
-        <Kbd variant={"darker"}>
-          <CornerDownLeft size={12} />
-        </Kbd>
-        <div className={"ml-1"}>Open</div>
-      </div>
-      <div className={"flex items-center gap-1.5"}>
-        <Kbd variant={"darker"} className={"text-[0.65rem] font-medium"}>
-          esc
-        </Kbd>
-        <div className={"ml-1"}>Close</div>
-      </div>
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-oz2-border-soft bg-oz2-bg-sunken px-4 py-3 text-[12px] text-oz2-text-muted">
+      <Shortcut label="Navigate">
+        <KbdHint>
+          <ArrowUpIcon size={11} />
+        </KbdHint>
+        <KbdHint>
+          <ArrowDownIcon size={11} />
+        </KbdHint>
+      </Shortcut>
+      <Shortcut label="Open">
+        <KbdHint>
+          <CornerDownLeft size={11} />
+        </KbdHint>
+      </Shortcut>
+      <Shortcut label="Close">
+        <KbdHint>esc</KbdHint>
+      </Shortcut>
+      <Shortcut label="Toggle">
+        <KbdHint>{mac ? "⌘" : "Ctrl"}</KbdHint>
+        <KbdHint>K</KbdHint>
+      </Shortcut>
     </div>
   );
 };
+
+function Shortcut({
+  children,
+  label,
+}: {
+  children: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1">{children}</div>
+      <span className="text-oz2-text-muted">{label}</span>
+    </div>
+  );
+}
+
+function KbdHint({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[4px] border border-oz2-border-soft bg-oz2-surface px-1 font-mono text-[10.5px] font-medium text-oz2-text-faint">
+      {children}
+    </kbd>
+  );
+}

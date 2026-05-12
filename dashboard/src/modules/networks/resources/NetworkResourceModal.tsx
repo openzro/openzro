@@ -1,11 +1,6 @@
 "use client";
 
-import Button from "@components/Button";
 import FancyToggleSwitch from "@components/FancyToggleSwitch";
-import HelpText from "@components/HelpText";
-import InlineLink from "@components/InlineLink";
-import { Input } from "@components/Input";
-import { Label } from "@components/Label";
 import {
   Modal,
   ModalClose,
@@ -14,10 +9,8 @@ import {
 } from "@components/modal/Modal";
 import ModalHeader from "@components/modal/ModalHeader";
 import { notify } from "@components/Notification";
-import Paragraph from "@components/Paragraph";
 import { PeerGroupSelector } from "@components/PeerGroupSelector";
 import Separator from "@components/Separator";
-import { Textarea } from "@components/Textarea";
 import { useApiCall } from "@utils/api";
 import {
   ExternalLinkIcon,
@@ -26,6 +19,10 @@ import {
   WorkflowIcon,
 } from "lucide-react";
 import React, { useMemo, useState } from "react";
+import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
+import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
+import OzTextarea from "@/components/v2/OzTextarea";
 import { Network, NetworkResource } from "@/interfaces/Network";
 import useGroupHelper from "@/modules/groups/useGroupHelper";
 import { ResourceSingleAddressInput } from "@/modules/networks/resources/ResourceSingleAddressInput";
@@ -151,11 +148,14 @@ export function ResourceModalContent({
 
       <Separator />
 
-      <div className={"px-8 flex-col flex gap-6 py-6"}>
+      <div className={"px-8 flex flex-col gap-6 py-6"}>
         <div>
-          <Label>Name</Label>
-          <HelpText>Provide a name for your resource</HelpText>
-          <Input
+          <OzLabel htmlFor="resource-name">Name</OzLabel>
+          <OzHelpText className="mb-2">
+            Provide a name for your resource
+          </OzHelpText>
+          <OzInput
+            id="resource-name"
             tabIndex={0}
             placeholder={"e.g., Postgres Database"}
             value={name}
@@ -163,11 +163,14 @@ export function ResourceModalContent({
           />
         </div>
         <div>
-          <Label>Description (optional)</Label>
-          <HelpText>
+          <OzLabel htmlFor="resource-description" optional>
+            Description
+          </OzLabel>
+          <OzHelpText className="mb-2">
             Write a short description to add more context to this resource.
-          </HelpText>
-          <Textarea
+          </OzHelpText>
+          <OzTextarea
+            id="resource-description"
             placeholder={"e.g., Production, Development"}
             value={description}
             rows={1}
@@ -182,11 +185,11 @@ export function ResourceModalContent({
         />
 
         <div>
-          <Label>Destination Groups</Label>
-          <HelpText>
+          <OzLabel>Destination Groups</OzLabel>
+          <OzHelpText className="mb-2">
             Add this resource to groups and use them as destinations when
             creating policies
-          </HelpText>
+          </OzHelpText>
           <PeerGroupSelector onChange={setGroups} values={groups} />
         </div>
         <div className={"mt-3"}>
@@ -206,23 +209,25 @@ export function ResourceModalContent({
 
       <ModalFooter className={"items-center"}>
         <div className={"w-full"}>
-          <Paragraph className={"text-sm mt-auto"}>
-            Learn more about
-            <InlineLink
+          <p className={"text-sm mt-auto text-oz2-text-muted"}>
+            Learn more about{" "}
+            <a
               href={"https://docs.openzro.io/how-to/networks#resources"}
               target={"_blank"}
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-oz2-acc-text underline-offset-2 hover:underline"
             >
               Resources
               <ExternalLinkIcon size={12} />
-            </InlineLink>
-          </Paragraph>
+            </a>
+          </p>
         </div>
         <div className={"flex gap-3 w-full justify-end"}>
           <ModalClose asChild={true}>
-            <Button variant={"secondary"}>Cancel</Button>
+            <OzButton variant={"default"}>Cancel</OzButton>
           </ModalClose>
 
-          <Button
+          <OzButton
             variant={"primary"}
             data-cy={"submit-route"}
             onClick={resource ? updateResource : createResource}
@@ -236,7 +241,7 @@ export function ResourceModalContent({
                 Add Resource
               </>
             )}
-          </Button>
+          </OzButton>
         </div>
       </ModalFooter>
     </ModalContent>

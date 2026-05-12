@@ -1,13 +1,8 @@
 "use client";
 
-import Button from "@components/Button";
 import ButtonGroup from "@components/ButtonGroup";
 import FancyToggleSwitch from "@components/FancyToggleSwitch";
 import FullTooltip from "@components/FullTooltip";
-import HelpText from "@components/HelpText";
-import InlineLink from "@components/InlineLink";
-import { Input } from "@components/Input";
-import { Label } from "@components/Label";
 import {
   Modal,
   ModalClose,
@@ -16,12 +11,9 @@ import {
   ModalTrigger,
 } from "@components/modal/Modal";
 import ModalHeader from "@components/modal/ModalHeader";
-import Paragraph from "@components/Paragraph";
 import { PeerGroupSelector } from "@components/PeerGroupSelector";
 import { PeerSelector } from "@components/PeerSelector";
 import { SegmentedTabs } from "@components/SegmentedTabs";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/Tabs";
-import { Textarea } from "@components/Textarea";
 import InputDomain, { domainReducer } from "@components/ui/InputDomain";
 import { getOperatingSystem } from "@hooks/useOperatingSystem";
 import { IconDirectionSign } from "@tabler/icons-react";
@@ -47,13 +39,22 @@ import {
 import { useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import NetworkRoutesIcon from "@/assets/icons/NetworkRoutesIcon";
+import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
+import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
+import {
+  OzTabs as Tabs,
+  OzTabsContent as TabsContent,
+  OzTabsList as TabsList,
+  OzTabsTrigger as TabsTrigger,
+} from "@/components/v2/OzTabs";
+import OzTextarea from "@/components/v2/OzTextarea";
 import { useDialog } from "@/contexts/DialogProvider";
 import { useRoutes } from "@/contexts/RoutesProvider";
 import { OperatingSystem } from "@/interfaces/OperatingSystem";
 import { Peer } from "@/interfaces/Peer";
 import { Policy } from "@/interfaces/Policy";
 import { Route } from "@/interfaces/Route";
-import { AccessControlModalContent } from "@/modules/access-control/AccessControlModal";
 import useGroupHelper from "@/modules/groups/useGroupHelper";
 import { RoutingPeerMasqueradeSwitch } from "@/modules/networks/routing-peers/RoutingPeerMasqueradeSwitch";
 
@@ -63,11 +64,16 @@ type Props = {
   setOpen?: (open: boolean) => void;
 };
 
+// sessionStorage key that /access-control/new reads on mount to
+// pre-fill the form when the operator accepts the post-route prompt
+// "Do you want to create a policy for this route?". Keeps the seed
+// off the URL (the rules JSON would be ugly + leaky in browser
+// history) without needing extra plumbing through router state.
+const POLICY_SEED_KEY = "oz2-policy-seed";
+
 export default function RouteModal({ children, open, setOpen }: Props) {
   const { confirm } = useDialog();
   const router = useRouter();
-  const [routePolicyModal, setRoutePolicyModal] = useState(false);
-  const [newPolicy, setNewPolicy] = useState<Policy>();
 
   const handleCreatePolicyPrompt = async (r: Route) => {
     if (!r?.access_control_groups) return;
@@ -83,7 +89,7 @@ export default function RouteModal({ children, open, setOpen }: Props) {
     if (!choice) return;
 
     const name = `${r.network_id} Policy`;
-    const newPolicy: Policy = {
+    const seed: Policy = {
       name,
       description: "",
       enabled: true,
@@ -102,35 +108,29 @@ export default function RouteModal({ children, open, setOpen }: Props) {
         },
       ],
     };
-    setNewPolicy(newPolicy);
-    setRoutePolicyModal(true);
+
+    try {
+      window.sessionStorage.setItem(POLICY_SEED_KEY, JSON.stringify(seed));
+    } catch {
+      // sessionStorage may be unavailable (private mode quotas, etc.).
+      // The page-side hydration is best-effort, so falling back to a
+      // blank /access-control/new is acceptable degradation.
+    }
+    router.push("/access-control/new");
   };
 
   return (
-    <>
-      <Modal open={open} onOpenChange={setOpen} key={open ? 1 : 0}>
-        {children && <ModalTrigger asChild>{children}</ModalTrigger>}
-        {open && (
-          <RouteModalContent
-            onSuccess={async (r) => {
-              await handleCreatePolicyPrompt(r);
-              setOpen?.(false);
-            }}
-          />
-        )}
-      </Modal>
-
-      <Modal open={routePolicyModal} onOpenChange={setRoutePolicyModal}>
-        {routePolicyModal && newPolicy != undefined && (
-          <AccessControlModalContent
-            onSuccess={() => {
-              router.push("/access-control");
-            }}
-            policy={newPolicy}
-          />
-        )}
-      </Modal>
-    </>
+    <Modal open={open} onOpenChange={setOpen} key={open ? 1 : 0}>
+      {children && <ModalTrigger asChild>{children}</ModalTrigger>}
+      {open && (
+        <RouteModalContent
+          onSuccess={async (r) => {
+            await handleCreatePolicyPrompt(r);
+            setOpen?.(false);
+          }}
+        />
+      )}
+    </Modal>
   );
 }
 
@@ -401,65 +401,59 @@ export function RouteModalContent({
       />
 
       <Tabs defaultValue={tab} onValueChange={(v) => setTab(v)} value={tab}>
-        <TabsList justify={"start"} className={"px-8"}>
-          {!(exitNode && peer) && (
-            <TabsTrigger
-              value={"network"}
-              onClick={() => networkRangeRef.current?.focus()}
-            >
-              <RouteIcon
-                size={16}
-                className={
-                  "text-nb-gray-500 group-data-[state=active]/trigger:text-openzro transition-all"
-                }
-              />
-              Route
-            </TabsTrigger>
-          )}
+        <div className="px-8 pb-3 pt-1">
+          <TabsList>
+            {!(exitNode && peer) && (
+              <TabsTrigger
+                value={"network"}
+                onClick={() => networkRangeRef.current?.focus()}
+              >
+                <RouteIcon
+                  size={16}
+                  className="text-oz2-text-faint group-data-[state=active]/trigger:text-oz2-acc transition-colors"
+                />
+                Route
+              </TabsTrigger>
+            )}
 
-          <TabsTrigger value={"access-control"} disabled={!isNetworkEntered}>
-            <FolderGit2
-              size={16}
-              className={
-                "text-nb-gray-500 group-data-[state=active]/trigger:text-openzro transition-all"
-              }
-            />
-            Groups
-          </TabsTrigger>
-          <TabsTrigger
-            value={"general"}
-            disabled={!isGroupsEntered}
-            onClick={() => nameRef.current?.focus()}
-          >
-            <Text
-              size={16}
-              className={
-                "text-nb-gray-500 group-data-[state=active]/trigger:text-openzro transition-all"
-              }
-            />
-            Name & Description
-          </TabsTrigger>
-          <TabsTrigger
-            value={"settings"}
-            disabled={!isNetworkEntered || !isNameEntered || !isGroupsEntered}
-          >
-            <Settings2
-              size={16}
-              className={
-                "text-nb-gray-500 group-data-[state=active]/trigger:text-openzro transition-all"
-              }
-            />
-            Additional Settings
-          </TabsTrigger>
-        </TabsList>
+            <TabsTrigger value={"access-control"} disabled={!isNetworkEntered}>
+              <FolderGit2
+                size={16}
+                className="text-oz2-text-faint group-data-[state=active]/trigger:text-oz2-acc transition-colors"
+              />
+              Groups
+            </TabsTrigger>
+            <TabsTrigger
+              value={"general"}
+              disabled={!isGroupsEntered}
+              onClick={() => nameRef.current?.focus()}
+            >
+              <Text
+                size={16}
+                className="text-oz2-text-faint group-data-[state=active]/trigger:text-oz2-acc transition-colors"
+              />
+              Name & Description
+            </TabsTrigger>
+            <TabsTrigger
+              value={"settings"}
+              disabled={!isNetworkEntered || !isNameEntered || !isGroupsEntered}
+            >
+              <Settings2
+                size={16}
+                className="text-oz2-text-faint group-data-[state=active]/trigger:text-oz2-acc transition-colors"
+              />
+              Additional Settings
+            </TabsTrigger>
+          </TabsList>
+        </div>
         <TabsContent value={"network"} className={"pb-8"}>
           <div className={"px-8 flex-col flex gap-4"}>
             <div className={cn(exitNode && "hidden")}>
-              <Label>Route Type</Label>
-              <HelpText>
+              <OzLabel>Route Type</OzLabel>
+              <OzHelpText className="mb-2">
                 Select your route type to add either a network range or a list
                 of domains.
-              </HelpText>
+              </OzHelpText>
               <div className={"flex justify-between items-center w-full"}>
                 <ButtonGroup className={"w-full"}>
                   <ButtonGroup.Button
@@ -487,15 +481,17 @@ export function RouteModalContent({
                   routeType !== "ip-range" && "hidden",
                 )}
               >
-                <Label>Network Range</Label>
-                <HelpText>Add a private IPv4 address range</HelpText>
-                <Input
+                <OzLabel>Network Range</OzLabel>
+                <OzHelpText className="mb-2">
+                  Add a private IPv4 address range
+                </OzHelpText>
+                <OzInput
                   ref={networkRangeRef}
-                  customPrefix={<NetworkIcon size={16} />}
+                  prefix={<NetworkIcon size={16} />}
                   placeholder={"e.g., 172.16.0.0/16"}
                   value={networkRange}
                   data-cy={"network-range"}
-                  className={"font-mono !text-[13px]"}
+                  mono
                   error={cidrError}
                   onChange={(e) => setNetworkRange(e.target.value)}
                 />
@@ -504,52 +500,47 @@ export function RouteModalContent({
               <div
                 className={cn("mt-5 mb-3", routeType !== "domains" && "hidden")}
               >
-                <Label>Domains</Label>
-                <HelpText>
+                <OzLabel>Domains</OzLabel>
+                <OzHelpText className="mb-2">
                   Add domains that dynamically resolve to one or more IPv4
-                  addresses. <br /> A maximum of 32 domains can be added.
-                </HelpText>
+                  addresses. A maximum of 32 domains can be added.
+                </OzHelpText>
                 <div>
                   {domainRoutes.length > 0 && (
-                    <div className={"flex gap-3 w-full mb-3"}>
-                      <div className={"flex flex-col gap-2 w-full"}>
-                        {domainRoutes.map((domain, i) => {
-                          return (
-                            <InputDomain
-                              key={domain.id}
-                              value={domain}
-                              data-cy={`domain-input-${i}`}
-                              onChange={(d) =>
-                                setDomainRoutes({
-                                  type: "UPDATE",
-                                  index: i,
-                                  d,
-                                })
-                              }
-                              onError={setDomainError}
-                              onRemove={() =>
-                                setDomainRoutes({
-                                  type: "REMOVE",
-                                  index: i,
-                                })
-                              }
-                            />
-                          );
-                        })}
-                      </div>
+                    <div className={"mb-3 flex w-full flex-col gap-2"}>
+                      {domainRoutes.map((domain, i) => (
+                        <InputDomain
+                          key={domain.id}
+                          value={domain}
+                          data-cy={`domain-input-${i}`}
+                          onChange={(d) =>
+                            setDomainRoutes({
+                              type: "UPDATE",
+                              index: i,
+                              d,
+                            })
+                          }
+                          onError={setDomainError}
+                          onRemove={() =>
+                            setDomainRoutes({
+                              type: "REMOVE",
+                              index: i,
+                            })
+                          }
+                        />
+                      ))}
                     </div>
                   )}
-                  <Button
-                    variant={"dotted"}
-                    className={"w-full"}
-                    size={"sm"}
+                  <button
+                    type="button"
                     disabled={domainRoutes.length === 32}
                     data-cy={"add-domain"}
                     onClick={() => setDomainRoutes({ type: "ADD" })}
+                    className="inline-flex h-[34px] w-full items-center justify-center gap-2 rounded-oz2-input border border-dashed border-oz2-border-strong bg-transparent px-3 text-[13px] font-medium text-oz2-text-muted transition-colors hover:border-oz2-acc hover:bg-oz2-acc-soft/50 hover:text-oz2-acc-text disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <PlusIcon size={14} />
                     Add Domain
-                  </Button>
+                  </button>
                 </div>
                 <div className={cn("mt-6 w-full")}>
                   <FullTooltip
@@ -614,10 +605,10 @@ export function RouteModalContent({
                 </SegmentedTabs.List>
                 <SegmentedTabs.Content value={"routing-peer"}>
                   <div>
-                    <HelpText>
+                    <OzHelpText className="mb-2">
                       Assign a single peer as a routing peer for the
                       {exitNode ? " exit node." : " network route."}
-                    </HelpText>
+                    </OzHelpText>
                     <PeerSelector
                       onChange={setRoutingPeer}
                       value={routingPeer}
@@ -627,10 +618,10 @@ export function RouteModalContent({
                 </SegmentedTabs.Content>
                 <SegmentedTabs.Content value={"peer-group"}>
                   <div>
-                    <HelpText>
+                    <OzHelpText className="mb-2">
                       Assign a peer group with machines to be used as
                       {exitNode ? " exit nodes." : " routing peers."}
-                    </HelpText>
+                    </OzHelpText>
                     <PeerGroupSelector
                       max={1}
                       onChange={setRoutingPeerGroups}
@@ -645,22 +636,22 @@ export function RouteModalContent({
         <TabsContent value={"access-control"} className={"pb-8"}>
           <div className={"px-8 flex-col flex gap-6"}>
             <div>
-              <Label>Distribution Groups</Label>
-              <HelpText>
+              <OzLabel>Distribution Groups</OzLabel>
+              <OzHelpText className="mb-2">
                 {exitNode
                   ? peer
                     ? `Route all internet traffic through this peer for the following groups`
                     : `Route all internet traffic through the peer(s) for the following groups`
                   : "Advertise this route to peers that belong to the following groups"}
-              </HelpText>
+              </OzHelpText>
               <PeerGroupSelector onChange={setGroups} values={groups} />
             </div>
             <div>
-              <Label>Access Control Groups (optional)</Label>
-              <HelpText>
+              <OzLabel optional>Access Control Groups</OzLabel>
+              <OzHelpText className="mb-2">
                 These groups allow you to limit access to this route. Simply use
                 these groups as a destination when creating access policies.
-              </HelpText>
+              </OzHelpText>
               <PeerGroupSelector
                 dataCy={"access-control-groups-selector"}
                 onChange={setAccessControlGroups}
@@ -672,11 +663,14 @@ export function RouteModalContent({
         <TabsContent value={"general"} className={"px-8 pb-6"}>
           <div className={"flex flex-col gap-6"}>
             <div>
-              <Label>Network Identifier</Label>
-              <HelpText>
+              <OzLabel htmlFor="route-network-identifier" required>
+                Network Identifier
+              </OzLabel>
+              <OzHelpText className="mb-2">
                 Add a unique network identifier that is assigned to each device.
-              </HelpText>
-              <Input
+              </OzHelpText>
+              <OzInput
+                id="route-network-identifier"
                 error={networkIdentifierError}
                 autoFocus={true}
                 data-cy={"network-identifier"}
@@ -688,11 +682,14 @@ export function RouteModalContent({
               />
             </div>
             <div>
-              <Label>Description (optional)</Label>
-              <HelpText>
+              <OzLabel htmlFor="route-description" optional>
+                Description
+              </OzLabel>
+              <OzHelpText className="mb-2">
                 Write a short description to add more context to this route.
-              </HelpText>
-              <Textarea
+              </OzHelpText>
+              <OzTextarea
+                id="route-description"
                 data-cy={"description"}
                 placeholder={
                   "e.g., Route to access all devices in the AWS VPC, located in Frankfurt."
@@ -727,31 +724,26 @@ export function RouteModalContent({
               />
             )}
 
-            <div className={cn("flex justify-between")}>
-              <div>
-                <Label>Metric</Label>
-                <HelpText className={"max-w-[200px]"}>
+            <div className={cn("flex items-start justify-between gap-6")}>
+              <div className="flex-1 min-w-0">
+                <OzLabel htmlFor="route-metric">Metric</OzLabel>
+                <OzHelpText className="mt-1">
                   A lower metric indicates higher priority routes.
-                </HelpText>
+                </OzHelpText>
               </div>
-
-              <Input
-                min={1}
-                max={9999}
-                maxWidthClass={"max-w-[200px]"}
-                value={metric}
-                error={metricError}
-                data-cy={"metric"}
-                errorTooltip={true}
-                type={"number"}
-                onChange={(e) => setMetric(e.target.value)}
-                customPrefix={
-                  <ArrowDownWideNarrow
-                    size={16}
-                    className={"text-nb-gray-300"}
-                  />
-                }
-              />
+              <div className="w-[200px] shrink-0">
+                <OzInput
+                  id="route-metric"
+                  min={1}
+                  max={9999}
+                  value={metric}
+                  error={metricError}
+                  data-cy={"metric"}
+                  type={"number"}
+                  onChange={(e) => setMetric(e.target.value)}
+                  prefix={<ArrowDownWideNarrow size={16} />}
+                />
+              </div>
             </div>
           </div>
         </TabsContent>
@@ -759,78 +751,80 @@ export function RouteModalContent({
 
       <ModalFooter className={"items-center"}>
         <div className={"w-full"}>
-          <Paragraph className={"text-sm mt-auto"}>
-            Learn more about
-            <InlineLink
+          <p className={"text-sm mt-auto text-oz2-text-muted"}>
+            Learn more about{" "}
+            <a
               href={
                 exitNode
                   ? "https://docs.openzro.io/how-to/configuring-default-routes-for-internet-traffic"
                   : "https://docs.openzro.io/how-to/routing-traffic-to-private-networks"
               }
               target={"_blank"}
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-oz2-acc-text underline-offset-2 hover:underline"
             >
               {exitNode ? "Exit Nodes" : "Network Routes"}
               <ExternalLinkIcon size={12} />
-            </InlineLink>
-          </Paragraph>
+            </a>
+          </p>
         </div>
         <div className={"flex gap-3 w-full justify-end"}>
           {(tab == "network" || (tab == "access-control" && exitNode)) && (
             <ModalClose asChild={true}>
-              <Button variant={"secondary"}>Cancel</Button>
+              <OzButton variant={"default"}>Cancel</OzButton>
             </ModalClose>
           )}
 
           {tab == "access-control" && !exitNode && (
-            <Button variant={"secondary"} onClick={() => setTab("network")}>
+            <OzButton variant={"default"} onClick={() => setTab("network")}>
               Back
-            </Button>
+            </OzButton>
           )}
 
           {tab == "general" && (
-            <Button
-              variant={"secondary"}
+            <OzButton
+              variant={"default"}
               onClick={() => setTab("access-control")}
             >
               Back
-            </Button>
+            </OzButton>
           )}
 
           {tab == "settings" && (
-            <Button variant={"secondary"} onClick={() => setTab("general")}>
+            <OzButton variant={"default"} onClick={() => setTab("general")}>
               Back
-            </Button>
+            </OzButton>
           )}
 
           {tab == "network" && (
-            <Button
+            <OzButton
               variant={"primary"}
               onClick={() => setTab("access-control")}
               disabled={!isNetworkEntered}
             >
               Continue
-            </Button>
+            </OzButton>
           )}
           {tab == "access-control" && (
-            <Button
+            <OzButton
               variant={"primary"}
               onClick={() => setTab("general")}
               disabled={!isGroupsEntered}
             >
               Continue
-            </Button>
+            </OzButton>
           )}
           {tab == "general" && (
-            <Button
+            <OzButton
               variant={"primary"}
               onClick={() => setTab("settings")}
               disabled={!isNameEntered || !isNetworkEntered}
             >
               Continue
-            </Button>
+            </OzButton>
           )}
           {tab == "settings" && (
-            <Button
+            <OzButton
               variant={"primary"}
               disabled={!canCreateOrSave}
               data-cy={"submit-route"}
@@ -838,7 +832,7 @@ export function RouteModalContent({
             >
               <PlusCircle size={16} />
               {exitNode ? "Add Exit Node" : "Add Route"}
-            </Button>
+            </OzButton>
           )}
         </div>
       </ModalFooter>

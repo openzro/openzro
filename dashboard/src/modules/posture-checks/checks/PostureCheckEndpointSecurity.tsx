@@ -1,19 +1,15 @@
-import Button from "@components/Button";
-import HelpText from "@components/HelpText";
-import InlineLink from "@components/InlineLink";
-import { Label } from "@components/Label";
-import { ModalClose, ModalFooter } from "@components/modal/Modal";
-import Paragraph from "@components/Paragraph";
-import { SelectDropdown } from "@components/select/SelectDropdown";
 import FancyToggleSwitch from "@components/FancyToggleSwitch";
+import { ModalClose, ModalFooter } from "@components/modal/Modal";
+import { SelectDropdown } from "@components/select/SelectDropdown";
 import useFetchApi from "@utils/api";
 import { ExternalLinkIcon, ShieldHalf } from "lucide-react";
+import Link from "next/link";
 import * as React from "react";
 import { useState } from "react";
-import {
-  EndpointSecurityCheck,
-} from "@/interfaces/PostureCheck";
+import OzButton from "@/components/v2/OzButton";
+import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
 import { MDMProvider } from "@/interfaces/MDMProvider";
+import { EndpointSecurityCheck } from "@/interfaces/PostureCheck";
 import { PostureCheckCard } from "@/modules/posture-checks/ui/PostureCheckCard";
 
 type Props = {
@@ -40,7 +36,9 @@ export const PostureCheckEndpointSecurity = ({
         "Restrict access in your network based on device compliance reported by an MDM/EDR vendor."
       }
       icon={<ShieldHalf size={16} />}
-      iconClass={"bg-gradient-to-tr from-emerald-500 to-emerald-400"}
+      iconClass={
+        "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+      }
       modalWidthClass={"max-w-xl"}
       onReset={() => onChange(undefined)}
     >
@@ -78,20 +76,23 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
     <>
       <div className={"flex flex-col px-8 gap-6 pb-6"}>
         <div>
-          <Label>MDM/EDR Provider</Label>
-          <HelpText>
+          <OzLabel>MDM/EDR Provider</OzLabel>
+          <OzHelpText className="mb-2">
             Pick a provider configured under Settings → Integrations →
             MDM-EDR. The peer&apos;s hostname is used to look up the device on
             the vendor side.
-          </HelpText>
+          </OzHelpText>
           {noProviders ? (
-            <Paragraph className={"text-xs text-nb-gray-300 mt-2"}>
+            <p className={"text-xs text-oz2-text-muted mt-2"}>
               No MDM/EDR provider is configured. Add one in{" "}
-              <InlineLink href={"/settings?tab=integrations"}>
+              <Link
+                href={"/settings?tab=integrations"}
+                className="text-oz2-acc-text underline-offset-2 hover:underline"
+              >
                 Settings → Integrations
-              </InlineLink>{" "}
+              </Link>{" "}
               first, then come back to enable this check.
-            </Paragraph>
+            </p>
           ) : (
             <SelectDropdown
               value={providerId}
@@ -116,24 +117,26 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
       </div>
       <ModalFooter className={"items-center"}>
         <div className={"w-full"}>
-          <Paragraph className={"text-sm mt-auto"}>
-            Learn more about
-            <InlineLink
+          <p className={"text-sm mt-auto text-oz2-text-muted"}>
+            Learn more about{" "}
+            <a
               href={
                 "https://docs.openzro.io/how-to/manage-posture-checks#endpoint-security"
               }
               target={"_blank"}
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-oz2-acc-text underline-offset-2 hover:underline"
             >
               Endpoint Security
               <ExternalLinkIcon size={12} />
-            </InlineLink>
-          </Paragraph>
+            </a>
+          </p>
         </div>
         <div className={"flex gap-3 w-full justify-end"}>
           <ModalClose asChild={true}>
-            <Button variant={"secondary"}>Cancel</Button>
+            <OzButton variant={"default"}>Cancel</OzButton>
           </ModalClose>
-          <Button
+          <OzButton
             variant={"primary"}
             disabled={!providerId || disabled}
             onClick={() => {
@@ -146,7 +149,7 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
             }}
           >
             Save
-          </Button>
+          </OzButton>
         </div>
       </ModalFooter>
     </>
