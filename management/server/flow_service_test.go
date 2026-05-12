@@ -267,3 +267,171 @@ func TestFlowService_DropsEventsWithUnknownPeer(t *testing.T) {
 	assert.Empty(t, mem.all(),
 		"events whose peer cannot be resolved must be dropped, never persisted with empty account_id")
 }
+
+// fakePolicyResolver lets tests inspect resolver invocations and
+// optionally fill RuleID with a canned value. Mirrors the
+// PolicyResolver interface flow_service expects.
+type fakePolicyResolver struct {
+	mu      sync.Mutex
+	calls   []fakePolicyCall
+	stampID string // when set, all unstamped events get this RuleID
+}
+
+type fakePolicyCall struct {
+	accountID string
+	ruleID    string
+}
+
+func (f *fakePolicyResolver) Resolve(accountID string, e *flowstore.Event) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, fakePolicyCall{accountID: accountID, ruleID: string(e.RuleID)})
+	if len(e.RuleID) != 0 {
+		return false
+	}
+	if f.stampID == "" {
+		return false
+	}
+	e.RuleID = []byte(f.stampID)
+	return true
+}
+
+func (f *fakePolicyResolver) callCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.calls)
+}
+
+// startFlowServiceWithPolicyResolver wires the service with both a
+// store and an ADR-0018 policy resolver. Used by the resolver-wiring
+// tests below.
+func startFlowServiceWithPolicyResolver(t *testing.T, store flowstore.Sink, resolver PeerResolver, policy PolicyResolver) (flowProto.FlowServiceClient, func()) {
+	t.Helper()
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	server := grpc.NewServer()
+	fs := NewFlowService(
+		[]flowstore.Sink{store}, resolver,
+		WithBatchSize(2),
+		WithFlushInterval(50*time.Millisecond),
+		WithPolicyResolver(policy),
+	)
+	flowProto.RegisterFlowServiceServer(server, fs)
+	go func() { _ = server.Serve(lis) }()
+
+	conn, err := grpc.NewClient(lis.Addr().String(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+	cleanup := func() {
+		_ = conn.Close()
+		server.Stop()
+		_ = fs.Close()
+	}
+	return flowProto.NewFlowServiceClient(conn), cleanup
+}
+
+// TestFlowService_PolicyResolver_FillsEmptyRuleID covers the
+// happy-path wiring (ADR-0018): an event arrives with no RuleID,
+// the resolver fills it, the stored event carries the resolver's
+// PolicyID.
+func TestFlowService_PolicyResolver_FillsEmptyRuleID(t *testing.T) {
+	mem := newInMemoryStore()
+	pubKey := []byte("01234567890123456789012345678901")
+	peerResolver := func(context.Context, []byte) (string, string, error) {
+		return "peer-1", "acct-1", nil
+	}
+	policy := &fakePolicyResolver{stampID: "p-resolved-by-server"}
+
+	client, cleanup := startFlowServiceWithPolicyResolver(t, mem, peerResolver, policy)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	stream, err := client.Events(ctx)
+	require.NoError(t, err)
+
+	require.NoError(t, stream.Send(&flowProto.FlowEvent{
+		EventId:   []byte("e-unstamped"),
+		PublicKey: pubKey,
+		FlowFields: &flowProto.FlowFields{
+			FlowId:   []byte("f1"),
+			Protocol: 6,
+			SourceIp: []byte{10, 0, 0, 1},
+			DestIp:   []byte{10, 0, 0, 2},
+			ConnectionInfo: &flowProto.FlowFields_PortInfo{
+				PortInfo: &flowProto.PortInfo{DestPort: 443},
+			},
+			// RuleId intentionally empty — the Linux kernel
+			// outbound-initiator path can't stamp it.
+		},
+	}))
+	require.NoError(t, stream.CloseSend())
+	if _, err := stream.Recv(); err != nil && err != io.EOF {
+		t.Fatalf("recv: %v", err)
+	}
+
+	select {
+	case <-mem.saveCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("worker did not flush")
+	}
+
+	all := mem.all()
+	require.Len(t, all, 1)
+	assert.Equal(t, "p-resolved-by-server", string(all[0].RuleID),
+		"unstamped event must carry the resolver's PolicyID after persist")
+	assert.Equal(t, 1, policy.callCount(), "resolver must be consulted once per unstamped event")
+}
+
+// TestFlowService_PolicyResolver_DoesNotOverwriteAgentStamp asserts
+// that events the agent already stamped (the ADR-0013 primary path:
+// inbound, routing-forward, uspfilter) pass through untouched. The
+// resolver is still consulted to expose the metric, but it returns
+// false and leaves the event alone.
+func TestFlowService_PolicyResolver_DoesNotOverwriteAgentStamp(t *testing.T) {
+	mem := newInMemoryStore()
+	pubKey := []byte("01234567890123456789012345678901")
+	peerResolver := func(context.Context, []byte) (string, string, error) {
+		return "peer-1", "acct-1", nil
+	}
+	policy := &fakePolicyResolver{stampID: "p-resolver-would-have-used"}
+
+	client, cleanup := startFlowServiceWithPolicyResolver(t, mem, peerResolver, policy)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	stream, err := client.Events(ctx)
+	require.NoError(t, err)
+
+	require.NoError(t, stream.Send(&flowProto.FlowEvent{
+		EventId:   []byte("e-stamped"),
+		PublicKey: pubKey,
+		FlowFields: &flowProto.FlowFields{
+			FlowId:   []byte("f1"),
+			Protocol: 6,
+			SourceIp: []byte{10, 0, 0, 1},
+			DestIp:   []byte{10, 0, 0, 2},
+			ConnectionInfo: &flowProto.FlowFields_PortInfo{
+				PortInfo: &flowProto.PortInfo{DestPort: 443},
+			},
+			RuleId: []byte("agent-stamped-policy-id"),
+		},
+	}))
+	require.NoError(t, stream.CloseSend())
+	if _, err := stream.Recv(); err != nil && err != io.EOF {
+		t.Fatalf("recv: %v", err)
+	}
+
+	select {
+	case <-mem.saveCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("worker did not flush")
+	}
+
+	all := mem.all()
+	require.Len(t, all, 1)
+	assert.Equal(t, "agent-stamped-policy-id", string(all[0].RuleID),
+		"agent-stamped RuleID must NOT be overwritten")
+}
