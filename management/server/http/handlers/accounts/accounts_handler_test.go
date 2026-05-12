@@ -304,3 +304,98 @@ func TestAccounts_AccountsHandler(t *testing.T) {
 		})
 	}
 }
+
+// TestAccounts_PutPreservesUnexposedFlowFlags is a regression test for
+// the bug where the PUT /accounts/{id} handler rebuilt ExtraSettings
+// from the wire shape and silently zeroed the Flow* flags that the
+// OpenAPI spec does not surface (FlowDnsCollectionEnabled,
+// FlowENCollectionEnabled). The dashboard's NetworkSettingsTab never
+// sends those fields, so every "Save" call would reset them to false
+// and disable per-flow DNS / exit-node collection until the operator
+// hand-edited the DB.
+//
+// The fix: load existing settings, override only what the request
+// declared. The non-pointer bools in the API contract (FlowEnabled,
+// FlowPacketCounterEnabled, PeerApprovalEnabled) are still
+// authoritative on the wire — operators relying on those flips must
+// keep the dashboard's PUT body in sync.
+func TestAccounts_PutPreservesUnexposedFlowFlags(t *testing.T) {
+	accountID := "test_account"
+	adminUser := types.NewAdminUser("test_user")
+
+	existing := &types.Settings{
+		PeerLoginExpirationEnabled: false,
+		PeerLoginExpiration:        time.Hour,
+		Extra: &types.ExtraSettings{
+			FlowEnabled:              true,
+			FlowPacketCounterEnabled: true,
+			FlowDnsCollectionEnabled: true,
+			FlowENCollectionEnabled:  true,
+			FlowEventsGroups:         []string{"group-a"},
+		},
+	}
+
+	account := &types.Account{
+		Id:      accountID,
+		Domain:  "hotmail.com",
+		Network: types.NewNetwork(),
+		Users: map[string]*types.User{
+			adminUser.Id: adminUser,
+		},
+		Settings: existing,
+	}
+
+	handler := initAccountsTestData(t, account)
+
+	// Intercept the settings that the handler hands off to
+	// UpdateAccountSettings so we can assert on server-only Extra
+	// fields that the OpenAPI response does not surface.
+	var captured *types.Settings
+	if m, ok := handler.accountManager.(*mock_server.MockAccountManager); ok {
+		m.UpdateAccountSettingsFunc = func(ctx context.Context, accountID, userID string, newSettings *types.Settings) (*types.Settings, error) {
+			captured = newSettings
+			return newSettings, nil
+		}
+	}
+
+	// Dashboard PUT shape — sends only the fields the v2 NetworkSettingsTab
+	// surfaces (logs_enabled, logs_groups). Critically the body omits
+	// network_traffic_packet_counter_enabled and the two server-only
+	// flags. Before the fix, every one of these collapsed to false.
+	body := `{"settings":{"peer_login_expiration":3600,"peer_login_expiration_enabled":false,"extra":{"network_traffic_logs_enabled":true,"network_traffic_logs_groups":["group-a"],"network_traffic_packet_counter_enabled":true}}}`
+
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/accounts/"+accountID, bytes.NewBufferString(body))
+	req = nbcontext.SetUserAuthInRequest(req, nbcontext.UserAuth{
+		UserId:    adminUser.Id,
+		AccountId: accountID,
+		Domain:    "hotmail.com",
+	})
+
+	router := mux.NewRouter()
+	router.HandleFunc("/api/accounts/{accountId}", handler.updateAccount).Methods("PUT")
+	router.ServeHTTP(recorder, req)
+
+	assert.Equal(t, http.StatusOK, recorder.Code, "handler returned wrong status: body=%s", recorder.Body.String())
+
+	res := recorder.Result()
+	defer res.Body.Close()
+	content, err := io.ReadAll(res.Body)
+	assert.NoError(t, err)
+
+	var got api.Account
+	assert.NoError(t, json.Unmarshal(content, &got))
+
+	// Wire-visible fields: dashboard sent true, response echoes true.
+	if assert.NotNil(t, got.Settings.Extra) {
+		assert.True(t, got.Settings.Extra.NetworkTrafficLogsEnabled, "logs enabled should round-trip")
+		assert.True(t, got.Settings.Extra.NetworkTrafficPacketCounterEnabled, "packet counter must persist when dashboard sends it")
+	}
+
+	// Server-only fields: dashboard didn't mention them, but the
+	// handler must have preserved them from existing settings.
+	if assert.NotNil(t, captured, "UpdateAccountSettings was not called") && assert.NotNil(t, captured.Extra) {
+		assert.True(t, captured.Extra.FlowDnsCollectionEnabled, "FlowDnsCollectionEnabled must persist across a PUT that does not mention it")
+		assert.True(t, captured.Extra.FlowENCollectionEnabled, "FlowENCollectionEnabled must persist across a PUT that does not mention it")
+	}
+}

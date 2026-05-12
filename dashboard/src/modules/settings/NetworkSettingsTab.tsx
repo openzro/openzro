@@ -78,6 +78,14 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
     account.settings.extra?.network_traffic_logs_enabled ?? false,
   );
 
+  // Default the packet counter to ON. Without it, conntrack accounting
+  // stays off in the kernel and every flow event arrives with
+  // rx/tx_bytes = 0, which makes the Flow Traffic page useless. Operators
+  // who care about the CPU cost can flip it off after enabling.
+  const [flowPacketCounter, setFlowPacketCounter] = useState(
+    account.settings.extra?.network_traffic_packet_counter_enabled ?? true,
+  );
+
   const [flowGroups, setFlowGroups, { save: saveFlowGroups }] = useGroupHelper(
     {
       initial: account.settings.extra?.network_traffic_logs_groups ?? [],
@@ -98,16 +106,27 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
     return false;
   }, [flowGroups, initialFlowGroupIDs]);
 
+  // persistFlowExtra is the single write path for every Flow*
+  // toggle. The backend handler rebuilds ExtraSettings from the wire
+  // shape on each PUT (with a seed from existing settings so unexposed
+  // fields like FlowDnsCollectionEnabled survive), but every API field
+  // it does surface is a non-pointer bool — so any toggle the
+  // dashboard omits collapses to false. Always include every flag.
   const persistFlowExtra = async (
-    enabled: boolean,
-    successMessage: string,
-    loadingMessage: string,
+    overrides: {
+      enabled?: boolean;
+      packetCounter?: boolean;
+      successMessage: string;
+      loadingMessage: string;
+    },
   ) => {
     const persistedGroups = await saveFlowGroups();
     const groupIDs = persistedGroups.map((g) => g.id);
+    const nextEnabled = overrides.enabled ?? flowEnabled;
+    const nextPacketCounter = overrides.packetCounter ?? flowPacketCounter;
     notify({
       title: "Network Traffic Events",
-      description: successMessage,
+      description: overrides.successMessage,
       promise: saveRequest
         .put({
           id: account.id,
@@ -115,37 +134,48 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
             ...account.settings,
             extra: {
               ...account.settings.extra,
-              network_traffic_logs_enabled: enabled,
+              network_traffic_logs_enabled: nextEnabled,
+              network_traffic_packet_counter_enabled: nextPacketCounter,
               network_traffic_logs_groups: groupIDs,
             },
           },
         })
         .then(() => {
-          setFlowEnabled(enabled);
+          setFlowEnabled(nextEnabled);
+          setFlowPacketCounter(nextPacketCounter);
           setFlowGroups(persistedGroups);
           mutate("/accounts");
         }),
-      loadingMessage,
+      loadingMessage: overrides.loadingMessage,
     });
   };
 
   const toggleFlowSetting = (toggle: boolean) =>
-    persistFlowExtra(
-      toggle,
-      `Network Traffic Events successfully ${toggle ? "enabled" : "disabled"}.`,
-      "Updating Network Traffic Events...",
-    );
+    persistFlowExtra({
+      enabled: toggle,
+      successMessage: `Network Traffic Events successfully ${toggle ? "enabled" : "disabled"}.`,
+      loadingMessage: "Updating Network Traffic Events...",
+    });
+
+  const toggleFlowPacketCounter = (toggle: boolean) =>
+    persistFlowExtra({
+      packetCounter: toggle,
+      successMessage: toggle
+        ? "Byte and packet counters enabled."
+        : "Byte and packet counters disabled (flow rows will show 0 bytes).",
+      loadingMessage: "Updating packet counter setting...",
+    });
 
   const saveFlowGroupsFilter = () =>
-    persistFlowExtra(
-      flowEnabled,
-      flowGroups.length > 0
-        ? `Traffic events scoped to ${flowGroups.length} ${
-            flowGroups.length === 1 ? "group" : "groups"
-          }.`
-        : "Traffic events now apply to all peers.",
-      "Updating traffic events scope...",
-    );
+    persistFlowExtra({
+      successMessage:
+        flowGroups.length > 0
+          ? `Traffic events scoped to ${flowGroups.length} ${
+              flowGroups.length === 1 ? "group" : "groups"
+            }.`
+          : "Traffic events now apply to all peers.",
+      loadingMessage: "Updating traffic events scope...",
+    });
 
   const toggleNetworkDNSSetting = async (toggle: boolean) => {
     notify({
@@ -310,42 +340,52 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
         />
 
         {flowEnabled && (
-          <div
-            className={
-              "flex flex-col gap-3 rounded-oz2-card border border-oz2-border-soft bg-oz2-bg-sunken p-4 " +
-              (editDisabled ? "opacity-60" : "")
-            }
-          >
-            <div>
-              <div className="inline-flex items-center gap-2 text-[13px] font-medium text-oz2-text-2">
-                <Filter size={13} />
-                Limit to specific groups
-              </div>
-              <p className="mt-[3px] text-[11.5px] leading-[1.45] text-oz2-text-faint">
-                Optional. When set, only peers in these groups capture and
-                report traffic events — excluded peers never spend CPU on
-                conntrack and never push events to management. Leave empty to
-                apply to all peers.
-              </p>
-            </div>
-            <PeerGroupSelector
-              values={flowGroups}
-              onChange={setFlowGroups}
+          <>
+            <OzSettingsToggle
+              value={flowPacketCounter}
+              onChange={toggleFlowPacketCounter}
               disabled={editDisabled}
-              hideAllGroup
+              label="Count bytes and packets"
+              desc="Turns on kernel conntrack accounting on every peer so each flow row carries real rx/tx byte and packet totals. Required for the volume column in Flow Traffic to be non-zero. Slight per-flow CPU cost."
             />
-            <div>
-              <OzButton
-                variant="primary"
-                type="button"
-                disabled={!flowGroupsDirty || editDisabled}
-                onClick={saveFlowGroupsFilter}
-                className="!h-[30px] !px-3 !text-[12.5px]"
-              >
-                Save filter
-              </OzButton>
+
+            <div
+              className={
+                "flex flex-col gap-3 rounded-oz2-card border border-oz2-border-soft bg-oz2-bg-sunken p-4 " +
+                (editDisabled ? "opacity-60" : "")
+              }
+            >
+              <div>
+                <div className="inline-flex items-center gap-2 text-[13px] font-medium text-oz2-text-2">
+                  <Filter size={13} />
+                  Limit to specific groups
+                </div>
+                <p className="mt-[3px] text-[11.5px] leading-[1.45] text-oz2-text-faint">
+                  Optional. When set, only peers in these groups capture and
+                  report traffic events — excluded peers never spend CPU on
+                  conntrack and never push events to management. Leave empty to
+                  apply to all peers.
+                </p>
+              </div>
+              <PeerGroupSelector
+                values={flowGroups}
+                onChange={setFlowGroups}
+                disabled={editDisabled}
+                hideAllGroup
+              />
+              <div>
+                <OzButton
+                  variant="primary"
+                  type="button"
+                  disabled={!flowGroupsDirty || editDisabled}
+                  onClick={saveFlowGroupsFilter}
+                  className="!h-[30px] !px-3 !text-[12.5px]"
+                >
+                  Save filter
+                </OzButton>
+              </div>
             </div>
-          </div>
+          </>
         )}
       </OzSettingsCard>
     </Tabs.Content>

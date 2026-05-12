@@ -107,14 +107,22 @@ func (h *handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 		if req.Settings.Extra.NetworkTrafficLogsGroups != nil {
 			groups = append(groups, *req.Settings.Extra.NetworkTrafficLogsGroups...)
 		}
-		settings.Extra = &types.ExtraSettings{
-			PeerApprovalEnabled:      req.Settings.Extra.PeerApprovalEnabled,
-			FlowEnabled:              req.Settings.Extra.NetworkTrafficLogsEnabled,
-			FlowPacketCounterEnabled: req.Settings.Extra.NetworkTrafficPacketCounterEnabled,
-			FlowEventsGroups:         groups,
+		// Seed the new Extra from the current account settings so that
+		// fields the OpenAPI spec does not surface (FlowDnsCollectionEnabled,
+		// FlowENCollectionEnabled) survive the round-trip. Without the
+		// seed, the dashboard's NetworkSettingsTab — which only sends
+		// the wire-visible toggles — wipes those flags on every Save.
+		var seed types.ExtraSettings
+		if existing, err := h.settingsManager.GetSettings(r.Context(), accountID, userID); err == nil && existing != nil && existing.Extra != nil {
+			seed = *existing.Extra
 		}
+		extra := seed
+		extra.PeerApprovalEnabled = req.Settings.Extra.PeerApprovalEnabled
+		extra.FlowEnabled = req.Settings.Extra.NetworkTrafficLogsEnabled
+		extra.FlowPacketCounterEnabled = req.Settings.Extra.NetworkTrafficPacketCounterEnabled
+		extra.FlowEventsGroups = groups
 		if req.Settings.Extra.NetworkTrafficDisableDefaultPortFilter != nil {
-			settings.Extra.FlowDisableDefaultPortFilter = *req.Settings.Extra.NetworkTrafficDisableDefaultPortFilter
+			extra.FlowDisableDefaultPortFilter = *req.Settings.Extra.NetworkTrafficDisableDefaultPortFilter
 		}
 		if req.Settings.Extra.NetworkTrafficExcludedPorts != nil {
 			ports := make([]types.FlowPortFilter, 0, len(*req.Settings.Extra.NetworkTrafficExcludedPorts))
@@ -124,8 +132,9 @@ func (h *handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 					Protocol: string(p.Protocol),
 				})
 			}
-			settings.Extra.FlowExcludedPorts = ports
+			extra.FlowExcludedPorts = ports
 		}
+		settings.Extra = &extra
 	}
 
 	if req.Settings.JwtGroupsEnabled != nil {
