@@ -105,10 +105,19 @@ func (r *Resolver) Forget(accountID string) {
 // store.Event holds destinations as strings (the DTO layer formats
 // them); the resolver matches in netip space for cheap CIDR
 // containment checks.
+//
+// Unmap is intentional: an IPv4-mapped IPv6 address ("::ffff:10.0.0.1")
+// must compare equal to its bare IPv4 form ("10.0.0.1") for index
+// lookups to hit. Without this normalisation a malicious or
+// misconfigured peer could report dst_ip in the mapped form to
+// evade attribution (matching nothing, leaving rule_id null) —
+// audit-quality issue, low severity but real. The index builder
+// also unmaps peer IPs (see index.go::buildGroupExpansion), so both
+// sides of the comparison are normalised.
 func parseIP(s string) (netip.Addr, bool) {
 	a, err := netip.ParseAddr(s)
 	if err != nil {
 		return netip.Addr{}, false
 	}
-	return a, true
+	return a.Unmap(), true
 }
