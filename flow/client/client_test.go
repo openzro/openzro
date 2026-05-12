@@ -255,6 +255,49 @@ func TestSend(t *testing.T) {
 	}
 }
 
+// TestReceive_ClosedDuringRetryReturnsClientClosed verifies that
+// closing the client mid-retry causes Receive to unwind with
+// ErrClientClosed instead of looping forever on the dead conn. The
+// recreate-on-failure path checks the closed flag under streamMu
+// before dialing a fresh grpc.ClientConn; without that check, Close
+// would race with a new dial and the Receive goroutine could keep
+// trying past Close indefinitely on slow networks.
+func TestReceive_ClosedDuringRetryReturnsClientClosed(t *testing.T) {
+	server := newTestServer(t)
+
+	// Use a context that won't expire before we get to Close — we
+	// want the closure (not the context) to terminate the loop.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	t.Cleanup(cancel)
+
+	client, err := flow.NewClient("http://"+server.addr, "test-payload", "test-signature", 200*time.Millisecond)
+	require.NoError(t, err)
+
+	// Force the stream into a retry cycle: stop the server, then call
+	// Close on the client a moment later. The Receive loop should
+	// observe the closed flag inside recreateConnection or
+	// establishStream and return ErrClientClosed.
+	server.grpcSrv.Stop()
+
+	receiveDone := make(chan error, 1)
+	go func() {
+		receiveDone <- client.Receive(ctx, 200*time.Millisecond, func(*proto.FlowEventAck) error { return nil })
+	}()
+
+	// Give the loop one cycle to enter retry, then close.
+	time.Sleep(300 * time.Millisecond)
+	require.NoError(t, client.Close())
+
+	select {
+	case err := <-receiveDone:
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, flow.ErrClientClosed) || errors.Is(err, context.Canceled),
+			"Receive should unwind with ErrClientClosed or context cancellation after Close; got %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("Receive did not unwind within 5s after Close")
+	}
+}
+
 // TestReceive_RejectsConcurrentCall is a regression test for the
 // double-Receive bug: nothing in the API prevented two goroutines
 // from each opening a fresh stream against the same GRPCClient.
