@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"net/netip"
 	"sync"
+	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	nfct "github.com/ti-mo/conntrack"
@@ -18,6 +20,17 @@ import (
 )
 
 const defaultChannelSize = 100
+
+// Backoff parameters for the conntrack listener reconnect loop.
+// Exposed as vars so unit tests can shorten the cycle (tests assign
+// reconnectInitInterval = a few ms before constructing a ConnTrack).
+// Production values land within the netlink "transient EPERM after
+// module reload" recovery window: ~5s first try, capped at 5 minutes.
+var (
+	reconnectInitInterval  = 5 * time.Second
+	reconnectMaxInterval   = 5 * time.Minute
+	reconnectRandomization = 0.5
+)
 
 // PolicyResolver maps the agent-local rule_index that the firewall
 // backend stamped on the conntrack mark (per ADR-0013) back to the
@@ -150,14 +163,107 @@ func (c *ConnTrack) receiverRoutine(events chan nfct.Event, errChan chan error) 
 		case event := <-events:
 			c.handleEvent(event)
 		case err := <-errChan:
-			log.Errorf("Error from conntrack event listener: %v", err)
-			if err := c.conn.Close(); err != nil {
-				log.Errorf("Error closing conntrack connection: %v", err)
+			// Listener errored — kernel module reloaded, EPERM on a
+			// transient permission flap, netlink dispatcher restart.
+			// Attempt to recover via exponential backoff instead of
+			// dying for good. handleListenerError returns nil channels
+			// when Stop() ran during the reconnect window.
+			if events, errChan = c.handleListenerError(err); events == nil {
+				return
 			}
-			return
 		case <-c.done:
 			return
 		}
+	}
+}
+
+// handleListenerError closes the failed connection and attempts to
+// reconnect with exponential backoff. Returns the new event channels
+// on success, or (nil, nil) when shutdown was requested mid-reconnect
+// (caller exits the receiver loop in that case).
+func (c *ConnTrack) handleListenerError(err error) (chan nfct.Event, chan error) {
+	log.Warnf("conntrack event listener failed: %v", err)
+	c.closeConn()
+	return c.reconnect()
+}
+
+// closeConn tears down the current netlink listener if any. Safe to
+// call when c.conn is already nil (the reconnect race path).
+func (c *ConnTrack) closeConn() {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+
+	if c.conn != nil {
+		if err := c.conn.Close(); err != nil {
+			log.Debugf("close conntrack connection: %v", err)
+		}
+		c.conn = nil
+	}
+}
+
+// reconnect loops on backoff.NextBackOff() until either a fresh
+// listener comes up or Stop()/Close() set started=false. Returns the
+// new channels on success and (nil, nil) when shutdown wins the
+// race. Logs each attempt at Info so operators can see "we're
+// trying" without enabling debug.
+func (c *ConnTrack) reconnect() (chan nfct.Event, chan error) {
+	bo := &backoff.ExponentialBackOff{
+		InitialInterval:     reconnectInitInterval,
+		RandomizationFactor: reconnectRandomization,
+		Multiplier:          backoff.DefaultMultiplier,
+		MaxInterval:         reconnectMaxInterval,
+		MaxElapsedTime:      0, // retry indefinitely — only Stop/Close exit
+		Clock:               backoff.SystemClock,
+	}
+	bo.Reset()
+
+	for {
+		delay := bo.NextBackOff()
+		log.Infof("reconnecting conntrack listener in %s", delay)
+
+		select {
+		case <-c.done:
+			c.mux.Lock()
+			c.started = false
+			c.mux.Unlock()
+			return nil, nil
+		case <-time.After(delay):
+		}
+
+		conn, err := c.dial()
+		if err != nil {
+			log.Warnf("reconnect conntrack dial: %v", err)
+			continue
+		}
+
+		events := make(chan nfct.Event, defaultChannelSize)
+		errChan, err := conn.Listen(events, 1, []netfilter.NetlinkGroup{
+			netfilter.GroupCTNew,
+			netfilter.GroupCTDestroy,
+		})
+		if err != nil {
+			log.Warnf("reconnect conntrack listen: %v", err)
+			if closeErr := conn.Close(); closeErr != nil {
+				log.Debugf("close conntrack connection: %v", closeErr)
+			}
+			continue
+		}
+
+		c.mux.Lock()
+		if !c.started {
+			// Stop()/Close() landed while we were dialing or
+			// listening; close the orphan and bail.
+			c.mux.Unlock()
+			if closeErr := conn.Close(); closeErr != nil {
+				log.Debugf("close conntrack connection: %v", closeErr)
+			}
+			return nil, nil
+		}
+		c.conn = conn
+		c.mux.Unlock()
+
+		log.Infof("conntrack listener reconnected successfully")
+		return events, errChan
 	}
 }
 
