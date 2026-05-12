@@ -28,15 +28,45 @@ type PolicyResolver interface {
 	LookupPolicyID(ruleIndex uint32) ([]byte, bool)
 }
 
+// listener abstracts the netlink conntrack connection so the receiver
+// loop (and especially the upcoming reconnect-with-backoff path) can
+// be unit-tested without a real kernel. *nfct.Conn satisfies this
+// interface as-is.
+type listener interface {
+	Listen(evChan chan<- nfct.Event, numWorkers uint8, groups []netfilter.NetlinkGroup) (chan error, error)
+	Close() error
+}
+
+// DialFunc opens a fresh netlink conntrack connection. Tests inject
+// a mock via WithDialer to avoid touching the kernel.
+type DialFunc func() (listener, error)
+
+// Option configures a ConnTrack instance at construction time.
+type Option func(*ConnTrack)
+
+// WithDialer overrides the default netlink dialer. Production code
+// leaves the default in place; tests use this to feed a mock
+// listener that simulates kernel events, errors, and reconnects.
+func WithDialer(d DialFunc) Option {
+	return func(c *ConnTrack) { c.dial = d }
+}
+
+// defaultDial is the production netlink conntrack dialer. Wrapped
+// behind DialFunc so tests can swap it out.
+func defaultDial() (listener, error) {
+	return nfct.Dial(nil)
+}
+
 // ConnTrack manages kernel-based conntrack events
 type ConnTrack struct {
 	flowLogger nftypes.FlowLogger
 	iface      nftypes.IFaceMapper
 	resolver   PolicyResolver
 
-	conn *nfct.Conn
+	conn listener
 	mux  sync.Mutex
 
+	dial           DialFunc
 	instanceID     uuid.UUID
 	started        bool
 	done           chan struct{}
@@ -46,15 +76,20 @@ type ConnTrack struct {
 // New creates a new connection tracker that interfaces with the kernel's conntrack system.
 // If resolver is nil the collector emits events without RuleId, matching the
 // behaviour from before the ADR-0013 mark layout.
-func New(flowLogger nftypes.FlowLogger, iface nftypes.IFaceMapper, resolver PolicyResolver) *ConnTrack {
-	return &ConnTrack{
+func New(flowLogger nftypes.FlowLogger, iface nftypes.IFaceMapper, resolver PolicyResolver, opts ...Option) *ConnTrack {
+	c := &ConnTrack{
 		flowLogger: flowLogger,
 		iface:      iface,
 		resolver:   resolver,
 		instanceID: uuid.New(),
 		started:    false,
+		dial:       defaultDial,
 		done:       make(chan struct{}, 1),
 	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
 }
 
 // Start begins tracking connections by listening for conntrack events. This method is idempotent.
@@ -72,7 +107,7 @@ func (c *ConnTrack) Start(enableCounters bool) error {
 		c.EnableAccounting()
 	}
 
-	conn, err := nfct.Dial(nil)
+	conn, err := c.dial()
 	if err != nil {
 		return fmt.Errorf("dial conntrack: %w", err)
 	}
