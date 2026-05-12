@@ -1048,6 +1048,83 @@ func TestUpdateAccountPeers(t *testing.T) {
 	}
 }
 
+// fakeFlowPolicyIndex captures Rebuild / Forget calls for assertion
+// from TestUpdateAccountPeers_RebuildsFlowPolicyIndex below.
+type fakeFlowPolicyIndex struct {
+	mu       sync.Mutex
+	rebuilds []string // accountIDs
+	forgets  []string
+}
+
+func (f *fakeFlowPolicyIndex) Rebuild(accountID string, account *types.Account) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.rebuilds = append(f.rebuilds, accountID)
+}
+
+func (f *fakeFlowPolicyIndex) Forget(accountID string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.forgets = append(f.forgets, accountID)
+}
+
+func (f *fakeFlowPolicyIndex) rebuildCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.rebuilds)
+}
+
+// TestUpdateAccountPeers_RebuildsFlowPolicyIndex asserts the
+// ADR-0018 invalidation hook fires every time UpdateAccountPeers
+// runs. The flow policy resolver must observe every account-graph
+// change the management already pushes through this chokepoint —
+// policy save, peer add/remove, group edit, resource edit all
+// converge on UpdateAccountPeers, so a missed hook here would
+// silently leave the resolver serving stale attribution.
+func TestUpdateAccountPeers_RebuildsFlowPolicyIndex(t *testing.T) {
+	log.SetOutput(io.Discard)
+	defer log.SetOutput(os.Stderr)
+
+	manager, accountID, _, err := setupTestAccountManager(t, 5, 1)
+	if err != nil {
+		t.Fatalf("Failed to setup test account manager: %v", err)
+	}
+
+	idx := &fakeFlowPolicyIndex{}
+	manager.SetFlowPolicyIndex(idx)
+
+	ctx := context.Background()
+	account, err := manager.Store.GetAccount(ctx, accountID)
+	if err != nil {
+		t.Fatalf("Failed to get account: %v", err)
+	}
+
+	peerChannels := make(map[string]chan *UpdateMessage)
+	for peerID := range account.Peers {
+		peerChannels[peerID] = make(chan *UpdateMessage, channelBufferSize)
+	}
+	manager.peersUpdateManager.peerChannels = peerChannels
+
+	manager.UpdateAccountPeers(ctx, accountID)
+	// Drain peers so the fan-out goroutines complete.
+	for _, channel := range peerChannels {
+		<-channel
+	}
+
+	assert.Equal(t, 1, idx.rebuildCount(), "Rebuild must be invoked exactly once per UpdateAccountPeers call")
+	idx.mu.Lock()
+	assert.Equal(t, []string{accountID}, idx.rebuilds)
+	idx.mu.Unlock()
+
+	// Second call should produce a second Rebuild — the hook is
+	// not a one-shot.
+	manager.UpdateAccountPeers(ctx, accountID)
+	for _, channel := range peerChannels {
+		<-channel
+	}
+	assert.Equal(t, 2, idx.rebuildCount(), "every UpdateAccountPeers call must Rebuild the index")
+}
+
 func TestToSyncResponse(t *testing.T) {
 	_, ipnet, err := net.ParseCIDR("192.168.1.0/24")
 	if err != nil {

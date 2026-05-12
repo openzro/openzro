@@ -57,6 +57,7 @@ import (
 	nbContext "github.com/openzro/openzro/management/server/context"
 	"github.com/openzro/openzro/management/server/dex_proxy"
 	flowExports "github.com/openzro/openzro/management/server/flow_exports"
+	flowPolicyResolverPkg "github.com/openzro/openzro/management/server/flow_policy_resolver"
 	"github.com/openzro/openzro/management/server/geolocation"
 	"github.com/openzro/openzro/management/server/groups"
 	nbhttp "github.com/openzro/openzro/management/server/http"
@@ -443,7 +444,20 @@ var (
 				initial = append(initial, flowStore)
 			}
 			initial = append(initial, extraSinks...)
-			flowSvc := server.NewFlowService(initial, peerResolver)
+
+			// ADR-0018: the server-side resolver is the fallback path
+			// for flow events the agent could not stamp at firewall
+			// time (Linux kernel outbound-initiator flows). Wired into
+			// both FlowService (Resolve at ingest) and AccountManager
+			// (Rebuild on every account-graph change). When the flow
+			// store is disabled (engine=none), the resolver still
+			// fires but its output goes nowhere — kept on so SIEM
+			// streams and cold-archive sinks observe enriched events.
+			flowPolicyResolver := flowPolicyResolverPkg.New()
+			flowSvc := server.NewFlowService(initial, peerResolver,
+				server.WithPolicyResolver(flowPolicyResolver),
+			)
+			accountManager.SetFlowPolicyIndex(flowPolicyResolver)
 
 			var flowExportsManager *flowExports.Manager
 			if flowExportsStore != nil {

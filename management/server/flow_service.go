@@ -42,6 +42,11 @@ type FlowService struct {
 	sinks    []store.Sink
 	resolver PeerResolver
 	cache    *peerCache
+	// policyResolver fills FlowEvent.RuleID for events the agent
+	// could not stamp at firewall time (ADR-0018). Optional — when
+	// nil, events pass through with whatever RuleID the agent
+	// reported. Wired via WithPolicyResolver.
+	policyResolver PolicyResolver
 
 	bufferSize int
 	batchSize  int
@@ -51,6 +56,14 @@ type FlowService struct {
 	wg     sync.WaitGroup
 	stopCh chan struct{}
 	closed sync.Once
+}
+
+// PolicyResolver is the narrow contract FlowService needs from the
+// flow_policy_resolver package. Defined here (not imported) so the
+// package boundary stays clean and the resolver can be mocked in
+// tests without bringing the resolver's own dependencies along.
+type PolicyResolver interface {
+	Resolve(accountID string, e *store.Event) bool
 }
 
 // PeerResolver maps a WireGuard public key (raw 32 bytes from the
@@ -88,6 +101,22 @@ func WithFlushInterval(d time.Duration) FlowServiceOption {
 		if d > 0 {
 			s.flushEvery = d
 		}
+	}
+}
+
+// WithPolicyResolver installs an ADR-0018 fallback resolver. The
+// resolver is consulted only for events the agent left RuleID-empty
+// (typically outbound flows from Linux kernel peers — see ADR-0018
+// for the agent-side gap). Events the agent already stamped pass
+// through untouched, so the resolver runs on a minority of events
+// in mixed deployments.
+//
+// Passing nil is a no-op; the service behaves as if no resolver is
+// configured. Use this to disable the resolver for benchmarking
+// without changing wiring.
+func WithPolicyResolver(r PolicyResolver) FlowServiceOption {
+	return func(s *FlowService) {
+		s.policyResolver = r
 	}
 }
 
@@ -322,7 +351,15 @@ func (s *FlowService) flush(ctx context.Context, batch []*bufferedEvent) {
 			peerID, accountID = pid, aid
 			s.cache.put(b64key(key), pid, aid)
 		}
-		events = append(events, fromProto(b.proto, peerID, accountID, b.received))
+		ev := fromProto(b.proto, peerID, accountID, b.received)
+		// ADR-0018 fallback: fill RuleID when the agent could not
+		// stamp it at firewall time. No-op when policyResolver is
+		// nil or when RuleID is already set (the agent did its
+		// job, primary path).
+		if s.policyResolver != nil {
+			s.policyResolver.Resolve(accountID, ev)
+		}
+		events = append(events, ev)
 	}
 	if len(events) == 0 {
 		return

@@ -118,6 +118,24 @@ type DefaultAccountManager struct {
 	// short-circuit is skipped and the gate runs as if no bypass
 	// existed; the existing posture checks still apply.
 	admissionBypasses *admission.Store
+
+	// flowPolicyIndex owns the ADR-0018 server-side policy resolver.
+	// When set, UpdateAccountPeers rebuilds the resolver's index for
+	// the affected account so subsequent flow events can be
+	// attributed by the management. When nil, the resolver is
+	// effectively disabled and flow events keep whatever RuleID the
+	// agent stamped (or none).
+	flowPolicyIndex FlowPolicyIndex
+}
+
+// FlowPolicyIndex is the narrow contract DefaultAccountManager uses
+// to push account-graph changes into the ADR-0018 resolver. Defined
+// here (not imported from flow_policy_resolver) so the account
+// manager doesn't take a hard dependency on the resolver package —
+// the cmd/ wiring decides whether to plug a concrete implementation.
+type FlowPolicyIndex interface {
+	Rebuild(accountID string, account *types.Account)
+	Forget(accountID string)
 }
 
 // SetActivityExporters wires a per-account exporter manager into
@@ -133,6 +151,15 @@ func (am *DefaultAccountManager) SetActivityExporters(m *activity_exporters.Mana
 // gate continues to run posture checks as before.
 func (am *DefaultAccountManager) SetAdmissionBypasses(s *admission.Store) {
 	am.admissionBypasses = s
+}
+
+// SetFlowPolicyIndex wires the ADR-0018 server-side resolver into
+// UpdateAccountPeers. Called once at startup from cmd/management.go
+// after the resolver is constructed. nil disables the resolver and
+// flow events keep whatever RuleID the agent stamped at firewall
+// time (the ADR-0013 primary path).
+func (am *DefaultAccountManager) SetFlowPolicyIndex(idx FlowPolicyIndex) {
+	am.flowPolicyIndex = idx
 }
 
 func isUniqueConstraintError(err error) bool {
