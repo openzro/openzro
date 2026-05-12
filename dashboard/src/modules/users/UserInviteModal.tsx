@@ -1,7 +1,3 @@
-import Button from "@components/Button";
-import HelpText from "@components/HelpText";
-import { Input } from "@components/Input";
-import { Label } from "@components/Label";
 import {
   Modal,
   ModalContent,
@@ -9,7 +5,6 @@ import {
   ModalTrigger,
 } from "@components/modal/Modal";
 import { notify } from "@components/Notification";
-import Paragraph from "@components/Paragraph";
 import { PeerGroupSelector } from "@components/PeerGroupSelector";
 import { IconMailForward } from "@tabler/icons-react";
 import { useApiCall } from "@utils/api";
@@ -22,6 +17,9 @@ import Avatar1 from "@/assets/avatars/009.jpg";
 import Avatar2 from "@/assets/avatars/030.jpg";
 import Avatar3 from "@/assets/avatars/063.jpg";
 import Avatar4 from "@/assets/avatars/086.jpg";
+import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
+import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
 import { Role, User } from "@/interfaces/User";
 import useGroupHelper from "@/modules/groups/useGroupHelper";
 import { UserRoleSelector } from "@/modules/users/UserRoleSelector";
@@ -96,9 +94,11 @@ export function UserInviteModalContent({ onSuccess }: Readonly<ModalProps>) {
 
   return (
     <ModalContent maxWidthClass={"max-w-md relative"} showClose={true}>
+      {/* Decorative gradient overlay — `pointer-events-none` so it
+          doesn't intercept clicks on the form fields below it. */}
       <div
         className={
-          "h-full w-full absolute left-0 top-0 rounded-md overflow-hidden z-0"
+          "pointer-events-none h-full w-full absolute left-0 top-0 rounded-md overflow-hidden z-0"
         }
       >
         <div
@@ -117,31 +117,22 @@ export function UserInviteModalContent({ onSuccess }: Readonly<ModalProps>) {
         <h2 className={"text-lg my-0 leading-[1.5 text-center]"}>
           Invite User
         </h2>
-        <Paragraph className={cn("text-sm text-center max-w-xs")}>
+        <p className={cn("text-sm text-center max-w-xs text-oz2-text-muted")}>
           Invite a user to your network and set their permissions.
-        </Paragraph>
+        </p>
       </div>
 
       <div className={"px-8 py-3 flex flex-col gap-6 mt-4"}>
         <div className={"flex flex-col gap-4"}>
-          <Input
-            customPrefix={
-              <div className={"flex items-center gap-2"}>
-                <User2 size={16} className={"text-nb-gray-300"} />
-              </div>
-            }
+          <OzInput
+            prefix={<User2 size={16} />}
             placeholder={"John Doe"}
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
-          <Input
+          <OzInput
             type={"email"}
-            className={"w-full"}
-            customPrefix={
-              <div className={"flex items-center gap-2"}>
-                <MailIcon size={16} className={"text-nb-gray-300"} />
-              </div>
-            }
+            prefix={<MailIcon size={16} />}
             placeholder={"hello@openzro.io"}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -154,10 +145,10 @@ export function UserInviteModalContent({ onSuccess }: Readonly<ModalProps>) {
         </div>
 
         <div className={"mb-4"}>
-          <Label>Auto-assigned groups</Label>
-          <HelpText>
+          <OzLabel>Auto-assigned groups</OzLabel>
+          <OzHelpText className="mb-2">
             Groups will be assigned to peers added by this user.
-          </HelpText>
+          </OzHelpText>
           <PeerGroupSelector
             onChange={setSelectedGroups}
             values={selectedGroups}
@@ -167,7 +158,7 @@ export function UserInviteModalContent({ onSuccess }: Readonly<ModalProps>) {
       </div>
 
       <ModalFooter className={"items-center"}>
-        <Button
+        <OzButton
           variant={"primary"}
           className={"w-full"}
           disabled={isDisabled}
@@ -175,7 +166,7 @@ export function UserInviteModalContent({ onSuccess }: Readonly<ModalProps>) {
         >
           Send Invitation
           <IconMailForward size={16} />
-        </Button>
+        </OzButton>
       </ModalFooter>
     </ModalContent>
   );

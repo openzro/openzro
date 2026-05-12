@@ -1,17 +1,21 @@
 import FullTooltip from "@components/FullTooltip";
 import { Modal, ModalContent } from "@components/modal/Modal";
-import { IconCircleFilled } from "@tabler/icons-react";
 import { cn } from "@utils/helpers";
 import { ScaleIcon } from "lucide-react";
 import * as React from "react";
 import { useDialog } from "@/contexts/DialogProvider";
+
+// PostureCheckCard — row used inside PostureCheckModal for each
+// posture-check type (OS, version, geolocation, etc). v2 paint:
+// soft tinted icon tile (no shadow / no bright gradient), oz2 row
+// hover, On/Off pill in oz2-acc-soft vs oz2-bg-sunken.
 
 export const PostureCheckCard = ({
   children,
   title,
   description,
   icon,
-  iconClass = "bg-gradient-to-tr from-openzro-200 to-openzro-100",
+  iconClass = "bg-oz2-acc-soft text-oz2-acc-text",
   modalWidthClass = "max-w-xl",
   onClose,
   open,
@@ -50,12 +54,23 @@ export const PostureCheckCard = ({
   const licenseToolTip = (
     <FullTooltip content={license}>
       <ScaleIcon
-        size={14}
+        size={13}
         className={
-          "text-nb-gray-400 hover:text-nb-gray-200 transition-all cursor-pointer -top-[1px] relative"
+          "cursor-pointer text-oz2-text-faint transition-colors hover:text-oz2-text-2 relative -top-[1px]"
         }
       />
     </FullTooltip>
+  );
+
+  const tile = (
+    <div
+      className={cn(
+        "grid h-9 w-9 shrink-0 place-items-center rounded-[10px] border border-oz2-border-soft select-none",
+        iconClass,
+      )}
+    >
+      {icon}
+    </div>
   );
 
   return (
@@ -63,62 +78,45 @@ export const PostureCheckCard = ({
       <div
         onClick={() => setOpen(true)}
         className={cn(
-          "border border-transparent rounded-md flex flex-col items-center transition-all cursor-pointer w-full",
-          "hover:bg-neutral-100 hover:border-neutral-200",
-          "dark:hover:bg-nb-gray-920/80 dark:hover:border-nb-gray-900",
+          "flex w-full cursor-pointer items-center gap-4 rounded-oz2-input border border-transparent px-4 py-3 transition-colors",
+          "hover:bg-oz2-hover hover:border-oz2-border-soft",
         )}
       >
-        <div className={"flex gap-4 items-center w-full px-4 py-3"}>
-          <div
-            className={cn(
-              "h-9 w-9 shrink-0  shadow-xl  rounded-md flex items-center justify-center select-none",
-              iconClass,
-            )}
-          >
-            {icon}
-          </div>
-          <div className={" w-full"}>
-            <div
-              className={
-                "text-sm font-medium flex gap-2 items-center justify-between"
-              }
-            >
-              <span className={"flex items-center gap-2"}>
-                {title}
-                {license && licenseToolTip}
-              </span>
-            </div>
-            <div className={"text-xs mt-0.5 text-nb-gray-300"}>
-              {description}
-            </div>
-          </div>
-          <div>
-            <span
-              className={cn(
-                "text-[10px] rounded-full px-1 py-1 flex items-center gap-1 w-[50px] justify-center uppercase font-medium",
-                active
-                  ? [
-                      "text-green-700 bg-green-100 hover:bg-green-200 hover:text-green-800",
-                      "dark:text-green-400 dark:bg-green-900 dark:hover:bg-green-800 dark:hover:text-green-200",
-                      "transition-all",
-                    ].join(" ")
-                  : [
-                      "text-neutral-600 bg-neutral-200",
-                      "dark:text-nb-gray-400 dark:bg-nb-gray-900",
-                    ].join(" "),
-              )}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (active) handleReset().then();
-                else setOpen(true);
-              }}
-            >
-              <IconCircleFilled size={7} className={"mt-[0.1px]"} />
-              {active ? "On" : "Off"}
+        {tile}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2 text-[13.5px] font-medium text-oz2-text">
+            <span className="inline-flex items-center gap-2">
+              {title}
+              {license && licenseToolTip}
             </span>
           </div>
+          <div className="mt-0.5 text-[12px] leading-[1.45] text-oz2-text-muted">
+            {description}
+          </div>
         </div>
+        <span
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (active) handleReset().then();
+            else setOpen(true);
+          }}
+          className={cn(
+            "inline-flex w-[46px] items-center justify-center gap-1 rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] transition-colors",
+            active
+              ? "bg-oz2-acc-soft text-oz2-acc-text hover:bg-oz2-acc-soft-2"
+              : "border border-oz2-border-soft bg-oz2-bg-sunken text-oz2-text-muted hover:bg-oz2-hover",
+          )}
+        >
+          <span
+            aria-hidden
+            className={cn(
+              "inline-block h-1.5 w-1.5 rounded-full",
+              active ? "bg-oz2-acc" : "bg-oz2-text-faint/70",
+            )}
+          />
+          {active ? "On" : "Off"}
+        </span>
       </div>
 
       <Modal
@@ -135,21 +133,14 @@ export const PostureCheckCard = ({
           maxWidthClass={cn("relative", modalWidthClass)}
           showClose={true}
         >
-          <div className={"flex gap-4 items-center px-8 pb-5"}>
-            <div
-              className={cn(
-                "h-9 w-9 shrink-0  shadow-xl  rounded-md flex items-center justify-center select-none",
-                iconClass,
-              )}
-            >
-              {icon}
-            </div>
-            <div className={"pr-10"}>
-              <div className={"text-sm font-medium flex gap-2 items-center"}>
+          <div className="flex items-center gap-4 px-8 pb-5">
+            {tile}
+            <div className="min-w-0 pr-10">
+              <div className="flex items-center gap-2 text-[14px] font-semibold text-oz2-text">
                 {title}
                 {license && licenseToolTip}
               </div>
-              <div className={"text-xs mt-0.5 text-nb-gray-300"}>
+              <div className="mt-0.5 text-[12.5px] text-oz2-text-muted">
                 {description}
               </div>
             </div>

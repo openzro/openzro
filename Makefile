@@ -55,10 +55,10 @@ build.dashboard: ## Production build of the Next.js dashboard
 build.management: ## Build the management server binary
 	$(GO) build $(GOFLAGS) -o management/management ./management
 
-dev.dashboard: dev.idp.up dev.management.up dev.seed.flow-events ## Full dev stack: Zitadel + management + dashboard + flow events seed. http://localhost:3000
+dev.dashboard: dev.idp.up dev.management.up dev.seed.flow-events dev.seed.peers ## Full dev stack: Zitadel + management + dashboard + flow events + peers seed. http://localhost:3000
 	cd $(DASHBOARD_DIR) && $(NPM) install && $(NPM) run dev
 
-dev.dashboard.turbo: dev.idp.up dev.management.up dev.seed.flow-events ## Same as dev.dashboard but with Turbopack
+dev.dashboard.turbo: dev.idp.up dev.management.up dev.seed.flow-events dev.seed.peers ## Same as dev.dashboard but with Turbopack
 	cd $(DASHBOARD_DIR) && $(NPM) install && $(NPM) run turbo
 
 dev.dashboard.bare: ## Run dashboard without IdP/management (use when pointing at external services)
@@ -230,6 +230,10 @@ dev.management.up: build.management dev.deps.create-dbs dev.idp.up ## Start the 
 # `relation already exists` error from Postgres.
 dev.seed.flow-events: dev.management.up ## Seed the local Postgres flow store with synthetic events for dashboard previews
 	@$(GO) run ./scripts/dev-seed-flow-events
+
+.PHONY: dev.seed.peers
+dev.seed.peers: dev.management.up ## Seed the local management store with diverse synthetic peers + groups for /peers preview
+	@$(GO) run ./scripts/dev-seed-peers
 
 dev.management.down: ## Stop the management server
 	@if [ -f $(MGMT_PIDFILE) ]; then \

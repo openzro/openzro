@@ -1,8 +1,5 @@
 "use client";
 
-import Button from "@components/Button";
-import InlineLink from "@components/InlineLink";
-import { Input } from "@components/Input";
 import {
   Modal,
   ModalClose,
@@ -12,13 +9,14 @@ import {
 } from "@components/modal/Modal";
 import ModalHeader from "@components/modal/ModalHeader";
 import { notify } from "@components/Notification";
-import Paragraph from "@components/Paragraph";
 import Separator from "@components/Separator";
 import { IconSettings2 } from "@tabler/icons-react";
 import { useApiCall } from "@utils/api";
 import { ExternalLinkIcon, PlusCircle, User2 } from "lucide-react";
 import React, { useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
+import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
 import { Role, User } from "@/interfaces/User";
 import { UserRoleSelector } from "@/modules/users/UserRoleSelector";
 
@@ -86,12 +84,8 @@ export function ServiceUserModalContent({ onSuccess }: Readonly<ModalProps>) {
       <div className={"px-8 py-6 flex flex-col gap-8"}>
         <div className={"flex gap-4"}>
           <div className={"w-full"}>
-            <Input
-              customPrefix={
-                <div className={"flex items-center gap-2"}>
-                  <User2 size={16} className={"text-nb-gray-300"} />
-                </div>
-              }
+            <OzInput
+              prefix={<User2 size={16} />}
               placeholder={"John Doe"}
               value={name}
               data-cy={"service-user-name"}
@@ -110,23 +104,25 @@ export function ServiceUserModalContent({ onSuccess }: Readonly<ModalProps>) {
 
       <ModalFooter className={"items-center"}>
         <div className={"w-full"}>
-          <Paragraph className={"text-sm mt-auto"}>
-            Learn more about
-            <InlineLink
+          <p className={"text-sm mt-auto text-oz2-text-muted"}>
+            Learn more about{" "}
+            <a
               href={"https://docs.openzro.io/how-to/access-openzro-public-api"}
               target={"_blank"}
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-oz2-acc-text underline-offset-2 hover:underline"
             >
               Service Users
               <ExternalLinkIcon size={12} />
-            </InlineLink>
-          </Paragraph>
+            </a>
+          </p>
         </div>
         <div className={"flex gap-3 w-full justify-end"}>
           <ModalClose asChild={true}>
-            <Button variant={"secondary"}>Cancel</Button>
+            <OzButton variant={"default"}>Cancel</OzButton>
           </ModalClose>
 
-          <Button
+          <OzButton
             variant={"primary"}
             disabled={isDisabled}
             onClick={create}
@@ -134,7 +130,7 @@ export function ServiceUserModalContent({ onSuccess }: Readonly<ModalProps>) {
           >
             <PlusCircle size={16} />
             Create Service User
-          </Button>
+          </OzButton>
         </div>
       </ModalFooter>
     </ModalContent>

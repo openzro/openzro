@@ -98,34 +98,22 @@ export function PeerSelector({
       <PopoverTrigger asChild>
         <button
           className={cn(
-            "min-h-[46px] w-full relative items-center group",
-            "border border-neutral-200 dark:border-nb-gray-700 justify-between py-2 px-3",
-            "rounded-md bg-white text-sm dark:bg-nb-gray-900/40 flex dark:text-neutral-400/70 text-neutral-500 cursor-pointer enabled:hover:dark:bg-nb-gray-900/50",
-            "disabled:opacity-40 disabled:cursor-default",
+            "group min-h-[38px] w-full relative flex items-center justify-between gap-2",
+            "rounded-oz2-input border border-oz2-border bg-oz2-surface px-3 py-1.5 text-[13px] text-oz2-text-faint transition-colors",
+            "hover:border-oz2-border-strong hover:bg-oz2-hover",
+            "[outline:none] focus-visible:border-oz2-acc focus-visible:ring-2 focus-visible:ring-oz2-acc/30",
+            "disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-60",
           )}
           disabled={disabled}
           ref={inputRef}
         >
-          <div
-            className={
-              "flex items-center w-full gap-2 border-nb-gray-700 flex-wrap h-full"
-            }
-          >
+          <div className="flex w-full items-center gap-2 flex-wrap h-full">
             {value ? (
-              <div
-                className={
-                  "flex items-center justify-between text-sm text-white w-full pr-4 pl-1"
-                }
-              >
-                <div className={"flex items-center gap-2.5 text-sm"}>
+              <div className="flex w-full items-center justify-between gap-2 text-[13px] text-oz2-text">
+                <div className="flex items-center gap-2.5">
                   <TextWithTooltip text={value.name} maxChars={22} />
                 </div>
-
-                <div
-                  className={
-                    "text-neutral-500 dark:text-nb-gray-300 font-medium flex items-center gap-1 font-mono text-[10px]"
-                  }
-                >
+                <div className="flex items-center gap-1 font-mono text-[10px] font-medium text-oz2-text-muted">
                   <MapPinIcon />
                   {value.ip}
                 </div>
@@ -135,18 +123,18 @@ export function PeerSelector({
             )}
           </div>
 
-          <ChevronsUpDown size={18} className={"shrink-0"} />
+          <ChevronsUpDown size={14} className="shrink-0 text-oz2-text-faint" />
         </button>
       </PopoverTrigger>
       <PopoverContent
         hideWhenDetached={false}
-        className="w-full p-0 shadow-sm shadow-nb-gray-950"
+        className="w-full overflow-hidden rounded-oz2-card border border-oz2-border bg-oz2-bg-elev p-0 text-oz2-text shadow-oz2-md"
         style={{
           width: width,
         }}
         align="start"
         side={"top"}
-        sideOffset={10}
+        sideOffset={6}
       >
         <div className={"w-full"}>
           <DropdownInput

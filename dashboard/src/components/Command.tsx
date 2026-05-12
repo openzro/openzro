@@ -116,13 +116,12 @@ const CommandItem = React.forwardRef<
   <CommandPrimitive.Item
     ref={ref}
     className={cn(
-      "text-xs flex justify-between py-2 px-3 cursor-pointer items-center rounded-md",
-      // The aria-selected state is what cmdk applies on keyboard
-      // navigation / hover. Without a light-mode pair the highlight
-      // disappears on a white surface — the user can't tell which
-      // option is focused. neutral-100 mirrors the body's hover
-      // tone in the rest of the dashboard.
-      "bg-transparent aria-selected:bg-neutral-100 dark:aria-selected:bg-nb-gray-910 group/command-item",
+      "group/command-item flex cursor-pointer items-center justify-between gap-3 rounded-oz2-input px-2.5 py-1.5 text-[13px] text-oz2-text",
+      // cmdk applies aria-selected on keyboard navigation + hover.
+      // v2 paint: oz2-hover for the highlight, no separate light /
+      // dark pair (both themes resolve via the oz2 token).
+      "bg-transparent aria-selected:bg-oz2-hover",
+      "data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50",
       className,
     )}
     {...props}

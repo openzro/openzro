@@ -1,9 +1,5 @@
 "use client";
 
-import Button from "@components/Button";
-import HelpText from "@components/HelpText";
-import { Input } from "@components/Input";
-import { Label } from "@components/Label";
 import {
   Modal,
   ModalClose,
@@ -15,6 +11,9 @@ import { notify } from "@components/Notification";
 import { FolderGit2Icon, FolderPlus } from "lucide-react";
 import React, { useMemo, useRef, useState } from "react";
 import { useSWRConfig } from "swr";
+import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
+import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
 import { useGroups } from "@/contexts/GroupsProvider";
 
 type Props = {
@@ -84,15 +83,16 @@ function CreateGroupModalContent({ onSuccess }: { onSuccess: () => void }) {
       />
 
       <div className={"px-8 pb-6 pt-2"}>
-        <Label>Name</Label>
-        <HelpText>
+        <OzLabel htmlFor="create-group-name">Name</OzLabel>
+        <OzHelpText className="mb-2">
           Pick a short, lowercase identifier — e.g. <code>devs</code>,{" "}
           <code>prod-servers</code>.
-        </HelpText>
-        <Input
+        </OzHelpText>
+        <OzInput
+          id="create-group-name"
           ref={inputRef}
           autoFocus
-          customPrefix={<FolderPlus size={16} />}
+          prefix={<FolderPlus size={16} />}
           placeholder={"e.g., devs"}
           value={name}
           data-cy={"group-name"}
@@ -111,16 +111,16 @@ function CreateGroupModalContent({ onSuccess }: { onSuccess: () => void }) {
         <div className={"w-full"} />
         <div className={"flex gap-3 w-full justify-end"}>
           <ModalClose asChild={true}>
-            <Button variant={"secondary"}>Cancel</Button>
+            <OzButton variant={"default"}>Cancel</OzButton>
           </ModalClose>
-          <Button
+          <OzButton
             variant={"primary"}
             disabled={isDisabled}
             onClick={handleCreate}
             data-cy={"create-group-submit"}
           >
             Create Group
-          </Button>
+          </OzButton>
         </div>
       </ModalFooter>
     </ModalContent>

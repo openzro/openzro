@@ -7,8 +7,8 @@ import HelpText from "@components/HelpText";
 import InlineLink from "@components/InlineLink";
 import { notify } from "@components/Notification";
 import Paragraph from "@components/Paragraph";
-import { cn } from "@utils/helpers";
 import useFetchApi, { useApiCall } from "@utils/api";
+import { cn } from "@utils/helpers";
 import { API_ORIGIN } from "@utils/openzro";
 import {
   CableIcon,
@@ -181,7 +181,7 @@ export default function IntegrationsPage() {
 
 // ----- Flow Exports section ------------------------------------------
 
-function FlowExportsSection() {
+export function FlowExportsSection() {
   const { data, isLoading } =
     useFetchApi<FlowExport[]>("/admin/flow-exports");
 
@@ -334,7 +334,7 @@ function flowEndpointLabel(row: FlowExport): string {
 
 // ----- MDM / EDR section ---------------------------------------------
 
-function MDMProvidersSection() {
+export function MDMProvidersSection() {
   const { data, isLoading } =
     useFetchApi<MDMProvider[]>("/admin/mdm-providers");
 
@@ -478,7 +478,7 @@ function mdmEndpointLabel(row: MDMProvider): string {
 
 // ----- Activity Streamer section -------------------------------------
 
-function ActivityExportersSection() {
+export function ActivityExportersSection() {
   const { data, isLoading } =
     useFetchApi<ActivityExporter[]>("/admin/activity-exporters");
 
@@ -622,7 +622,7 @@ function activityEndpointLabel(row: ActivityExporter): string {
 
 // ----- SCIM Provisioning section -------------------------------------
 
-function SCIMSetupSection() {
+export function SCIMSetupSection() {
   const baseURL = API_ORIGIN
     ? `${API_ORIGIN.replace(/\/+$/, "")}/scim/v2`
     : "https://your-management.example.com/scim/v2";

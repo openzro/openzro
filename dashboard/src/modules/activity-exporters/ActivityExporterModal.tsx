@@ -1,9 +1,5 @@
 "use client";
 
-import Button from "@components/Button";
-import HelpText from "@components/HelpText";
-import { Input } from "@components/Input";
-import { Label } from "@components/Label";
 import {
   Modal,
   ModalClose,
@@ -12,12 +8,21 @@ import {
 } from "@components/modal/Modal";
 import ModalHeader from "@components/modal/ModalHeader";
 import { notify } from "@components/Notification";
-import Paragraph from "@components/Paragraph";
-import { Textarea } from "@components/Textarea";
 import { useApiCall } from "@utils/api";
 import { CableIcon } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { useSWRConfig } from "swr";
+import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
+import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
+import {
+  OzSelect,
+  OzSelectContent,
+  OzSelectItem,
+  OzSelectTrigger,
+  OzSelectValue,
+} from "@/components/v2/OzSelect";
+import OzTextarea from "@/components/v2/OzTextarea";
 import {
   ActivityExporter,
   ActivityExporterInput,
@@ -251,8 +256,9 @@ export default function ActivityExporterModal({
 
         <div className={"flex flex-col gap-4 px-8 pb-2"}>
           <div>
-            <Label>Name</Label>
-            <Input
+            <OzLabel htmlFor="exporter-name">Name</OzLabel>
+            <OzInput
+              id="exporter-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={"e.g., Datadog Prod"}
@@ -260,39 +266,47 @@ export default function ActivityExporterModal({
           </div>
 
           <div>
-            <Label>Type</Label>
-            <select
+            <OzLabel>Type</OzLabel>
+            <OzSelect
               value={type}
-              onChange={(e) =>
-                setType(e.target.value as ActivityExporterType)
-              }
+              onValueChange={(v) => setType(v as ActivityExporterType)}
               disabled={isEdit}
-              className={
-                "w-full h-9 rounded-md border border-nb-gray-800 bg-nb-gray-940 px-2 text-sm"
-              }
             >
-              <option value="http">HTTP webhook</option>
-              <option value="datadog">Datadog Logs Intake</option>
-              <option value="elastic">Elasticsearch (ECS)</option>
-            </select>
+              <OzSelectTrigger>
+                <OzSelectValue />
+              </OzSelectTrigger>
+              <OzSelectContent>
+                <OzSelectItem value="http">HTTP webhook</OzSelectItem>
+                <OzSelectItem value="datadog">Datadog Logs Intake</OzSelectItem>
+                <OzSelectItem value="elastic">
+                  Elasticsearch (ECS)
+                </OzSelectItem>
+              </OzSelectContent>
+            </OzSelect>
             {isEdit && (
-              <HelpText>Type cannot be changed after creation.</HelpText>
+              <OzHelpText className="mt-1.5">
+                Type cannot be changed after creation.
+              </OzHelpText>
             )}
           </div>
 
           {type === "http" && (
             <>
               <div>
-                <Label>URL</Label>
-                <Input
+                <OzLabel htmlFor="exporter-http-url">URL</OzLabel>
+                <OzInput
+                  id="exporter-http-url"
                   value={httpURL}
                   onChange={(e) => setHttpURL(e.target.value)}
                   placeholder={"https://siem.example.com/webhooks/audit"}
                 />
               </div>
               <div>
-                <Label>Headers (JSON, optional)</Label>
-                <Textarea
+                <OzLabel htmlFor="exporter-http-headers" optional>
+                  Headers (JSON)
+                </OzLabel>
+                <OzTextarea
+                  id="exporter-http-headers"
                   rows={3}
                   value={httpHeadersJSON}
                   onChange={(e) => setHttpHeadersJSON(e.target.value)}
@@ -300,10 +314,10 @@ export default function ActivityExporterModal({
                     isEdit ? PLACEHOLDER_KEEP : '{"Authorization":"Bearer ..."}'
                   }
                 />
-                <HelpText>
+                <OzHelpText className="mt-1.5">
                   Authorization tokens go here. Stored encrypted; never
                   returned by the API.
-                </HelpText>
+                </OzHelpText>
               </div>
             </>
           )}
@@ -311,28 +325,30 @@ export default function ActivityExporterModal({
           {type === "datadog" && (
             <>
               <div>
-                <Label>Site</Label>
-                <select
-                  value={ddSite}
-                  onChange={(e) => setDdSite(e.target.value)}
-                  className={
-                    "w-full h-9 rounded-md border border-nb-gray-800 bg-nb-gray-940 px-2 text-sm"
-                  }
-                >
-                  <option value="us1">US1 (datadoghq.com)</option>
-                  <option value="us3">US3</option>
-                  <option value="us5">US5</option>
-                  <option value="eu1">EU1 (datadoghq.eu)</option>
-                  <option value="ap1">AP1</option>
-                </select>
-                <HelpText>
+                <OzLabel>Site</OzLabel>
+                <OzSelect value={ddSite} onValueChange={setDdSite}>
+                  <OzSelectTrigger>
+                    <OzSelectValue />
+                  </OzSelectTrigger>
+                  <OzSelectContent>
+                    <OzSelectItem value="us1">
+                      US1 (datadoghq.com)
+                    </OzSelectItem>
+                    <OzSelectItem value="us3">US3</OzSelectItem>
+                    <OzSelectItem value="us5">US5</OzSelectItem>
+                    <OzSelectItem value="eu1">EU1 (datadoghq.eu)</OzSelectItem>
+                    <OzSelectItem value="ap1">AP1</OzSelectItem>
+                  </OzSelectContent>
+                </OzSelect>
+                <OzHelpText className="mt-1.5">
                   Pick the site your Datadog org lives on — sending to
                   the wrong site silently 401s.
-                </HelpText>
+                </OzHelpText>
               </div>
               <div>
-                <Label>API key</Label>
-                <Input
+                <OzLabel htmlFor="exporter-dd-key">API key</OzLabel>
+                <OzInput
+                  id="exporter-dd-key"
                   type="password"
                   value={ddAPIKey}
                   onChange={(e) => setDdAPIKey(e.target.value)}
@@ -341,16 +357,18 @@ export default function ActivityExporterModal({
               </div>
               <div className={"grid grid-cols-2 gap-3"}>
                 <div>
-                  <Label>Service</Label>
-                  <Input
+                  <OzLabel htmlFor="exporter-dd-service">Service</OzLabel>
+                  <OzInput
+                    id="exporter-dd-service"
                     value={ddService}
                     onChange={(e) => setDdService(e.target.value)}
                     placeholder={"openzro"}
                   />
                 </div>
                 <div>
-                  <Label>Tags</Label>
-                  <Input
+                  <OzLabel htmlFor="exporter-dd-tags">Tags</OzLabel>
+                  <OzInput
+                    id="exporter-dd-tags"
                     value={ddTags}
                     onChange={(e) => setDdTags(e.target.value)}
                     placeholder={"env:prod,team:secops"}
@@ -358,15 +376,18 @@ export default function ActivityExporterModal({
                 </div>
               </div>
               <div>
-                <Label>URL override (optional)</Label>
-                <Input
+                <OzLabel htmlFor="exporter-dd-url" optional>
+                  URL override
+                </OzLabel>
+                <OzInput
+                  id="exporter-dd-url"
                   value={ddURL}
                   onChange={(e) => setDdURL(e.target.value)}
                   placeholder={"https://datadog-proxy.internal"}
                 />
-                <HelpText>
+                <OzHelpText className="mt-1.5">
                   Only when proxying through an internal log forwarder.
-                </HelpText>
+                </OzHelpText>
               </div>
             </>
           )}
@@ -374,16 +395,18 @@ export default function ActivityExporterModal({
           {type === "elastic" && (
             <>
               <div>
-                <Label>URL</Label>
-                <Input
+                <OzLabel htmlFor="exporter-es-url">URL</OzLabel>
+                <OzInput
+                  id="exporter-es-url"
                   value={esURL}
                   onChange={(e) => setEsURL(e.target.value)}
                   placeholder={"https://es.example.com:9200"}
                 />
               </div>
               <div>
-                <Label>Index</Label>
-                <Input
+                <OzLabel htmlFor="exporter-es-index">Index</OzLabel>
+                <OzInput
+                  id="exporter-es-index"
                   value={esIndex}
                   onChange={(e) => setEsIndex(e.target.value)}
                   placeholder={"openzro-events"}
@@ -391,8 +414,9 @@ export default function ActivityExporterModal({
               </div>
               <div className={"grid grid-cols-2 gap-3"}>
                 <div>
-                  <Label>API key</Label>
-                  <Input
+                  <OzLabel htmlFor="exporter-es-key">API key</OzLabel>
+                  <OzInput
+                    id="exporter-es-key"
                     type="password"
                     value={esAPIKey}
                     onChange={(e) => setEsAPIKey(e.target.value)}
@@ -400,18 +424,27 @@ export default function ActivityExporterModal({
                   />
                 </div>
                 <div>
-                  <Label>OR Username</Label>
-                  <Input
+                  <OzLabel htmlFor="exporter-es-username">OR Username</OzLabel>
+                  <OzInput
+                    id="exporter-es-username"
                     value={esUsername}
                     onChange={(e) => setEsUsername(e.target.value)}
-                    placeholder={"basic auth fallback"}
+                    placeholder={
+                      isEdit ? PLACEHOLDER_KEEP : "basic auth fallback"
+                    }
                   />
                 </div>
               </div>
-              {esUsername && (
+              {/* Password field renders whenever there's a username typed OR
+                  we're editing — on edit we don't know if the existing record
+                  uses basic auth without exposing auth_mode, so showing the
+                  field unconditionally lets the operator update it without
+                  having to retype the username first. */}
+              {(esUsername || isEdit) && (
                 <div>
-                  <Label>Password</Label>
-                  <Input
+                  <OzLabel htmlFor="exporter-es-password">Password</OzLabel>
+                  <OzInput
+                    id="exporter-es-password"
                     type="password"
                     value={esPassword}
                     onChange={(e) => setEsPassword(e.target.value)}
@@ -423,8 +456,11 @@ export default function ActivityExporterModal({
           )}
 
           <div>
-            <Label>Custom payload template (optional)</Label>
-            <Textarea
+            <OzLabel htmlFor="exporter-template" optional>
+              Custom payload template
+            </OzLabel>
+            <OzTextarea
+              id="exporter-template"
               rows={5}
               value={template}
               onChange={(e) => setTemplate(e.target.value)}
@@ -433,7 +469,7 @@ export default function ActivityExporterModal({
               }
               className={"font-mono text-xs"}
             />
-            <HelpText>
+            <OzHelpText className="mt-1.5">
               Go text/template syntax. Bound to the activity event as{" "}
               <code className={"font-mono text-xs"}>.</code> with helpers{" "}
               <code className={"font-mono text-xs"}>json</code>,{" "}
@@ -442,33 +478,33 @@ export default function ActivityExporterModal({
               <code className={"font-mono text-xs"}>default</code>,{" "}
               <code className={"font-mono text-xs"}>meta</code>. Empty =
               ship the exporter&apos;s native default payload.
-            </HelpText>
+            </OzHelpText>
             <div className={"mt-2"}>
-              <Button
-                variant={"secondary"}
+              <OzButton
+                variant={"default"}
                 onClick={onTestTemplate}
                 disabled={validating || !template.trim()}
               >
                 {validating ? "Validating…" : "Validate template"}
-              </Button>
+              </OzButton>
             </div>
           </div>
 
-          <Paragraph className={"text-xs text-nb-gray-300"}>
+          <p className={"text-xs text-oz2-text-muted"}>
             Events are batched and shipped asynchronously — a slow
             destination never blocks the API path.
-          </Paragraph>
+          </p>
         </div>
 
         <ModalFooter>
           <ModalClose asChild>
-            <Button variant={"secondary"} disabled={saving}>
+            <OzButton variant={"default"} disabled={saving}>
               Cancel
-            </Button>
+            </OzButton>
           </ModalClose>
-          <Button variant={"primary"} onClick={onSave} disabled={saving}>
+          <OzButton variant={"primary"} onClick={onSave} disabled={saving}>
             {saving ? "Saving…" : isEdit ? "Save changes" : "Create exporter"}
-          </Button>
+          </OzButton>
         </ModalFooter>
       </ModalContent>
     </Modal>

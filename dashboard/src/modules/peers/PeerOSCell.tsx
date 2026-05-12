@@ -5,13 +5,15 @@ import {
   TooltipTrigger,
 } from "@components/Tooltip";
 import { Barcode, CpuIcon } from "lucide-react";
-import Image from "next/image";
 import React, { useMemo } from "react";
-import { FaWindows } from "react-icons/fa6";
-import { FcAndroidOs, FcLinux } from "react-icons/fc";
+import {
+  FaAndroid,
+  FaApple,
+  FaFreebsd,
+  FaLinux,
+  FaWindows,
+} from "react-icons/fa6";
 import IOSIcon from "@/assets/icons/IOSIcon";
-import AppleLogo from "@/assets/os-icons/apple.svg";
-import FreeBSDLogo from "@/assets/os-icons/FreeBSD.png";
 import { getOperatingSystem } from "@/hooks/useOperatingSystem";
 import { OperatingSystem } from "@/interfaces/OperatingSystem";
 
@@ -30,9 +32,7 @@ export function PeerOSCell({ os, serial }: Readonly<Props>) {
             }
           >
             <div
-              className={
-                "h-6 w-6 flex items-center justify-center grayscale brightness-[100%] contrast-[40%]"
-              }
+              className={"h-6 w-6 flex items-center justify-center"}
             >
               <OSLogo os={os} />
             </div>
@@ -84,27 +84,16 @@ export function OSLogo({ os }: { os: string }) {
     return getOperatingSystem(os);
   }, [os]);
 
-  // The Apple + iOS marks ship as solid-color SVGs that read as white
-  // on a dark surface but vanish on the light theme. We invert the
-  // glyph in light mode so it renders as black against light surfaces
-  // and stays untouched in dark mode. Windows + Linux + Android use
-  // explicit text colors with the same dark/light pair so they remain
-  // legible regardless of the active theme.
-  if (icon === OperatingSystem.WINDOWS)
-    return (
-      <FaWindows className={"text-neutral-700 dark:text-white text-lg"} />
-    );
-  if (icon === OperatingSystem.APPLE)
-    return (
-      <Image
-        src={AppleLogo}
-        alt={""}
-        width={14}
-        className={"invert dark:invert-0"}
-      />
-    );
-  if (icon === OperatingSystem.FREEBSD)
-    return <Image src={FreeBSDLogo} alt={""} width={18} />;
+  // All glyphs are now monochrome silhouettes from the Font Awesome
+  // Brands set (CC BY 4.0, free) — that means a single text color
+  // class drives both themes and we no longer need the brightness /
+  // contrast / invert filters that the multi-color Fc* set required.
+  // iOS keeps its own glyph so it reads as a phone, not a Mac.
+  const cls = "text-neutral-700 dark:text-white text-lg";
+
+  if (icon === OperatingSystem.WINDOWS) return <FaWindows className={cls} />;
+  if (icon === OperatingSystem.APPLE) return <FaApple className={cls} />;
+  if (icon === OperatingSystem.FREEBSD) return <FaFreebsd className={cls} />;
   if (icon === OperatingSystem.IOS)
     return (
       <IOSIcon
@@ -112,20 +101,7 @@ export function OSLogo({ os }: { os: string }) {
         size={20}
       />
     );
-  if (icon === OperatingSystem.ANDROID)
-    return (
-      // brightness:200 brightens the multi-coloured FcAndroidOs SVG so
-      // it pops on a dark surface; on light the same filter washes it
-      // out into near-white. Apply it only when the html.dark class is
-      // active.
-      <FcAndroidOs
-        className={"text-neutral-700 dark:text-white text-2xl dark:brightness-200"}
-      />
-    );
+  if (icon === OperatingSystem.ANDROID) return <FaAndroid className={cls} />;
 
-  return (
-    <FcLinux
-      className={"text-neutral-700 dark:text-white text-2xl dark:brightness-150"}
-    />
-  );
+  return <FaLinux className={cls} />;
 }

@@ -1,9 +1,4 @@
-import Button from "@components/Button";
 import FancyToggleSwitch from "@components/FancyToggleSwitch";
-import HelpText from "@components/HelpText";
-import InlineLink from "@components/InlineLink";
-import { Input } from "@components/Input";
-import { Label } from "@components/Label";
 import {
   Modal,
   ModalClose,
@@ -13,10 +8,7 @@ import {
 } from "@components/modal/Modal";
 import ModalHeader from "@components/modal/ModalHeader";
 import { notify } from "@components/Notification";
-import Paragraph from "@components/Paragraph";
 import { PeerGroupSelector } from "@components/PeerGroupSelector";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/Tabs";
-import { Textarea } from "@components/Textarea";
 import InputDomain, { domainReducer } from "@components/ui/InputDomain";
 import { useApiCall } from "@utils/api";
 import { cn } from "@utils/helpers";
@@ -36,6 +28,16 @@ import {
 import React, { useEffect, useMemo, useReducer, useState } from "react";
 import { useSWRConfig } from "swr";
 import DNSIcon from "@/assets/icons/DNSIcon";
+import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
+import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
+import {
+  OzTabs as Tabs,
+  OzTabsContent as TabsContent,
+  OzTabsList as TabsList,
+  OzTabsTrigger as TabsTrigger,
+} from "@/components/v2/OzTabs";
+import OzTextarea from "@/components/v2/OzTextarea";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { Nameserver, NameserverGroup } from "@/interfaces/Nameserver";
 import useGroupHelper from "@/modules/groups/useGroupHelper";
@@ -170,7 +172,6 @@ export function NameserverModalContent({
     }
   };
 
-  // Nameservers
   const [nameservers, setNameservers] = useReducer(nameServerReducer, [], () =>
     preset?.nameservers
       ? preset.nameservers.map((ns) => ({ id: uniqueId("ns"), ...ns }))
@@ -184,7 +185,6 @@ export function NameserverModalContent({
     typeof preset?.enabled !== undefined && preset ? preset.enabled : true,
   );
 
-  // Domains
   const [domains, setDomains] = useReducer(domainReducer, [], () => {
     if (preset?.domains?.length) {
       return preset.domains.map((d) => ({ name: d, id: uniqueId("domain") }));
@@ -197,15 +197,14 @@ export function NameserverModalContent({
       : false,
   );
 
-  // General
   const [name, setName] = useState(preset?.name || "");
   const [description, setDescription] = useState(preset?.description || "");
   const [tab, setTab] = useState(
     cell && cell == "name"
       ? "general"
       : cell == "domains"
-      ? "domains"
-      : "nameserver",
+        ? "domains"
+        : "nameserver",
   );
 
   const [nsError, setNsError] = useState<boolean>(false);
@@ -259,42 +258,38 @@ export function NameserverModalContent({
       />
 
       <Tabs defaultValue={tab} onValueChange={(v) => setTab(v)} value={tab}>
-        <TabsList justify={"start"} className={"px-8"}>
-          <TabsTrigger value={"nameserver"}>
-            <ServerIcon
-              size={16}
-              className={
-                "text-nb-gray-500 group-data-[state=active]/trigger:text-openzro transition-all"
-              }
-            />
-            Nameserver
-          </TabsTrigger>
-          <TabsTrigger value={"domains"} disabled={!canContinueToDomains}>
-            <GlobeIcon
-              size={16}
-              className={
-                "text-nb-gray-500 group-data-[state=active]/trigger:text-openzro transition-all"
-              }
-            />
-            Domains
-          </TabsTrigger>
-          <TabsTrigger value={"general"} disabled={!canContinueToGeneral}>
-            <Text
-              size={16}
-              className={
-                "text-nb-gray-500 group-data-[state=active]/trigger:text-openzro transition-all"
-              }
-            />
-            Name & Description
-          </TabsTrigger>
-        </TabsList>
+        <div className="px-8 pb-3 pt-1">
+          <TabsList>
+            <TabsTrigger value={"nameserver"}>
+              <ServerIcon
+                size={16}
+                className="text-oz2-text-faint group-data-[state=active]/trigger:text-oz2-acc transition-colors"
+              />
+              Nameserver
+            </TabsTrigger>
+            <TabsTrigger value={"domains"} disabled={!canContinueToDomains}>
+              <GlobeIcon
+                size={16}
+                className="text-oz2-text-faint group-data-[state=active]/trigger:text-oz2-acc transition-colors"
+              />
+              Domains
+            </TabsTrigger>
+            <TabsTrigger value={"general"} disabled={!canContinueToGeneral}>
+              <Text
+                size={16}
+                className="text-oz2-text-faint group-data-[state=active]/trigger:text-oz2-acc transition-colors"
+              />
+              Name & Description
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value={"nameserver"} className={"pb-8"}>
-          <div className={"px-8 flex-col flex gap-6"}>
+          <div className={"px-8 flex flex-col gap-6"}>
             <div>
               {nameservers.length > 0 && (
-                <div className={"flex gap-3 w-full mb-3"}>
-                  <div className={"flex flex-col gap-2 w-full"}>
+                <div className={"mb-3 flex w-full gap-3"}>
+                  <div className={"flex w-full flex-col gap-2"}>
                     {nameservers.map((ns, i) => {
                       return (
                         <NameserverInput
@@ -317,24 +312,23 @@ export function NameserverModalContent({
                 </div>
               )}
 
-              <Button
+              <button
+                type="button"
                 disabled={nameservers.length >= 3 || !canAction}
-                variant={"dotted"}
-                className={"w-full"}
-                size={"sm"}
                 onClick={() => setNameservers({ type: "ADD" })}
+                className="inline-flex h-[34px] w-full items-center justify-center gap-2 rounded-oz2-input border border-dashed border-oz2-border-strong bg-transparent px-3 text-[13px] font-medium text-oz2-text-muted transition-colors hover:border-oz2-acc hover:bg-oz2-acc-soft/50 hover:text-oz2-acc-text disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <PlusIcon size={14} />
                 Add Nameserver
-              </Button>
+              </button>
             </div>
 
             <div>
-              <Label>Distribution Groups</Label>
-              <HelpText>
+              <OzLabel>Distribution Groups</OzLabel>
+              <OzHelpText className="mb-2">
                 Advertise this nameserver to peers that belong to the following
                 groups
-              </HelpText>
+              </OzHelpText>
               <PeerGroupSelector
                 onChange={setGroups}
                 values={groups}
@@ -359,15 +353,15 @@ export function NameserverModalContent({
         <TabsContent value={"domains"} className={"pb-8"}>
           <div className={"px-8 flex flex-col gap-6"}>
             <div>
-              <Label>Match Domains</Label>
-              <HelpText>
+              <OzLabel>Match Domains</OzLabel>
+              <OzHelpText className="mb-2">
                 Add domain if you want to have a specific one resolved by this
                 nameserver.
-              </HelpText>
+              </OzHelpText>
               <div>
                 {domains.length > 0 && (
-                  <div className={"flex gap-3 w-full mb-3"}>
-                    <div className={"flex flex-col gap-2 w-full"}>
+                  <div className={"mb-3 flex w-full gap-3"}>
+                    <div className={"flex w-full flex-col gap-2"}>
                       {domains.map((domain, i) => {
                         return (
                           <InputDomain
@@ -392,21 +386,20 @@ export function NameserverModalContent({
                   </div>
                 )}
 
-                <Button
-                  variant={"dotted"}
-                  className={"w-full"}
-                  size={"sm"}
-                  onClick={() => setDomains({ type: "ADD" })}
+                <button
+                  type="button"
                   disabled={!canAction}
+                  onClick={() => setDomains({ type: "ADD" })}
+                  className="inline-flex h-[34px] w-full items-center justify-center gap-2 rounded-oz2-input border border-dashed border-oz2-border-strong bg-transparent px-3 text-[13px] font-medium text-oz2-text-muted transition-colors hover:border-oz2-acc hover:bg-oz2-acc-soft/50 hover:text-oz2-acc-text disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <PlusIcon size={14} />
                   Add Domain
-                </Button>
+                </button>
               </div>
             </div>
             <div
               className={cn(
-                domains.length === 0 && "opacity-40 pointer-events-none",
+                domains.length === 0 && "pointer-events-none opacity-40",
               )}
             >
               <FancyToggleSwitch
@@ -429,9 +422,12 @@ export function NameserverModalContent({
         <TabsContent value={"general"} className={"px-8 pb-6"}>
           <div className={"flex flex-col gap-6"}>
             <div>
-              <Label>DNS Name</Label>
-              <HelpText>Enter a name for this nameserver.</HelpText>
-              <Input
+              <OzLabel htmlFor="nameserver-name">DNS Name</OzLabel>
+              <OzHelpText className="mb-2">
+                Enter a name for this nameserver.
+              </OzHelpText>
+              <OzInput
+                id="nameserver-name"
                 autoFocus={true}
                 tabIndex={0}
                 error={nameLengthError}
@@ -442,12 +438,15 @@ export function NameserverModalContent({
               />
             </div>
             <div>
-              <Label>Description (optional)</Label>
-              <HelpText>
+              <OzLabel htmlFor="nameserver-description" optional>
+                Description
+              </OzLabel>
+              <OzHelpText className="mb-2">
                 Write a short description to add more context to this
                 nameserver.
-              </HelpText>
-              <Textarea
+              </OzHelpText>
+              <OzTextarea
+                id="nameserver-description"
                 placeholder={
                   "e.g., Berlin office resolver for remote developers"
                 }
@@ -463,87 +462,89 @@ export function NameserverModalContent({
 
       <ModalFooter className={"items-center"}>
         <div className={"w-full"}>
-          <Paragraph className={"text-sm mt-auto"}>
-            Learn more about
-            <InlineLink
+          <p className={"text-sm mt-auto text-oz2-text-muted"}>
+            Learn more about{" "}
+            <a
               href={"https://docs.openzro.io/how-to/manage-dns-in-your-network"}
               target={"_blank"}
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-oz2-acc-text underline-offset-2 hover:underline"
             >
               DNS
               <ExternalLinkIcon size={12} />
-            </InlineLink>
-          </Paragraph>
+            </a>
+          </p>
         </div>
         <div className={"flex gap-3 w-full justify-end"}>
           {!isUpdate ? (
             <>
               {tab == "nameserver" && (
                 <ModalClose asChild={true}>
-                  <Button variant={"secondary"}>Cancel</Button>
+                  <OzButton variant={"default"}>Cancel</OzButton>
                 </ModalClose>
               )}
 
               {tab == "domains" && (
-                <Button
-                  variant={"secondary"}
+                <OzButton
+                  variant={"default"}
                   onClick={() => setTab("nameserver")}
                 >
                   Back
-                </Button>
+                </OzButton>
               )}
 
               {tab == "nameserver" && (
-                <Button
+                <OzButton
                   variant={"primary"}
                   onClick={() => setTab("domains")}
                   disabled={!canContinueToDomains}
                 >
                   Continue
-                </Button>
+                </OzButton>
               )}
 
               {tab == "domains" && (
-                <Button
+                <OzButton
                   variant={"primary"}
                   onClick={() => setTab("general")}
                   disabled={!canContinueToGeneral}
                 >
                   Continue
-                </Button>
+                </OzButton>
               )}
 
               {tab == "general" && (
                 <>
-                  <Button
-                    variant={"secondary"}
+                  <OzButton
+                    variant={"default"}
                     onClick={() => setTab("domains")}
                   >
                     Back
-                  </Button>
+                  </OzButton>
 
-                  <Button
+                  <OzButton
                     variant={"primary"}
                     disabled={!canSubmit || !canAction}
                     onClick={submit}
                   >
                     <PlusCircle size={16} />
                     Add Nameserver
-                  </Button>
+                  </OzButton>
                 </>
               )}
             </>
           ) : (
             <>
               <ModalClose asChild={true}>
-                <Button variant={"secondary"}>Cancel</Button>
+                <OzButton variant={"default"}>Cancel</OzButton>
               </ModalClose>
-              <Button
+              <OzButton
                 variant={"primary"}
                 disabled={!canSubmit || !canAction}
                 onClick={submit}
               >
                 Save Changes
-              </Button>
+              </OzButton>
             </>
           )}
         </div>
@@ -597,37 +598,39 @@ function NameserverInput({
   }, []);
 
   return (
-    <div className={"flex gap-2 w-full"}>
+    <div className={"flex gap-2 w-full items-start"}>
       <div className={"w-full"}>
-        <Input
-          customPrefix={"IP"}
+        <OzInput
+          prefix={<span className="text-[12.5px] text-oz2-text-faint">IP</span>}
           placeholder={"e.g., 172.16.0.0"}
-          maxWidthClass={"w-full"}
           value={ip}
-          className={"font-mono !text-[13px]"}
+          mono
           error={cidrError}
           onChange={handleIPChange}
           disabled={disabled}
         />
       </div>
 
-      <Input
-        maxWidthClass={"min-w-[150px] max-w-[150px]"}
-        customPrefix={"Port"}
-        placeholder={"53"}
-        value={port}
-        type={"number"}
-        onChange={handlePortChange}
-        disabled={disabled}
-      />
-      <Button
-        className={"h-[42px]"}
-        variant={"default-outline"}
+      <div className="w-[150px] shrink-0">
+        <OzInput
+          prefix={
+            <span className="text-[12.5px] text-oz2-text-faint">Port</span>
+          }
+          placeholder={"53"}
+          value={port}
+          type={"number"}
+          onChange={handlePortChange}
+          disabled={disabled}
+        />
+      </div>
+      <button
+        type="button"
         onClick={onRemove}
         disabled={disabled}
+        className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-oz2-input border border-oz2-border bg-oz2-surface text-oz2-text-2 transition-colors hover:bg-oz2-hover hover:border-oz2-border-strong disabled:cursor-not-allowed disabled:opacity-50"
       >
         <MinusCircleIcon size={15} />
-      </Button>
+      </button>
     </div>
   );
 }

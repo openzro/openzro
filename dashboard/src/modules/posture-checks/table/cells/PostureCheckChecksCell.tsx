@@ -16,6 +16,14 @@ type Props = {
   className?: string;
   onClick?: () => void;
 };
+
+// Shared shape for each posture-check pill in the stack: 32x32 circle
+// with a 2px white-ish ring so adjacent pills look layered when they
+// overlap (-space-x-2 on the parent). Per-pill background + foreground
+// is appended at the call site.
+const pillBase =
+  "relative grid h-8 w-8 place-items-center rounded-full ring-2 ring-oz2-surface transition-colors";
+
 export const PostureCheckChecksCell = ({
   check,
   children,
@@ -27,24 +35,18 @@ export const PostureCheckChecksCell = ({
     <div className={"flex"} onClick={onClick}>
       <div
         className={cn(
-          "flex items-center gap-3 py-1 rounded-full px-1 transition-all border",
-          "bg-neutral-100 border-neutral-200",
-          "dark:bg-nb-gray-900/80 dark:border-nb-gray-800/50",
-          !disableHover &&
-            "hover:bg-neutral-200 dark:hover:bg-nb-gray-800",
+          "flex items-center gap-3 py-1 rounded-full px-1 transition-colors border",
+          "bg-oz2-surface border-oz2-border-soft",
+          !disableHover && "hover:bg-oz2-hover",
           className,
         )}
       >
-        <div className={"flex -space-x-2 "}>
+        <div className={"flex -space-x-2"}>
           {check.checks.nb_version_check && (
             <OpenzroVersionTooltip
               version={check.checks.nb_version_check.min_version}
             >
-              <div
-                className={cn(
-                  "bg-gradient-to-tr from-openzro-200 to-openzro-100 h-8 w-8 rounded-full flex items-center justify-center relative z-[10] hover:scale-[1.1] transition-all",
-                )}
-              >
+              <div className={cn(pillBase, "z-[10] bg-oz2-acc-soft text-oz2-acc-text")}>
                 <OpenzroIcon size={14} />
               </div>
             </OpenzroVersionTooltip>
@@ -54,7 +56,8 @@ export const PostureCheckChecksCell = ({
             <GeoLocationTooltip check={check.checks.geo_location_check}>
               <div
                 className={cn(
-                  "bg-gradient-to-tr from-indigo-500 to-indigo-400 h-8 w-8 rounded-full flex items-center justify-center relative z-[9] hover:scale-[1.1] transition-all",
+                  pillBase,
+                  "z-[9] bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300",
                 )}
               >
                 <FlagIcon size={14} />
@@ -64,11 +67,7 @@ export const PostureCheckChecksCell = ({
 
           {check.checks.os_version_check && (
             <OperatingSystemTooltip check={check.checks.os_version_check}>
-              <div
-                className={cn(
-                  "bg-gradient-to-tr from-neutral-500 to-neutral-400 dark:from-nb-gray-500 dark:to-nb-gray-300 h-8 w-8 rounded-full flex items-center justify-center relative z-[8] hover:scale-[1.1] transition-all",
-                )}
-              >
+              <div className={cn(pillBase, "z-[8] bg-oz2-bg-sunken text-oz2-text-2")}>
                 <Disc3Icon size={14} />
               </div>
             </OperatingSystemTooltip>
@@ -80,7 +79,8 @@ export const PostureCheckChecksCell = ({
             >
               <div
                 className={cn(
-                  "bg-gradient-to-tr from-blue-500 to-blue-400 h-8 w-8 rounded-full flex items-center justify-center relative z-[8] hover:scale-[1.1] transition-all",
+                  pillBase,
+                  "z-[7] bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
                 )}
               >
                 <NetworkIcon size={14} />
@@ -90,11 +90,7 @@ export const PostureCheckChecksCell = ({
 
           {check.checks.process_check && (
             <ProcessTooltip check={check.checks.process_check}>
-              <div
-                className={cn(
-                  "bg-gradient-to-tr from-neutral-500 to-neutral-400 dark:from-nb-gray-500 dark:to-nb-gray-300 h-8 w-8 rounded-full flex items-center justify-center relative z-[8] hover:scale-[1.1] transition-all",
-                )}
-              >
+              <div className={cn(pillBase, "z-[6] bg-oz2-bg-sunken text-oz2-text-2")}>
                 <ServerCogIcon size={14} />
               </div>
             </ProcessTooltip>

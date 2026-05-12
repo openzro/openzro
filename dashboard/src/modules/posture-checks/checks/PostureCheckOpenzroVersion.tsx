@@ -1,16 +1,13 @@
-import Button from "@components/Button";
-import HelpText from "@components/HelpText";
-import InlineLink from "@components/InlineLink";
-import { Input } from "@components/Input";
-import { Label } from "@components/Label";
 import { ModalClose, ModalFooter } from "@components/modal/Modal";
-import Paragraph from "@components/Paragraph";
 import { validator } from "@utils/helpers";
 import { isEmpty } from "lodash";
 import { ExternalLinkIcon } from "lucide-react";
 import * as React from "react";
 import { useMemo, useState } from "react";
 import OpenzroIcon from "@/assets/icons/OpenzroIcon";
+import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
+import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
 import { OpenzroVersionCheck } from "@/interfaces/PostureCheck";
 import { PostureCheckCard } from "@/modules/posture-checks/ui/PostureCheckCard";
 
@@ -76,19 +73,24 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
     <>
       <div className={"flex flex-col px-8 gap-3 pb-6"}>
         <div>
-          <Label>Minimum required version</Label>
-          <HelpText>
+          <OzLabel htmlFor="posture-version">Minimum required version</OzLabel>
+          <OzHelpText className="mb-2">
             Only peers with the minimum specified Openzro client version will
             have access to the network.
-          </HelpText>
+          </OzHelpText>
           <div>
-            <Input
-              className={"max-w-[200px]"}
+            <OzInput
+              id="posture-version"
+              wrapperClassName="max-w-[200px]"
               value={version}
               onChange={(e) => setVersion(e.target.value)}
               placeholder={"e.g., 0.25.0"}
               error={versionError}
-              customPrefix={"Version"}
+              prefix={
+                <span className="text-[12.5px] text-oz2-text-faint">
+                  Version
+                </span>
+              }
               disabled={disabled}
             />
           </div>
@@ -96,24 +98,26 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
       </div>
       <ModalFooter className={"items-center"}>
         <div className={"w-full"}>
-          <Paragraph className={"text-sm mt-auto"}>
-            Learn more about
-            <InlineLink
+          <p className={"text-sm mt-auto text-oz2-text-muted"}>
+            Learn more about{" "}
+            <a
               href={
                 "https://docs.openzro.io/how-to/manage-posture-checks#net-bird-client-version-check"
               }
               target={"_blank"}
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-oz2-acc-text underline-offset-2 hover:underline"
             >
               Client Version Check
               <ExternalLinkIcon size={12} />
-            </InlineLink>
-          </Paragraph>
+            </a>
+          </p>
         </div>
         <div className={"flex gap-3 w-full justify-end"}>
           <ModalClose asChild={true}>
-            <Button variant={"secondary"}>Cancel</Button>
+            <OzButton variant={"default"}>Cancel</OzButton>
           </ModalClose>
-          <Button
+          <OzButton
             variant={"primary"}
             disabled={!canSave}
             onClick={() => {
@@ -125,7 +129,7 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
             }}
           >
             Save
-          </Button>
+          </OzButton>
         </div>
       </ModalFooter>
     </>

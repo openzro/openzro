@@ -1,6 +1,6 @@
 import { useApiCall } from "@utils/api";
 import { isEmpty, orderBy } from "lodash";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSWRConfig } from "swr";
 import { useGroups } from "@/contexts/GroupsProvider";
 import { usePeerGroups } from "@/contexts/PeerProvider";
@@ -30,6 +30,27 @@ export default function useGroupHelper({ initial = [], peer }: Props) {
   }, [groups, initial]);
 
   const [selectedGroups, setSelectedGroups] = useState<Group[]>(initialGroups);
+
+  // Race-condition guard: `initial` may arrive as a list of group IDs
+  // (string[]) that this hook resolves against the GroupsProvider
+  // cache. If that cache is still loading at mount, every id maps to
+  // undefined and `initialGroups` collapses to []. useState then locks
+  // in [] even though the memo will recompute with the resolved groups
+  // moments later when /groups arrives — leaving the consumer (e.g.
+  // /settings/networks traffic-events scope filter, /team/user
+  // auto-groups) showing an empty selection despite saved IDs on the
+  // server. This effect performs a one-shot sync: when the resolved
+  // initialGroups first becomes non-empty AND the user hasn't touched
+  // the state yet, we lift it into state. Once the operator interacts
+  // (manual pick / clear) we never overwrite again.
+  const hasSyncedInitial = useRef(false);
+  useEffect(() => {
+    if (hasSyncedInitial.current) return;
+    if (initialGroups.length === 0) return;
+    hasSyncedInitial.current = true;
+    setSelectedGroups((prev) => (prev.length === 0 ? initialGroups : prev));
+  }, [initialGroups]);
+
   const { peerGroups } = usePeerGroups(peer);
 
   const save = async () => {

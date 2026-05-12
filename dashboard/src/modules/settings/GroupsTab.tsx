@@ -1,54 +1,47 @@
-import Breadcrumbs from "@components/Breadcrumbs";
-import Button from "@components/Button";
-import FancyToggleSwitch from "@components/FancyToggleSwitch";
-import HelpText from "@components/HelpText";
+"use client";
+
 import InlineLink from "@components/InlineLink";
-import { Input } from "@components/Input";
-import { Label } from "@components/Label";
 import { notify } from "@components/Notification";
-import Paragraph from "@components/Paragraph";
 import * as Tabs from "@radix-ui/react-tabs";
 import { useApiCall } from "@utils/api";
-import { cn } from "@utils/helpers";
 import { isLocalDev, isOpenzroHosted } from "@utils/openzro";
-import { AnimatePresence, motion } from "framer-motion";
 import { isEmpty } from "lodash";
-import {
-  AlertCircle,
-  Braces,
-  FolderGit2Icon,
-  FolderInput,
-  FolderSync,
-  ShieldCheck,
-} from "lucide-react";
+import { AlertCircle, Braces, ShieldCheck } from "lucide-react";
 import React, { useState } from "react";
 import { useSWRConfig } from "swr";
-import SettingsIcon from "@/assets/icons/SettingsIcon";
+import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
 import { useDialog } from "@/contexts/DialogProvider";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { useHasChanges } from "@/hooks/useHasChanges";
 import { Account } from "@/interfaces/Account";
+import OzSettingsCard from "@/modules/settings/v2/OzSettingsCard";
+import OzSettingsField from "@/modules/settings/v2/OzSettingsField";
+import OzSettingsToggle from "@/modules/settings/v2/OzSettingsToggle";
+
+// GroupsTab — settings sub-page body for /settings/groups.
+// Functionality preserved verbatim: groups_propagation_enabled,
+// jwt_groups_enabled + jwt_groups_claim_name + jwt_allow_groups
+// saved through /accounts/{id} with a confirm step when an allow
+// group is set (to prevent the operator from locking themselves
+// out). Only paint changes — propagation + JWT sync toggles split
+// into two OzSettingsCards; JWT claim + allow-group inputs render
+// inside a sunken sub-card when JWT sync is on (mirrors the
+// AuthenticationTab session-expiration expansion).
 
 type Props = {
   account: Account;
 };
 
-export default function GroupsTab({ account }: Props) {
+export default function GroupsTab({ account }: Readonly<Props>) {
   const { permission } = usePermissions();
-
   const { mutate } = useSWRConfig();
   const { confirm } = useDialog();
 
-  /**
-   * Group Propagation
-   */
   const [groupsPropagation, setGroupsPropagation] = useState<boolean>(
     account.settings.groups_propagation_enabled,
   );
 
-  /**
-   * JWT Group Sync
-   */
   const [jwtGroupSync, setJwtGroupSync] = useState<boolean>(
     account.settings.jwt_groups_enabled,
   );
@@ -60,9 +53,6 @@ export default function GroupsTab({ account }: Props) {
   );
   const [jwtAllowGroupsWarning, setJwtAllowGroupsWarning] = useState(false);
 
-  /**
-   * Detect changes
-   */
   const { hasChanges, updateRef } = useHasChanges([
     groupsPropagation,
     jwtAllowGroups,
@@ -70,9 +60,6 @@ export default function GroupsTab({ account }: Props) {
     jwtGroupSync,
   ]);
 
-  /**
-   * Save Group Propagation
-   */
   const saveRequest = useApiCall<Account>("/accounts/" + account.id);
 
   const saveChanges = async () => {
@@ -82,14 +69,10 @@ export default function GroupsTab({ account }: Props) {
     const choice = showConfirm
       ? await confirm({
           title: `JWT allow group - ${jwtAllowGroups[0]}`,
-          description: `Only users part of the ${jwtAllowGroups[0]} group will be able to access Openzro. Are you sure you want to save the changes?`,
+          description: `Only users part of the ${jwtAllowGroups[0]} group will be able to access openZro. Are you sure you want to save the changes?`,
           confirmText: "Save",
           children: (
-            <div
-              className={
-                "flex gap-2 items-center text-xs bg-openzro-950 px-4 justify-center py-3 rounded-md border border-openzro-500 text-openzro-200"
-              }
-            >
+            <div className="flex items-center gap-2 rounded-md border border-oz2-acc bg-oz2-acc-soft px-4 py-3 text-[12px] text-oz2-acc-text">
               <AlertCircle size={14} />
               To prevent losing access, ensure you are part of this group.
             </div>
@@ -130,153 +113,106 @@ export default function GroupsTab({ account }: Props) {
     });
   };
 
+  const editDisabled = !permission.settings.update;
+  const showJwtSync = !isOpenzroHosted() || isLocalDev();
+
   return (
-    <Tabs.Content value={"groups"} className={"w-full"}>
-      <div className={"p-default py-6 max-w-xl"}>
-        <Breadcrumbs>
-          <Breadcrumbs.Item
-            href={"/settings"}
-            label={"Settings"}
-            icon={<SettingsIcon size={13} />}
-          />
-          <Breadcrumbs.Item
-            href={"/settings"}
-            label={"User Groups"}
-            icon={<FolderGit2Icon size={14} />}
-            active
-          />
-        </Breadcrumbs>
-        <div className={"flex items-start justify-between"}>
-          <h1>User Groups</h1>
-          <Button
-            variant={"primary"}
-            disabled={!hasChanges}
-            onClick={saveChanges}
-          >
-            Save Changes
-          </Button>
+    <Tabs.Content value="groups" className="flex flex-col gap-5">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-[18px] font-semibold tracking-tight text-oz2-text">
+            User Groups
+          </h2>
+          <p className="mt-1 max-w-2xl text-[13px] leading-[1.55] text-oz2-text-muted">
+            How group membership flows between users, peers, and your IdP.
+            Manage the groups themselves on the dedicated{" "}
+            <InlineLink href="/team/groups">Team → Groups</InlineLink> page.
+          </p>
         </div>
+        <OzButton
+          variant="primary"
+          type="button"
+          disabled={!hasChanges}
+          onClick={saveChanges}
+        >
+          Save Changes
+        </OzButton>
+      </header>
 
-        <div className={"flex flex-col gap-6 mt-8 mb-3"}>
-          <FancyToggleSwitch
-            value={groupsPropagation}
-            onChange={setGroupsPropagation}
-            label={
-              <>
-                <FolderInput size={15} />
-                Enable user group propagation
-              </>
-            }
-            helpText={
-              "Allow group propagation from user’s auto-groups to peers, sharing membership information."
-            }
-            disabled={!permission.settings.update}
+      <OzSettingsCard
+        title="Group propagation"
+        sub="Share user group membership down to the peers they own, so policies can reference user-level groups consistently across the mesh."
+      >
+        <OzSettingsToggle
+          value={groupsPropagation}
+          onChange={setGroupsPropagation}
+          disabled={editDisabled}
+          label="Enable user group propagation"
+          desc="Auto-groups assigned to a user are also assigned to every peer that user owns."
+        />
+      </OzSettingsCard>
+
+      {showJwtSync && (
+        <OzSettingsCard
+          title="JWT group sync"
+          sub="Read group membership directly from your IdP's JWT claims. Groups in the token are auto-created and the user is added to them on every sign-in."
+        >
+          <OzSettingsToggle
+            value={jwtGroupSync}
+            onChange={setJwtGroupSync}
+            disabled={editDisabled}
+            label="Enable JWT group sync"
+            desc="Extract & sync groups from JWT claims with the user's auto-groups, auto-creating groups from tokens."
           />
-          {(!isOpenzroHosted() || isLocalDev()) && (
-            <FancyToggleSwitch
-              value={jwtGroupSync}
-              onChange={setJwtGroupSync}
-              label={
-                <>
-                  <FolderSync size={15} />
-                  Enable JWT group sync
-                </>
-              }
-              helpText={
-                "Extract & sync groups from JWT claims with user’s auto-groups, auto-creating groups from tokens."
-              }
-              disabled={!permission.settings.update}
-            />
+
+          {jwtGroupSync && (
+            <div className="flex flex-col gap-5 rounded-oz2-card border border-oz2-border-soft bg-oz2-bg-sunken p-4">
+              <OzSettingsField
+                label="JWT claim"
+                hint="Specify the JWT claim used for extracting group names (e.g. roles, groups). The claim should contain a list of group names."
+              >
+                <OzInput
+                  prefix={<Braces size={14} />}
+                  placeholder="e.g., roles"
+                  value={jwtGroupsClaimName ?? ""}
+                  onKeyDown={(event) => {
+                    if (event.code === "Space") event.preventDefault();
+                  }}
+                  onChange={(e) => {
+                    setJwtGroupsClaimName(e.target.value.replace(/ /g, ""));
+                  }}
+                  disabled={editDisabled}
+                />
+              </OzSettingsField>
+
+              <OzSettingsField
+                label="JWT allow group"
+                hint="Limit access to openZro for the specified group name (e.g. openZro users). The group must already exist in your IdP."
+              >
+                <OzInput
+                  prefix={<ShieldCheck size={14} />}
+                  placeholder="e.g., openZro users"
+                  value={jwtAllowGroups[0] ?? ""}
+                  onChange={(e) => {
+                    setJwtAllowGroups([e.target.value]);
+                    setJwtAllowGroupsWarning(e.target.value !== "");
+                  }}
+                  disabled={editDisabled}
+                />
+              </OzSettingsField>
+
+              {jwtAllowGroupsWarning && (
+                <div className="flex items-start gap-2 rounded-oz2-card border border-oz2-warn/40 bg-oz2-warn-bg/40 px-3 py-2.5 text-[12px] text-oz2-warn">
+                  <AlertCircle size={13} className="mt-0.5 shrink-0" />
+                  <span className="leading-[1.5]">
+                    To prevent losing access, ensure you are part of this group.
+                  </span>
+                </div>
+              )}
+            </div>
           )}
-        </div>
-
-        {(!isOpenzroHosted() || isLocalDev()) && (
-          <AnimatePresence>
-            {jwtGroupSync && (
-              <div className={"overflow-hidden -top-4 relative z-0"}>
-                <motion.div
-                  className={""}
-                  initial={{ opacity: 0, height: 0, scale: 0.98 }}
-                  animate={{ opacity: 1, height: "auto", scale: 1 }}
-                  exit={{ opacity: 0, height: 0, scale: 0.98 }}
-                >
-                  <div
-                    className={cn(
-                      !jwtGroupSync && "opacity-50 pointer-events-none",
-                      "flex flex-col gap-6 bg-nb-gray-940 px-6 pt-5 pb-6 border border-nb-gray-930 rounded-b-md relative mx-3",
-                    )}
-                  >
-                    <div>
-                      <Label>JWT claim</Label>
-                      <HelpText>
-                        Specify the JWT claim for extracting group names, e.g.,
-                        roles or groups, to add to account groups (this claim
-                        should contain a list of group names).
-                      </HelpText>
-                      <Input
-                        customPrefix={
-                          <Braces size={16} className={"text-nb-gray-300"} />
-                        }
-                        onKeyDown={(event) => {
-                          if (event.code === "Space") event.preventDefault();
-                        }}
-                        placeholder={"e.g., roles"}
-                        value={jwtGroupsClaimName}
-                        onChange={(e) => {
-                          setJwtGroupsClaimName(
-                            e.target.value.replace(/ /g, ""),
-                          );
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <Label>JWT allow group</Label>
-                      <HelpText>
-                        Limit access to Openzro for the specified group name,
-                        e.g., Openzro users. To use the group, you need to
-                        configure it first in your IdP.
-                      </HelpText>
-                      <Input
-                        customPrefix={
-                          <ShieldCheck
-                            size={16}
-                            className={"text-nb-gray-300"}
-                          />
-                        }
-                        placeholder={"e.g., Openzro users"}
-                        value={jwtAllowGroups[0]}
-                        onChange={(e) => {
-                          setJwtAllowGroups([e.target.value]);
-                          setJwtAllowGroupsWarning(true);
-                          if (e.target.value === "")
-                            setJwtAllowGroupsWarning(false);
-                        }}
-                      />
-                    </div>
-                    {jwtAllowGroupsWarning && (
-                      <div
-                        className={
-                          "flex gap-2 items-center text-xs bg-openzro-950 px-4 justify-center py-3 rounded-md border border-openzro-500 text-openzro-200"
-                        }
-                      >
-                        <AlertCircle size={14} />
-                        To prevent losing access, ensure you are part of this
-                        group.
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              </div>
-            )}
-          </AnimatePresence>
-        )}
-        <Paragraph className={"text-sm mt-6 max-w-xl"}>
-          Looking for the groups list? Manage groups (rename, delete,
-          create) on the dedicated{" "}
-          <InlineLink href={"/team/groups"}>Team → Groups</InlineLink>{" "}
-          page.
-        </Paragraph>
-      </div>
+        </OzSettingsCard>
+      )}
     </Tabs.Content>
   );
 }

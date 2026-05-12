@@ -1,11 +1,6 @@
 "use client";
 
-import Button from "@components/Button";
 import FancyToggleSwitch from "@components/FancyToggleSwitch";
-import HelpText from "@components/HelpText";
-import InlineLink from "@components/InlineLink";
-import { Input } from "@components/Input";
-import { Label } from "@components/Label";
 import {
   Modal,
   ModalClose,
@@ -13,11 +8,8 @@ import {
   ModalFooter,
 } from "@components/modal/Modal";
 import ModalHeader from "@components/modal/ModalHeader";
-import Paragraph from "@components/Paragraph";
 import { PeerGroupSelector } from "@components/PeerGroupSelector";
 import { PeerSelector } from "@components/PeerSelector";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/Tabs";
-import { Textarea } from "@components/Textarea";
 import { DomainsTooltip } from "@components/ui/DomainListBadge";
 import { getOperatingSystem } from "@hooks/useOperatingSystem";
 import { cn } from "@utils/helpers";
@@ -33,6 +25,16 @@ import {
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSWRConfig } from "swr";
 import NetworkRoutesIcon from "@/assets/icons/NetworkRoutesIcon";
+import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
+import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
+import {
+  OzTabs as Tabs,
+  OzTabsContent as TabsContent,
+  OzTabsList as TabsList,
+  OzTabsTrigger as TabsTrigger,
+} from "@/components/v2/OzTabs";
+import OzTextarea from "@/components/v2/OzTextarea";
 import { useGroupRoute } from "@/contexts/GroupRouteProvider";
 import { useGroups } from "@/contexts/GroupsProvider";
 import { usePeers } from "@/contexts/PeersProvider";
@@ -328,59 +330,55 @@ function RouteUpdateModalContent({ onSuccess, route, cell }: ModalProps) {
       >
         {route?.domains && (
           <DomainsTooltip domains={route.domains} className={"block"}>
-            <Paragraph className={cn("text-sm", "!block truncate")}>
+            <p className={cn("text-sm text-oz2-text-muted", "!block truncate")}>
               {routeInfo}
-            </Paragraph>
+            </p>
           </DomainsTooltip>
         )}
       </ModalHeader>
 
       <Tabs defaultValue={tab} onValueChange={(v) => setTab(v)}>
-        <TabsList justify={"start"} className={"px-8"}>
-          <TabsTrigger
-            value={"network"}
-            onClick={() => networkRangeRef.current?.focus()}
-          >
-            <RouteIcon
-              size={16}
-              className={
-                "text-nb-gray-500 group-data-[state=active]/trigger:text-openzro transition-all"
-              }
-            />
-            Route
-          </TabsTrigger>
-          <TabsTrigger
-            value={"general"}
-            onClick={() => nameRef.current?.focus()}
-          >
-            <Text
-              size={16}
-              className={
-                "text-nb-gray-500 group-data-[state=active]/trigger:text-openzro transition-all"
-              }
-            />
-            Description
-          </TabsTrigger>
-          <TabsTrigger value={"settings"}>
-            <Settings2
-              size={16}
-              className={
-                "text-nb-gray-500 group-data-[state=active]/trigger:text-openzro transition-all"
-              }
-            />
-            Settings
-          </TabsTrigger>
-        </TabsList>
+        <div className="px-8 pb-3 pt-1">
+          <TabsList>
+            <TabsTrigger
+              value={"network"}
+              onClick={() => networkRangeRef.current?.focus()}
+            >
+              <RouteIcon
+                size={16}
+                className="text-oz2-text-faint group-data-[state=active]/trigger:text-oz2-acc transition-colors"
+              />
+              Route
+            </TabsTrigger>
+            <TabsTrigger
+              value={"general"}
+              onClick={() => nameRef.current?.focus()}
+            >
+              <Text
+                size={16}
+                className="text-oz2-text-faint group-data-[state=active]/trigger:text-oz2-acc transition-colors"
+              />
+              Description
+            </TabsTrigger>
+            <TabsTrigger value={"settings"}>
+              <Settings2
+                size={16}
+                className="text-oz2-text-faint group-data-[state=active]/trigger:text-oz2-acc transition-colors"
+              />
+              Settings
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value={"network"} className={"pb-8"}>
           <div className={"px-8 flex-col flex gap-6"}>
             {route.peer ? (
               <div>
-                <Label>Routing Peer</Label>
-                <HelpText>
+                <OzLabel>Routing Peer</OzLabel>
+                <OzHelpText className="mb-2">
                   Assign a single peer as a routing peer for the
                   {isExitNode ? " exit node." : " network route."}
-                </HelpText>
+                </OzHelpText>
                 <PeerSelector
                   onChange={setRoutingPeer}
                   value={routingPeer}
@@ -389,11 +387,11 @@ function RouteUpdateModalContent({ onSuccess, route, cell }: ModalProps) {
               </div>
             ) : (
               <div>
-                <Label>Peer Group</Label>
-                <HelpText>
+                <OzLabel>Peer Group</OzLabel>
+                <OzHelpText className="mb-2">
                   Assign a peer group with machines to be used as
                   {isExitNode ? " exit nodes." : " routing peers."}
-                </HelpText>
+                </OzHelpText>
                 <PeerGroupSelector
                   max={1}
                   onChange={setRoutingPeerGroups}
@@ -403,21 +401,21 @@ function RouteUpdateModalContent({ onSuccess, route, cell }: ModalProps) {
             )}
 
             <div>
-              <Label>Distribution Groups</Label>
-              <HelpText>
+              <OzLabel>Distribution Groups</OzLabel>
+              <OzHelpText className="mb-2">
                 Advertise this route to peers that belong to the following
                 groups
-              </HelpText>
+              </OzHelpText>
               <PeerGroupSelector onChange={setGroups} values={groups} />
             </div>
 
             <div>
-              <Label>Access Control Groups (optional)</Label>
-              <HelpText>
+              <OzLabel optional>Access Control Groups</OzLabel>
+              <OzHelpText className="mb-2">
                 These groups offer a more granular control of internal services
                 in your network. They can be used in access control policies to
                 limit and control access of this route.
-              </HelpText>
+              </OzHelpText>
               <PeerGroupSelector
                 onChange={setAccessControlGroups}
                 values={accessControlGroups}
@@ -428,11 +426,14 @@ function RouteUpdateModalContent({ onSuccess, route, cell }: ModalProps) {
         <TabsContent value={"general"} className={"px-8 pb-6"}>
           <div className={"flex flex-col gap-6"}>
             <div>
-              <Label>Description (optional)</Label>
-              <HelpText>
+              <OzLabel htmlFor="route-description" optional>
+                Description
+              </OzLabel>
+              <OzHelpText className="mb-2">
                 Write a short description to add more context to this route.
-              </HelpText>
-              <Textarea
+              </OzHelpText>
+              <OzTextarea
+                id="route-description"
                 placeholder={
                   "e.g., Route to access all devices in the AWS VPC, located in Frankfurt."
                 }
@@ -464,30 +465,25 @@ function RouteUpdateModalContent({ onSuccess, route, cell }: ModalProps) {
                 routingPeerGroupId={routingPeerGroups?.[0]?.id}
               />
             )}
-            <div className={cn("flex justify-between")}>
-              <div>
-                <Label>Metric</Label>
-                <HelpText className={"max-w-[200px]"}>
+            <div className={cn("flex items-start justify-between gap-6")}>
+              <div className="flex-1 min-w-0">
+                <OzLabel htmlFor="route-metric">Metric</OzLabel>
+                <OzHelpText className="mt-1">
                   A lower metric indicates a higher priority route.
-                </HelpText>
+                </OzHelpText>
               </div>
-
-              <Input
-                min={1}
-                max={9999}
-                maxWidthClass={"max-w-[200px]"}
-                value={metric}
-                error={metricError}
-                errorTooltip={true}
-                type={"number"}
-                onChange={(e) => setMetric(e.target.value)}
-                customPrefix={
-                  <ArrowDownWideNarrow
-                    size={16}
-                    className={"text-nb-gray-300"}
-                  />
-                }
-              />
+              <div className="w-[200px] shrink-0">
+                <OzInput
+                  id="route-metric"
+                  min={1}
+                  max={9999}
+                  value={metric}
+                  error={metricError}
+                  type={"number"}
+                  onChange={(e) => setMetric(e.target.value)}
+                  prefix={<ArrowDownWideNarrow size={16} />}
+                />
+              </div>
             </div>
           </div>
         </TabsContent>
@@ -495,31 +491,32 @@ function RouteUpdateModalContent({ onSuccess, route, cell }: ModalProps) {
 
       <ModalFooter className={"items-center"}>
         <div className={"w-full"}>
-          <Paragraph className={"text-sm mt-auto"}>
-            Learn more about
-            <InlineLink
+          <p className={"text-sm mt-auto text-oz2-text-muted"}>
+            Learn more about{" "}
+            <a
               href={
                 "https://docs.openzro.io/how-to/routing-traffic-to-private-networks"
               }
               target={"_blank"}
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-oz2-acc-text underline-offset-2 hover:underline"
             >
               Network Routes
               <ExternalLinkIcon size={12} />
-            </InlineLink>
-          </Paragraph>
+            </a>
+          </p>
         </div>
         <div className={"flex gap-3 w-full justify-end"}>
           <ModalClose asChild={true}>
-            <Button variant={"secondary"}>Cancel</Button>
+            <OzButton variant={"default"}>Cancel</OzButton>
           </ModalClose>
-
-          <Button
+          <OzButton
             variant={"primary"}
             disabled={isDisabled}
             onClick={updateRouteHandler}
           >
             Save Changes
-          </Button>
+          </OzButton>
         </div>
       </ModalFooter>
     </ModalContent>

@@ -1,5 +1,3 @@
-import Button from "@components/Button";
-import { Input } from "@components/Input";
 import {
   Modal,
   ModalClose,
@@ -11,6 +9,8 @@ import { IconCornerDownLeft } from "@tabler/icons-react";
 import { trim } from "lodash";
 import * as React from "react";
 import { useMemo, useState } from "react";
+import OzButton from "@/components/v2/OzButton";
+import OzInput from "@/components/v2/OzInput";
 
 type Props = {
   initialName: string;
@@ -42,24 +42,22 @@ export const EditGroupNameModal = ({
           />
 
           <div className={"p-default flex flex-col gap-4"}>
-            <div>
-              <Input
-                placeholder={"e.g., AWS Servers"}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
+            <OzInput
+              placeholder={"e.g., AWS Servers"}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
           </div>
 
           <ModalFooter className={"items-center"} separator={false}>
             <div className={"flex gap-3 w-full justify-end"}>
               <ModalClose asChild={true}>
-                <Button variant={"secondary"} className={"w-full"}>
+                <OzButton variant={"default"} className={"w-full"}>
                   Cancel
-                </Button>
+                </OzButton>
               </ModalClose>
 
-              <Button
+              <OzButton
                 variant={"primary"}
                 className={"w-full"}
                 onClick={() => onSuccess(name)}
@@ -68,7 +66,7 @@ export const EditGroupNameModal = ({
               >
                 Confirm
                 <IconCornerDownLeft size={16} />
-              </Button>
+              </OzButton>
             </div>
           </ModalFooter>
         </form>
