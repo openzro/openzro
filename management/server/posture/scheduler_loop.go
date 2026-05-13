@@ -158,14 +158,6 @@ func (s *Scheduler) Run(ctx context.Context) error {
 // broker outage). The inner tickWhileLeader loop only runs while THIS
 // replica is the elected leader for the account.
 func (s *Scheduler) runForAccount(ctx context.Context, accountID string) {
-	defer func() {
-		// A panic anywhere in the loop must not bring down the
-		// scheduler — other accounts continue uninterrupted.
-		if r := recover(); r != nil {
-			log.WithContext(ctx).Errorf("posture scheduler: panic in account %s: %v", accountID, r)
-		}
-	}()
-
 	lockKey := schedulerLockKeyPrefix + accountID
 	invalidations, err := s.coord.Subscribe(ctx, scheduleChangedTopicPrefix+accountID)
 	if err != nil {
@@ -188,7 +180,20 @@ func (s *Scheduler) runForAccount(ctx context.Context, accountID string) {
 			}
 			continue
 		}
-		s.tickWhileLeader(ctx, accountID, invalidations)
+		// Per-iteration recover so a panic inside tickWhileLeader (or
+		// anything it transitively calls) logs and falls through to
+		// re-acquire the lock instead of killing the goroutine. A
+		// function-scope recover would catch the panic too, but then
+		// the account would lose its scheduler entirely until the next
+		// management restart — defeating the whole point of HA.
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.WithContext(ctx).Errorf("posture scheduler: panic in tick for %s: %v", accountID, r)
+				}
+			}()
+			s.tickWhileLeader(ctx, accountID, invalidations)
+		}()
 		release()
 	}
 }
