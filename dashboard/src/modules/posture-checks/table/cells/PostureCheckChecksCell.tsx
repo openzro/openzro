@@ -5,10 +5,12 @@ import {
   FlagIcon,
   NetworkIcon,
   ServerCogIcon,
+  ShieldHalf,
 } from "lucide-react";
 import * as React from "react";
 import OpenzroIcon from "@/assets/icons/OpenzroIcon";
 import { PostureCheck } from "@/interfaces/PostureCheck";
+import { EndpointSecurityTooltip } from "@/modules/posture-checks/checks/tooltips/EndpointSecurityTooltip";
 import { GeoLocationTooltip } from "@/modules/posture-checks/checks/tooltips/GeoLocationTooltip";
 import { OpenzroVersionTooltip } from "@/modules/posture-checks/checks/tooltips/OpenzroVersionTooltip";
 import { OperatingSystemTooltip } from "@/modules/posture-checks/checks/tooltips/OperatingSystemTooltip";
@@ -64,7 +66,7 @@ export const PostureCheckChecksCell = ({
               <div
                 className={cn(
                   pillBase,
-                  "z-[9] bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300",
+                  "z-[9] bg-indigo-100 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-200",
                 )}
               >
                 <FlagIcon size={14} />
@@ -87,7 +89,7 @@ export const PostureCheckChecksCell = ({
               <div
                 className={cn(
                   pillBase,
-                  "z-[7] bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
+                  "z-[7] bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-200",
                 )}
               >
                 <NetworkIcon size={14} />
@@ -108,12 +110,27 @@ export const PostureCheckChecksCell = ({
               <div
                 className={cn(
                   pillBase,
-                  "z-[5] bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
+                  "z-[5] bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-200",
                 )}
               >
                 <CalendarClock size={14} />
               </div>
             </ScheduleTooltip>
+          )}
+
+          {check.checks.endpoint_security_check && (
+            <EndpointSecurityTooltip
+              check={check.checks.endpoint_security_check}
+            >
+              <div
+                className={cn(
+                  pillBase,
+                  "z-[4] bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-200",
+                )}
+              >
+                <ShieldHalf size={14} />
+              </div>
+            </EndpointSecurityTooltip>
           )}
         </div>
         {children}

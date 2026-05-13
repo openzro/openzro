@@ -39,7 +39,7 @@ import { PostureCheck } from "@/interfaces/PostureCheck";
 import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
 import PostureCheckModal from "@/modules/posture-checks/modal/PostureCheckModal";
 import { PostureCheckActionCellV2 } from "@/modules/posture-checks/table/cells/v2/PostureCheckActionCellV2";
-import { PostureCheckChecksCellV2 } from "@/modules/posture-checks/table/cells/v2/PostureCheckChecksCellV2";
+import { PostureCheckChecksCell } from "@/modules/posture-checks/table/cells/PostureCheckChecksCell";
 import { PostureCheckNameCellV2 } from "@/modules/posture-checks/table/cells/v2/PostureCheckNameCellV2";
 import { PostureCheckPolicyUsageCellV2 } from "@/modules/posture-checks/table/cells/v2/PostureCheckPolicyUsageCellV2";
 
@@ -168,7 +168,7 @@ export default function PostureCheckTable({
         accessorFn: (row) => Object.keys(row.checks ?? {}).length,
         sortingFn: "basic",
         header: ({ column }) => <SortHeader column={column} label="Checks" />,
-        cell: ({ row }) => <PostureCheckChecksCellV2 check={row.original} />,
+        cell: ({ row }) => <PostureCheckChecksCell check={row.original} />,
       },
       {
         id: "access_control_usage",
