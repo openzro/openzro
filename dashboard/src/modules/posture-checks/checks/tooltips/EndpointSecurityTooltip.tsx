@@ -10,11 +10,13 @@ type Props = {
 };
 
 export const EndpointSecurityTooltip = ({ check, children }: Props) => {
-  // Only fetch when we actually have a check to describe. Avoids a
-  // /admin/mdm-providers hit on every row that doesn't carry the
-  // endpoint-security gate.
+  // Mount-guarded by the call site (cell wraps the tooltip only when
+  // endpoint_security_check is set), so this fetch only runs on pages
+  // that actually need the provider name. SWR dedupes by URL key, so
+  // multiple rows with endpoint security on the same page share one
+  // network round-trip.
   const { data: providers } = useFetchApi<MDMProvider[]>(
-    check ? "/admin/mdm-providers" : null,
+    "/admin/mdm-providers",
   );
 
   if (!check) return <>{children}</>;
