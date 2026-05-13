@@ -263,22 +263,25 @@ var (
 			// Posture-schedule scheduler: one goroutine per account
 			// with at least one ScheduleCheck, electing a leader via
 			// the cluster lock so HA deployments only fire one
-			// network-map recomputation per boundary cross. Single-
-			// replica installs still benefit — boundary crosses become
-			// near-real-time instead of waiting for the next peer
-			// Sync poll. Errors at boot don't block the management
-			// startup; we log and continue with the natural-Sync
-			// fall-back path.
-			postureScheduler := posture.NewScheduler(
-				clusterCoord,
-				accountManager,
-				server.NewScheduleLoader(store),
-			)
-			go func() {
-				if err := postureScheduler.Run(ctx); err != nil && ctx.Err() == nil {
-					log.WithContext(ctx).Errorf("posture scheduler exited unexpectedly: %v", err)
-				}
-			}()
+			// network-map recomputation per boundary cross. When no
+			// coordinator is configured (single-instance/dev) we skip
+			// the scheduler entirely and fall back to the natural-Sync
+			// path — boundary crosses then surface on the next peer
+			// poll instead of in near-real-time.
+			if clusterCoord != nil {
+				postureScheduler := posture.NewScheduler(
+					clusterCoord,
+					accountManager,
+					server.NewScheduleLoader(store),
+				)
+				go func() {
+					if err := postureScheduler.Run(ctx); err != nil && ctx.Err() == nil {
+						log.WithContext(ctx).Errorf("posture scheduler exited unexpectedly: %v", err)
+					}
+				}()
+			} else {
+				log.WithContext(ctx).Info("posture scheduler disabled: no cluster coordinator (single-instance mode); schedule boundaries surface on the next peer Sync")
+			}
 
 			secretsManager := server.NewTimeBasedAuthSecretsManager(peersUpdateManager, config.TURNConfig, config.Relay, settingsManager)
 
