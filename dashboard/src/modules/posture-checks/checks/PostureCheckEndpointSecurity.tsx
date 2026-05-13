@@ -1,6 +1,5 @@
 import FancyToggleSwitch from "@components/FancyToggleSwitch";
 import { ModalClose, ModalFooter } from "@components/modal/Modal";
-import { SelectDropdown } from "@components/select/SelectDropdown";
 import useFetchApi from "@utils/api";
 import { ExternalLinkIcon, ShieldHalf } from "lucide-react";
 import Link from "next/link";
@@ -8,6 +7,13 @@ import * as React from "react";
 import { useState } from "react";
 import OzButton from "@/components/v2/OzButton";
 import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
+import {
+  OzSelect,
+  OzSelectContent,
+  OzSelectItem,
+  OzSelectTrigger,
+  OzSelectValue,
+} from "@/components/v2/OzSelect";
 import { MDMProvider } from "@/interfaces/MDMProvider";
 import { EndpointSecurityCheck } from "@/interfaces/PostureCheck";
 import { PostureCheckCard } from "@/modules/posture-checks/ui/PostureCheckCard";
@@ -94,15 +100,22 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
               first, then come back to enable this check.
             </p>
           ) : (
-            <SelectDropdown
+            <OzSelect
               value={providerId}
-              onChange={setProviderId}
-              options={options}
-              placeholder={"Select a provider..."}
-              showSearch={options.length > 5}
-              isLoading={isLoading}
-              disabled={disabled}
-            />
+              onValueChange={setProviderId}
+              disabled={disabled || isLoading}
+            >
+              <OzSelectTrigger id={"posture-endpoint-provider"}>
+                <OzSelectValue placeholder={"Select a provider..."} />
+              </OzSelectTrigger>
+              <OzSelectContent>
+                {options.map((opt) => (
+                  <OzSelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </OzSelectItem>
+                ))}
+              </OzSelectContent>
+            </OzSelect>
           )}
         </div>
         <FancyToggleSwitch

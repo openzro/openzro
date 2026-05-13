@@ -1,5 +1,4 @@
 import { ModalClose, ModalFooter } from "@components/modal/Modal";
-import { RadioGroup, RadioGroupItem } from "@components/RadioGroup";
 import cidr from "ip-cidr";
 import { isEmpty, uniqueId } from "lodash";
 import {
@@ -15,6 +14,7 @@ import { useMemo, useState } from "react";
 import OzButton from "@/components/v2/OzButton";
 import OzInput from "@/components/v2/OzInput";
 import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
+import { OzTabs, OzTabsList, OzTabsTrigger } from "@/components/v2/OzTabs";
 import { PeerNetworkRangeCheck } from "@/interfaces/PostureCheck";
 import { PostureCheckCard } from "@/modules/posture-checks/ui/PostureCheckCard";
 
@@ -133,16 +133,36 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
               ranges
             </OzHelpText>
           </div>
-          <RadioGroup value={allowOrDeny} onChange={setAllowOrDeny}>
-            <RadioGroupItem value={"allow"} variant={"green"}>
-              <ShieldCheck size={16} />
-              Allow
-            </RadioGroupItem>
-            <RadioGroupItem value={"deny"} variant={"red"}>
-              <ShieldXIcon size={16} />
-              Block
-            </RadioGroupItem>
-          </RadioGroup>
+          <OzTabs value={allowOrDeny} onValueChange={setAllowOrDeny}>
+            <OzTabsList>
+              <OzTabsTrigger
+                value={"allow"}
+                className={
+                  "gap-1.5 " +
+                  "data-[state=active]:!bg-emerald-500/15 " +
+                  "data-[state=active]:!text-emerald-700 " +
+                  "data-[state=active]:!shadow-none " +
+                  "dark:data-[state=active]:!text-emerald-300"
+                }
+              >
+                <ShieldCheck size={14} />
+                Allow
+              </OzTabsTrigger>
+              <OzTabsTrigger
+                value={"deny"}
+                className={
+                  "gap-1.5 " +
+                  "data-[state=active]:!bg-red-500/15 " +
+                  "data-[state=active]:!text-red-700 " +
+                  "data-[state=active]:!shadow-none " +
+                  "dark:data-[state=active]:!text-red-300"
+                }
+              >
+                <ShieldXIcon size={14} />
+                Block
+              </OzTabsTrigger>
+            </OzTabsList>
+          </OzTabs>
         </div>
         {networkRanges.length > 0 && (
           <div className={"mb-2 flex flex-col gap-2 w-full "}>

@@ -1,5 +1,4 @@
 import { ModalClose, ModalFooter } from "@components/modal/Modal";
-import { RadioGroup, RadioGroupItem } from "@components/RadioGroup";
 import { CitySelector } from "@components/ui/CitySelector";
 import { CountrySelector } from "@components/ui/CountrySelector";
 import { isEmpty, uniqueId } from "lodash";
@@ -16,6 +15,7 @@ import * as React from "react";
 import { useState } from "react";
 import OzButton from "@/components/v2/OzButton";
 import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
+import { OzTabs, OzTabsList, OzTabsTrigger } from "@/components/v2/OzTabs";
 import { useCountries } from "@/contexts/CountryProvider";
 import { GeoLocation, GeoLocationCheck } from "@/interfaces/PostureCheck";
 import { PostureCheckCard } from "@/modules/posture-checks/ui/PostureCheckCard";
@@ -128,16 +128,39 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
               countries or regions
             </OzHelpText>
           </div>
-          <RadioGroup value={allowDenyLocation} onChange={setAllowDenyLocation}>
-            <RadioGroupItem value={"allow"} variant={"green"}>
-              <ShieldCheck size={16} />
-              Allow
-            </RadioGroupItem>
-            <RadioGroupItem value={"deny"} variant={"red"}>
-              <ShieldXIcon size={16} />
-              Block
-            </RadioGroupItem>
-          </RadioGroup>
+          <OzTabs
+            value={allowDenyLocation}
+            onValueChange={setAllowDenyLocation}
+          >
+            <OzTabsList>
+              <OzTabsTrigger
+                value={"allow"}
+                className={
+                  "gap-1.5 " +
+                  "data-[state=active]:!bg-emerald-500/15 " +
+                  "data-[state=active]:!text-emerald-700 " +
+                  "data-[state=active]:!shadow-none " +
+                  "dark:data-[state=active]:!text-emerald-300"
+                }
+              >
+                <ShieldCheck size={14} />
+                Allow
+              </OzTabsTrigger>
+              <OzTabsTrigger
+                value={"deny"}
+                className={
+                  "gap-1.5 " +
+                  "data-[state=active]:!bg-red-500/15 " +
+                  "data-[state=active]:!text-red-700 " +
+                  "data-[state=active]:!shadow-none " +
+                  "dark:data-[state=active]:!text-red-300"
+                }
+              >
+                <ShieldXIcon size={14} />
+                Block
+              </OzTabsTrigger>
+            </OzTabsList>
+          </OzTabs>
         </div>
         {geoUnavailable && (
           <div

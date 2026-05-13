@@ -1,10 +1,6 @@
 import FancyToggleSwitch from "@components/FancyToggleSwitch";
 import { ModalClose, ModalFooter } from "@components/modal/Modal";
-import { RadioGroup, RadioGroupItem } from "@components/RadioGroup";
-import {
-  SelectDropdown,
-  SelectOption,
-} from "@components/select/SelectDropdown";
+import { SelectOption } from "@components/select/SelectDropdown";
 import { IconMathEqualGreater } from "@tabler/icons-react";
 import { validator } from "@utils/helpers";
 import { isEmpty } from "lodash";
@@ -26,6 +22,13 @@ import WindowsIcon from "@/assets/icons/WindowsIcon";
 import OzButton from "@/components/v2/OzButton";
 import OzInput from "@/components/v2/OzInput";
 import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
+import {
+  OzSelect,
+  OzSelectContent,
+  OzSelectItem,
+  OzSelectTrigger,
+  OzSelectValue,
+} from "@/components/v2/OzSelect";
 import {
   OzTabs,
   OzTabsContent,
@@ -384,33 +387,76 @@ export const OperatingSystemTab = ({
             Choose whether you want to allow or block the operating system.
           </OzHelpText>
         </div>
-        <RadioGroup value={allow} onChange={changeAllow}>
-          <RadioGroupItem value={"allow"} variant={"green"}>
-            <ShieldCheck size={14} />
-            Allow
-          </RadioGroupItem>
-          <RadioGroupItem value={"block"} variant={"red"}>
-            <ShieldXIcon size={14} />
-            Block
-          </RadioGroupItem>
-        </RadioGroup>
+        <OzTabs value={allow} onValueChange={changeAllow}>
+          <OzTabsList>
+            <OzTabsTrigger
+              value={"allow"}
+              className={
+                "gap-1.5 " +
+                "data-[state=active]:!bg-emerald-500/15 " +
+                "data-[state=active]:!text-emerald-700 " +
+                "data-[state=active]:!shadow-none " +
+                "dark:data-[state=active]:!text-emerald-300"
+              }
+            >
+              <ShieldCheck size={14} />
+              Allow
+            </OzTabsTrigger>
+            <OzTabsTrigger
+              value={"block"}
+              className={
+                "gap-1.5 " +
+                "data-[state=active]:!bg-red-500/15 " +
+                "data-[state=active]:!text-red-700 " +
+                "data-[state=active]:!shadow-none " +
+                "dark:data-[state=active]:!text-red-300"
+              }
+            >
+              <ShieldXIcon size={14} />
+              Block
+            </OzTabsTrigger>
+          </OzTabsList>
+        </OzTabs>
       </div>
       <div className={"gap-4 items-center grid grid-cols-2 mt-3"}>
-        <SelectDropdown
+        <OzSelect
           value={allOrMin}
-          onChange={changeAllOrMin}
-          options={allOrMinOptions}
+          onValueChange={changeAllOrMin}
           disabled={allow === "block" || disabled}
-        />
+        >
+          <OzSelectTrigger>
+            <OzSelectValue />
+          </OzSelectTrigger>
+          <OzSelectContent>
+            {allOrMinOptions.map((opt) => (
+              <OzSelectItem key={opt.value} value={opt.value}>
+                <span className={"inline-flex items-center gap-2"}>
+                  {opt.icon && <opt.icon size={14} width={14} />}
+                  {opt.label}
+                </span>
+              </OzSelectItem>
+            ))}
+          </OzSelectContent>
+        </OzSelect>
         {versionList && !useCustomVersion ? (
-          <SelectDropdown
-            value={value || "0"}
-            showSearch={true}
-            placeholder={"Select version..."}
-            onChange={onChange}
-            options={versionList}
+          <OzSelect
+            value={
+              value && value !== "0" && value !== "-" ? value : undefined
+            }
+            onValueChange={onChange}
             disabled={allOrMin === "all" || allow === "block" || disabled}
-          />
+          >
+            <OzSelectTrigger>
+              <OzSelectValue placeholder={"Select version..."} />
+            </OzSelectTrigger>
+            <OzSelectContent>
+              {versionList.map((opt) => (
+                <OzSelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </OzSelectItem>
+              ))}
+            </OzSelectContent>
+          </OzSelect>
         ) : (
           <OzInput
             value={value}
