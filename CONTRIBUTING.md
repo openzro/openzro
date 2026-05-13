@@ -24,7 +24,7 @@ If you haven't already, join our slack workspace [here](https://join.slack.com/t
         - [Test suite](#test-suite)
     - [Checklist before submitting a PR](#checklist-before-submitting-a-pr)
     - [Other project repositories](#other-project-repositories)
-    - [Contributor License Agreement](#contributor-license-agreement)
+    - [Developer Certificate of Origin (DCO)](#developer-certificate-of-origin-dco)
 
 ## Code of conduct
 
@@ -292,8 +292,43 @@ openZro project is composed of 3 main repositories:
 - Dashboard: https://github.com/openzro/dashboard, contains the Administration UI for the management service
 - Documentations: https://github.com/openzro/docs, contains the documentation from https://openzro.io/docs
 
-## Contributor License Agreement
+## Developer Certificate of Origin (DCO)
 
-That we do not have any potential problems later it is sadly necessary to sign a [Contributor License Agreement](CONTRIBUTOR_LICENSE_AGREEMENT.md). That can be done literally with the push of a button.
+openZro uses the [Developer Certificate of Origin](https://developercertificate.org/)
+(DCO) — a lightweight, in-commit alternative to a Contributor License
+Agreement. By signing off on a commit, you confirm that you have the
+right to submit the work and that you license it under the project's
+BSD-3-Clause license.
 
-A bot will automatically comment on the pull request once it got opened asking for the agreement to be signed. Before it did not get signed it is sadly not possible to merge it in.
+### Signing off
+
+Every commit must carry a `Signed-off-by:` trailer matching your
+`git config user.name` / `user.email`:
+
+```
+git commit -s -m "fix(component): describe the change"
+```
+
+The `-s` flag appends:
+
+```
+Signed-off-by: Your Name <your.email@example.com>
+```
+
+A CI check enforces this on every PR — merges are blocked if any
+commit on the branch lacks a valid sign-off.
+
+### Why DCO and not a CLA
+
+DCO is the same model used by the Linux kernel, Kubernetes, GitLab,
+Chromium and most modern open-source projects. It keeps copyright
+with the contributor (no copyright reassignment), is auditable per-
+commit, and requires no separate signing flow. The full text of the
+DCO is at <https://developercertificate.org/>.
+
+### Trademark
+
+The BSD-3 license covers the code; the openZro **name and logo** are
+governed separately by [TRADEMARK.md](TRADEMARK.md). DCO sign-off
+does not grant trademark rights; please read TRADEMARK.md before
+reusing the openZro name on a fork or derivative product.
