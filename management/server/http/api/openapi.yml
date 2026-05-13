@@ -1169,6 +1169,8 @@ components:
           $ref: '#/components/schemas/ProcessCheck'
         endpoint_security_check:
           $ref: '#/components/schemas/EndpointSecurityCheck'
+        schedule_check:
+          $ref: '#/components/schemas/ScheduleCheck'
     NBVersionCheck:
       description: Posture check for the version of Openzro
       type: object
@@ -1284,6 +1286,77 @@ components:
           example: false
       required:
         - provider_id
+    ScheduleCheck:
+      description: |
+        Posture check gating peer access by wall-clock time. The window
+        is interpreted in the supplied IANA timezone and evaluated
+        server-side at every Sync and at each admission revalidation
+        tick (default ~1 minute). Use `action=allow` to scope access
+        strictly to the window ("office hours only"); use `action=deny`
+        to lock access out during the window ("after-hours block"). For
+        compound shapes such as "office hours with lunch break", create
+        a second posture check on the same policy — the engine ANDs
+        them, so combining an `allow` window with an inner `deny`
+        window produces the intersection.
+      type: object
+      properties:
+        window:
+          $ref: '#/components/schemas/TimeWindow'
+        timezone:
+          description: |
+            IANA timezone name (e.g. `America/Sao_Paulo`,
+            `Europe/Berlin`, `UTC`). Empty defaults to UTC. The literal
+            `Local` is rejected — pick an explicit IANA zone so the
+            policy never silently depends on the management host clock.
+            POSIX `Etc/GMT±N` works but is discouraged: the sign is
+            inverted by convention which trips operators.
+          type: string
+          example: "America/Sao_Paulo"
+          default: "UTC"
+        action:
+          description: Action to take upon window match.
+          type: string
+          enum: [ "allow", "deny" ]
+          example: "allow"
+      required:
+        - window
+        - action
+    TimeWindow:
+      description: |
+        Single window of time. Day-of-week filter plus an HH:MM range
+        interpreted in the parent `ScheduleCheck` timezone. When
+        `end_time <= start_time` the window wraps midnight — for
+        example `start_time=22:00`, `end_time=06:00` covers 22:00 today
+        through 06:00 the following day.
+      type: object
+      properties:
+        days_of_week:
+          description: |
+            Days of week the window applies to. `0` is Sunday, `6` is
+            Saturday. Empty array means every day. Duplicates and
+            out-of-range values are rejected.
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 6
+          example: [1, 2, 3, 4, 5]
+          default: []
+        start_time:
+          description: Inclusive window opener, HH:MM 24-hour.
+          type: string
+          example: "09:00"
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+        end_time:
+          description: |
+            Exclusive window closer, HH:MM 24-hour. When less than or
+            equal to `start_time`, the window wraps midnight.
+          type: string
+          example: "18:00"
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+      required:
+        - start_time
+        - end_time
     Process:
       description: Describes the operational activity within a peer's system.
       type: object

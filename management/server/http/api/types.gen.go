@@ -12,6 +12,16 @@ const (
 	TokenAuthScopes  = "TokenAuth.Scopes"
 )
 
+// Defines values for AccountExtraSettingsNetworkTrafficDefaultRange.
+const (
+	AccountExtraSettingsNetworkTrafficDefaultRangeAll  AccountExtraSettingsNetworkTrafficDefaultRange = "all"
+	AccountExtraSettingsNetworkTrafficDefaultRangeN1h  AccountExtraSettingsNetworkTrafficDefaultRange = "1h"
+	AccountExtraSettingsNetworkTrafficDefaultRangeN24h AccountExtraSettingsNetworkTrafficDefaultRange = "24h"
+	AccountExtraSettingsNetworkTrafficDefaultRangeN30d AccountExtraSettingsNetworkTrafficDefaultRange = "30d"
+	AccountExtraSettingsNetworkTrafficDefaultRangeN6h  AccountExtraSettingsNetworkTrafficDefaultRange = "6h"
+	AccountExtraSettingsNetworkTrafficDefaultRangeN7d  AccountExtraSettingsNetworkTrafficDefaultRange = "7d"
+)
+
 // Defines values for EventActivityCode.
 const (
 	EventActivityCodeAccountCreate                            EventActivityCode = "account.create"
@@ -179,6 +189,12 @@ const (
 	ResourceTypeSubnet ResourceType = "subnet"
 )
 
+// Defines values for ScheduleCheckAction.
+const (
+	ScheduleCheckActionAllow ScheduleCheckAction = "allow"
+	ScheduleCheckActionDeny  ScheduleCheckAction = "deny"
+)
+
 // Defines values for UserStatus.
 const (
 	UserStatusActive  UserStatus = "active"
@@ -265,6 +281,14 @@ type Account struct {
 
 // AccountExtraSettings defines model for AccountExtraSettings.
 type AccountExtraSettings struct {
+	// NetworkTrafficDefaultRange Pre-fills the date filter on the Flow Traffic dashboard page so
+	// opening it does not request every event that fits in the
+	// 10 000-event API ceiling. Recognised values: "1h", "6h", "24h",
+	// "7d", "30d", "all". Empty or unrecognised values keep the
+	// "no time filter" behaviour. Operators can still override per
+	// session via the date picker on the page itself.
+	NetworkTrafficDefaultRange *AccountExtraSettingsNetworkTrafficDefaultRange `json:"network_traffic_default_range,omitempty"`
+
 	// NetworkTrafficDisableDefaultPortFilter Turns OFF the client-side built-in skip list of broadcast /
 	// discovery ports (NetBIOS-137/138, SSDP-1900, mDNS-5353, LLMNR-5355,
 	// all UDP). Default false: a corporate VPN almost never wants those
@@ -296,12 +320,17 @@ type AccountExtraSettings struct {
 	// NetworkTrafficPacketCounterEnabled Enables or disables network traffic packet counter. If enabled, network packets and their size will be counted and reported. (This can have an slight impact on performance)
 	NetworkTrafficPacketCounterEnabled bool `json:"network_traffic_packet_counter_enabled"`
 
-	// NetworkTrafficDefaultRange Pre-fills the date filter on the Flow Traffic dashboard page. Recognised values: "1h", "6h", "24h", "7d", "30d", "all". Empty / unrecognised values keep "no time filter" behaviour.
-	NetworkTrafficDefaultRange *string `json:"network_traffic_default_range,omitempty"`
-
 	// PeerApprovalEnabled (Cloud only) Enables or disables peer approval globally. If enabled, all peers added will be in pending state until approved by an admin.
 	PeerApprovalEnabled bool `json:"peer_approval_enabled"`
 }
+
+// AccountExtraSettingsNetworkTrafficDefaultRange Pre-fills the date filter on the Flow Traffic dashboard page so
+// opening it does not request every event that fits in the
+// 10 000-event API ceiling. Recognised values: "1h", "6h", "24h",
+// "7d", "30d", "all". Empty or unrecognised values keep the
+// "no time filter" behaviour. Operators can still override per
+// session via the date picker on the page itself.
+type AccountExtraSettingsNetworkTrafficDefaultRange string
 
 // AccountOnboarding defines model for AccountOnboarding.
 type AccountOnboarding struct {
@@ -395,6 +424,18 @@ type Checks struct {
 
 	// ProcessCheck Posture Check for binaries exist and are running in the peer’s system
 	ProcessCheck *ProcessCheck `json:"process_check,omitempty"`
+
+	// ScheduleCheck Posture check gating peer access by wall-clock time. The window
+	// is interpreted in the supplied IANA timezone and evaluated
+	// server-side at every Sync and at each admission revalidation
+	// tick (default ~1 minute). Use `action=allow` to scope access
+	// strictly to the window ("office hours only"); use `action=deny`
+	// to lock access out during the window ("after-hours block"). For
+	// compound shapes such as "office hours with lunch break", create
+	// a second posture check on the same policy — the engine ANDs
+	// them, so combining an `allow` window with an inner `deny`
+	// window produces the intersection.
+	ScheduleCheck *ScheduleCheck `json:"schedule_check,omitempty"`
 }
 
 // City Describe city geographical location information
@@ -1651,6 +1692,39 @@ type RulePortRange struct {
 	Start int `json:"start"`
 }
 
+// ScheduleCheck Posture check gating peer access by wall-clock time. The window
+// is interpreted in the supplied IANA timezone and evaluated
+// server-side at every Sync and at each admission revalidation
+// tick (default ~1 minute). Use `action=allow` to scope access
+// strictly to the window ("office hours only"); use `action=deny`
+// to lock access out during the window ("after-hours block"). For
+// compound shapes such as "office hours with lunch break", create
+// a second posture check on the same policy — the engine ANDs
+// them, so combining an `allow` window with an inner `deny`
+// window produces the intersection.
+type ScheduleCheck struct {
+	// Action Action to take upon window match.
+	Action ScheduleCheckAction `json:"action"`
+
+	// Timezone IANA timezone name (e.g. `America/Sao_Paulo`,
+	// `Europe/Berlin`, `UTC`). Empty defaults to UTC. The literal
+	// `Local` is rejected — pick an explicit IANA zone so the
+	// policy never silently depends on the management host clock.
+	// POSIX `Etc/GMT±N` works but is discouraged: the sign is
+	// inverted by convention which trips operators.
+	Timezone *string `json:"timezone,omitempty"`
+
+	// Window Single window of time. Day-of-week filter plus an HH:MM range
+	// interpreted in the parent `ScheduleCheck` timezone. When
+	// `end_time <= start_time` the window wraps midnight — for
+	// example `start_time=22:00`, `end_time=06:00` covers 22:00 today
+	// through 06:00 the following day.
+	Window TimeWindow `json:"window"`
+}
+
+// ScheduleCheckAction Action to take upon window match.
+type ScheduleCheckAction string
+
 // SetupKey defines model for SetupKey.
 type SetupKey struct {
 	// AllowExtraDnsLabels Allow extra DNS labels to be added to the peer
@@ -1799,6 +1873,25 @@ type SetupKeyRequest struct {
 
 	// Revoked Setup key revocation status
 	Revoked bool `json:"revoked"`
+}
+
+// TimeWindow Single window of time. Day-of-week filter plus an HH:MM range
+// interpreted in the parent `ScheduleCheck` timezone. When
+// `end_time <= start_time` the window wraps midnight — for
+// example `start_time=22:00`, `end_time=06:00` covers 22:00 today
+// through 06:00 the following day.
+type TimeWindow struct {
+	// DaysOfWeek Days of week the window applies to. `0` is Sunday, `6` is
+	// Saturday. Empty array means every day. Duplicates and
+	// out-of-range values are rejected.
+	DaysOfWeek *[]int `json:"days_of_week,omitempty"`
+
+	// EndTime Exclusive window closer, HH:MM 24-hour. When less than or
+	// equal to `start_time`, the window wraps midnight.
+	EndTime string `json:"end_time"`
+
+	// StartTime Inclusive window opener, HH:MM 24-hour.
+	StartTime string `json:"start_time"`
 }
 
 // User defines model for User.

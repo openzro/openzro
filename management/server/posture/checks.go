@@ -19,6 +19,7 @@ const (
 	PeerNetworkRangeCheckName = "PeerNetworkRangeCheck"
 	ProcessCheckName          = "ProcessCheck"
 	EndpointSecurityCheckName = "EndpointSecurityCheck"
+	ScheduleCheckName         = "ScheduleCheck"
 
 	CheckActionAllow string = "allow"
 	CheckActionDeny  string = "deny"
@@ -63,6 +64,10 @@ type ChecksDefinition struct {
 	// MDM/EDR vendor (Intune / SentinelOne / Huntress). See
 	// endpoint_security.go.
 	EndpointSecurityCheck *EndpointSecurityCheck `json:",omitempty"`
+	// ScheduleCheck gates peer access by wall-clock time (single
+	// window of day-of-week + HH:MM range, interpreted in an IANA
+	// timezone, evaluated server-side). See schedule.go.
+	ScheduleCheck *ScheduleCheck `json:",omitempty"`
 }
 
 // Copy returns a copy of a checks definition.
@@ -121,6 +126,19 @@ func (cd ChecksDefinition) Copy() ChecksDefinition {
 			FailOpen:   cd.EndpointSecurityCheck.FailOpen,
 		}
 	}
+	if cd.ScheduleCheck != nil {
+		src := cd.ScheduleCheck
+		schedCopy := &ScheduleCheck{
+			Timezone: src.Timezone,
+			Action:   src.Action,
+			Window: TimeWindow{
+				StartTime:  src.Window.StartTime,
+				EndTime:    src.Window.EndTime,
+				DaysOfWeek: append([]int(nil), src.Window.DaysOfWeek...),
+			},
+		}
+		cdCopy.ScheduleCheck = schedCopy
+	}
 	return cdCopy
 }
 
@@ -166,6 +184,9 @@ func (pc *Checks) GetChecks() []Check {
 	}
 	if pc.Checks.EndpointSecurityCheck != nil {
 		checks = append(checks, pc.Checks.EndpointSecurityCheck)
+	}
+	if pc.Checks.ScheduleCheck != nil {
+		checks = append(checks, pc.Checks.ScheduleCheck)
 	}
 	return checks
 }
@@ -226,6 +247,10 @@ func buildPostureCheck(postureChecksID string, name string, description string, 
 		postureChecks.Checks.EndpointSecurityCheck = toEndpointSecurityCheck(endpointSecurityCheck)
 	}
 
+	if scheduleCheck := checks.ScheduleCheck; scheduleCheck != nil {
+		postureChecks.Checks.ScheduleCheck = toScheduleCheck(scheduleCheck)
+	}
+
 	return &postureChecks, nil
 }
 
@@ -264,6 +289,10 @@ func (pc *Checks) ToAPIResponse() *api.PostureCheck {
 		checks.EndpointSecurityCheck = toEndpointSecurityCheckResponse(pc.Checks.EndpointSecurityCheck)
 	}
 
+	if pc.Checks.ScheduleCheck != nil {
+		checks.ScheduleCheck = toScheduleCheckResponse(pc.Checks.ScheduleCheck)
+	}
+
 	return &api.PostureCheck{
 		Id:          pc.ID,
 		Name:        pc.Name,
@@ -288,6 +317,48 @@ func toEndpointSecurityCheckResponse(check *EndpointSecurityCheck) *api.Endpoint
 	return &api.EndpointSecurityCheck{
 		ProviderId: check.ProviderID,
 		FailOpen:   &failOpen,
+	}
+}
+
+func toScheduleCheck(check *api.ScheduleCheck) *ScheduleCheck {
+	tz := ""
+	if check.Timezone != nil {
+		tz = *check.Timezone
+	}
+	var days []int
+	if check.Window.DaysOfWeek != nil {
+		days = append([]int(nil), *check.Window.DaysOfWeek...)
+	}
+	return &ScheduleCheck{
+		Window: TimeWindow{
+			DaysOfWeek: days,
+			StartTime:  check.Window.StartTime,
+			EndTime:    check.Window.EndTime,
+		},
+		Timezone: tz,
+		Action:   string(check.Action),
+	}
+}
+
+func toScheduleCheckResponse(check *ScheduleCheck) *api.ScheduleCheck {
+	var daysPtr *[]int
+	if len(check.Window.DaysOfWeek) > 0 {
+		days := append([]int(nil), check.Window.DaysOfWeek...)
+		daysPtr = &days
+	}
+	tz := check.Timezone
+	var tzPtr *string
+	if tz != "" {
+		tzPtr = &tz
+	}
+	return &api.ScheduleCheck{
+		Window: api.TimeWindow{
+			DaysOfWeek: daysPtr,
+			StartTime:  check.Window.StartTime,
+			EndTime:    check.Window.EndTime,
+		},
+		Timezone: tzPtr,
+		Action:   api.ScheduleCheckAction(check.Action),
 	}
 }
 

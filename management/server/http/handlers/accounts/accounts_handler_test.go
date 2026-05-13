@@ -456,7 +456,7 @@ func TestAccounts_PutRoundTripsFlowTrafficDefaultRange(t *testing.T) {
 	assert.NoError(t, json.Unmarshal(content, &got))
 
 	if assert.NotNil(t, got.Settings.Extra) && assert.NotNil(t, got.Settings.Extra.NetworkTrafficDefaultRange) {
-		assert.Equal(t, "24h", *got.Settings.Extra.NetworkTrafficDefaultRange)
+		assert.Equal(t, api.AccountExtraSettingsNetworkTrafficDefaultRange("24h"), *got.Settings.Extra.NetworkTrafficDefaultRange)
 	}
 	if assert.NotNil(t, captured) && assert.NotNil(t, captured.Extra) {
 		assert.Equal(t, "24h", captured.Extra.FlowTrafficDefaultRange)
