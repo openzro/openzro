@@ -503,26 +503,6 @@ jobs:
           echo "$APP_CERT_B64"  | base64 -d > /tmp/app.p12
           echo "$INST_CERT_B64" | base64 -d > /tmp/inst.p12
 
-          # DEBUG (temporary): log byte-length + SHA256 of the password
-          # secrets so we can diff against the local files when the .p12
-          # import fails with "wrong password". Strict alphanumeric
-          # passwords (24 chars from openssl rand | tr) — logging the
-          # SHA256 of a 24-char string with high entropy is not a
-          # brute-forcing concern. Remove this block once the codesign
-          # pipeline is stable.
-          printf "APP_CERT_PW:  len=%s sha=%s\n" \
-            "$(printf '%s' "$APP_CERT_PW" | wc -c)" \
-            "$(printf '%s' "$APP_CERT_PW" | sha256sum | cut -d' ' -f1)"
-          printf "INST_CERT_PW: len=%s sha=%s\n" \
-            "$(printf '%s' "$INST_CERT_PW" | wc -c)" \
-            "$(printf '%s' "$INST_CERT_PW" | sha256sum | cut -d' ' -f1)"
-          printf "app.p12:  size=%s sha=%s\n" \
-            "$(wc -c < /tmp/app.p12)" \
-            "$(sha256sum /tmp/app.p12 | cut -d' ' -f1)"
-          printf "inst.p12: size=%s sha=%s\n" \
-            "$(wc -c < /tmp/inst.p12)" \
-            "$(sha256sum /tmp/inst.p12 | cut -d' ' -f1)"
-
           security import /tmp/app.p12  -k "$KC" -P "$APP_CERT_PW"  \
             -T /usr/bin/codesign    -T /usr/bin/security
           security import /tmp/inst.p12 -k "$KC" -P "$INST_CERT_PW" \
