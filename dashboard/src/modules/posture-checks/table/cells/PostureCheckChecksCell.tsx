@@ -1,5 +1,11 @@
 import { cn } from "@utils/helpers";
-import { Disc3Icon, FlagIcon, NetworkIcon, ServerCogIcon } from "lucide-react";
+import {
+  CalendarClock,
+  Disc3Icon,
+  FlagIcon,
+  NetworkIcon,
+  ServerCogIcon,
+} from "lucide-react";
 import * as React from "react";
 import OpenzroIcon from "@/assets/icons/OpenzroIcon";
 import { PostureCheck } from "@/interfaces/PostureCheck";
@@ -8,6 +14,7 @@ import { OpenzroVersionTooltip } from "@/modules/posture-checks/checks/tooltips/
 import { OperatingSystemTooltip } from "@/modules/posture-checks/checks/tooltips/OperatingSystemTooltip";
 import { PeerNetworkRangeTooltip } from "@/modules/posture-checks/checks/tooltips/PeerNetworkRangeTooltip";
 import { ProcessTooltip } from "@/modules/posture-checks/checks/tooltips/ProcessTooltip";
+import { ScheduleTooltip } from "@/modules/posture-checks/checks/tooltips/ScheduleTooltip";
 
 type Props = {
   check: PostureCheck;
@@ -94,6 +101,19 @@ export const PostureCheckChecksCell = ({
                 <ServerCogIcon size={14} />
               </div>
             </ProcessTooltip>
+          )}
+
+          {check.checks.schedule_check && (
+            <ScheduleTooltip check={check.checks.schedule_check}>
+              <div
+                className={cn(
+                  pillBase,
+                  "z-[5] bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
+                )}
+              >
+                <CalendarClock size={14} />
+              </div>
+            </ScheduleTooltip>
           )}
         </div>
         {children}

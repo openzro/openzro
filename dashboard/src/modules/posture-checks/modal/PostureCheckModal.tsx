@@ -22,6 +22,7 @@ import { PostureCheckOpenzroVersion } from "@/modules/posture-checks/checks/Post
 import { PostureCheckOperatingSystem } from "@/modules/posture-checks/checks/PostureCheckOperatingSystem";
 import { PostureCheckPeerNetworkRange } from "@/modules/posture-checks/checks/PostureCheckPeerNetworkRange";
 import { PostureCheckProcess } from "@/modules/posture-checks/checks/PostureCheckProcess";
+import { PostureCheckSchedule } from "@/modules/posture-checks/checks/PostureCheckSchedule";
 import { usePostureCheck } from "@/modules/posture-checks/usePostureCheck";
 
 type Props = {
@@ -60,7 +61,8 @@ export default function PostureCheckModal({
     !!check?.checks?.os_version_check ||
     !!check?.checks?.peer_network_range_check ||
     !!check?.checks?.process_check ||
-    !!check?.checks?.endpoint_security_check;
+    !!check?.checks?.endpoint_security_check ||
+    !!check?.checks?.schedule_check;
   const canCreate =
     !isEmpty(check?.name) &&
     isAtLeastOneCheckEnabled &&
@@ -171,6 +173,18 @@ export default function PostureCheckModal({
                   onChange={(v) =>
                     setCheck({
                       type: "endpoint_security",
+                      payload: v,
+                    })
+                  }
+                  disabled={
+                    !permission.policies.create || !permission.policies.update
+                  }
+                />
+                <PostureCheckSchedule
+                  value={check?.checks?.schedule_check}
+                  onChange={(v) =>
+                    setCheck({
+                      type: "schedule",
                       payload: v,
                     })
                   }

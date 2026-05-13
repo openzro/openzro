@@ -1,7 +1,13 @@
 "use client";
 
 import { cn } from "@utils/helpers";
-import { Disc3Icon, FlagIcon, NetworkIcon, ServerCogIcon } from "lucide-react";
+import {
+  CalendarClock,
+  Disc3Icon,
+  FlagIcon,
+  NetworkIcon,
+  ServerCogIcon,
+} from "lucide-react";
 import * as React from "react";
 import OpenzroIcon from "@/assets/icons/OpenzroIcon";
 import { PostureCheck } from "@/interfaces/PostureCheck";
@@ -10,6 +16,7 @@ import { OpenzroVersionTooltip } from "@/modules/posture-checks/checks/tooltips/
 import { OperatingSystemTooltip } from "@/modules/posture-checks/checks/tooltips/OperatingSystemTooltip";
 import { PeerNetworkRangeTooltip } from "@/modules/posture-checks/checks/tooltips/PeerNetworkRangeTooltip";
 import { ProcessTooltip } from "@/modules/posture-checks/checks/tooltips/ProcessTooltip";
+import { ScheduleTooltip } from "@/modules/posture-checks/checks/tooltips/ScheduleTooltip";
 
 // V2 paint of PostureCheckChecksCell — same overlapping-avatar stack,
 // but the surrounding chip uses oz2-bg-sunken / oz2-border-soft and
@@ -84,6 +91,14 @@ export const PostureCheckChecksCellV2 = ({
                 <ServerCogIcon size={14} className="text-white" />
               </div>
             </ProcessTooltip>
+          )}
+
+          {check.checks.schedule_check && (
+            <ScheduleTooltip check={check.checks.schedule_check}>
+              <div className="z-[5] flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-tr from-amber-500 to-amber-400 transition-transform hover:scale-[1.1]">
+                <CalendarClock size={14} className="text-white" />
+              </div>
+            </ScheduleTooltip>
           )}
         </div>
         {children}

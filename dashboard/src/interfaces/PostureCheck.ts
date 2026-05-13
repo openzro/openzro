@@ -12,6 +12,7 @@ export interface PostureCheck {
     peer_network_range_check?: PeerNetworkRangeCheck;
     process_check?: ProcessCheck;
     endpoint_security_check?: EndpointSecurityCheck;
+    schedule_check?: ScheduleCheck;
   };
   policies?: Policy[];
   active?: boolean;
@@ -63,6 +64,44 @@ export interface PeerNetworkRangeCheck {
 export interface ProcessCheck {
   processes: Process[];
 }
+
+export interface TimeWindow {
+  days_of_week?: number[];
+  start_time: string;
+  end_time: string;
+}
+
+export interface ScheduleCheck {
+  window: TimeWindow;
+  timezone?: string;
+  action: "allow" | "deny";
+}
+
+export const commonTimezones: string[] = [
+  "UTC",
+  "America/Sao_Paulo",
+  "America/New_York",
+  "America/Los_Angeles",
+  "America/Mexico_City",
+  "Europe/London",
+  "Europe/Berlin",
+  "Europe/Madrid",
+  "Europe/Paris",
+  "Africa/Johannesburg",
+  "Asia/Tokyo",
+  "Asia/Singapore",
+  "Australia/Sydney",
+];
+
+export const weekdayLabels: { value: number; short: string; long: string }[] = [
+  { value: 0, short: "Sun", long: "Sunday" },
+  { value: 1, short: "Mon", long: "Monday" },
+  { value: 2, short: "Tue", long: "Tuesday" },
+  { value: 3, short: "Wed", long: "Wednesday" },
+  { value: 4, short: "Thu", long: "Thursday" },
+  { value: 5, short: "Fri", long: "Friday" },
+  { value: 6, short: "Sat", long: "Saturday" },
+];
 
 export interface Process {
   id: string;

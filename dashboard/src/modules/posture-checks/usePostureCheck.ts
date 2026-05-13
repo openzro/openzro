@@ -6,6 +6,7 @@ import { PostureCheck } from "@/interfaces/PostureCheck";
 import {
   validateLocationCheck,
   validateOSCheck,
+  validateScheduleCheck,
 } from "@/modules/posture-checks/helper/PostureCheckHelper";
 
 // Posture Check Reducer Type
@@ -23,7 +24,8 @@ interface PostureCheckAction {
     | "os"
     | "network_range"
     | "process_check"
-    | "endpoint_security";
+    | "endpoint_security"
+    | "schedule";
   payload: any;
 }
 
@@ -86,6 +88,15 @@ const postureCheckReducer = (
         checks: {
           ...state.checks,
           endpoint_security_check: action.payload,
+        },
+      };
+
+    case "schedule":
+      return {
+        ...state,
+        checks: {
+          ...state.checks,
+          schedule_check: validateScheduleCheck(action.payload),
         },
       };
 
