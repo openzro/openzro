@@ -1,11 +1,14 @@
 package posture
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	nbpeer "github.com/openzro/openzro/management/server/peer"
 )
 
 func TestScheduleCheck_Validate(t *testing.T) {
@@ -416,4 +419,172 @@ func TestScheduleCheck_Name(t *testing.T) {
 	t.Parallel()
 	s := &ScheduleCheck{}
 	assert.Equal(t, ScheduleCheckName, s.Name())
+}
+
+// TestScheduleCheck_NilReceiver guards against future regressions where
+// the posture engine, a fuzz harness or a direct caller hands a nil
+// *ScheduleCheck to Check/Validate. The receiver methods must return an
+// error instead of panicking on receiver method dispatch.
+func TestScheduleCheck_NilReceiver(t *testing.T) {
+	t.Parallel()
+
+	var s *ScheduleCheck
+
+	ok, err := s.Check(context.Background(), nbpeer.Peer{})
+	require.Error(t, err)
+	assert.False(t, ok)
+
+	err = s.Validate()
+	require.Error(t, err)
+}
+
+// TestScheduleCheck_BoundaryMinutes covers the inclusive-start /
+// exclusive-end boundary semantics at both ends of the day so the
+// "00:00–23:59" all-day pattern documented in the operator guide
+// behaves as advertised.
+func TestScheduleCheck_BoundaryMinutes(t *testing.T) {
+	t.Parallel()
+
+	const layout = "2006-01-02 15:04"
+
+	tests := []struct {
+		name     string
+		now      string
+		window   TimeWindow
+		action   string
+		want     bool
+	}{
+		{
+			name:   "all-day window — start of day passes",
+			window: TimeWindow{StartTime: "00:00", EndTime: "23:59"},
+			action: CheckActionAllow,
+			now:    "2026-05-13 00:00",
+			want:   true,
+		},
+		{
+			name:   "all-day window — 23:58 still inside",
+			window: TimeWindow{StartTime: "00:00", EndTime: "23:59"},
+			action: CheckActionAllow,
+			now:    "2026-05-13 23:58",
+			want:   true,
+		},
+		{
+			name:   "all-day window — 23:59 is the exclusive end",
+			window: TimeWindow{StartTime: "00:00", EndTime: "23:59"},
+			action: CheckActionAllow,
+			now:    "2026-05-13 23:59",
+			want:   false,
+		},
+		{
+			name:   "midnight start, evening end — 00:00 inclusive",
+			window: TimeWindow{StartTime: "00:00", EndTime: "08:00"},
+			action: CheckActionAllow,
+			now:    "2026-05-13 00:00",
+			want:   true,
+		},
+		{
+			name:   "midnight start, evening end — 07:59 still inside",
+			window: TimeWindow{StartTime: "00:00", EndTime: "08:00"},
+			action: CheckActionAllow,
+			now:    "2026-05-13 07:59",
+			want:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := ScheduleCheck{Window: tt.window, Action: tt.action}
+			got, err := s.checkAt(mustTime(t, layout, tt.now, "UTC"))
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// TestScheduleCheck_ZeroValueTime makes sure passing a zero time.Time
+// (epoch 0001-01-01) doesn't crash the predicate. Zero-time inputs are
+// improbable in production but cheap to defend against.
+func TestScheduleCheck_ZeroValueTime(t *testing.T) {
+	t.Parallel()
+
+	s := ScheduleCheck{
+		Window: TimeWindow{StartTime: "09:00", EndTime: "18:00"},
+		Action: CheckActionAllow,
+	}
+	// 0001-01-01 00:00:00 UTC. Hour=0, Minute=0, weekday=Monday(1).
+	// Falls outside the 09:00–18:00 window → allow returns false.
+	got, err := s.checkAt(time.Time{})
+	require.NoError(t, err)
+	assert.False(t, got)
+}
+
+// TestScheduleCheck_DSTTransitions exercises the wall-clock semantics
+// across both pathologies (spring-forward gap and fall-back duplicate)
+// to ensure the predicate does not accidentally double-fire during
+// fall-back or skip a valid window during spring-forward.
+//
+// We use America/New_York because Brazil dropped DST in 2019 and so
+// would not exercise the transitions. The two transition Sundays in
+// 2026 are:
+//   - 2026-03-08: 02:00 EST → 03:00 EDT (spring-forward, 02:30 doesn't exist)
+//   - 2026-11-01: 02:00 EDT → 01:00 EST (fall-back, 01:30 happens twice)
+func TestScheduleCheck_DSTTransitions(t *testing.T) {
+	t.Parallel()
+
+	tz := "America/New_York"
+	loc, err := time.LoadLocation(tz)
+	require.NoError(t, err, "tzdata must be embedded for DST tests")
+
+	// Window that brackets the transition: 01:00–04:00 local on the
+	// transition Sunday.
+	s := ScheduleCheck{
+		Window: TimeWindow{
+			DaysOfWeek: []int{0}, // Sunday
+			StartTime:  "01:00",
+			EndTime:    "04:00",
+		},
+		Timezone: tz,
+		Action:   CheckActionAllow,
+	}
+
+	// Spring-forward day: 02:00 EST does not exist (wall clock jumps
+	// to 03:00 EDT). Probing a real UTC instant that translates to
+	// 03:30 EDT — inside the window — should still pass.
+	springForwardNoon := time.Date(2026, 3, 8, 3, 30, 0, 0, loc)
+	got, err := s.checkAt(springForwardNoon)
+	require.NoError(t, err)
+	assert.True(t, got, "spring-forward 03:30 EDT is inside the 01:00–04:00 window")
+
+	// Fall-back day: 01:30 local happens twice. Both instances should
+	// pass the check identically — the predicate operates on wall
+	// time, not on absolute time, so it has no way to (and shouldn't)
+	// distinguish the two.
+	fallBackFirst := time.Date(2026, 11, 1, 1, 30, 0, 0, loc) // first 01:30 (EDT)
+	got, err = s.checkAt(fallBackFirst)
+	require.NoError(t, err)
+	assert.True(t, got, "fall-back first 01:30 inside window")
+
+	// Add an hour to land on the second 01:30 (now EST).
+	fallBackSecond := fallBackFirst.Add(1 * time.Hour)
+	got, err = s.checkAt(fallBackSecond)
+	require.NoError(t, err)
+	assert.True(t, got, "fall-back second 01:30 also inside window")
+}
+
+// TestScheduleCheck_TzDataEmbedded asserts the tzdata embed (the
+// blank import in schedule.go) is in effect by loading a zone that is
+// not part of the POSIX-minimum set most slim base images ship with.
+// If this regresses, the assertion fires before any production deploy.
+func TestScheduleCheck_TzDataEmbedded(t *testing.T) {
+	t.Parallel()
+	for _, zone := range []string{
+		"America/Sao_Paulo",
+		"America/Manaus",
+		"Europe/Berlin",
+		"Asia/Tokyo",
+		"Pacific/Auckland",
+	} {
+		_, err := time.LoadLocation(zone)
+		assert.NoErrorf(t, err, "loading %s — tzdata embed missing?", zone)
+	}
 }

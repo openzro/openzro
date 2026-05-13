@@ -7,6 +7,15 @@ import (
 	"slices"
 	"time"
 
+	// Embed Go's tzdata so time.LoadLocation works without the host
+	// /usr/share/zoneinfo. The management container today is a slim
+	// ubuntu:24.04 base that does NOT install the tzdata apt package
+	// — without this import every non-UTC schedule check would fail
+	// in production while passing Validate locally on a dev machine
+	// that does have tzdata. ~450 KB binary-size cost; tiny price for
+	// eliminating a silent prod-only regression.
+	_ "time/tzdata"
+
 	nbpeer "github.com/openzro/openzro/management/server/peer"
 )
 
@@ -51,6 +60,13 @@ type ScheduleCheck struct {
 }
 
 func (s *ScheduleCheck) Check(_ context.Context, _ nbpeer.Peer) (bool, error) {
+	if s == nil {
+		// Defensive: GetChecks() only appends non-nil pointers today,
+		// but a future refactor or a direct caller could pass nil and
+		// would otherwise panic on receiver method dispatch. Treat as
+		// an invalid configuration rather than crashing the worker.
+		return false, fmt.Errorf("nil ScheduleCheck")
+	}
 	return s.checkAt(time.Now())
 }
 
@@ -147,6 +163,9 @@ func (s *ScheduleCheck) Name() string {
 }
 
 func (s *ScheduleCheck) Validate() error {
+	if s == nil {
+		return fmt.Errorf("nil ScheduleCheck")
+	}
 	if s.Action == "" {
 		return fmt.Errorf("%s action shouldn't be empty", s.Name())
 	}
