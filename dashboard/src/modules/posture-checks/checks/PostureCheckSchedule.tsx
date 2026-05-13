@@ -121,10 +121,15 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
                 value={"allow"}
                 className={
                   "gap-1.5 " +
-                  "data-[state=active]:bg-emerald-500/15 " +
-                  "data-[state=active]:text-emerald-700 " +
-                  "data-[state=active]:shadow-none " +
-                  "dark:data-[state=active]:text-emerald-300"
+                  // `!` overrides OzTabsTrigger's default
+                  // data-[state=active]:bg-oz2-surface /
+                  // text-oz2-text — Tailwind's important modifier
+                  // gives the colored variant the higher specificity
+                  // needed when both rules target the same selector.
+                  "data-[state=active]:!bg-emerald-500/15 " +
+                  "data-[state=active]:!text-emerald-700 " +
+                  "data-[state=active]:!shadow-none " +
+                  "dark:data-[state=active]:!text-emerald-300"
                 }
               >
                 <ShieldCheck size={14} />
@@ -134,10 +139,10 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
                 value={"deny"}
                 className={
                   "gap-1.5 " +
-                  "data-[state=active]:bg-red-500/15 " +
-                  "data-[state=active]:text-red-700 " +
-                  "data-[state=active]:shadow-none " +
-                  "dark:data-[state=active]:text-red-300"
+                  "data-[state=active]:!bg-red-500/15 " +
+                  "data-[state=active]:!text-red-700 " +
+                  "data-[state=active]:!shadow-none " +
+                  "dark:data-[state=active]:!text-red-300"
                 }
               >
                 <ShieldXIcon size={14} />
