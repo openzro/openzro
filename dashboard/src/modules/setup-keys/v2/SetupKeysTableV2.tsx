@@ -98,7 +98,6 @@ export default function SetupKeysTableV2({ setupKeys, isLoading }: Props) {
   const [validFilter, setValidFilter] = useState<ValidFilter>("all");
   const [refreshing, setRefreshing] = useState(false);
   const [sorting, setSorting] = useState<SortingState>([
-    { id: "valid", desc: true },
     { id: "last_used", desc: true },
     { id: "name", desc: true },
   ]);
