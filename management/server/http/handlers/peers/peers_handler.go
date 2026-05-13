@@ -41,16 +41,24 @@ func NewHandler(accountManager account.Manager) *Handler {
 }
 
 func (h *Handler) checkPeerStatus(peer *nbpeer.Peer) (*nbpeer.Peer, error) {
-	peerToReturn := peer.Copy()
-	if peer.Status.Connected {
-		// Although we have online status in store we do not yet have an updated channel so have to show it as disconnected
-		// This may happen after server restart when not all peers are yet connected
-		if !h.accountManager.HasConnectedChannel(peer.ID) {
-			peerToReturn.Status.Connected = false
-		}
-	}
-
-	return peerToReturn, nil
+	// The store-side Status.Connected is authoritative: it's set true
+	// in updatePeerStatusAndLocation when the peer Sync stream attaches
+	// to any replica, and false in peer/peer.go when the stream closes
+	// or detection-stale fires.
+	//
+	// Earlier versions also overrode Connected to false here when
+	// HasConnectedChannel reported no local channel — a single-replica
+	// safety net for "server restarted but peer hasn't reconnected yet"
+	// gap. That override breaks HA: HasConnectedChannel only sees
+	// channels owned by THIS replica's local map, so in an N-replica
+	// fleet roughly (N-1)/N of /api/peers requests land on a replica
+	// that doesn't own the stream and report every healthy peer as
+	// disconnected. The dashboard then flickers each refresh as the
+	// load balancer cycles through replicas. Trust the store; accept
+	// the ~keep-alive-timeout window of "ghost connected" that may
+	// follow an abrupt pod kill — peers reconnect within that window
+	// and the store catches up.
+	return peer.Copy(), nil
 }
 
 func (h *Handler) getPeer(ctx context.Context, accountID, peerID, userID string, w http.ResponseWriter) {

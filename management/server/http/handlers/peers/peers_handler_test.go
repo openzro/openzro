@@ -210,8 +210,15 @@ func TestGetPeers(t *testing.T) {
 	expectedUpdatedPeer.SSHEnabled = true
 	expectedUpdatedPeer.Name = "New Name"
 
+	// peer1's `expected.Status.Connected` mirrors its store value (true).
+	// The handler used to override Connected→false when the local replica
+	// lacked an update channel for the peer; that override was removed
+	// because it produced false "disconnected" reports in HA deployments
+	// (a peer's update channel lives on a single replica, but /api/peers
+	// can land on any replica via the LB). The store value is now
+	// authoritative — see Handler.checkPeerStatus.
 	expectedPeer1 := peer1.Copy()
-	expectedPeer1.Status.Connected = false
+	expectedPeer1.Status.Connected = true
 
 	tt := []struct {
 		name           string
@@ -302,11 +309,15 @@ func TestGetPeers(t *testing.T) {
 				// hardcode this check for now as we only have two peers in this suite
 				assert.Equal(t, len(respBody), 2)
 
+				// peer1 (noUpdateChannelTestPeerID) is reported as
+				// Connected=true because the store value is now
+				// authoritative regardless of whether the local replica
+				// owns the update channel.
 				for _, peer := range respBody {
 					if peer.Id == testPeerID {
 						got = peer
 					} else {
-						assert.Equal(t, peer.Connected, false)
+						assert.Equal(t, peer.Connected, true)
 					}
 				}
 
