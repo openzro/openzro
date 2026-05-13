@@ -23,6 +23,7 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 	"golang.org/x/exp/maps"
 
+	"github.com/openzro/openzro/cluster"
 	nbdns "github.com/openzro/openzro/dns"
 	"github.com/openzro/openzro/formatter/hook"
 	"github.com/openzro/openzro/management/server/account"
@@ -111,6 +112,15 @@ type DefaultAccountManager struct {
 	// configured via the dashboard. Optional: when nil, only the
 	// process-wide env-var baseline is active.
 	activityExporters *activity_exporters.Manager
+
+	// coordinator is the cluster pub/sub + lock primitive used by
+	// internal services that need cross-replica coordination — today
+	// just the posture-schedule scheduler, which publishes via this
+	// field when a posture check changes so the leader replica re-
+	// computes its next wakeup. Nil-safe: every consumer guards on
+	// nil so single-replica deployments without a cluster broker keep
+	// working with the in-process fall-back.
+	coordinator cluster.Coordinator
 
 	// admissionBypasses owns the per-peer admission bypass store
 	// (ADR-0004 — break-glass overrides for the Device Admission
@@ -317,6 +327,22 @@ func BuildManager(
 	go am.runAdmissionRevalidator(ctx)
 
 	return am, nil
+}
+
+// SetCoordinator wires a cluster coordinator after construction so
+// internal services that need cross-replica primitives (today: the
+// posture-schedule scheduler) can publish/lock/subscribe. Decoupled
+// from BuildManager to avoid widening the constructor signature —
+// callers that don't run in HA can skip the call entirely.
+func (am *DefaultAccountManager) SetCoordinator(c cluster.Coordinator) {
+	am.coordinator = c
+}
+
+// Coordinator exposes the cluster primitive for internal services
+// (posture scheduler). Returns nil for managers that were never wired
+// with one.
+func (am *DefaultAccountManager) Coordinator() cluster.Coordinator {
+	return am.coordinator
 }
 
 func (am *DefaultAccountManager) startWarmup(ctx context.Context) {

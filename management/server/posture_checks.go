@@ -82,6 +82,15 @@ func (am *DefaultAccountManager) SavePostureChecks(ctx context.Context, accountI
 		am.UpdateAccountPeers(ctx, accountID)
 	}
 
+	// Notify the posture scheduler that the account's schedule set
+	// might have changed. Cheap: nil coord short-circuits, and the
+	// scheduler ignores invalidations for accounts it isn't leading.
+	// Unconditional publish is safer than trying to introspect whether
+	// this particular check carries a ScheduleCheck — operators can
+	// add/remove the schedule block on an existing check via update,
+	// and we'd otherwise miss those transitions.
+	posture.PublishScheduleChange(ctx, am.coordinator, accountID)
+
 	return postureChecks, nil
 }
 
@@ -121,6 +130,10 @@ func (am *DefaultAccountManager) DeletePostureChecks(ctx context.Context, accoun
 	}
 
 	am.StoreEvent(ctx, userID, postureChecks.ID, accountID, activity.PostureCheckDeleted, postureChecks.EventMeta())
+
+	// Same rationale as SavePostureChecks: nudge the scheduler in case
+	// the deleted record carried a ScheduleCheck.
+	posture.PublishScheduleChange(ctx, am.coordinator, accountID)
 
 	return nil
 }

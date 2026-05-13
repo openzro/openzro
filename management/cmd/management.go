@@ -255,6 +255,31 @@ var (
 				return fmt.Errorf("failed to build default manager: %v", err)
 			}
 
+			// Wire the cluster coordinator so the account manager can
+			// publish posture-schedule-change invalidations and so the
+			// posture scheduler below can subscribe + acquire locks.
+			accountManager.SetCoordinator(clusterCoord)
+
+			// Posture-schedule scheduler: one goroutine per account
+			// with at least one ScheduleCheck, electing a leader via
+			// the cluster lock so HA deployments only fire one
+			// network-map recomputation per boundary cross. Single-
+			// replica installs still benefit — boundary crosses become
+			// near-real-time instead of waiting for the next peer
+			// Sync poll. Errors at boot don't block the management
+			// startup; we log and continue with the natural-Sync
+			// fall-back path.
+			postureScheduler := posture.NewScheduler(
+				clusterCoord,
+				accountManager,
+				server.NewScheduleLoader(store),
+			)
+			go func() {
+				if err := postureScheduler.Run(ctx); err != nil && ctx.Err() == nil {
+					log.WithContext(ctx).Errorf("posture scheduler exited unexpectedly: %v", err)
+				}
+			}()
+
 			secretsManager := server.NewTimeBasedAuthSecretsManager(peersUpdateManager, config.TURNConfig, config.Relay, settingsManager)
 
 			trustedPeers := config.ReverseProxy.TrustedPeers
