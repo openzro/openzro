@@ -1,6 +1,9 @@
 # ADR-0017 — Time-based posture check (`ScheduleCheck`)
 
-**Status:** Proposed (2026-05-11)
+**Status:** Accepted (2026-05-13). Phase 1 — predicate + plumbing —
+shipped in `2bae7363`. Phase 2 (cluster-coordinated scheduler) and
+Phase 3 (dashboard UX) are tracked as
+[issue #32](https://github.com/openzro/openzro/issues/32).
 
 **Relates to:**
 [ADR-0003](0003-device-admission-gate.md) (posture-check framework),
@@ -10,6 +13,28 @@ coordinator + leader election),
 deployments).
 
 **Supersedes:** none.
+
+## Implementation status snapshot (2026-05-13)
+
+| Rollout step | Status |
+| --- | --- |
+| 1. `posture/schedule.go` predicate + Validate + tests | Done — `2bae7363` |
+| 2. `ChecksDefinition.Copy` / `GetChecks` / handler marshalling | Done — same commit |
+| 3. OpenAPI `ScheduleCheck` + `TimeWindow` schemas, types.gen regen | Done — same commit |
+| 4. Cluster-coordinated scheduler (`posture/scheduler/` package) | **Deferred** — existing 1-minute `peer_admission_revalidator` covers the SLA target for v1. Tracked as follow-up. |
+| 5. Activity log metadata extension | Deferred — same follow-up |
+| 6. Dashboard editor card + weekday/HH:MM/timezone components | Deferred — same follow-up |
+| 7. Operator guide (`docs/operator/posture-checks.md`) | Deferred — same follow-up |
+| 8. Helm chart appVersion bump | Lands with next alpha tag |
+
+**Trade-off documented**: the 1-minute revalidator gives a worst-case
+boundary-cross latency of ~60 seconds, vs the < 5 seconds the dedicated
+scheduler would deliver. Acceptable for the v1 use cases enumerated
+below (compliance windows, contractor schedules, after-hours lockout)
+because none of them are time-sensitive at the second granularity.
+The scheduler stays first-class on the roadmap and the design in
+section 4 is the binding contract when it lands — no rework expected
+to the predicate or the API.
 
 ## Context
 
