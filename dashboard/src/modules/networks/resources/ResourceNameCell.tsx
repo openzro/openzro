@@ -15,38 +15,53 @@ export default function ResourceNameCell({ resource }: Readonly<Props>) {
   const { permission } = usePermissions();
   const { network, openResourceModal } = useNetworksContext();
 
+  const icon =
+    resource.type === "domain" ? (
+      <GlobeIcon size={15} />
+    ) : resource.type === "subnet" ? (
+      <NetworkIcon size={15} />
+    ) : (
+      <WorkflowIcon size={15} />
+    );
+
   return (
     <button
-      className={"flex gap-4 items-center group"}
+      className={"flex gap-3 items-center group"}
       onClick={() => {
         if (!network || !permission.networks.update) return;
         openResourceModal(network, resource);
       }}
     >
+      {/*
+        Row-level resource tile. Light mode mirrors the modal exactly
+        (amber-100 / amber-700). Dark mode swaps the modal's amber-500/15
+        — which glowed loud when stacked across a dozen rows — for a
+        deeper amber-950 base + amber-200 icon, so the tile sits flat
+        against the dark surface like the OS / process pills do.
+      */}
       <div
         className={cn(
-          "flex items-center justify-center rounded-md h-9 w-9 shrink-0 bg-nb-gray-900 transition-all",
-          "group-hover:bg-nb-gray-800",
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] select-none",
+          "bg-amber-100 text-amber-700",
+          "dark:bg-amber-950/50 dark:text-amber-200/90",
         )}
       >
-        {resource.type === "host" && <WorkflowIcon size={15} />}
-        {resource.type === "domain" && <GlobeIcon size={15} />}
-        {resource.type === "subnet" && <NetworkIcon size={15} />}
+        {icon}
       </div>
       <div
         className={cn(
-          "flex flex-col gap-0 text-neutral-300  font-light truncate",
-          "group-hover:text-neutral-900 dark:group-hover:text-neutral-100 text-left",
+          "flex flex-col gap-0 text-left",
+          "text-oz2-text",
         )}
       >
         <TextWithTooltip
           text={resource.name}
           maxChars={25}
-          className={"font-normal"}
+          className={"font-medium"}
         />
         <DescriptionWithTooltip
           maxChars={25}
-          className={cn("font-normal mt-0.5 ")}
+          className={"text-oz2-text-muted mt-0.5"}
           text={resource.description}
         />
       </div>

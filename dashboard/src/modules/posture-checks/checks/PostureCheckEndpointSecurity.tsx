@@ -43,7 +43,7 @@ export const PostureCheckEndpointSecurity = ({
       }
       icon={<ShieldHalf size={16} />}
       iconClass={
-        "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+        "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-200"
       }
       modalWidthClass={"max-w-xl"}
       onReset={() => onChange(undefined)}

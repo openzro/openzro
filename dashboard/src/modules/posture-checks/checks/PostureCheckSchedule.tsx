@@ -49,7 +49,7 @@ export const PostureCheckSchedule = ({ value, onChange, disabled }: Props) => {
         "Only allow (or deny) connections inside a time-of-day window — typically business hours, after-hours lockout, or maintenance windows."
       }
       iconClass={
-        "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300"
+        "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-200"
       }
       modalWidthClass={"max-w-xl"}
       active={!!value}

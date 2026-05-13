@@ -43,7 +43,7 @@ export const PostureCheckPeerNetworkRange = ({
         "Restrict access by allowing or blocking peer network ranges."
       }
       iconClass={
-        "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300"
+        "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-200"
       }
       active={value !== undefined}
       onReset={() => onChange(undefined)}
