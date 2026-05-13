@@ -69,6 +69,30 @@ type DeviceStatus struct {
 	LastChecked time.Time
 }
 
+// DeviceLookup is the set of hints the caller supplies to a Provider
+// for the device search. The hostname is the universal key — every
+// supported vendor can answer with just that. UserEmail is optional
+// and only some vendors (notably Intune, which keys devices by
+// userPrincipalName) use it to disambiguate when the same hostname
+// appears on multiple users' enrolled devices (renames, hand-me-down
+// laptops, shared hardware). Vendors that don't model per-user device
+// ownership simply ignore the field.
+//
+// Future fields (SerialNumber, MACAddress, AzureADDeviceID) can be
+// added without breaking existing callers — implementations should
+// only read what they need.
+type DeviceLookup struct {
+	// Hostname is the OS hostname the openZro agent reported, normalised
+	// to whatever the local vendor's MDM agent uses. Required.
+	Hostname string
+
+	// UserEmail is the address of the openZro user the peer was
+	// registered for, when known. Empty for peers registered via setup
+	// keys without user attribution, or for vendors that don't keep
+	// per-user device ownership.
+	UserEmail string
+}
+
 // Provider is the per-vendor interface. Implementations live in
 // sibling files (intune.go, sentinelone.go, huntress.go) and are
 // constructed from credentials persisted in the mdm.Store.
@@ -77,14 +101,14 @@ type Provider interface {
 	// provider row's Type column).
 	Type() ProviderType
 
-	// GetDeviceStatus looks up the device by an identifier the
-	// peer carries — typically the hostname. Returning ErrUnsupported
-	// is allowed for vendors that match by a different attribute and
-	// the caller did not supply that attribute.
+	// GetDeviceStatus looks up the device using the hints in lookup.
+	// Hostname is always present; UserEmail may be empty. Returning
+	// ErrUnsupported is allowed for vendors that match by a different
+	// attribute and the caller did not supply that attribute.
 	//
 	// The caller is responsible for caching; implementations should
 	// not introduce their own per-call cache.
-	GetDeviceStatus(ctx context.Context, deviceIdentifier string) (DeviceStatus, error)
+	GetDeviceStatus(ctx context.Context, lookup DeviceLookup) (DeviceStatus, error)
 
 	// Close releases resources (HTTP keep-alive pools). Safe to call
 	// multiple times.

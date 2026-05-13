@@ -110,8 +110,10 @@ type csDevice struct {
 
 // GetDeviceStatus queries Falcon for the device by hostname and
 // translates the response into DeviceStatus.
-func (c *CrowdStrike) GetDeviceStatus(ctx context.Context, deviceID string) (DeviceStatus, error) {
-	return c.lookupAt(ctx, c.baseURL, deviceID)
+func (c *CrowdStrike) GetDeviceStatus(ctx context.Context, lookup DeviceLookup) (DeviceStatus, error) {
+	// Falcon hosts are keyed by hostname; per-user attribution isn't
+	// part of the host lookup, so we ignore lookup.UserEmail.
+	return c.lookupAt(ctx, c.baseURL, lookup.Hostname)
 }
 
 // lookupAt is GetDeviceStatus parameterised on the Falcon base URL —

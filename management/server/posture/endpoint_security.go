@@ -41,7 +41,13 @@ type EndpointSecurityCheck struct {
 // MDMResolver is the runtime hook the validator wires into the
 // EndpointSecurityCheck. Posture package never imports mdm — the
 // resolver function is the only boundary.
-type MDMResolver func(ctx context.Context, providerID uint64, deviceID string) (bool, string, error)
+//
+// The resolver receives the raw peer because some vendors (notably
+// Intune via userPrincipalName) need attributes beyond the hostname
+// to disambiguate the device. The closure is responsible for looking
+// up auxiliary fields (e.g. translating peer.UserID → user email)
+// before calling the underlying provider.
+type MDMResolver func(ctx context.Context, providerID uint64, peer nbpeer.Peer) (bool, string, error)
 
 // resolverContextKey is the context key used to carry an MDMResolver
 // into the Check method. Tests use this; production wires through
@@ -97,12 +103,11 @@ func (c *EndpointSecurityCheck) Check(ctx context.Context, peer nbpeer.Peer) (bo
 		return c.FailOpen, fmt.Errorf("endpoint-security: MDM resolver not configured")
 	}
 
-	deviceID := deviceIdentifierFromPeer(peer)
-	if deviceID == "" {
+	if deviceIdentifierFromPeer(peer) == "" {
 		return c.FailOpen, fmt.Errorf("endpoint-security: peer has no usable device identifier (hostname missing)")
 	}
 
-	compliant, reason, err := resolver(ctx, c.ProviderID, deviceID)
+	compliant, reason, err := resolver(ctx, c.ProviderID, peer)
 	if err != nil {
 		if c.FailOpen {
 			return true, nil

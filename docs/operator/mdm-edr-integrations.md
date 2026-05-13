@@ -75,24 +75,46 @@ Settings → Integrations → MDM/EDR → **Add provider** → type
 | Client ID | Application (client) ID from step 5 |
 | Client Secret | The Value from step 2 |
 | Authority (optional) | Defaults to `https://login.microsoftonline.com/<tenant>`. Override only for sovereign clouds (US Gov: `https://login.microsoftonline.us`, China: `https://login.partner.microsoftonline.cn`). |
+| Strict compliance (optional) | Default `off`: `inGracePeriod` is treated as compliant. Flip `on` to drop peers off the network the moment Intune flags them, even before the grace window expires. |
 
 Save. The first peer evaluation will trigger the Graph call.
 
 ### What openZro queries
 
-```http
-GET /v1.0/deviceManagement/managedDevices?$filter=deviceName eq '<hostname>'
-```
+The driver issues up to three Graph queries per device lookup, in
+this order, stopping at the first hit. The `$select` projection is
+pinned on every call to keep responses small.
+
+1. **Combined filter** (only when both the peer's hostname and the
+   registering user's email are known):
+   ```http
+   GET /v1.0/deviceManagement/managedDevices
+     ?$filter=deviceName eq '<hostname>' and userPrincipalName eq '<email>'
+     &$select=id,deviceName,complianceState,managementState,operatingSystem,osVersion,userPrincipalName
+   ```
+   Disambiguates the case where the same hostname appears on multiple
+   users' enrolled devices (renames, hand-me-down laptops, shared
+   hardware).
+
+2. **userPrincipalName-only fallback** (only when the user email is
+   known): `?$filter=userPrincipalName eq '<email>'`. Recovers the
+   renamed-hostname case — the agent reports a new hostname but
+   Intune still has the device under the old one; the user email is
+   the stable anchor.
+
+3. **deviceName-only fallback**: `?$filter=deviceName eq '<hostname>'`.
+   Used when the peer was registered via a setup key with no user
+   attribution, and as a last-resort safety net.
 
 The response's `complianceState` field drives the result:
 
-| Graph value | openZro decision |
-|---|---|
-| `compliant` | ✅ pass |
-| `inGracePeriod` | ✅ pass (Intune's "compliant within grace window") |
-| `noncompliant` | ❌ fail, reason `"device not compliant per Microsoft Intune"` |
-| `unknown`, `error`, `conflict` | ❌ fail, reason includes the state |
-| missing device (404) | ❌ fail, reason `"device not enrolled in Intune"` |
+| Graph value | openZro decision (default) | Strict compliance ON |
+|---|---|---|
+| `compliant` | ✅ pass | ✅ pass |
+| `inGracePeriod` | ✅ pass (Intune's "compliant within grace window") | ❌ fail |
+| `noncompliant` | ❌ fail, reason `"device not compliant per Microsoft Intune"` | ❌ fail |
+| `unknown`, `error`, `conflict` | ❌ fail, reason includes the state | ❌ fail |
+| missing device (404) | ❌ fail, reason `"device not enrolled in Intune"` | ❌ fail |
 
 ### Common Intune issues
 

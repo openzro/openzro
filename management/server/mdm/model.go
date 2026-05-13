@@ -38,22 +38,33 @@ type IntuneConfig struct {
 	// Authority overrides the default login.microsoftonline.com.
 	// Only useful for Azure China / Government clouds.
 	Authority string `json:"authority,omitempty"`
+
+	// StrictCompliance controls whether `complianceState=inGracePeriod`
+	// is accepted as compliant. Default false (= permissive: peers in
+	// the grace window keep network access while their config drifts
+	// back into policy). Operators with strict regulatory requirements
+	// flip it true to treat the grace period as non-compliant — peers
+	// drop off the network the moment Intune flags them, even before
+	// the grace window expires.
+	StrictCompliance bool `json:"strict_compliance,omitempty"`
 }
 
 func (c IntuneConfig) PublicView() IntunePublicConfig {
 	return IntunePublicConfig{
-		TenantID:        c.TenantID,
-		ClientID:        c.ClientID,
-		Authority:       c.Authority,
-		HasClientSecret: c.ClientSecret != "",
+		TenantID:         c.TenantID,
+		ClientID:         c.ClientID,
+		Authority:        c.Authority,
+		StrictCompliance: c.StrictCompliance,
+		HasClientSecret:  c.ClientSecret != "",
 	}
 }
 
 type IntunePublicConfig struct {
-	TenantID        string `json:"tenant_id"`
-	ClientID        string `json:"client_id"`
-	Authority       string `json:"authority,omitempty"`
-	HasClientSecret bool   `json:"has_client_secret"`
+	TenantID         string `json:"tenant_id"`
+	ClientID         string `json:"client_id"`
+	Authority        string `json:"authority,omitempty"`
+	StrictCompliance bool   `json:"strict_compliance,omitempty"`
+	HasClientSecret  bool   `json:"has_client_secret"`
 }
 
 // SentinelOneConfig holds SentinelOne API credentials.

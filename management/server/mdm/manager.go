@@ -96,14 +96,14 @@ func (m *Manager) buildProvider(row *MDMProvider) (Provider, error) {
 // Returns ErrNotConfigured if the provider ID is unknown — the
 // posture check translates that into "configuration error, peer
 // non-compliant".
-func (m *Manager) Lookup(ctx context.Context, providerID uint64, deviceIdentifier string) (DeviceStatus, error) {
+func (m *Manager) Lookup(ctx context.Context, providerID uint64, lookup DeviceLookup) (DeviceStatus, error) {
 	m.mu.RLock()
 	p, ok := m.providers[providerID]
 	m.mu.RUnlock()
 	if !ok {
 		return DeviceStatus{}, ErrNotConfigured
 	}
-	return p.GetDeviceStatus(ctx, deviceIdentifier)
+	return p.GetDeviceStatus(ctx, lookup)
 }
 
 // Close shuts the manager down — closes every active provider.

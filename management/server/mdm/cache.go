@@ -63,14 +63,23 @@ func NewCachedProvider(p Provider, ttl time.Duration) *CachedProvider {
 func (c *CachedProvider) Type() ProviderType { return c.inner.Type() }
 func (c *CachedProvider) Close() error       { return c.inner.Close() }
 
-func (c *CachedProvider) GetDeviceStatus(ctx context.Context, deviceID string) (DeviceStatus, error) {
-	if cached, ok := c.cache.get(deviceID); ok {
+func (c *CachedProvider) GetDeviceStatus(ctx context.Context, lookup DeviceLookup) (DeviceStatus, error) {
+	// Cache key includes UserEmail so that two operators with the same
+	// hostname under different users (rare but possible — a laptop
+	// reassigned during the cache window) don't read each other's
+	// status. UserEmail is usually empty for vendors that don't use it,
+	// in which case the key collapses to the hostname.
+	key := lookup.Hostname
+	if lookup.UserEmail != "" {
+		key = lookup.Hostname + "\x00" + lookup.UserEmail
+	}
+	if cached, ok := c.cache.get(key); ok {
 		return cached, nil
 	}
-	status, err := c.inner.GetDeviceStatus(ctx, deviceID)
+	status, err := c.inner.GetDeviceStatus(ctx, lookup)
 	if err != nil {
 		return status, err
 	}
-	c.cache.put(deviceID, status)
+	c.cache.put(key, status)
 	return status, nil
 }

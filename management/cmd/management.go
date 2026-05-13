@@ -37,6 +37,7 @@ import (
 	clusterfactory "github.com/openzro/openzro/cluster/factory"
 	"github.com/openzro/openzro/management/integrations/integrations"
 
+	nbpeer "github.com/openzro/openzro/management/server/peer"
 	"github.com/openzro/openzro/management/server/peers"
 	"github.com/openzro/openzro/management/server/types"
 
@@ -434,8 +435,23 @@ var (
 				// the package-level resolver once so every Account's
 				// posture eval can call the manager without threading
 				// the dependency through every method.
-				posture.SetDefaultMDMResolver(func(ctx context.Context, providerID uint64, deviceID string) (bool, string, error) {
-					st, err := mdmManager.Lookup(ctx, providerID, deviceID)
+				posture.SetDefaultMDMResolver(func(ctx context.Context, providerID uint64, peer nbpeer.Peer) (bool, string, error) {
+					lookup := mdm.DeviceLookup{Hostname: peer.Meta.Hostname}
+					if lookup.Hostname == "" {
+						lookup.Hostname = peer.Name
+					}
+					// Best-effort user email lookup — empty UserID
+					// (setup-key peer with no user attribution) or a
+					// store miss is non-fatal; the provider falls back
+					// to hostname-only matching. Vendors that don't use
+					// the per-user attribute (SentinelOne, Huntress,
+					// CrowdStrike) ignore the field regardless.
+					if peer.UserID != "" {
+						if user, err := accountManager.GetUserByID(ctx, peer.UserID); err == nil && user != nil {
+							lookup.UserEmail = user.Email
+						}
+					}
+					st, err := mdmManager.Lookup(ctx, providerID, lookup)
 					if err != nil {
 						return false, "", err
 					}

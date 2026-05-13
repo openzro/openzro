@@ -64,8 +64,10 @@ type s1Agent struct {
 	OperationalState string `json:"operationalState"`
 }
 
-func (s *SentinelOne) GetDeviceStatus(ctx context.Context, deviceID string) (DeviceStatus, error) {
-	return s.lookupAt(ctx, s.cfg.ManagementURL, deviceID)
+func (s *SentinelOne) GetDeviceStatus(ctx context.Context, lookup DeviceLookup) (DeviceStatus, error) {
+	// SentinelOne keys devices by `computerName`; the per-user email
+	// hint isn't part of the agents query, so we ignore lookup.UserEmail.
+	return s.lookupAt(ctx, s.cfg.ManagementURL, lookup.Hostname)
 }
 
 func (s *SentinelOne) lookupAt(ctx context.Context, base, hostname string) (DeviceStatus, error) {
