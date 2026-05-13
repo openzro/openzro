@@ -6,6 +6,7 @@ import {
   ModalContent,
   ModalFooter,
 } from "@components/modal/Modal";
+import FancyToggleSwitch from "@components/FancyToggleSwitch";
 import ModalHeader from "@components/modal/ModalHeader";
 import { notify } from "@components/Notification";
 import { useApiCall } from "@utils/api";
@@ -49,6 +50,7 @@ export default function MDMProviderModal({
   const [intuneTenant, setIntuneTenant] = useState("");
   const [intuneClient, setIntuneClient] = useState("");
   const [intuneSecret, setIntuneSecret] = useState("");
+  const [intuneStrict, setIntuneStrict] = useState(false);
 
   // SentinelOne fields
   const [s1URL, setS1URL] = useState("");
@@ -80,6 +82,7 @@ export default function MDMProviderModal({
           setIntuneTenant(cfg?.tenant_id ?? "");
           setIntuneClient(cfg?.client_id ?? "");
           setIntuneSecret("");
+          setIntuneStrict(!!cfg?.strict_compliance);
           break;
         case "sentinelone":
           setS1URL(cfg?.management_url ?? "");
@@ -101,6 +104,7 @@ export default function MDMProviderModal({
       setIntuneTenant("");
       setIntuneClient("");
       setIntuneSecret("");
+      setIntuneStrict(false);
       setS1URL("");
       setS1Token("");
       setHuntressKey("");
@@ -118,6 +122,7 @@ export default function MDMProviderModal({
         tenant_id: intuneTenant,
         client_id: intuneClient,
         client_secret: intuneSecret || undefined,
+        strict_compliance: intuneStrict,
       };
     } else if (type === "sentinelone") {
       base.sentinelone = {
@@ -269,6 +274,14 @@ export default function MDMProviderModal({
                   placeholder={isEdit ? "(unchanged)" : ""}
                 />
               </div>
+              <FancyToggleSwitch
+                value={intuneStrict}
+                onChange={setIntuneStrict}
+                label={"Strict compliance"}
+                helpText={
+                  "When OFF (default), Intune's `inGracePeriod` state counts as compliant — devices keep access while their config drifts back into policy. When ON, peers drop off the network the moment Intune flags them, even before the grace window expires."
+                }
+              />
             </>
           )}
 

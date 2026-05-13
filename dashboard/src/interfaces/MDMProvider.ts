@@ -27,6 +27,10 @@ export interface IntunePublicConfig {
   tenant_id: string;
   client_id: string;
   authority?: string;
+  // strict_compliance opt-in: when true, devices reported by Intune as
+  // `inGracePeriod` are treated as non-compliant. Default false keeps
+  // the permissive behaviour (grace period counts as compliant).
+  strict_compliance?: boolean;
   has_client_secret: boolean;
 }
 
@@ -66,6 +70,7 @@ export interface MDMProviderInput {
     client_id: string;
     client_secret?: string;
     authority?: string;
+    strict_compliance?: boolean;
   };
   sentinelone?: {
     management_url: string;
