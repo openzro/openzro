@@ -49,6 +49,7 @@ import (
 	"github.com/openzro/openzro/management/server/networks/resources"
 	"github.com/openzro/openzro/management/server/networks/routers"
 	nbpeers "github.com/openzro/openzro/management/server/peers"
+	"github.com/openzro/openzro/management/server/posture"
 	"github.com/openzro/openzro/management/server/telemetry"
 )
 
@@ -80,6 +81,7 @@ func NewAPIHandler(
 	admissionBypassStore *admission.Store,
 	admissionBypassEmitter admissionBypassHandler.EventEmitter,
 	dexClient *dex_proxy.Client,
+	postureEvalStore posture.EvalStore,
 ) (http.Handler, error) {
 
 	authMiddleware := middleware.NewAuthMiddleware(
@@ -104,7 +106,7 @@ func NewAPIHandler(
 	}
 
 	accounts.AddEndpoints(accountManager, settingsManager, router)
-	peers.AddEndpoints(accountManager, router)
+	peers.AddEndpoints(accountManager, postureEvalStore, router)
 	users.AddEndpoints(accountManager, router)
 	setup_keys.AddEndpoints(accountManager, router)
 	policies.AddEndpoints(accountManager, LocationManager, router)

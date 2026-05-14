@@ -625,7 +625,7 @@ var (
 				}
 			}
 
-			httpAPIHandler, err := nbhttp.NewAPIHandler(ctx, accountManager, networksManager, resourcesManager, routersManager, groupsManager, geo, authManager, appMetrics, integratedPeerValidator, proxyController, permissionsManager, peersManager, settingsManager, flowStore, flowExportsStore, flowExportsManager, mdmStore, mdmManager, activityExportersStore, activityExportersManager, admissionBypassStore, bypassEmitter, dexClient)
+			httpAPIHandler, err := nbhttp.NewAPIHandler(ctx, accountManager, networksManager, resourcesManager, routersManager, groupsManager, geo, authManager, appMetrics, integratedPeerValidator, proxyController, permissionsManager, peersManager, settingsManager, flowStore, flowExportsStore, flowExportsManager, mdmStore, mdmManager, activityExportersStore, activityExportersManager, admissionBypassStore, bypassEmitter, dexClient, postureEvalStore)
 
 			if err != nil {
 				return fmt.Errorf("failed creating HTTP API handler: %v", err)
