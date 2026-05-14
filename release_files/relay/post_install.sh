@@ -28,8 +28,23 @@ if command -V systemctl >/dev/null 2>&1; then
         systemctl enable openzro-relay.service >/dev/null 2>&1 || true
     fi
 
+    # Intentionally NOT auto-restarting on upgrade. The package
+    # scriptlet runs in many contexts (interactive `dnf upgrade`,
+    # cloud-init / startup-script auto-update, unattended-upgrades)
+    # and silently bouncing a long-lived service on each repo bump
+    # causes invisible restarts that look like bugs from the
+    # operator's perspective — exactly the boot-time stop+start
+    # cycle that prompted this change. Operators who want the new
+    # binary active call `systemctl restart` themselves; orchestration
+    # tools should add an explicit restart handler.
     if systemctl is-active openzro-relay.service >/dev/null 2>&1; then
-        systemctl restart openzro-relay.service || true
+        cat <<'EOF'
+
+  Note: openzro-relay is currently running with the previous binary.
+  Restart manually to activate the new binary:
+      systemctl restart openzro-relay
+
+EOF
     fi
 fi
 

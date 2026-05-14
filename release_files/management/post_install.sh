@@ -59,11 +59,22 @@ if command -V systemctl >/dev/null 2>&1; then
         systemctl enable openzro-management.service >/dev/null 2>&1 || true
     fi
 
-    # If the service is currently active (= upgrade path), restart it
-    # to pick up the new binary. Skip when not running so we don't
-    # auto-start on a fresh install with a placeholder config.
+    # Intentionally NOT auto-restarting on upgrade. The package
+    # scriptlet runs in many contexts (interactive `dnf upgrade`,
+    # cloud-init / startup-script auto-update, unattended-upgrades)
+    # and silently bouncing a long-lived service on each repo bump
+    # causes invisible restarts that look like bugs from the
+    # operator's perspective. Operators who want the new binary
+    # active call `systemctl restart` themselves; orchestration tools
+    # should add an explicit restart handler.
     if systemctl is-active openzro-management.service >/dev/null 2>&1; then
-        systemctl restart openzro-management.service || true
+        cat <<'EOF'
+
+  Note: openzro-management is currently running with the previous binary.
+  Restart manually to activate the new binary:
+      systemctl restart openzro-management
+
+EOF
     fi
 fi
 
