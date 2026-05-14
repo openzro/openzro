@@ -13,7 +13,7 @@ import {
   Square,
 } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { DateRange } from "react-day-picker";
+import { DateRange } from "@components/ui/Calendar";
 import RoundedFlag from "@/assets/countries/RoundedFlag";
 import FullTooltip from "@/components/FullTooltip";
 import OzCard from "@/components/v2/OzCard";

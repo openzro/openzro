@@ -4,7 +4,7 @@ import dayjs from "dayjs";
 import { Cog, FileTextIcon } from "lucide-react";
 import { usePathname } from "next/navigation";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { DateRange } from "react-day-picker";
+import { DateRange } from "@components/ui/Calendar";
 import { useSWRConfig } from "swr";
 import OzCard from "@/components/v2/OzCard";
 import OzEmptyState from "@/components/v2/OzEmptyState";

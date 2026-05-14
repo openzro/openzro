@@ -13,7 +13,7 @@ import { uniqBy } from "lodash";
 import { ExternalLinkIcon } from "lucide-react";
 import { usePathname } from "next/navigation";
 import React, { useMemo, useState } from "react";
-import { DateRange } from "react-day-picker";
+import { DateRange } from "@components/ui/Calendar";
 import { useSWRConfig } from "swr";
 import PeerIcon from "@/assets/icons/PeerIcon";
 import { useLocalStorage } from "@/hooks/useLocalStorage";

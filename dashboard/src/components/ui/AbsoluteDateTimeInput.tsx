@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { DateRange } from "react-day-picker";
+import { DateRange } from "@components/ui/Calendar";
 import { useTimescape } from "timescape/react";
 
 type Props = {

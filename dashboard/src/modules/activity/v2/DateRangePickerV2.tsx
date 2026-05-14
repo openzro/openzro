@@ -8,7 +8,7 @@ import dayjs from "dayjs";
 import { debounce } from "lodash";
 import { Calendar as CalendarIcon, ChevronDown } from "lucide-react";
 import React, { useMemo, useState } from "react";
-import { DateRange } from "react-day-picker";
+import { DateRange } from "@components/ui/Calendar";
 
 // DateRangePickerV2 — handoff-flavored repaint of the legacy
 // DatePickerWithRange. Same calendar + presets popover under the

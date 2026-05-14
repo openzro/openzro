@@ -39,7 +39,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import React, { useMemo, useState } from "react";
-import { DateRange } from "react-day-picker";
+import { DateRange } from "@components/ui/Calendar";
 import RoundedFlag from "@/assets/countries/RoundedFlag";
 import { usePeers } from "@/contexts/PeersProvider";
 import { NetworkResource } from "@/interfaces/Network";

@@ -9,7 +9,7 @@ import dayjs from "dayjs";
 import { debounce } from "lodash";
 import { Calendar as CalendarIcon } from "lucide-react";
 import React, { useMemo, useState } from "react";
-import { DateRange } from "react-day-picker";
+import { DateRange } from "@components/ui/Calendar";
 
 interface Props {
   value?: DateRange;
