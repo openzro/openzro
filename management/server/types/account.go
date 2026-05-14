@@ -1125,13 +1125,44 @@ func (a *Account) validatePostureChecksOnPeer(ctx context.Context, sourcePosture
 	for _, postureChecksID := range sourcePostureChecksID {
 		postureChecks := a.GetPostureChecks(postureChecksID)
 		if postureChecks == nil {
-			continue
+			// The policy references a posture check that this in-memory
+			// account snapshot doesn't have. Two ways to land here:
+			//
+			//   - Stale in-memory state on this management replica (the
+			//     check was recreated against another replica that
+			//     refreshed; this one didn't pick up the new ID yet).
+			//   - The check was deleted but a policy still references
+			//     its old ID (race during edit).
+			//
+			// Fail closed in either case. Silent-skip used to slide the
+			// loop forward, returning true at the bottom when every
+			// referenced check ID missed — that meant any peer would
+			// vacuously pass posture, leaking access to non-compliant
+			// devices. With the explicit failure here, the worst case
+			// for an operator is a peer denied access until the cache
+			// refreshes; the alternative (silent allow) is a real
+			// security gap.
+			log.WithContext(ctx).Warnf(
+				"posture: check %s referenced by policy is missing from account state; failing closed for peer %s",
+				postureChecksID, peerID,
+			)
+			return false
 		}
 
 		for _, check := range postureChecks.GetChecks() {
 			isValid, err := check.Check(ctx, *peer)
 			if err != nil {
-				log.WithContext(ctx).Debugf("an error occurred check %s: on peer: %s :%s", check.Name(), peer.ID, err.Error())
+				// Logged at Info (was Debug) so operators see denial
+				// reasons without flipping log level — the visible
+				// trail an admin needs to debug "why was peer X
+				// blocked by policy Y". A more structured surface
+				// (persistent posture-evaluation timeline per peer,
+				// rendered on the peer detail page) is tracked
+				// separately; this is the cheap stop-gap.
+				log.WithContext(ctx).Infof(
+					"posture: check %s denied peer %s: %s",
+					check.Name(), peer.ID, err.Error(),
+				)
 			}
 			if !isValid {
 				return false
