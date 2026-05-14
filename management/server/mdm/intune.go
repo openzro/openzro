@@ -108,13 +108,20 @@ func (i *Intune) GetDeviceStatus(ctx context.Context, lookup DeviceLookup) (Devi
 //     the same hostname exists on multiple users' enrolled devices
 //     (shared / hand-me-down laptops, renamed devices, etc).
 //  2. If the combined filter returns no hits, fall back to a
-//     userPrincipalName-only query. Covers the renamed-hostname case:
-//     the agent reports a new hostname but Intune still has the
-//     device under the original name; userPrincipalName is the stable
-//     anchor.
+//     userPrincipalName-only query — but ONLY accept the result when
+//     the returned device's operatingSystem matches the requesting
+//     peer's OS. Without that guard, a user who owns a single
+//     compliant Mac in Intune would have every other personal device
+//     (Linux PC, Windows desktop) silently pass posture via UPN
+//     match. Covers the renamed-hostname case (same-OS device, same
+//     user) without leaking compliance across devices.
 //  3. If only hostname is known (peer registered via a setup key with
-//     no user attribution), fall back to deviceName-only — same as
-//     the legacy behaviour.
+//     no user attribution), fall back to deviceName-only — same OS
+//     guard applies for the same reason (common hostnames like
+//     "MacBook-Pro" across orgs).
+//
+// Combined matches (step 1) skip the OS guard because the deviceName
+// already pins the lookup to one specific device row.
 func (i *Intune) lookupAt(ctx context.Context, base string, lookup DeviceLookup) (DeviceStatus, error) {
 	if lookup.Hostname == "" && lookup.UserEmail == "" {
 		return DeviceStatus{}, errors.New("intune: lookup requires hostname or user email")
@@ -141,7 +148,7 @@ func (i *Intune) lookupAt(ctx context.Context, base string, lookup DeviceLookup)
 		if err != nil {
 			return DeviceStatus{}, err
 		}
-		if found {
+		if found && osMatches(st.OperatingSystem, lookup.OS) {
 			return i.classify(st, lookup), nil
 		}
 	}
@@ -152,7 +159,7 @@ func (i *Intune) lookupAt(ctx context.Context, base string, lookup DeviceLookup)
 		if err != nil {
 			return DeviceStatus{}, err
 		}
-		if found {
+		if found && osMatches(st.OperatingSystem, lookup.OS) {
 			return i.classify(st, lookup), nil
 		}
 	}
@@ -160,7 +167,7 @@ func (i *Intune) lookupAt(ctx context.Context, base string, lookup DeviceLookup)
 	return DeviceStatus{
 		Found:     false,
 		Compliant: false,
-		Reason:    fmt.Sprintf("device not enrolled in Intune (hostname=%q, user=%q)", lookup.Hostname, lookup.UserEmail),
+		Reason:    fmt.Sprintf("device not enrolled in Intune (hostname=%q, user=%q, os=%q)", lookup.Hostname, lookup.UserEmail, lookup.OS),
 	}, nil
 }
 
@@ -243,4 +250,39 @@ func (i *Intune) classify(dev graphDevice, lookup DeviceLookup) DeviceStatus {
 // single quote is escaped by doubling it.
 func escapeFilterValue(s string) string {
 	return strings.ReplaceAll(s, "'", "''")
+}
+
+// osMatches reports whether Intune's operatingSystem field on a device
+// record is consistent with the peer's reported GOOS. Used by the
+// fallback paths (UPN-only, hostname-only) to avoid accepting a
+// returned device whose OS differs from the peer that triggered the
+// lookup — the classic cross-device leak where a user's compliant
+// macOS device in Intune would mark every other personal machine
+// (Linux PC, Windows desktop) as compliant via shared UPN.
+//
+// When peerOS is empty the function is permissive (returns true) so
+// legacy callers that never set DeviceLookup.OS keep behaving
+// exactly as they did before this check landed.
+func osMatches(intuneOS, peerOS string) bool {
+	if peerOS == "" {
+		return true
+	}
+	intuneOS = strings.ToLower(strings.TrimSpace(intuneOS))
+	peerOS = strings.ToLower(strings.TrimSpace(peerOS))
+	switch peerOS {
+	case "darwin":
+		// macOS variants Intune emits: "macOS", "Mac OS X".
+		return strings.Contains(intuneOS, "mac")
+	case "linux":
+		return strings.Contains(intuneOS, "linux")
+	case "windows":
+		return strings.Contains(intuneOS, "windows")
+	case "ios":
+		return intuneOS == "ios" || strings.Contains(intuneOS, "ipados")
+	case "android":
+		return strings.Contains(intuneOS, "android")
+	}
+	// Unknown peerOS family — be permissive rather than break a vendor
+	// integration on a value we haven't seen before.
+	return true
 }

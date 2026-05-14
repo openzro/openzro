@@ -91,6 +91,15 @@ type DeviceLookup struct {
 	// keys without user attribution, or for vendors that don't keep
 	// per-user device ownership.
 	UserEmail string
+
+	// OS is the peer's runtime GOOS — "linux", "darwin", "windows", etc.
+	// Used by vendors to disambiguate fallback matches (e.g. when the
+	// combined hostname+user query misses and the user-only fallback
+	// would otherwise return a sibling device owned by the same user
+	// but on a different OS — classic cross-device leak). Empty for
+	// legacy callers; implementations must treat empty as "skip the
+	// OS check" to preserve backwards-compatible behavior.
+	OS string
 }
 
 // Provider is the per-vendor interface. Implementations live in

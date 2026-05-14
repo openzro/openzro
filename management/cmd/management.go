@@ -473,7 +473,16 @@ var (
 					lookupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
 
-					lookup := mdm.DeviceLookup{Hostname: peer.Meta.Hostname}
+					lookup := mdm.DeviceLookup{
+						Hostname: peer.Meta.Hostname,
+						// GoOS is the Go runtime constant the peer
+						// agent reported at registration ("linux",
+						// "darwin", "windows"). Vendors use this in
+						// fallback matches to reject sibling devices
+						// owned by the same user but on a different
+						// OS — see osMatches in mdm/intune.go.
+						OS: peer.Meta.GoOS,
+					}
 					if lookup.Hostname == "" {
 						lookup.Hostname = peer.Name
 					}
