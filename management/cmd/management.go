@@ -90,16 +90,30 @@ var (
 	certKey                 string
 	config                  *types.Config
 
+	// gRPC server keepalive parameters tuned for the long-lived bidi
+	// Sync stream that every peer holds open. Inherited defaults (15s
+	// MaxConnectionIdle, 5s/2s ping cadence) were copy-pasted from a
+	// short-RPC server template and cycled every peer's stream every
+	// ~15 seconds: RST_STREAM NO_ERROR on the wire, agent reconnect,
+	// Status.Connected briefly flips false in the store — visible on
+	// the dashboard's Peers page as the "online ↔ offline" flicker
+	// operators reported.
+	//
+	// Current values: idle window 1h (enough churn for periodic
+	// replica rebalancing in HA without thrashing); ping every 30s
+	// with a 10s ack window (tolerates transient mobile / Wi-Fi
+	// blips that previously killed laptops over the 2s ack
+	// threshold).
 	kaep = keepalive.EnforcementPolicy{
-		MinTime:             15 * time.Second,
+		MinTime:             10 * time.Second,
 		PermitWithoutStream: true,
 	}
 
 	kasp = keepalive.ServerParameters{
-		MaxConnectionIdle:     15 * time.Second,
+		MaxConnectionIdle:     1 * time.Hour,
 		MaxConnectionAgeGrace: 5 * time.Second,
-		Time:                  5 * time.Second,
-		Timeout:               2 * time.Second,
+		Time:                  30 * time.Second,
+		Timeout:               10 * time.Second,
 	}
 
 	mgmtCmd = &cobra.Command{
