@@ -65,6 +65,16 @@ type PeerStatus struct { //nolint:revive
 	LoginExpired bool
 	// RequiresApproval indicates whether peer requires approval or not
 	RequiresApproval bool
+	// OwnerStreamID identifies the gRPC Sync stream that currently
+	// represents the peer's live connection to the management service.
+	// Set on connect, cleared on the matching disconnect. The stale-
+	// stream guard in updatePeerStatusAndLocation compares this against
+	// the streamID of an incoming disconnect call so a stream closing
+	// AFTER the peer has already reconnected (typically to a different
+	// replica) doesn't clobber Connected back to false.
+	// Empty for peers that haven't reconnected since the field was added —
+	// disconnects fall through to the legacy behaviour in that case.
+	OwnerStreamID string
 }
 
 // Location is a geo location information of a Peer based on public connection IP
@@ -322,6 +332,7 @@ func (p *PeerStatus) Copy() *PeerStatus {
 		Connected:        p.Connected,
 		LoginExpired:     p.LoginExpired,
 		RequiresApproval: p.RequiresApproval,
+		OwnerStreamID:    p.OwnerStreamID,
 	}
 }
 

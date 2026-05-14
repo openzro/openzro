@@ -387,6 +387,7 @@ func (s *SqlStore) SavePeerStatus(ctx context.Context, lockStrength LockingStren
 	fieldsToUpdate := []string{
 		"peer_status_last_seen", "peer_status_connected",
 		"peer_status_login_expired", "peer_status_required_approval",
+		"peer_status_owner_stream_id",
 	}
 	result := s.db.Clauses(clause.Locking{Strength: string(lockStrength)}).Model(&nbpeer.Peer{}).
 		Select(fieldsToUpdate).

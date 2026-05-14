@@ -12,6 +12,7 @@ import (
 
 	pb "github.com/golang/protobuf/proto" // nolint
 	"github.com/golang/protobuf/ptypes/timestamp"
+	"github.com/google/uuid"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/realip"
 	log "github.com/sirupsen/logrus"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
@@ -230,7 +231,15 @@ func (s *GRPCServer) Sync(req *proto.EncryptedMessage, srv proto.ManagementServi
 		log.WithContext(ctx).Tracef("peer system meta has to be provided on sync. Peer %s, remote addr %s", peerKey.String(), realIP)
 	}
 
-	peer, netMap, postureChecks, err := s.accountManager.SyncAndMarkPeer(ctx, accountID, peerKey.String(), extractPeerMeta(ctx, syncReq.GetMeta()), realIP)
+	// streamID identifies THIS Sync stream's ownership of the peer.
+	// MarkPeerConnected stamps it on the peer's status; the deferred
+	// cancelPeerRoutines path passes the same value so the disconnect
+	// only fires when this stream is still the one representing the
+	// peer (i.e. the peer hasn't reconnected on another replica in the
+	// meantime). See updatePeerStatusAndLocation for the guard.
+	streamID := uuid.NewString()
+
+	peer, netMap, postureChecks, err := s.accountManager.SyncAndMarkPeer(ctx, accountID, peerKey.String(), extractPeerMeta(ctx, syncReq.GetMeta()), realIP, streamID)
 	if err != nil {
 		log.WithContext(ctx).Debugf("error while syncing peer %s: %v", peerKey.String(), err)
 		return mapError(ctx, err)
@@ -257,11 +266,11 @@ func (s *GRPCServer) Sync(req *proto.EncryptedMessage, srv proto.ManagementServi
 
 	log.WithContext(ctx).Debugf("Sync: took %v", time.Since(reqStart))
 
-	return s.handleUpdates(ctx, accountID, peerKey, peer, updates, srv)
+	return s.handleUpdates(ctx, accountID, peerKey, peer, updates, srv, streamID)
 }
 
 // handleUpdates sends updates to the connected peer until the updates channel is closed.
-func (s *GRPCServer) handleUpdates(ctx context.Context, accountID string, peerKey wgtypes.Key, peer *nbpeer.Peer, updates chan *UpdateMessage, srv proto.ManagementService_SyncServer) error {
+func (s *GRPCServer) handleUpdates(ctx context.Context, accountID string, peerKey wgtypes.Key, peer *nbpeer.Peer, updates chan *UpdateMessage, srv proto.ManagementService_SyncServer, streamID string) error {
 	log.WithContext(ctx).Tracef("starting to handle updates for peer %s", peerKey.String())
 	for {
 		select {
@@ -273,12 +282,12 @@ func (s *GRPCServer) handleUpdates(ctx context.Context, accountID string, peerKe
 
 			if !open {
 				log.WithContext(ctx).Debugf("updates channel for peer %s was closed", peerKey.String())
-				s.cancelPeerRoutines(ctx, accountID, peer)
+				s.cancelPeerRoutines(ctx, accountID, peer, streamID)
 				return nil
 			}
 			log.WithContext(ctx).Debugf("received an update for peer %s", peerKey.String())
 
-			if err := s.sendUpdate(ctx, accountID, peerKey, peer, update, srv); err != nil {
+			if err := s.sendUpdate(ctx, accountID, peerKey, peer, update, srv, streamID); err != nil {
 				return err
 			}
 
@@ -286,7 +295,7 @@ func (s *GRPCServer) handleUpdates(ctx context.Context, accountID string, peerKe
 		case <-srv.Context().Done():
 			// happens when connection drops, e.g. client disconnects
 			log.WithContext(ctx).Debugf("stream of peer %s has been closed", peerKey.String())
-			s.cancelPeerRoutines(ctx, accountID, peer)
+			s.cancelPeerRoutines(ctx, accountID, peer, streamID)
 			return srv.Context().Err()
 		}
 	}
@@ -294,10 +303,10 @@ func (s *GRPCServer) handleUpdates(ctx context.Context, accountID string, peerKe
 
 // sendUpdate encrypts the update message using the peer key and the server's wireguard key,
 // then sends the encrypted message to the connected peer via the sync server.
-func (s *GRPCServer) sendUpdate(ctx context.Context, accountID string, peerKey wgtypes.Key, peer *nbpeer.Peer, update *UpdateMessage, srv proto.ManagementService_SyncServer) error {
+func (s *GRPCServer) sendUpdate(ctx context.Context, accountID string, peerKey wgtypes.Key, peer *nbpeer.Peer, update *UpdateMessage, srv proto.ManagementService_SyncServer, streamID string) error {
 	encryptedResp, err := encryption.EncryptMessage(peerKey, s.wgKey, update.Update)
 	if err != nil {
-		s.cancelPeerRoutines(ctx, accountID, peer)
+		s.cancelPeerRoutines(ctx, accountID, peer, streamID)
 		return status.Errorf(codes.Internal, "failed processing update message")
 	}
 	err = srv.SendMsg(&proto.EncryptedMessage{
@@ -305,18 +314,18 @@ func (s *GRPCServer) sendUpdate(ctx context.Context, accountID string, peerKey w
 		Body:     encryptedResp,
 	})
 	if err != nil {
-		s.cancelPeerRoutines(ctx, accountID, peer)
+		s.cancelPeerRoutines(ctx, accountID, peer, streamID)
 		return status.Errorf(codes.Internal, "failed sending update message")
 	}
 	log.WithContext(ctx).Debugf("sent an update to peer %s", peerKey.String())
 	return nil
 }
 
-func (s *GRPCServer) cancelPeerRoutines(ctx context.Context, accountID string, peer *nbpeer.Peer) {
+func (s *GRPCServer) cancelPeerRoutines(ctx context.Context, accountID string, peer *nbpeer.Peer, streamID string) {
 	unlock := s.acquirePeerLockByUID(ctx, peer.Key)
 	defer unlock()
 
-	err := s.accountManager.OnPeerDisconnected(ctx, accountID, peer.Key)
+	err := s.accountManager.OnPeerDisconnected(ctx, accountID, peer.Key, streamID)
 	if err != nil {
 		log.WithContext(ctx).Errorf("failed to disconnect peer %s properly: %v", peer.Key, err)
 	}

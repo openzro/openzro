@@ -136,8 +136,15 @@ func (am *DefaultAccountManager) getUserAccessiblePeers(ctx context.Context, acc
 	return maps.Values(peersMap), nil
 }
 
-// MarkPeerConnected marks peer as connected (true) or disconnected (false)
-func (am *DefaultAccountManager) MarkPeerConnected(ctx context.Context, peerPubKey string, connected bool, realIP net.IP, accountID string) error {
+// MarkPeerConnected marks peer as connected (true) or disconnected
+// (false). streamID identifies the gRPC Sync stream the caller is
+// representing; on disconnect, the store-side guard only writes
+// Connected=false when streamID matches the OwnerStreamID currently
+// pinned on the peer. This prevents stale-stream cleanups on one
+// replica from clobbering the live Connected=true state another
+// replica already wrote after the peer reconnected. Empty streamID
+// (legacy callers) falls through to the unguarded behaviour.
+func (am *DefaultAccountManager) MarkPeerConnected(ctx context.Context, peerPubKey string, connected bool, realIP net.IP, accountID string, streamID string) error {
 	start := time.Now()
 	defer func() {
 		log.WithContext(ctx).Debugf("MarkPeerConnected: took %v", time.Since(start))
@@ -154,7 +161,7 @@ func (am *DefaultAccountManager) MarkPeerConnected(ctx context.Context, peerPubK
 			return err
 		}
 
-		expired, err = updatePeerStatusAndLocation(ctx, am.geo, transaction, peer, connected, realIP, accountID)
+		expired, err = updatePeerStatusAndLocation(ctx, am.geo, transaction, peer, connected, realIP, accountID, streamID)
 		return err
 	})
 	if err != nil {
@@ -185,7 +192,27 @@ func (am *DefaultAccountManager) MarkPeerConnected(ctx context.Context, peerPubK
 	return nil
 }
 
-func updatePeerStatusAndLocation(ctx context.Context, geo geolocation.Geolocation, transaction store.Store, peer *nbpeer.Peer, connected bool, realIP net.IP, accountID string) (bool, error) {
+func updatePeerStatusAndLocation(ctx context.Context, geo geolocation.Geolocation, transaction store.Store, peer *nbpeer.Peer, connected bool, realIP net.IP, accountID string, streamID string) (bool, error) {
+	// Stale-stream guard. When the caller signals a disconnect but the
+	// peer's stored OwnerStreamID belongs to a different stream, the
+	// peer has reconnected via a fresh stream (typically on another
+	// replica) and the disconnect is a phantom close. Skipping the
+	// write keeps Connected=true and the live OwnerStreamID intact.
+	//
+	// The guard requires BOTH ids to be non-empty AND non-matching to
+	// fire. Empty streamID (legacy caller that hasn't been updated) or
+	// empty stored OwnerStreamID (peer hasn't reconnected since the
+	// field was added) falls through to the old behaviour so legacy
+	// peers and pre-fix code paths continue to work unchanged.
+	if !connected && streamID != "" && peer.Status != nil &&
+		peer.Status.OwnerStreamID != "" && peer.Status.OwnerStreamID != streamID {
+		log.WithContext(ctx).Debugf(
+			"updatePeerStatusAndLocation: ignoring stale disconnect for peer %s (closing streamID=%s, owner=%s)",
+			peer.ID, streamID, peer.Status.OwnerStreamID,
+		)
+		return false, nil
+	}
+
 	oldStatus := peer.Status.Copy()
 	newStatus := oldStatus
 	newStatus.LastSeen = time.Now().UTC()
@@ -193,6 +220,11 @@ func updatePeerStatusAndLocation(ctx context.Context, geo geolocation.Geolocatio
 	// whenever peer got connected that means that it logged in successfully
 	if newStatus.Connected {
 		newStatus.LoginExpired = false
+		newStatus.OwnerStreamID = streamID
+	} else {
+		// Clear the pin so a subsequent reconnect on any replica can
+		// claim ownership without comparing against a dead stream's id.
+		newStatus.OwnerStreamID = ""
 	}
 	peer.Status = newStatus
 

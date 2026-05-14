@@ -1789,7 +1789,7 @@ func domainIsUpToDate(domain string, domainCategory string, userAuth nbcontext.U
 	return domainCategory == types.PrivateCategory || userAuth.DomainCategory != types.PrivateCategory || domain != userAuth.Domain
 }
 
-func (am *DefaultAccountManager) SyncAndMarkPeer(ctx context.Context, accountID string, peerPubKey string, meta nbpeer.PeerSystemMeta, realIP net.IP) (*nbpeer.Peer, *types.NetworkMap, []*posture.Checks, error) {
+func (am *DefaultAccountManager) SyncAndMarkPeer(ctx context.Context, accountID string, peerPubKey string, meta nbpeer.PeerSystemMeta, realIP net.IP, streamID string) (*nbpeer.Peer, *types.NetworkMap, []*posture.Checks, error) {
 	start := time.Now()
 	defer func() {
 		log.WithContext(ctx).Debugf("SyncAndMarkPeer: took %v", time.Since(start))
@@ -1805,7 +1805,7 @@ func (am *DefaultAccountManager) SyncAndMarkPeer(ctx context.Context, accountID 
 		return nil, nil, nil, fmt.Errorf("error syncing peer: %w", err)
 	}
 
-	err = am.MarkPeerConnected(ctx, peerPubKey, true, realIP, accountID)
+	err = am.MarkPeerConnected(ctx, peerPubKey, true, realIP, accountID, streamID)
 	if err != nil {
 		log.WithContext(ctx).Warnf("failed marking peer as connected %s %v", peerPubKey, err)
 	}
@@ -1813,13 +1813,13 @@ func (am *DefaultAccountManager) SyncAndMarkPeer(ctx context.Context, accountID 
 	return peer, netMap, postureChecks, nil
 }
 
-func (am *DefaultAccountManager) OnPeerDisconnected(ctx context.Context, accountID string, peerPubKey string) error {
+func (am *DefaultAccountManager) OnPeerDisconnected(ctx context.Context, accountID string, peerPubKey string, streamID string) error {
 	accountUnlock := am.Store.AcquireReadLockByUID(ctx, accountID)
 	defer accountUnlock()
 	peerUnlock := am.Store.AcquireWriteLockByUID(ctx, peerPubKey)
 	defer peerUnlock()
 
-	err := am.MarkPeerConnected(ctx, peerPubKey, false, nil, accountID)
+	err := am.MarkPeerConnected(ctx, peerPubKey, false, nil, accountID, streamID)
 	if err != nil {
 		log.WithContext(ctx).Warnf("failed marking peer as disconnected %s %v", peerPubKey, err)
 	}

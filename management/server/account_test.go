@@ -1914,7 +1914,7 @@ func TestDefaultAccountManager_UpdatePeer_PeerLoginExpiration(t *testing.T) {
 	accountID, err := manager.GetAccountIDByUserID(context.Background(), userID, "")
 	require.NoError(t, err, "unable to get the account")
 
-	err = manager.MarkPeerConnected(context.Background(), key.PublicKey().String(), true, nil, accountID)
+	err = manager.MarkPeerConnected(context.Background(), key.PublicKey().String(), true, nil, accountID, "")
 	require.NoError(t, err, "unable to mark peer connected")
 
 	_, err = manager.UpdateAccountSettings(context.Background(), accountID, userID, &types.Settings{
@@ -1985,7 +1985,7 @@ func TestDefaultAccountManager_MarkPeerConnected_PeerLoginExpiration(t *testing.
 	require.NoError(t, err, "unable to get the account")
 
 	// when we mark peer as connected, the peer login expiration routine should trigger
-	err = manager.MarkPeerConnected(context.Background(), key.PublicKey().String(), true, nil, accountID)
+	err = manager.MarkPeerConnected(context.Background(), key.PublicKey().String(), true, nil, accountID, "")
 	require.NoError(t, err, "unable to mark peer connected")
 
 	failed := waitTimeout(wg, time.Second)
@@ -2016,7 +2016,7 @@ func TestDefaultAccountManager_UpdateAccountSettings_PeerLoginExpiration(t *test
 	account, err := manager.Store.GetAccount(context.Background(), accountID)
 	require.NoError(t, err, "unable to get the account")
 
-	err = manager.MarkPeerConnected(context.Background(), key.PublicKey().String(), true, nil, accountID)
+	err = manager.MarkPeerConnected(context.Background(), key.PublicKey().String(), true, nil, accountID, "")
 	require.NoError(t, err, "unable to mark peer connected")
 
 	wg := &sync.WaitGroup{}
@@ -3144,7 +3144,7 @@ func BenchmarkSyncAndMarkPeer(b *testing.B) {
 			b.ResetTimer()
 			start := time.Now()
 			for i := 0; i < b.N; i++ {
-				_, _, _, err := manager.SyncAndMarkPeer(context.Background(), account.Id, account.Peers["peer-1"].Key, nbpeer.PeerSystemMeta{Hostname: strconv.Itoa(i)}, net.IP{1, 1, 1, 1})
+				_, _, _, err := manager.SyncAndMarkPeer(context.Background(), account.Id, account.Peers["peer-1"].Key, nbpeer.PeerSystemMeta{Hostname: strconv.Itoa(i)}, net.IP{1, 1, 1, 1}, "")
 				assert.NoError(b, err)
 			}
 

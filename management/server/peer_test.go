@@ -2453,3 +2453,83 @@ func TestBufferUpdateAccountPeers(t *testing.T) {
 	assert.Less(t, totalNewRuns, totalOldRuns, "Expected new approach to run less than old approach. New runs: %d, Old runs: %d", totalNewRuns, totalOldRuns)
 	t.Logf("New runs: %d, Old runs: %d", totalNewRuns, totalOldRuns)
 }
+
+// TestMarkPeerConnected_StaleStreamGuard exercises the cross-replica
+// reconnect race that motivated the OwnerStreamID field on PeerStatus.
+//
+// Scenario: a peer connects via streamA (representing the gRPC Sync
+// stream owned by, say, replica 1). The peer's network blips and the
+// agent reconnects via streamB (another replica). Some time later,
+// replica 1's stale stream finally errors and fires a disconnect
+// referencing streamA — but streamA is no longer the owner. The
+// disconnect must be a no-op so Connected stays true and the live
+// stream's ownership stays intact.
+//
+// Tests both branches:
+//
+//   - stale disconnect → skip
+//   - matching disconnect → write Connected=false
+//   - empty streamID (legacy caller) → fall through to the unguarded
+//     behaviour so pre-fix callers / pre-upgrade peers still work.
+func TestMarkPeerConnected_StaleStreamGuard(t *testing.T) {
+	manager, err := createManager(t)
+	require.NoError(t, err)
+
+	const accountID = "test-stale-guard"
+	const userID = "creator"
+	account, err := createAccount(manager, accountID, userID, "")
+	require.NoError(t, err)
+
+	setupKey, err := manager.CreateSetupKey(context.Background(), account.Id, "k", types.SetupKeyReusable, time.Hour, nil, 999, userID, false, false)
+	require.NoError(t, err)
+
+	wgKey, err := wgtypes.GeneratePrivateKey()
+	require.NoError(t, err)
+	peer, _, _, err := manager.AddPeer(context.Background(), setupKey.Key, "", &nbpeer.Peer{
+		Key:  wgKey.PublicKey().String(),
+		Meta: nbpeer.PeerSystemMeta{Hostname: "stale-guard"},
+	})
+	require.NoError(t, err)
+
+	const streamA = "stream-A-on-replica-1"
+	const streamB = "stream-B-on-replica-2"
+
+	// 1. Initial connect on streamA — replica 1 owns the peer.
+	require.NoError(t, manager.MarkPeerConnected(context.Background(), peer.Key, true, nil, account.Id, streamA))
+	got, err := manager.Store.GetPeerByPeerPubKey(context.Background(), store.LockingStrengthShare, peer.Key)
+	require.NoError(t, err)
+	assert.True(t, got.Status.Connected, "after initial connect Connected must be true")
+	assert.Equal(t, streamA, got.Status.OwnerStreamID, "OwnerStreamID must pin to streamA")
+
+	// 2. Peer reconnects on streamB — replica 2 takes over.
+	require.NoError(t, manager.MarkPeerConnected(context.Background(), peer.Key, true, nil, account.Id, streamB))
+	got, err = manager.Store.GetPeerByPeerPubKey(context.Background(), store.LockingStrengthShare, peer.Key)
+	require.NoError(t, err)
+	assert.True(t, got.Status.Connected)
+	assert.Equal(t, streamB, got.Status.OwnerStreamID, "OwnerStreamID must move to streamB after the new replica's connect")
+
+	// 3. Replica 1's stale stream finally fires a disconnect for streamA.
+	//    The current owner is streamB → guard must skip the write.
+	require.NoError(t, manager.MarkPeerConnected(context.Background(), peer.Key, false, nil, account.Id, streamA))
+	got, err = manager.Store.GetPeerByPeerPubKey(context.Background(), store.LockingStrengthShare, peer.Key)
+	require.NoError(t, err)
+	assert.True(t, got.Status.Connected, "stale disconnect must NOT flip Connected to false")
+	assert.Equal(t, streamB, got.Status.OwnerStreamID, "stale disconnect must NOT clear the live OwnerStreamID")
+
+	// 4. Genuine disconnect from the current owner (streamB) — must write.
+	require.NoError(t, manager.MarkPeerConnected(context.Background(), peer.Key, false, nil, account.Id, streamB))
+	got, err = manager.Store.GetPeerByPeerPubKey(context.Background(), store.LockingStrengthShare, peer.Key)
+	require.NoError(t, err)
+	assert.False(t, got.Status.Connected, "matching disconnect must clear Connected")
+	assert.Equal(t, "", got.Status.OwnerStreamID, "matching disconnect must clear OwnerStreamID")
+
+	// 5. Legacy fallthrough: a caller that doesn't supply a streamID
+	//    (empty string) must behave like before — the disconnect
+	//    proceeds regardless. Covers (a) pre-fix code paths and
+	//    (b) peers that haven't reconnected since the field was added.
+	require.NoError(t, manager.MarkPeerConnected(context.Background(), peer.Key, true, nil, account.Id, "stream-C"))
+	require.NoError(t, manager.MarkPeerConnected(context.Background(), peer.Key, false, nil, account.Id, ""))
+	got, err = manager.Store.GetPeerByPeerPubKey(context.Background(), store.LockingStrengthShare, peer.Key)
+	require.NoError(t, err)
+	assert.False(t, got.Status.Connected, "empty streamID must fall through to legacy unguarded disconnect")
+}

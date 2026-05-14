@@ -69,7 +69,7 @@ type Manager interface {
 	GetUserFromUserAuth(ctx context.Context, userAuth nbcontext.UserAuth) (*types.User, error)
 	ListUsers(ctx context.Context, accountID string) ([]*types.User, error)
 	GetPeers(ctx context.Context, accountID, userID, nameFilter, ipFilter string) ([]*nbpeer.Peer, error)
-	MarkPeerConnected(ctx context.Context, peerKey string, connected bool, realIP net.IP, accountID string) error
+	MarkPeerConnected(ctx context.Context, peerKey string, connected bool, realIP net.IP, accountID string, streamID string) error
 	DeletePeer(ctx context.Context, accountID, peerID, userID string) error
 	UpdatePeer(ctx context.Context, accountID, userID string, peer *nbpeer.Peer) (*nbpeer.Peer, error)
 	GetNetworkMap(ctx context.Context, peerID string) (*types.NetworkMap, error)
@@ -147,8 +147,8 @@ type Manager interface {
 	UpdateIntegratedValidator(ctx context.Context, accountID, userID, validator string, groups []string) error
 	GroupValidation(ctx context.Context, accountId string, groups []string) (bool, error)
 	GetValidatedPeers(ctx context.Context, accountID string) (map[string]struct{}, error)
-	SyncAndMarkPeer(ctx context.Context, accountID string, peerPubKey string, meta nbpeer.PeerSystemMeta, realIP net.IP) (*nbpeer.Peer, *types.NetworkMap, []*posture.Checks, error)
-	OnPeerDisconnected(ctx context.Context, accountID string, peerPubKey string) error
+	SyncAndMarkPeer(ctx context.Context, accountID string, peerPubKey string, meta nbpeer.PeerSystemMeta, realIP net.IP, streamID string) (*nbpeer.Peer, *types.NetworkMap, []*posture.Checks, error)
+	OnPeerDisconnected(ctx context.Context, accountID string, peerPubKey string, streamID string) error
 	SyncPeerMeta(ctx context.Context, peerPubKey string, meta nbpeer.PeerSystemMeta) error
 	FindExistingPostureCheck(accountID string, checks *posture.ChecksDefinition) (*posture.Checks, error)
 	GetAccountIDForPeerKey(ctx context.Context, peerKey string) (string, error)
