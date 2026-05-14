@@ -1,8 +1,6 @@
 "use client";
 
 import "react-loading-skeleton/dist/skeleton.css";
-import { openzroTheme } from "@utils/theme";
-import { Flowbite } from "flowbite-react";
 import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
 import { type ThemeProviderProps } from "next-themes/dist/types";
@@ -51,9 +49,7 @@ export function GlobalThemeProvider({
       disableTransitionOnChange
       {...props}
     >
-      <Flowbite theme={{ theme: openzroTheme }}>
-        <ThemedSkeleton>{children}</ThemedSkeleton>
-      </Flowbite>
+      <ThemedSkeleton>{children}</ThemedSkeleton>
     </NextThemesProvider>
   );
 }

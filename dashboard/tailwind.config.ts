@@ -3,12 +3,10 @@ import type { Config } from "tailwindcss";
 // (set in tsconfig.json) lets us pull them in without a `require()`,
 // which broke at runtime once Next.js started loading this file as
 // ESM.
-import flowbitePlugin from "flowbite/plugin";
 import tailwindcssAnimate from "tailwindcss-animate";
 
 const config: Config = {
   content: [
-    "./node_modules/flowbite-react/**/*.js",
     "./src/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   darkMode: "class",
@@ -169,6 +167,6 @@ const config: Config = {
       },
     },
   },
-  plugins: [flowbitePlugin, tailwindcssAnimate],
+  plugins: [tailwindcssAnimate],
 };
 export default config;
