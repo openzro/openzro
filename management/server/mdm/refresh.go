@@ -21,24 +21,33 @@ import (
 // Refresh(). The first fire is staggered by a half-jitter so a
 // cluster reboot doesn't line every replica's workers up on the
 // same wall-clock second.
+//
+// Cancellation: the worker owns its own ctx + cancel pair. Stop()
+// cancels that ctx, which propagates into the in-flight
+// GetDeviceStatus call (vendors honor ctx), so a slow vendor cannot
+// block Stop() for the full per-tick timeout. Without this, a hot
+// reload during a Graph slowness window would freeze the admin API.
 type refreshWorker struct {
 	provider *CachedProvider
 	interval time.Duration
 	rowID    uint64
 	rowType  ProviderType
 
-	stop      chan struct{}
+	ctx       context.Context
+	cancel    context.CancelFunc
 	done      chan struct{}
 	closeOnce sync.Once
 }
 
 func startRefreshWorker(p *CachedProvider, interval time.Duration, rowID uint64, rowType ProviderType) *refreshWorker {
+	ctx, cancel := context.WithCancel(context.Background())
 	w := &refreshWorker{
 		provider: p,
 		interval: interval,
 		rowID:    rowID,
 		rowType:  rowType,
-		stop:     make(chan struct{}),
+		ctx:      ctx,
+		cancel:   cancel,
 		done:     make(chan struct{}),
 	}
 	go w.run()
@@ -55,7 +64,7 @@ func (w *refreshWorker) run() {
 	jitter := time.Duration(time.Now().UnixNano() % int64(w.interval))
 	select {
 	case <-time.After(jitter):
-	case <-w.stop:
+	case <-w.ctx.Done():
 		return
 	}
 
@@ -66,7 +75,7 @@ func (w *refreshWorker) run() {
 		select {
 		case <-ticker.C:
 			w.refresh()
-		case <-w.stop:
+		case <-w.ctx.Done():
 			return
 		}
 	}
@@ -77,14 +86,20 @@ func (w *refreshWorker) refresh() {
 	if len(lookups) == 0 {
 		return
 	}
-	// Detached ctx — this is a background loop, not a request, and
-	// must not inherit a cancelled parent. Per-tick timeout caps how
-	// long the worker can spend on the vendor when it's slow.
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// Per-tick timeout caps how long the worker can spend on the
+	// vendor when it's slow. Derived from the worker ctx so a Stop()
+	// during the batch cancels the in-flight call rather than waiting
+	// for the timeout to elapse.
+	ctx, cancel := context.WithTimeout(w.ctx, 30*time.Second)
 	defer cancel()
 
 	var served, errored int
 	for _, l := range lookups {
+		// Bail fast on cancellation rather than ploughing through the
+		// remaining lookups with a dead ctx.
+		if ctx.Err() != nil {
+			return
+		}
 		// Go through the cached path on purpose: entries still inside
 		// their TTL return without an API call, expired entries
 		// refetch and re-cache. The worker exists to take that
@@ -102,10 +117,11 @@ func (w *refreshWorker) refresh() {
 
 // Stop is idempotent — multiple callers (Manager.Refresh on a hot
 // reload, then Manager.Close on shutdown) can race without panicking
-// on a double channel-close.
+// on a double-cancel. Cancels the worker ctx so any in-flight vendor
+// call returns immediately, then waits for the goroutine to exit.
 func (w *refreshWorker) Stop() {
 	w.closeOnce.Do(func() {
-		close(w.stop)
+		w.cancel()
 		<-w.done
 	})
 }

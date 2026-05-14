@@ -40,6 +40,15 @@ type Manager struct {
 	// contained cache + worker setup with no cross-replica chatter.
 	coord cluster.Coordinator
 
+	// baseCtx is the process-lifetime context the Manager owns for
+	// long-running goroutines (cluster subscriptions). It MUST be
+	// independent of the request-scoped ctx the Refresh() admin path
+	// uses — otherwise every API save would cancel every subscription
+	// the instant the handler returned. baseCancel is wired to fire
+	// on Close so shutdown actually unwinds the subscribers.
+	baseCtx    context.Context
+	baseCancel context.CancelFunc
+
 	mu        sync.RWMutex
 	providers map[uint64]*CachedProvider // by row ID
 	workers   map[uint64]*refreshWorker  // by row ID, one per CachedProvider
@@ -53,14 +62,18 @@ func NewManager(ctx context.Context, store *Store, coord cluster.Coordinator) (*
 	if store == nil {
 		return nil, errors.New("mdm: store is required")
 	}
+	baseCtx, baseCancel := context.WithCancel(context.Background())
 	m := &Manager{
-		store:     store,
-		coord:     coord,
-		providers: map[uint64]*CachedProvider{},
-		workers:   map[uint64]*refreshWorker{},
-		subs:      map[uint64]context.CancelFunc{},
+		store:      store,
+		coord:      coord,
+		baseCtx:    baseCtx,
+		baseCancel: baseCancel,
+		providers:  map[uint64]*CachedProvider{},
+		workers:    map[uint64]*refreshWorker{},
+		subs:       map[uint64]context.CancelFunc{},
 	}
 	if err := m.Refresh(ctx); err != nil {
+		baseCancel()
 		return nil, err
 	}
 	return m, nil
@@ -104,7 +117,12 @@ func (m *Manager) Refresh(ctx context.Context) error {
 			publishStatus(context.Background(), m.coord, rowID, lookup, status)
 		})
 
-		cancel, err := subscribeStatus(ctx, m.coord, rowID, cached)
+		// Subscriptions are bound to the Manager's process-lifetime ctx
+		// (NOT the request-scoped ctx Refresh runs under) — otherwise
+		// every admin save would tear the sub down the instant the
+		// HTTP handler returned. Cancel is captured per-provider so
+		// hot-reload can stop only the affected subs.
+		cancel, err := subscribeStatus(m.baseCtx, m.coord, rowID, cached)
 		if err != nil {
 			log.WithContext(ctx).Warnf("mdm: subscribe failed for provider #%d (%s): %v — cross-replica fan-out disabled for this provider",
 				rowID, row.Type, err)
@@ -174,18 +192,27 @@ func (m *Manager) Lookup(ctx context.Context, providerID uint64, lookup DeviceLo
 // Idempotent.
 func (m *Manager) Close() error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	for _, cancel := range m.subs {
-		cancel()
-	}
-	for _, w := range m.workers {
-		w.Stop()
-	}
-	for _, p := range m.providers {
-		_ = p.Close()
-	}
+	subs, workers, providers := m.subs, m.workers, m.providers
 	m.subs = map[uint64]context.CancelFunc{}
 	m.workers = map[uint64]*refreshWorker{}
 	m.providers = map[uint64]*CachedProvider{}
+	m.mu.Unlock()
+
+	// Cancel the process-lifetime ctx first so any in-flight worker
+	// refresh and subscriber goroutine see the cancellation and bail
+	// fast instead of holding our lock while we wait on a 30s vendor
+	// timeout in Stop().
+	if m.baseCancel != nil {
+		m.baseCancel()
+	}
+	for _, cancel := range subs {
+		cancel()
+	}
+	for _, w := range workers {
+		w.Stop()
+	}
+	for _, p := range providers {
+		_ = p.Close()
+	}
 	return nil
 }

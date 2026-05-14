@@ -95,6 +95,52 @@ func TestRefreshWorker_StopIsIdempotent(t *testing.T) {
 	w.Stop()
 }
 
+// slowProvider blocks GetDeviceStatus until ctx is cancelled.
+// Models a vendor API that has gone slow / hung in production.
+type slowProvider struct{}
+
+func (slowProvider) Type() ProviderType { return "slow" }
+func (slowProvider) Close() error       { return nil }
+func (slowProvider) GetDeviceStatus(ctx context.Context, _ DeviceLookup) (DeviceStatus, error) {
+	<-ctx.Done()
+	return DeviceStatus{}, ctx.Err()
+}
+
+func TestRefreshWorker_StopInterruptsInFlightVendorCall(t *testing.T) {
+	// Regression: previously the worker's per-tick ctx was a fresh
+	// context.Background() WithTimeout, so a Stop() during a slow
+	// vendor call had to wait for the full 30s timeout. With the
+	// per-worker ctx, Stop must propagate into the in-flight call
+	// and return promptly.
+	cached := NewCachedProvider(slowProvider{}, 1*time.Millisecond)
+	// Seed the cache directly via the broker path so the slow inner
+	// provider doesn't get called on the prime — and give it a
+	// 1ms TTL so the entry is already expired by the time the
+	// worker fires, forcing a refetch.
+	cached.putFromBroker(DeviceLookup{Hostname: "alice"},
+		DeviceStatus{Compliant: true})
+	time.Sleep(5 * time.Millisecond)
+
+	w := startRefreshWorker(cached, 5*time.Millisecond, 1, "slow")
+
+	// Give the worker time to: clear the initial jitter, tick once,
+	// enter GetDeviceStatus, and block inside slowProvider.
+	time.Sleep(60 * time.Millisecond)
+
+	stopDone := make(chan struct{})
+	go func() {
+		w.Stop()
+		close(stopDone)
+	}()
+
+	select {
+	case <-stopDone:
+		// Good — Stop returned before the 30s timeout could elapse.
+	case <-time.After(2 * time.Second):
+		t.Fatalf("Stop() blocked on slow vendor — ctx cancellation does not reach the in-flight call")
+	}
+}
+
 func TestCacheKey_RoundTripsHostnameOnly(t *testing.T) {
 	in := DeviceLookup{Hostname: "alice-laptop"}
 	out := decodeCacheKey(encodeCacheKey(in))
