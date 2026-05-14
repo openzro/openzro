@@ -4,11 +4,17 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@components/DropdownMenu";
 import { notify } from "@components/Notification";
 import { useApiCall } from "@utils/api";
-import { MoreVertical, PencilLine, Trash2 } from "lucide-react";
+import {
+  ExternalLink,
+  MoreVertical,
+  PencilLine,
+  Trash2,
+} from "lucide-react";
 import React, { useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
 import { useDialog } from "@/contexts/DialogProvider";
@@ -80,12 +86,49 @@ export default function GroupsActionCellV2({
     handleDelete().then();
   };
 
-  const { isRegularGroup, isJWTGroup } = useGroupIdentification({
-    id: group?.id,
-    issued: group?.issued,
-  });
+  const { isRegularGroup, isJWTGroup, isOktaGroup, isGoogleGroup, isAzureGroup } =
+    useGroupIdentification({
+      id: group?.id,
+      issued: group?.issued,
+    });
 
   const isAllGroup = group.name === "All";
+
+  // Per-IdP metadata for the dropdown footer link. Docs pages live
+  // under docs.openzro.io/how-to/idp-<provider>-group-sync; tracked
+  // in #36. Until the docs land, the URLs still 404 — operators see
+  // the "Manage in <provider>" affordance, the link target gets
+  // back-filled silently once the page exists.
+  const idpInfo = useMemo<
+    { label: string; docsUrl: string } | undefined
+  >(() => {
+    if (isJWTGroup) {
+      return {
+        label: "JWT provisioning",
+        docsUrl: "https://docs.openzro.io/how-to/jwt-groups",
+      };
+    }
+    if (isOktaGroup) {
+      return {
+        label: "Okta",
+        docsUrl: "https://docs.openzro.io/how-to/idp-okta-group-sync",
+      };
+    }
+    if (isGoogleGroup) {
+      return {
+        label: "Google Workspace",
+        docsUrl:
+          "https://docs.openzro.io/how-to/idp-google-workspace-group-sync",
+      };
+    }
+    if (isAzureGroup) {
+      return {
+        label: "Azure AD",
+        docsUrl: "https://docs.openzro.io/how-to/idp-azure-ad-group-sync",
+      };
+    }
+    return undefined;
+  }, [isJWTGroup, isOktaGroup, isGoogleGroup, isAzureGroup]);
 
   const isDeleteDisabled =
     isAllGroup || in_use || !isRegularGroup || !permission.groups.delete;
@@ -98,36 +141,28 @@ export default function GroupsActionCellV2({
       return "The All group is a system default and cannot be deleted.";
     }
     if (!isRegularGroup) {
-      return isJWTGroup
-        ? "This group is issued by JWT and cannot be deleted."
+      return idpInfo
+        ? `This group is synced from ${idpInfo.label} and cannot be deleted.`
         : "This group is issued by an IdP and cannot be deleted.";
     }
     if (in_use && usageBreakdown) {
       return `In use by ${usageBreakdown}. Remove these references first.`;
     }
     return "Remove dependencies to this group to delete it.";
-  }, [
-    isDeleteDisabled,
-    isAllGroup,
-    isRegularGroup,
-    isJWTGroup,
-    in_use,
-    usageBreakdown,
-  ]);
+  }, [isDeleteDisabled, isAllGroup, isRegularGroup, idpInfo, in_use, usageBreakdown]);
 
   const editDisabledText = useMemo(() => {
     if (!isEditDisabled) return undefined;
     if (isAllGroup) {
       return "The All group is a system default and cannot be renamed.";
     }
-    if (isJWTGroup) {
-      return "This group is issued by JWT and cannot be renamed.";
-    }
     if (!isRegularGroup) {
-      return "This group is issued by an IdP and cannot be renamed.";
+      return idpInfo
+        ? `This group is synced from ${idpInfo.label} and cannot be renamed.`
+        : "This group is issued by an IdP and cannot be renamed.";
     }
     return "You don't have permission to rename groups.";
-  }, [isEditDisabled, isAllGroup, isJWTGroup, isRegularGroup]);
+  }, [isEditDisabled, isAllGroup, isRegularGroup, idpInfo]);
 
   return (
     <div className="flex justify-end pr-2" data-stop-row-click>
@@ -184,6 +219,24 @@ export default function GroupsActionCellV2({
               Delete
             </div>
           </DropdownMenuItem>
+          {idpInfo && (
+            <>
+              <DropdownMenuSeparator />
+              {/* Footer link to the per-IdP docs. Plain <a> instead
+                  of a DropdownMenuItem so the click navigates instead
+                  of being preventDefault-ed by our menu-item wrapper. */}
+              <a
+                href={idpInfo.docsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="flex items-center gap-2 px-2 py-1.5 text-[12px] text-oz2-text-2 rounded-sm outline-none transition-colors hover:bg-oz2-hover hover:text-oz2-text"
+              >
+                <ExternalLink size={12} className="shrink-0" />
+                <span>Manage in {idpInfo.label}</span>
+              </a>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
