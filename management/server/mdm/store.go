@@ -113,9 +113,80 @@ func (in *SaveInput) publicBlob() ([]byte, error) {
 	return nil, fmt.Errorf("mdm: unknown type %q", in.Type)
 }
 
+// MergeIncomingSecret preserves the existing sensitive fields when the
+// caller posts empty values on update — the API never reads secrets
+// back to the dashboard (PublicView strips them), so the form sends
+// "" to mean "leave it as is." Without this merge, every Save that
+// doesn't re-type the secret would overwrite the stored credential
+// with the empty zero-value, leaving the provider unconfigurable on
+// the next manager Refresh (NewIntune et al. reject empty secrets).
+//
+// Mirrors the same-named method in activity_exporters/store.go —
+// the canonical "write-only credential" pattern in this codebase.
+func (in *SaveInput) MergeIncomingSecret(prev any) {
+	switch in.Type {
+	case TypeIntune:
+		if in.Intune == nil {
+			return
+		}
+		if in.Intune.ClientSecret != "" {
+			return
+		}
+		if pc, ok := prev.(*IntuneConfig); ok && pc != nil {
+			in.Intune.ClientSecret = pc.ClientSecret
+		}
+	case TypeSentinelOne:
+		if in.SentinelOne == nil {
+			return
+		}
+		if in.SentinelOne.APIToken != "" {
+			return
+		}
+		if pc, ok := prev.(*SentinelOneConfig); ok && pc != nil {
+			in.SentinelOne.APIToken = pc.APIToken
+		}
+	case TypeHuntress:
+		if in.Huntress == nil {
+			return
+		}
+		if pc, ok := prev.(*HuntressConfig); ok && pc != nil {
+			if in.Huntress.APIKey == "" {
+				in.Huntress.APIKey = pc.APIKey
+			}
+			if in.Huntress.APISecret == "" {
+				in.Huntress.APISecret = pc.APISecret
+			}
+		}
+	case TypeCrowdStrike:
+		if in.CrowdStrike == nil {
+			return
+		}
+		if in.CrowdStrike.ClientSecret != "" {
+			return
+		}
+		if pc, ok := prev.(*CrowdStrikeConfig); ok && pc != nil {
+			in.CrowdStrike.ClientSecret = pc.ClientSecret
+		}
+	}
+}
+
 // Save creates or updates a row. Sensitive fields are encrypted
 // before INSERT/UPDATE.
 func (s *Store) Save(ctx context.Context, in SaveInput) (*MDMProvider, error) {
+	if in.ID != 0 {
+		// Preserve write-only credentials when the caller posts
+		// placeholders. See MergeIncomingSecret for the rationale.
+		existing, err := s.Get(ctx, in.ID)
+		if err != nil {
+			return nil, err
+		}
+		prev, err := s.Decrypt(existing)
+		if err != nil {
+			return nil, fmt.Errorf("mdm: decrypt prev: %w", err)
+		}
+		in.MergeIncomingSecret(prev)
+	}
+
 	if err := in.Validate(); err != nil {
 		return nil, err
 	}
