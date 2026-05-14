@@ -2,10 +2,21 @@ package posture
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
 )
+
+// openSqliteForTest opens an in-memory SQLite handle for migration
+// tests. Cheap, isolated, and matches the driver the production
+// store package uses (glebarez/sqlite — pure-Go, no cgo).
+func openSqliteForTest(_ *testing.T) (*gorm.DB, error) {
+	return gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+}
 
 // fakeEvalStore is a thread-safe in-memory EvalStore for unit tests.
 // Captures every Insert so tests can assert on what the recorder
@@ -73,10 +84,12 @@ func TestBufferedRecorder_FlushesOnBatchSize(t *testing.T) {
 	defer r.Close()
 
 	now := time.Now().UTC()
+	// Distinct PeerIDs so dedup does not suppress identical-state repeats —
+	// this test asserts the batch-size flush path, not dedup behavior.
 	for i := 0; i < 3; i++ {
 		r.Record(context.Background(), PostureEvaluation{
 			AccountID:      "acct",
-			PeerID:         "peer",
+			PeerID:         fmt.Sprintf("peer-%d", i),
 			PostureCheckID: "check",
 			CheckType:      "TestCheck",
 			Compliant:      false,
@@ -174,15 +187,24 @@ func TestBufferedRecorder_DropsOnOverflow(t *testing.T) {
 	defer close(blockedStore.released)
 
 	now := time.Now().UTC()
+	// Distinct PeerIDs so dedup does not suppress on the cache lookup —
+	// without this every Record() after the first would short-circuit
+	// before ever reaching the channel-send path we're trying to exercise.
 	for i := 0; i < 10; i++ {
-		r.Record(context.Background(), PostureEvaluation{EvaluatedAt: now})
+		r.Record(context.Background(), PostureEvaluation{
+			PeerID:      fmt.Sprintf("peer-a-%d", i),
+			EvaluatedAt: now,
+		})
 	}
 
 	// Give the drainer a moment to pull a couple from the channel and
 	// block in Insert. After that, additional Records must overflow.
 	time.Sleep(50 * time.Millisecond)
 	for i := 0; i < 20; i++ {
-		r.Record(context.Background(), PostureEvaluation{EvaluatedAt: now})
+		r.Record(context.Background(), PostureEvaluation{
+			PeerID:      fmt.Sprintf("peer-b-%d", i),
+			EvaluatedAt: now,
+		})
 	}
 
 	r.mu.Lock()
@@ -261,5 +283,253 @@ func TestEvalRetention_PurgesOldRows(t *testing.T) {
 	}
 	if rows[0].CheckType != "fresh" {
 		t.Fatalf("wrong row survived: %+v", rows[0])
+	}
+}
+
+func TestMigrateEvaluationTable_CreatesIndexes(t *testing.T) {
+	// Skip if sqlite driver isn't pulled in (it's already in go.mod
+	// for the other GORM-backed stores; defensive guard for future
+	// build configurations).
+	db, err := openSqliteForTest(t)
+	if err != nil {
+		t.Skip("sqlite test driver not available:", err)
+	}
+
+	if err := MigrateEvaluationTable(db); err != nil {
+		t.Fatalf("migrate failed: %v", err)
+	}
+
+	// Both indexes must exist after migration.
+	mig := db.Migrator()
+	for _, idx := range []string{
+		"idx_posture_eval_account_peer_time",
+		"idx_posture_eval_evaluated_at",
+	} {
+		if !mig.HasIndex(&PostureEvaluation{}, idx) {
+			t.Errorf("expected index %q after AutoMigrate", idx)
+		}
+	}
+}
+
+// BenchmarkRecord_HotPath measures the overhead of a single Record()
+// call — this fires inside validatePostureChecksOnPeer once per
+// check.Check() invocation, so the hot path runs it
+// O(peers × policies × checks_per_policy) per Sync. Anything above a
+// few hundred ns/op here would show up as visible CPU under load.
+func BenchmarkRecord_HotPath(b *testing.B) {
+	r := NewBufferedRecorder(&fakeEvalStore{}, BufferedRecorderOpts{
+		QueueSize:     65536, // sized large so we never block in this loop
+		BatchSize:     200,
+		FlushInterval: 1 * time.Hour,
+	})
+	defer r.Close()
+
+	ev := PostureEvaluation{
+		AccountID:      "bench-account",
+		PeerID:         "bench-peer",
+		PostureCheckID: "bench-check",
+		CheckType:      "EndpointSecurityCheck",
+		Compliant:      false,
+		Reason:         "endpoint-security: device not enrolled in Intune (hostname=\"x\", user=\"y\", os=\"linux\")",
+		EvaluatedAt:    time.Now().UTC(),
+	}
+	ctx := context.Background()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		r.Record(ctx, ev)
+	}
+}
+
+func TestBufferedRecorder_DedupesIdenticalConsecutiveStates(t *testing.T) {
+	store := &fakeEvalStore{}
+	r := NewBufferedRecorder(store, BufferedRecorderOpts{
+		QueueSize:     128,
+		BatchSize:     1, // flush every record so we can assert on store
+		FlushInterval: 1 * time.Hour,
+	})
+	defer r.Close()
+
+	now := time.Now().UTC()
+	base := PostureEvaluation{
+		AccountID:      "a",
+		PeerID:         "p",
+		PostureCheckID: "c",
+		CheckType:      "EndpointSecurityCheck",
+		Compliant:      true,
+		Reason:         "",
+		EvaluatedAt:    now,
+	}
+
+	// 1st record — fresh, must be persisted.
+	r.Record(context.Background(), base)
+	// 2nd–10th — identical state, must be deduped.
+	for i := 0; i < 9; i++ {
+		dup := base
+		dup.EvaluatedAt = now.Add(time.Duration(i) * time.Second)
+		r.Record(context.Background(), dup)
+	}
+
+	// Wait for the drainer to flush the first one.
+	deadline := time.After(2 * time.Second)
+	for {
+		select {
+		case <-deadline:
+			t.Fatalf("first record never landed in store")
+		default:
+			if len(store.snapshot()) >= 1 {
+				goto persisted
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+persisted:
+
+	// Give the drainer a moment to (not) flush the dupes.
+	time.Sleep(50 * time.Millisecond)
+	if got := len(store.snapshot()); got != 1 {
+		t.Fatalf("dedup failed: expected 1 row, got %d", got)
+	}
+	r.mu.Lock()
+	deduped := r.deduped
+	r.mu.Unlock()
+	if deduped != 9 {
+		t.Fatalf("expected 9 dedupes, got %d", deduped)
+	}
+}
+
+func TestBufferedRecorder_StateChangeBreaksDedup(t *testing.T) {
+	store := &fakeEvalStore{}
+	r := NewBufferedRecorder(store, BufferedRecorderOpts{
+		QueueSize:     128,
+		BatchSize:     1,
+		FlushInterval: 1 * time.Hour,
+	})
+	defer r.Close()
+
+	now := time.Now().UTC()
+	base := PostureEvaluation{
+		AccountID:      "a",
+		PeerID:         "p",
+		PostureCheckID: "c",
+		CheckType:      "EndpointSecurityCheck",
+		EvaluatedAt:    now,
+	}
+
+	// 1st: compliant. 2nd: not compliant. 3rd: compliant again (NEW reason).
+	// All three must persist — dedup only suppresses unchanged repeats.
+	compliant := base
+	compliant.Compliant = true
+	r.Record(context.Background(), compliant)
+
+	notCompliant := base
+	notCompliant.Compliant = false
+	notCompliant.Reason = "denied because reasons"
+	r.Record(context.Background(), notCompliant)
+
+	compliantAgain := base
+	compliantAgain.Compliant = true
+	r.Record(context.Background(), compliantAgain)
+
+	deadline := time.After(2 * time.Second)
+	for {
+		select {
+		case <-deadline:
+			t.Fatalf("expected 3 distinct rows, got %d", len(store.snapshot()))
+		default:
+			if len(store.snapshot()) == 3 {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+}
+
+func TestBufferedRecorder_RefreshTTLBypassesDedup(t *testing.T) {
+	// A stable-state peer must still leave a fresh row periodically so
+	// the dashboard timeline has something to show after retention
+	// purges older rows. The TTL on the dedup cache enforces that.
+	store := &fakeEvalStore{}
+	r := NewBufferedRecorder(store, BufferedRecorderOpts{
+		QueueSize:     128,
+		BatchSize:     1,
+		FlushInterval: 1 * time.Hour,
+		RefreshTTL:    100 * time.Millisecond,
+	})
+	defer r.Close()
+
+	now := time.Now().UTC()
+	base := PostureEvaluation{
+		AccountID:      "a",
+		PeerID:         "p",
+		PostureCheckID: "c",
+		CheckType:      "EndpointSecurityCheck",
+		Compliant:      true,
+		EvaluatedAt:    now,
+	}
+
+	// 1st: persisted (cache miss).
+	r.Record(context.Background(), base)
+
+	// 2nd: same state, EvaluatedAt within TTL — must dedupe.
+	within := base
+	within.EvaluatedAt = now.Add(50 * time.Millisecond)
+	r.Record(context.Background(), within)
+
+	// 3rd: same state but EvaluatedAt past the TTL — must persist
+	// even though (compliant, reason) is unchanged.
+	expired := base
+	expired.EvaluatedAt = now.Add(200 * time.Millisecond)
+	r.Record(context.Background(), expired)
+
+	deadline := time.After(2 * time.Second)
+	for {
+		select {
+		case <-deadline:
+			t.Fatalf("expected 2 rows (one bypassed dedup via TTL), got %d", len(store.snapshot()))
+		default:
+			if len(store.snapshot()) == 2 {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+}
+
+func TestBufferedRecorder_DedupIsPerCheckType(t *testing.T) {
+	// Two different check_types under the same posture_checks row
+	// (same peer, same account, same posture_check_id) must dedupe
+	// independently — a state change in one cannot mask the other.
+	store := &fakeEvalStore{}
+	r := NewBufferedRecorder(store, BufferedRecorderOpts{
+		QueueSize:     128,
+		BatchSize:     1,
+		FlushInterval: 1 * time.Hour,
+	})
+	defer r.Close()
+
+	now := time.Now().UTC()
+	for _, check := range []string{"EndpointSecurityCheck", "OSVersionCheck"} {
+		r.Record(context.Background(), PostureEvaluation{
+			AccountID:      "a",
+			PeerID:         "p",
+			PostureCheckID: "c",
+			CheckType:      check,
+			Compliant:      true,
+			EvaluatedAt:    now,
+		})
+	}
+
+	deadline := time.After(2 * time.Second)
+	for {
+		select {
+		case <-deadline:
+			t.Fatalf("expected 2 rows (distinct check_types), got %d", len(store.snapshot()))
+		default:
+			if len(store.snapshot()) == 2 {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
 	}
 }
