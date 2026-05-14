@@ -33,6 +33,7 @@ import {
   MonitorSmartphoneIcon,
   NetworkIcon,
   PencilIcon,
+  ShieldCheck,
   TerminalSquare,
   TimerResetIcon,
 } from "lucide-react";
@@ -64,6 +65,7 @@ import useGroupHelper from "@/modules/groups/useGroupHelper";
 import { AccessiblePeersSection } from "@/modules/peer/AccessiblePeersSection";
 import { PeerExpirationToggle } from "@/modules/peer/PeerExpirationToggle";
 import { PeerNetworkRoutesSection } from "@/modules/peer/PeerNetworkRoutesSection";
+import { PostureEvaluationsSection } from "@/modules/peer/PostureEvaluationsSection";
 import OzSettingsCard from "@/modules/settings/v2/OzSettingsCard";
 import OzSettingsToggle from "@/modules/settings/v2/OzSettingsToggle";
 
@@ -324,6 +326,12 @@ const PeerGeneralInformation = () => {
                 Accessible Peers
               </OzTabsTrigger>
             )}
+            {peer?.id && permission.settings.read && (
+              <OzTabsTrigger value="posture">
+                <ShieldCheck size={13} />
+                Posture
+              </OzTabsTrigger>
+            )}
           </OzTabsList>
         </div>
 
@@ -433,6 +441,12 @@ const PeerGeneralInformation = () => {
         {peer?.id && permission.peers.read && (
           <OzTabsContent value="accessible-peers">
             <AccessiblePeersSection peerID={peer.id} />
+          </OzTabsContent>
+        )}
+
+        {peer?.id && permission.settings.read && (
+          <OzTabsContent value="posture">
+            <PostureEvaluationsSection peerID={peer.id} />
           </OzTabsContent>
         )}
       </OzTabs>
