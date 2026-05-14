@@ -29,33 +29,39 @@ function Calendar({
         months: "flex flex-col sm:flex-row gap-4",
         month: "flex flex-col gap-4",
         month_caption: "flex justify-center pt-1 relative items-center",
-        caption_label: "text-sm font-medium",
+        caption_label: "text-sm font-medium text-oz2-text",
         nav: "flex items-center gap-1 absolute right-1 top-1",
         button_previous: cn(
           buttonVariants({ variant: "outline" }),
-          "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100",
+          "h-7 w-7 bg-transparent p-0 opacity-60 hover:opacity-100",
         ),
         button_next: cn(
           buttonVariants({ variant: "outline" }),
-          "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100",
+          "h-7 w-7 bg-transparent p-0 opacity-60 hover:opacity-100",
         ),
         month_grid: "w-full border-collapse",
         weekdays: "flex",
         weekday:
-          "text-neutral-500 rounded-md w-9 font-normal text-[0.8rem] dark:text-neutral-400",
+          "text-oz2-text-faint rounded-md w-9 font-normal text-[0.8rem]",
         week: "flex w-full mt-2",
-        day: "h-9 w-9 text-center text-sm p-0 relative focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-neutral-100 dark:[&:has([aria-selected])]:bg-neutral-800 [&:has([aria-selected].range-end)]:rounded-r-md first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md",
+        // Range-band uses oz2-acc-soft so the violet tint stays
+        // legible in both light and dark mode (the legacy neutral-100
+        // band looked black in light mode and disappeared in dark).
+        day: "h-9 w-9 text-center text-sm p-0 relative focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-oz2-acc-soft [&:has([aria-selected].range-end)]:rounded-r-md first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md",
         day_button: cn("h-9 w-9 p-0 font-normal aria-selected:opacity-100"),
         range_end: "range-end rounded-r-md",
         range_start: "range-start rounded-l-md",
+        // Endpoints get the solid violet pill (oz2-acc). Hover/focus
+        // stay on the same fill so the pill doesn't flash.
         selected:
-          "bg-neutral-900 text-neutral-50 hover:bg-neutral-900 hover:text-neutral-50 focus:bg-neutral-900 focus:text-neutral-50 dark:bg-neutral-50 dark:text-neutral-900 dark:hover:bg-neutral-50 dark:hover:text-neutral-900 dark:focus:bg-neutral-50 dark:focus:text-neutral-900",
-        today: "text-neutral-900 dark:text-red-500",
+          "bg-oz2-acc text-oz2-text-on-acc hover:bg-oz2-acc hover:text-oz2-text-on-acc focus:bg-oz2-acc focus:text-oz2-text-on-acc",
+        today:
+          "text-oz2-acc font-semibold aria-selected:text-oz2-text-on-acc",
         outside:
-          "outside text-neutral-500 opacity-50 aria-selected:bg-neutral-100/50 aria-selected:text-neutral-500 aria-selected:opacity-30 dark:text-neutral-400 dark:aria-selected:bg-neutral-800/50 dark:aria-selected:text-neutral-400",
-        disabled: "text-neutral-500 opacity-50 dark:text-neutral-400",
+          "outside text-oz2-text-faint opacity-50 aria-selected:bg-oz2-acc-soft/50 aria-selected:text-oz2-text-2 aria-selected:opacity-40",
+        disabled: "text-oz2-text-faint opacity-40",
         range_middle:
-          "aria-selected:bg-neutral-100 aria-selected:text-neutral-900 dark:aria-selected:bg-nb-gray-800 dark:aria-selected:text-neutral-50 rounded-none",
+          "aria-selected:bg-oz2-acc-soft aria-selected:text-oz2-acc-text rounded-none",
         hidden: "invisible",
         ...classNames,
       }}
