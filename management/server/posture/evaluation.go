@@ -87,6 +87,46 @@ type EvalRecorder interface {
 	Record(ctx context.Context, e PostureEvaluation)
 }
 
+// evalRecorderContextKey is the context key used to carry an
+// EvalRecorder into validatePostureChecksOnPeer. Mirrors the
+// MDMResolver pattern in endpoint_security.go: tests inject via
+// WithEvalRecorder, production wires through the package-level
+// default below so the eval call sites don't have to thread the
+// recorder through every Account method.
+type evalRecorderContextKey struct{}
+
+// WithEvalRecorder returns a derived context carrying r. Returns the
+// original ctx untouched if r is nil so callers can pass through.
+func WithEvalRecorder(ctx context.Context, r EvalRecorder) context.Context {
+	if r == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, evalRecorderContextKey{}, r)
+}
+
+// RecorderFromContext extracts the EvalRecorder threaded through the
+// context, falling back to the package-level default if none is set.
+// Returns nil when neither is configured — callers must nil-check.
+func RecorderFromContext(ctx context.Context) EvalRecorder {
+	if r, ok := ctx.Value(evalRecorderContextKey{}).(EvalRecorder); ok && r != nil {
+		return r
+	}
+	return defaultEvalRecorder
+}
+
+// defaultEvalRecorder is the process-wide fallback. cmd/management.go
+// sets this once at startup after constructing the BufferedRecorder.
+// Reads may race writes during boot; tests should use WithEvalRecorder
+// instead of touching this global.
+var defaultEvalRecorder EvalRecorder
+
+// SetDefaultEvalRecorder installs the process-wide EvalRecorder.
+// Called once at startup. Subsequent calls replace the previous
+// value; no concurrency protection beyond the caller's own ordering.
+func SetDefaultEvalRecorder(r EvalRecorder) {
+	defaultEvalRecorder = r
+}
+
 // EvalStore persists PostureEvaluation rows and answers the
 // per-peer-timeline query the dashboard makes. Implemented by the
 // GORM-backed store in evaluation_store.go; tests can inject an

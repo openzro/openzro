@@ -1155,15 +1155,34 @@ func (a *Account) validatePostureChecksOnPeer(ctx context.Context, sourcePosture
 				// Logged at Info (was Debug) so operators see denial
 				// reasons without flipping log level — the visible
 				// trail an admin needs to debug "why was peer X
-				// blocked by policy Y". A more structured surface
-				// (persistent posture-evaluation timeline per peer,
-				// rendered on the peer detail page) is tracked
-				// separately; this is the cheap stop-gap.
+				// blocked by policy Y".
 				log.WithContext(ctx).Infof(
 					"posture: check %s denied peer %s: %s",
 					check.Name(), peer.ID, err.Error(),
 				)
 			}
+
+			// Persist the result for the per-peer timeline rendered on
+			// /peer/<id>. Recorder is best-effort + non-blocking by
+			// contract (channel-buffered drainer behind it). Nil
+			// recorder means "no persistence configured" (tests,
+			// startup pre-init) — skip silently.
+			if recorder := posture.RecorderFromContext(ctx); recorder != nil {
+				reason := ""
+				if err != nil {
+					reason = err.Error()
+				}
+				recorder.Record(ctx, posture.PostureEvaluation{
+					AccountID:      a.Id,
+					PeerID:         peer.ID,
+					PostureCheckID: postureChecksID,
+					CheckType:      check.Name(),
+					Compliant:      isValid,
+					Reason:         reason,
+					EvaluatedAt:    time.Now().UTC(),
+				})
+			}
+
 			if !isValid {
 				return false
 			}

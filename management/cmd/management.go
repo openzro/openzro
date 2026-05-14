@@ -410,7 +410,23 @@ var (
 			var activityExportersStore *activityExporters.Store
 			var activityExportersManager *activityExporters.Manager
 			var admissionBypassStore *admission.Store
+			var postureEvalStore posture.EvalStore
+			var postureEvalRecorder *posture.BufferedRecorder
 			if sqlStore, ok := store.(*mgmtStore.SqlStore); ok {
+				// Persistent posture evaluation timeline (#38). The
+				// migration creates posture_evaluations + its compound
+				// index next to the other GORM auto-migrations; the
+				// recorder is wired into the per-account eval path via
+				// the package-level default below so validatePostureChecksOnPeer
+				// records every check.Check() outcome.
+				gdb := sqlStore.GetGormDB()
+				if err := posture.MigrateEvaluationTable(gdb); err != nil {
+					return fmt.Errorf("posture evaluations migrate: %w", err)
+				}
+				postureEvalStore = posture.NewGormEvalStore(gdb)
+				postureEvalRecorder = posture.NewBufferedRecorder(postureEvalStore, posture.BufferedRecorderOpts{})
+				posture.SetDefaultEvalRecorder(postureEvalRecorder)
+				defer postureEvalRecorder.Close()
 				flowExportsStore, err = flowExports.NewStore(sqlStore.GetGormDB(), config.DataStoreEncryptionKey)
 				if err != nil {
 					return fmt.Errorf("flow_exports store: %w", err)
