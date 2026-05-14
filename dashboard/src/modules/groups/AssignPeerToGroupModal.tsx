@@ -1,20 +1,41 @@
-import { Checkbox } from "@components/Checkbox";
+"use client";
+
 import { Modal, ModalContent } from "@components/modal/Modal";
 import ModalHeader from "@components/modal/ModalHeader";
 import { notify } from "@components/Notification";
-import SkeletonTable from "@components/skeletons/SkeletonTable";
-import DataTableHeader from "@components/table/DataTableHeader";
-import NoResultsCard from "@components/ui/NoResultsCard";
-import { ColumnDef, RowSelectionState } from "@tanstack/react-table";
+import {
+  ColumnDef,
+  FilterFn,
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  RowSelectionState,
+  SortingFn,
+  SortingState,
+  useReactTable,
+} from "@tanstack/react-table";
 import useFetchApi, { useApiCall } from "@utils/api";
-import { cn } from "@utils/helpers";
-import { FolderGit2, PencilLineIcon } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  FolderGit2,
+  PencilLineIcon,
+  Search,
+} from "lucide-react";
 import * as React from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
-import PeerIcon from "@/assets/icons/PeerIcon";
-import { DataTable } from "@/components/table/DataTable";
 import OzButton from "@/components/v2/OzButton";
+import OzCheckbox from "@/components/v2/OzCheckbox";
+import {
+  OzTable,
+  OzTableBody,
+  OzTableCell,
+  OzTableHead,
+  OzTableHeader,
+  OzTableRow,
+} from "@/components/v2/OzTable";
 import { Group, GroupPeer } from "@/interfaces/Group";
 import { Peer } from "@/interfaces/Peer";
 import { EditGroupNameModal } from "@/modules/groups/EditGroupNameModal";
@@ -59,6 +80,23 @@ type ContentProps = {
   useSave?: boolean;
 };
 
+// useReactTable's global FilterFns / SortingFns interface extensions
+// (declared by the legacy DataTable) require every caller to supply
+// these names. We do not use any of them here, so no-op stubs keep
+// the typecheck happy without altering runtime behavior. Same pattern
+// as PeersTableV2.
+const noopFilter: FilterFn<unknown> = () => true;
+const noopSort: SortingFn<unknown> = () => 0;
+const NOOP_FILTER_FNS = {
+  fuzzy: noopFilter,
+  dateRange: noopFilter,
+  exactMatch: noopFilter,
+  arrIncludesSomeExact: noopFilter,
+};
+const NOOP_SORTING_FNS = {
+  checkbox: noopSort,
+};
+
 export const AssignGroupToPeerModalContent = ({
   group,
   onSuccess,
@@ -68,18 +106,13 @@ export const AssignGroupToPeerModalContent = ({
   const { mutate } = useSWRConfig();
   const groupRequest = useApiCall<Group>("/groups");
   const [initialPeersSet, setInitialPeersSet] = useState(false);
-  const [selectedRows, setSelectedRows] = useState<RowSelectionState>({});
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const isAllGroup = group.name === "All";
-  const [sorting, setSorting] = useState([
-    {
-      id: "select",
-      desc: false,
-    },
-    {
-      id: "name",
-      desc: false,
-    },
+  const [sorting, setSorting] = useState<SortingState>([
+    { id: "select", desc: false },
+    { id: "name", desc: false },
   ]);
+  const [search, setSearch] = useState("");
 
   const [groupNameModal, setGroupNameModal] = useState(false);
   const [groupName, setGroupName] = useState(group.name);
@@ -89,20 +122,13 @@ export const AssignGroupToPeerModalContent = ({
     setGroupName(name);
   };
 
-  // Get initial selected peers
   const getInitialSelectedPeers = useCallback(() => {
-    if (!group) return undefined;
-    if (!peers) return undefined;
-    let initialSelectedPeers = group?.peers
-      ?.map((p) => {
-        if (typeof p === "string") return p;
-        return p.id;
-      })
-      .filter((p) => p !== undefined) as string[];
-    if (!initialSelectedPeers) return {};
-
-    // Return Record<string, boolean> for initialSelectedPeers
-    return initialSelectedPeers.reduce(
+    if (!group || !peers) return undefined;
+    const ids = group?.peers
+      ?.map((p) => (typeof p === "string" ? p : p.id))
+      .filter((p): p is string => p !== undefined);
+    if (!ids) return {};
+    return ids.reduce(
       (acc, peerId) => {
         acc[peerId] = true;
         return acc;
@@ -111,73 +137,171 @@ export const AssignGroupToPeerModalContent = ({
     );
   }, [group, peers]);
 
-  const handleOnSave = async (selectedPeers: Peer[]) => {
+  useEffect(() => {
+    if (initialPeersSet) return;
+    const initial = getInitialSelectedPeers();
+    if (initial === undefined) return;
+    setRowSelection(initial);
+    setInitialPeersSet(true);
+  }, [getInitialSelectedPeers, initialPeersSet]);
+
+  // Case-insensitive search across name, dns_label, ip, user email/name.
+  // Avoids the legacy DataTable global filter (which used the custom
+  // fuzzy filter declared at the project-wide TanStack module level).
+  const filtered = useMemo(() => {
+    if (!peers) return [] as Peer[];
+    const q = search.trim().toLowerCase();
+    if (!q) return peers;
+    return peers.filter((peer) => {
+      const haystacks = [
+        peer.name,
+        peer.dns_label,
+        peer.ip,
+        peer.user?.email,
+        peer.user?.name,
+      ];
+      return haystacks.some((h) => h?.toLowerCase().includes(q));
+    });
+  }, [peers, search]);
+
+  const columns = useMemo<ColumnDef<Peer>[]>(
+    () => [
+      {
+        id: "select",
+        size: 44,
+        header: ({ table }) => (
+          <OzCheckbox
+            checked={
+              table.getIsAllPageRowsSelected()
+                ? true
+                : table.getIsSomePageRowsSelected()
+                  ? "indeterminate"
+                  : false
+            }
+            onCheckedChange={(value) =>
+              table.toggleAllPageRowsSelected(!!value)
+            }
+            aria-label="Select all"
+          />
+        ),
+        cell: ({ row }) => (
+          <OzCheckbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            aria-label={`Select ${row.original.name}`}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ),
+        enableSorting: false,
+      },
+      {
+        accessorKey: "name",
+        header: ({ column }) => (
+          <SortHeader column={column}>Name</SortHeader>
+        ),
+        sortingFn: (a, b) =>
+          (a.original.name || "").localeCompare(b.original.name || ""),
+        cell: ({ row }) => (
+          <PeerNameCell peer={row.original} linkToPeer={false} />
+        ),
+      },
+      {
+        accessorKey: "dns_label",
+        header: ({ column }) => (
+          <SortHeader column={column}>Address</SortHeader>
+        ),
+        sortingFn: (a, b) =>
+          (a.original.dns_label || "").localeCompare(
+            b.original.dns_label || "",
+          ),
+        cell: ({ row }) => <PeerAddressCell peer={row.original} />,
+      },
+      {
+        accessorKey: "os",
+        header: ({ column }) => <SortHeader column={column}>OS</SortHeader>,
+        size: 80,
+        sortingFn: (a, b) =>
+          (a.original.os || "").localeCompare(b.original.os || ""),
+        cell: ({ row }) => (
+          <PeerOSCell
+            os={row.original.os}
+            serial={row.original.serial_number}
+          />
+        ),
+      },
+    ],
+    [],
+  );
+
+  const table = useReactTable({
+    data: filtered,
+    columns,
+    state: { sorting, rowSelection },
+    onSortingChange: setSorting,
+    onRowSelectionChange: setRowSelection,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    enableRowSelection: !isAllGroup,
+    getRowId: (peer) => peer.id ?? peer.name,
+    filterFns: NOOP_FILTER_FNS,
+    sortingFns: NOOP_SORTING_FNS,
+  });
+
+  const selectedCount = Object.keys(rowSelection).length;
+
+  const handleOnSave = async () => {
+    const selectedPeerIds = Object.keys(rowSelection);
+    const selectedPeers = (peers ?? []).filter((p) =>
+      selectedPeerIds.includes(p.id ?? ""),
+    );
+
     if (!useSave) {
-      onSuccess &&
-        onSuccess({
-          ...group,
-          name: groupName,
-          peers: selectedPeers.map((peer) => {
-            return {
-              id: peer.id,
-              name: peer.name,
-            } as GroupPeer;
-          }),
-          peers_count: selectedPeers.length,
-          resources: group.resources,
-          keepClientState: true,
-        });
+      onSuccess?.({
+        ...group,
+        name: groupName,
+        peers: selectedPeers.map(
+          (peer) => ({ id: peer.id, name: peer.name }) as GroupPeer,
+        ),
+        peers_count: selectedPeers.length,
+        resources: group.resources,
+        keepClientState: true,
+      });
       return;
     }
 
     const hasGroupID = !!group?.id;
-    let request;
-
-    if (hasGroupID) {
-      request = () =>
-        groupRequest.put(
-          {
+    const request = hasGroupID
+      ? () =>
+          groupRequest.put(
+            {
+              name: group.name,
+              peers: selectedPeers.map((peer) => peer.id),
+              resources: group.resources,
+            },
+            "/" + group?.id,
+          )
+      : () =>
+          groupRequest.post({
             name: group.name,
             peers: selectedPeers.map((peer) => peer.id),
             resources: group.resources,
-          },
-          "/" + group?.id,
-        );
-    } else {
-      request = () =>
-        groupRequest.post({
-          name: group.name,
-          peers: selectedPeers.map((peer) => peer.id),
-          resources: group.resources,
-        });
-    }
+          });
+
     notify({
       title: "Saving changes",
       description: `${group?.name || "Group"} was successfully saved.`,
       promise: request()
         .then((g: Group) => {
           mutate("/groups");
-          onSuccess && onSuccess(g);
+          onSuccess?.(g);
         })
         .catch(() => {}),
       loadingMessage: "Updating group...",
     });
   };
 
-  useEffect(() => {
-    if (initialPeersSet) return;
-    const initialSelectedPeers = getInitialSelectedPeers();
-    if (initialSelectedPeers === undefined) return;
-    setSelectedRows(initialSelectedPeers);
-    setInitialPeersSet(true);
-  }, [getInitialSelectedPeers, initialPeersSet]);
-
   return (
-    <ModalContent
-      maxWidthClass={"max-w-4xl"}
-      className={cn(peers && peers.length > 0 ? "pb-0" : "pb-8")}
-      showClose={true}
-    >
+    <ModalContent maxWidthClass={"max-w-4xl"} className={"pb-0"} showClose>
       {groupNameModal && (
         <EditGroupNameModal
           initialName={groupName}
@@ -186,192 +310,171 @@ export const AssignGroupToPeerModalContent = ({
           onSuccess={onGroupNameUpdate}
         />
       )}
-      <div className={"flex items-start justify-between pr-8"}>
-        <ModalHeader
-          title={
-            <div className={"flex items-center gap-2 mb-1 text-nb-gray-100"}>
-              <FolderGit2 size={16} className={"shrink-0"} />
-              <div className={"flex gap-2 items-center"}>
-                {groupName}
-                {groupName !== "All" && (
-                  <button
-                    className={
-                      "flex items-center gap-2 dark:text-neutral-300 text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 transition-all hover:bg-neutral-100 dark:hover:bg-nb-gray-800/60 py-2 px-3 rounded-md cursor-pointer"
-                    }
-                    onClick={() => setGroupNameModal(true)}
-                  >
-                    <PencilLineIcon size={16} />
-                  </button>
-                )}
-              </div>
-            </div>
-          }
-          description={
-            isAllGroup
-              ? "View assigned peers for this group"
-              : "Manage assigned peers for this group"
-          }
-          color={"blue"}
-        />
+
+      <ModalHeader
+        title={
+          <span className="inline-flex items-center gap-2">
+            <FolderGit2
+              size={16}
+              className="shrink-0 text-oz2-text-faint"
+            />
+            <span>{groupName}</span>
+            {groupName !== "All" && (
+              <button
+                type="button"
+                onClick={() => setGroupNameModal(true)}
+                className="grid h-7 w-7 place-items-center rounded-oz2-input text-oz2-text-faint transition-colors hover:bg-oz2-hover hover:text-oz2-text"
+                aria-label="Rename group"
+              >
+                <PencilLineIcon size={14} />
+              </button>
+            )}
+          </span>
+        }
+        description={
+          isAllGroup
+            ? "View assigned peers for this group"
+            : "Manage assigned peers for this group"
+        }
+      />
+
+      {/* Toolbar: search on the left, selection counter + confirm on the
+          right. Mirrors the layout the AuditTimelineV2 toolbar adopted. */}
+      <div className="flex flex-wrap items-center gap-3 px-8 pb-4">
+        <div className="inline-flex h-9 w-[320px] items-center gap-2 rounded-oz2-input border border-oz2-border bg-oz2-surface px-3">
+          <Search size={14} className="shrink-0 text-oz2-text-faint" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name, IP or owner…"
+            className="h-full flex-1 border-0 bg-transparent text-[13px] outline-none placeholder:text-oz2-text-faint"
+          />
+        </div>
+
+        <div className="ml-auto flex items-center gap-4">
+          {selectedCount > 0 && (
+            <span className="text-[13px] text-oz2-text-muted">
+              <span className="font-medium text-oz2-acc-text">
+                {selectedCount}
+              </span>{" "}
+              {selectedCount === 1 ? "Peer" : "Peers"} selected
+            </span>
+          )}
+          {!isAllGroup && (
+            <OzButton
+              variant={"primary"}
+              disabled={peers?.length === 0}
+              onClick={() => handleOnSave()}
+            >
+              Confirm Changes
+            </OzButton>
+          )}
+        </div>
       </div>
 
-      {initialPeersSet ? (
-        <DataTable
-          useRowId={true}
-          rowSelection={selectedRows}
-          setRowSelection={setSelectedRows}
-          onRowClick={(row) => row.toggleSelected()}
-          text={"Peers"}
-          resetRowSelectionOnSearch={false}
-          uniqueKey={group?.id ?? group?.name}
-          sorting={sorting}
-          keepStateInLocalStorage={false}
-          setSorting={setSorting}
-          columns={PeersTableColumns}
-          data={initialPeersSet ? peers : undefined}
-          isLoading={isLoading && !initialPeersSet}
-          tableCellClassName={"!py-1 scale-[95%]"}
-          searchPlaceholder={"Search by name, IP or owner..."}
-          minimal={false}
-          columnVisibility={{
-            connected: false,
-            select: !isAllGroup,
-            approval_required: false,
-            group_name_strings: false,
-            group_names: false,
-            ip: false,
-            user_name: false,
-            user_email: false,
-          }}
-          getStartedCard={
-            <NoResultsCard
-              title={"Seems like you don't have any peers"}
-              description={
-                "In order to view or assign peers to a group, you need to have at least one peer."
-              }
-              icon={<PeerIcon className={"fill-nb-gray-200"} size={14} />}
-            />
-          }
-          rightSide={(table) => (
-            <div className={"ml-auto flex items-center gap-5"}>
-              <div className={"text-sm"}>
-                {Object.keys(selectedRows).length > 0 && (
-                  <div className={"text-nb-gray-200"}>
-                    <span className={"text-openzro font-medium"}>
-                      {Object.keys(selectedRows).length}
-                    </span>{" "}
-                    Peer(s) selected
-                  </div>
-                )}
-              </div>
-              {!isAllGroup && (
-                <OzButton
-                  variant={"primary"}
-                  className={"ml-auto"}
-                  disabled={peers?.length === 0}
-                  onClick={() => {
-                    const selectedPeers = table
-                      .getSelectedRowModel()
-                      .rows.map((row) => row.original);
-                    handleOnSave(selectedPeers).then();
-                  }}
+      <div className="max-h-[60vh] overflow-y-auto border-t border-oz2-border-soft">
+        {!initialPeersSet || isLoading ? (
+          <div className="px-8 py-10 text-center text-[13px] text-oz2-text-muted">
+            Loading peers…
+          </div>
+        ) : peers && peers.length === 0 ? (
+          <div className="px-8 py-12 text-center text-[13px] text-oz2-text-muted">
+            <p className="font-medium text-oz2-text">No peers yet</p>
+            <p className="mt-1">
+              In order to view or assign peers to a group, you need to have at
+              least one peer.
+            </p>
+          </div>
+        ) : (
+          <OzTable>
+            <OzTableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <OzTableRow
+                  key={headerGroup.id}
+                  className="hover:bg-transparent"
                 >
-                  Confirm Changes
-                </OzButton>
+                  {headerGroup.headers.map((header) => (
+                    <OzTableHead
+                      key={header.id}
+                      style={
+                        header.column.columnDef.size
+                          ? { width: header.column.columnDef.size }
+                          : undefined
+                      }
+                    >
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext(),
+                          )}
+                    </OzTableHead>
+                  ))}
+                </OzTableRow>
+              ))}
+            </OzTableHeader>
+            <OzTableBody>
+              {table.getRowModel().rows.map((row) => (
+                <OzTableRow
+                  key={row.id}
+                  data-state={row.getIsSelected() ? "selected" : undefined}
+                  className={
+                    !isAllGroup ? "cursor-pointer" : undefined
+                  }
+                  onClick={
+                    !isAllGroup ? () => row.toggleSelected() : undefined
+                  }
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <OzTableCell key={cell.id}>
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext(),
+                      )}
+                    </OzTableCell>
+                  ))}
+                </OzTableRow>
+              ))}
+              {table.getRowModel().rows.length === 0 && (
+                <OzTableRow className="hover:bg-transparent">
+                  <OzTableCell
+                    colSpan={columns.length}
+                    className="px-[18px] py-10 text-center text-oz2-text-muted"
+                  >
+                    No peers match your search.
+                  </OzTableCell>
+                </OzTableRow>
               )}
-            </div>
-          )}
-        />
-      ) : (
-        <SkeletonTable withHeader={false} />
-      )}
+            </OzTableBody>
+          </OzTable>
+        )}
+      </div>
     </ModalContent>
   );
 };
 
-const PeersTableColumns: ColumnDef<Peer>[] = [
-  {
-    id: "select",
-    header: ({ table, column }) => (
-      <div className={"min-w-[20px] max-w-[20px]"}>
-        <Checkbox
-          checked={table.getIsAllPageRowsSelected()}
-          onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)}
-          aria-label="Select all"
-        />
-      </div>
-    ),
-    accessorFn: (peer) => peer.id,
-    sortingFn: "checkbox",
-    cell: ({ row }) => {
-      return (
-        <div className={"min-w-[20px] max-w-[20px]"}>
-          <Checkbox
-            variant={"tableCell"}
-            checked={row.getIsSelected()}
-            onCheckedChange={(value) => row.toggleSelected(!!value)}
-            aria-label="Select row"
-          />
-        </div>
-      );
-    },
-  },
-  {
-    accessorKey: "name",
-    header: ({ column }) => {
-      return <DataTableHeader column={column}>Name</DataTableHeader>;
-    },
-    sortingFn: "text",
-    cell: ({ row }) => <PeerNameCell peer={row.original} linkToPeer={false} />,
-  },
-  {
-    id: "approval_required",
-    accessorKey: "approval_required",
-    sortingFn: "basic",
-    accessorFn: (peer) => peer.approval_required,
-  },
-  {
-    id: "connected",
-    accessorKey: "connected",
-    accessorFn: (peer) => peer.connected,
-  },
-  {
-    accessorKey: "ip",
-    sortingFn: "text",
-  },
-  {
-    id: "user_name",
-    accessorFn: (peer) => (peer.user ? peer.user?.name : "Unknown"),
-  },
-  {
-    id: "user_email",
-    accessorFn: (peer) => (peer.user ? peer.user?.email : "Unknown"),
-  },
-  {
-    accessorKey: "dns_label",
-    header: ({ column }) => {
-      return <DataTableHeader column={column}>Address</DataTableHeader>;
-    },
-    cell: ({ row }) => <PeerAddressCell peer={row.original} />,
-  },
-  {
-    accessorKey: "group_name_strings",
-    accessorFn: (peer) => peer.groups?.map((g) => g?.name || "").join(", "),
-    sortingFn: "text",
-  },
-  {
-    accessorKey: "group_names",
-    accessorFn: (peer) => peer.groups?.map((g) => g?.name || ""),
-    sortingFn: "text",
-    filterFn: "arrIncludesSome",
-  },
-  {
-    accessorKey: "os",
-    header: ({ column }) => {
-      return <DataTableHeader column={column}>OS</DataTableHeader>;
-    },
-    cell: ({ row }) => (
-      <PeerOSCell os={row.original.os} serial={row.original.serial_number} />
-    ),
-  },
-];
+function SortHeader<T>({
+  column,
+  children,
+}: {
+  column: import("@tanstack/react-table").Column<T, unknown>;
+  children: React.ReactNode;
+}) {
+  const sorted = column.getIsSorted();
+  return (
+    <button
+      type="button"
+      onClick={() => column.toggleSorting()}
+      className="inline-flex items-center gap-1.5 text-oz2-text-muted transition-colors hover:text-oz2-text"
+    >
+      {children}
+      {sorted === "asc" ? (
+        <ArrowUp size={11} />
+      ) : sorted === "desc" ? (
+        <ArrowDown size={11} />
+      ) : (
+        <ArrowUpDown size={11} className="opacity-60" />
+      )}
+    </button>
+  );
+}
