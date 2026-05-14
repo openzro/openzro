@@ -89,11 +89,23 @@ func decodeCacheKey(key string) DeviceLookup {
 type CachedProvider struct {
 	inner Provider
 	cache *statusCache
+	// onFreshFetch fires after a cache miss has been resolved from
+	// inner — used by the Manager to broadcast the result to other
+	// replicas via cluster pub/sub. Nil in single-instance mode and
+	// in tests that don't exercise cross-replica fan-out.
+	onFreshFetch func(lookup DeviceLookup, status DeviceStatus)
 }
 
 // NewCachedProvider wraps p with a status cache. ttl=0 → default 5m.
 func NewCachedProvider(p Provider, ttl time.Duration) *CachedProvider {
 	return &CachedProvider{inner: p, cache: newStatusCache(ttl)}
+}
+
+// setBroadcaster wires a publish hook fired after every successful
+// inner fetch. The Manager calls this once per provider at Refresh,
+// pointing at a closure that knows the provider's topic.
+func (c *CachedProvider) setBroadcaster(fn func(lookup DeviceLookup, status DeviceStatus)) {
+	c.onFreshFetch = fn
 }
 
 func (c *CachedProvider) Type() ProviderType { return c.inner.Type() }
@@ -114,5 +126,15 @@ func (c *CachedProvider) GetDeviceStatus(ctx context.Context, lookup DeviceLooku
 		return status, err
 	}
 	c.cache.put(key, status)
+	if c.onFreshFetch != nil {
+		c.onFreshFetch(lookup, status)
+	}
 	return status, nil
+}
+
+// putFromBroker fills the cache from an inbound cluster broadcast.
+// Bypasses onFreshFetch so the inbound event doesn't echo back to
+// the broker. Used only by the subscriber goroutine in pubsub.go.
+func (c *CachedProvider) putFromBroker(lookup DeviceLookup, status DeviceStatus) {
+	c.cache.put(encodeCacheKey(lookup), status)
 }

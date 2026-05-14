@@ -7,6 +7,8 @@ import (
 	"sync"
 
 	log "github.com/sirupsen/logrus"
+
+	"github.com/openzro/openzro/cluster"
 )
 
 // Manager is the in-process orchestrator that:
@@ -19,28 +21,44 @@ import (
 //   - serves status lookups to posture checks via Lookup()
 //   - keeps a per-provider RefreshWorker warming the cache so big
 //     tenants don't thunder-herd the vendor API on rollout
+//   - in HA deployments, broadcasts every fresh fetch over the
+//     cluster pub/sub so sibling replicas populate their caches
+//     without re-paying the vendor latency (per ADR-0006-ish
+//     thinking — replica fan-out is the dominant cost in busy
+//     tenants, especially against rate-limited APIs like Graph)
 //
 // One Manager per process. Hot-reload happens via Refresh() — called
 // after the admin API mutates a provider. Refresh swaps the provider
-// map atomically and tears down stale workers before starting new
-// ones, so an interval change on the form takes effect on the next
-// admin save without a process restart.
+// map atomically and tears down stale workers + subscriptions before
+// starting new ones, so an interval change on the form takes effect
+// on the next admin save without a process restart.
 type Manager struct {
 	store *Store
+	// coord is the optional cluster coordinator used to publish fresh
+	// fetches and subscribe to peer replicas' fetches. nil in
+	// single-instance mode — the Manager falls back to a self-
+	// contained cache + worker setup with no cross-replica chatter.
+	coord cluster.Coordinator
 
 	mu        sync.RWMutex
 	providers map[uint64]*CachedProvider // by row ID
 	workers   map[uint64]*refreshWorker  // by row ID, one per CachedProvider
+	subs      map[uint64]context.CancelFunc
 }
 
-func NewManager(ctx context.Context, store *Store) (*Manager, error) {
+// NewManager builds a Manager from the store and (optionally) the
+// cluster coordinator. coord may be nil — that's the single-instance
+// case; everything still works, just without cross-replica fan-out.
+func NewManager(ctx context.Context, store *Store, coord cluster.Coordinator) (*Manager, error) {
 	if store == nil {
 		return nil, errors.New("mdm: store is required")
 	}
 	m := &Manager{
 		store:     store,
+		coord:     coord,
 		providers: map[uint64]*CachedProvider{},
 		workers:   map[uint64]*refreshWorker{},
+		subs:      map[uint64]context.CancelFunc{},
 	}
 	if err := m.Refresh(ctx); err != nil {
 		return nil, err
@@ -61,6 +79,7 @@ func (m *Manager) Refresh(ctx context.Context) error {
 
 	nextProviders := map[uint64]*CachedProvider{}
 	nextWorkers := map[uint64]*refreshWorker{}
+	nextSubs := map[uint64]context.CancelFunc{}
 	for _, row := range rows {
 		if !row.Enabled {
 			continue
@@ -73,17 +92,42 @@ func (m *Manager) Refresh(ctx context.Context) error {
 		}
 		ttl := row.ResolvedRefreshInterval()
 		cached := NewCachedProvider(p, ttl)
+
+		// Wire the publish hook BEFORE starting the subscriber so a
+		// fresh fetch can immediately fan out. The closure captures
+		// providerID + coord; nil-coord short-circuits in publishStatus.
+		rowID := row.ID
+		cached.setBroadcaster(func(lookup DeviceLookup, status DeviceStatus) {
+			// Detached ctx — the broadcast is best-effort and a parent
+			// ctx cancellation must not strand the publish on
+			// in-flight fetches that already succeeded.
+			publishStatus(context.Background(), m.coord, rowID, lookup, status)
+		})
+
+		cancel, err := subscribeStatus(ctx, m.coord, rowID, cached)
+		if err != nil {
+			log.WithContext(ctx).Warnf("mdm: subscribe failed for provider #%d (%s): %v — cross-replica fan-out disabled for this provider",
+				rowID, row.Type, err)
+			cancel = func() {}
+		}
+
 		nextProviders[row.ID] = cached
 		nextWorkers[row.ID] = startRefreshWorker(cached, ttl, row.ID, row.Type)
+		nextSubs[row.ID] = cancel
 	}
 
 	m.mu.Lock()
 	oldProviders := m.providers
 	oldWorkers := m.workers
+	oldSubs := m.subs
 	m.providers = nextProviders
 	m.workers = nextWorkers
+	m.subs = nextSubs
 	m.mu.Unlock()
 
+	for _, cancel := range oldSubs {
+		cancel()
+	}
 	for _, w := range oldWorkers {
 		w.Stop()
 	}
@@ -125,17 +169,22 @@ func (m *Manager) Lookup(ctx context.Context, providerID uint64, lookup DeviceLo
 	return p.GetDeviceStatus(ctx, lookup)
 }
 
-// Close shuts the manager down — stops every refresh worker and
-// closes every active provider. Idempotent.
+// Close shuts the manager down — cancels every cluster subscription,
+// stops every refresh worker and closes every active provider.
+// Idempotent.
 func (m *Manager) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	for _, cancel := range m.subs {
+		cancel()
+	}
 	for _, w := range m.workers {
 		w.Stop()
 	}
 	for _, p := range m.providers {
 		_ = p.Close()
 	}
+	m.subs = map[uint64]context.CancelFunc{}
 	m.workers = map[uint64]*refreshWorker{}
 	m.providers = map[uint64]*CachedProvider{}
 	return nil
