@@ -41,7 +41,16 @@ const Time = ({
   value?: Date;
   onChange?: (date?: Date) => void;
 }) => {
-  const { getRootProps, getInputProps, options, update } = useTimescape({
+  // Reach into timescape's private `_manager` to drive the visible
+  // inputs imperatively. Without this, presets / preset-like
+  // external updates leave the visible inputs stuck on placeholders
+  // because timescape's setDate skips emitting "changeDate" while
+  // all registered elements are still marked `isUnset: true` (see
+  // timescape/dist/react.cjs setDate_fn: bails when isCompleted()
+  // returns false). The bug was previously masked because any
+  // unrelated re-render — toggling theme, resizing the popover —
+  // re-mounted the input refs and woke the sync up.
+  const ts = useTimescape({
     date: value,
     minDate: undefined,
     maxDate: undefined,
@@ -53,30 +62,39 @@ const Time = ({
     disallowPartial: false,
     onChangeDate: onChange,
   });
+  const { getRootProps, getInputProps } = ts;
+  // _manager is not in the public typings but is stable across
+  // versions (timescape ^0.x) — the cast is intentional.
+  const manager = (
+    ts as unknown as { _manager: { date: Date | undefined; resync: () => void } }
+  )._manager;
 
   useEffect(() => {
-    if (options.date?.getTime() !== value?.getTime()) {
-      update({ ...options, date: value });
-    }
-  }, [value]);
+    manager.date = value;
+    // resync re-registers each input element with the manager,
+    // recomputing `isUnset` against the now-current timestamp. After
+    // this call the registered elements are marked completed, so
+    // subsequent setDate calls emit "changeDate" and the inputs
+    // stay in sync without any further imperative pokes.
+    manager.resync();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value?.getTime()]);
 
   return (
     <div className={"timescape w-full"} {...getRootProps()}>
-      <div>
+      <div className="timescape-group">
         <input {...getInputProps("years")} />
         <span className={"separator"}>/</span>
         <input {...getInputProps("months")} />
         <span className={"separator"}>/</span>
         <input {...getInputProps("days")} />
       </div>
-      <span className={"separator px-1"}>⋆</span>
-      <div>
+      <span className={"separator timescape-divider"}>·</span>
+      <div className="timescape-group">
         <input {...getInputProps("hours")} />
         <span className={"separator"}>:</span>
         <input {...getInputProps("minutes")} />
-        <span className={"separator"}>:</span>
-        <input {...getInputProps("seconds")} />
-        <input {...getInputProps("am/pm")} />
+        <input {...getInputProps("am/pm")} className="timescape-ampm" />
       </div>
     </div>
   );

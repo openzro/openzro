@@ -400,37 +400,59 @@ p {
 
 
 /**
- * Timescape Root element — repainted with v2 surface tokens so the
- * pill that hosts the year/month/day + hours/minutes inputs looks
- * native against the rest of the calendar popover in both themes.
- * Was previously hard-pinned to bg-nb-gray-900 (near-black in light
- * mode), which clashed badly inside a white popover.
+ * Timescape Root element — v2 input pill. bg-oz2-bg-sunken gives a
+ * subtle elevation tweak against the popover surface (works in both
+ * themes) and reads as "input" without needing a hard border. The
+ * gap between segments was loosened (2px) so the year / month / day
+ * triplet doesn't crowd, and the date / time halves get a bigger
+ * gap via the .timescape-divider rule below.
  */
 .timescape {
-    @apply flex items-center gap-[1px] rounded-oz2-input py-2 px-3 select-none w-fit cursor-text bg-oz2-bg-sunken border border-oz2-border-soft;
+    @apply inline-flex items-center gap-1 rounded-oz2-input px-3 py-2 select-none w-fit cursor-text bg-oz2-bg-sunken border border-oz2-border-soft;
+    font-feature-settings: "tnum";
 }
 
-/**
- * Date and time input elements
- */
+/* Date and time field groups (year/month/day, hour/minute/ampm). */
+.timescape .timescape-group {
+    @apply inline-flex items-center gap-[1px];
+}
+
+/* Middle dot between the date and time halves. Larger gap + faint
+   color so it reads as a soft visual divider, not a separator like
+   the slashes within each group. */
+.timescape .timescape-divider {
+    @apply mx-2 text-oz2-text-faint text-[16px] leading-none;
+}
+
+/* Date and time input elements. caret-transparent because the
+   keyboard interaction is segment-based (arrow keys + digit type
+   advance to next field), not free-text. */
 .timescape input {
-    @apply cursor-text px-0.5 py-1 bg-transparent h-fit border-0 outline-0 select-none box-content caret-transparent text-oz2-text text-sm placeholder-oz2-text-faint;
+    @apply cursor-text bg-transparent h-fit border-0 outline-0 select-none box-content caret-transparent text-oz2-text text-[13px] placeholder-oz2-text-faint;
     font-variant-numeric: tabular-nums;
-    /* For the calculation of the input width these are important */
     font-family: inherit;
     font-size: inherit;
-    line-height: inherit;
+    line-height: 1;
+    padding: 2px 1px;
 }
 
-.timescape input:focus {
-    @apply bg-oz2-acc text-oz2-text-on-acc rounded py-1 px-0.5 border-0 outline-0;
+/* AM/PM is the only non-numeric segment — give it a hair more left
+   padding so it reads as a separate token, not a digit pair. */
+.timescape input.timescape-ampm {
+    @apply ml-1.5 text-oz2-text-2;
 }
 
-/**
- * Separator elements
- */
+/* Soft violet focus pill on the active segment. Less aggressive
+   than the previous solid oz2-acc fill which felt like a stamp. */
+.timescape input:focus,
+.timescape input:focus-visible {
+    @apply rounded-[5px] bg-oz2-acc-soft text-oz2-acc-text outline-0;
+    padding: 2px 3px;
+}
+
+/* Slash + colon separators within each group. */
 .timescape .separator {
-    @apply text-oz2-text-faint m-0 text-[80%] -top-[1px] relative;
+    @apply text-oz2-text-faint;
 }
 
 
