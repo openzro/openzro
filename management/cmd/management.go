@@ -450,6 +450,29 @@ var (
 				// posture eval can call the manager without threading
 				// the dependency through every method.
 				posture.SetDefaultMDMResolver(func(ctx context.Context, providerID uint64, peer nbpeer.Peer) (bool, string, error) {
+					// Detach the MDM lookup from the request-scoped ctx.
+					//
+					// Policy eval is called from request handlers whose
+					// ctx tracks the request lifecycle (peer Login, Sync
+					// stream message, admin action). When the handler
+					// returns or the gRPC stream advances to its next
+					// message, that ctx cancels — propagating into the
+					// vendor HTTP client below and aborting calls
+					// mid-flight. Worse, the eval iterates over every
+					// source-group peer in sequence sharing the same
+					// ctx, so once the first call cancels the request,
+					// every subsequent peer immediately fails with
+					// "context canceled" before its Graph round-trip
+					// even starts.
+					//
+					// We give the lookup its own 10-second budget against
+					// a fresh background context. http.Client already
+					// caps the slowest call at 30s; this just guarantees
+					// the call gets a chance to run to completion
+					// regardless of how the request-side ctx churns.
+					lookupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+
 					lookup := mdm.DeviceLookup{Hostname: peer.Meta.Hostname}
 					if lookup.Hostname == "" {
 						lookup.Hostname = peer.Name
@@ -461,11 +484,11 @@ var (
 					// the per-user attribute (SentinelOne, Huntress,
 					// CrowdStrike) ignore the field regardless.
 					if peer.UserID != "" {
-						if user, err := accountManager.GetUserByID(ctx, peer.UserID); err == nil && user != nil {
+						if user, err := accountManager.GetUserByID(lookupCtx, peer.UserID); err == nil && user != nil {
 							lookup.UserEmail = user.Email
 						}
 					}
-					st, err := mdmManager.Lookup(ctx, providerID, lookup)
+					st, err := mdmManager.Lookup(lookupCtx, providerID, lookup)
 					if err != nil {
 						return false, "", err
 					}
