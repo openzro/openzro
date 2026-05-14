@@ -2,11 +2,11 @@
   "version": "v1.0.0",
   "entity": {
     "type": "organisation",
-    "role": "owner",
-    "name": "Openzro GmbH",
-    "email": "hello@openzro.io",
+    "role": "maintainer",
+    "name": "openZro Project",
+    "email": "dev@openzro.io",
     "phone": "",
-    "description": "Openzro GmbH is a Berlin-based software company specializing in the development of open-source network security solutions. Network security is utterly complex and expensive, accessible only to companies with multi-million dollar IT budgets. In contrast, there are millions of companies left behind. Our mission is to create an advanced network and cybersecurity platform that is both easy-to-use and affordable for teams of all sizes and budgets. By leveraging the open-source strategy and technological advancements, Openzro aims to set the industry standard for connecting and securing IT infrastructure.",
+    "description": "openZro is an open-source, community-maintained platform for zero-trust mesh networking on top of WireGuard. It is a BSD-3-Clause fork of NetBird, maintained independently of any corporate vendor. The project ships a self-hosted control plane (management, signal, relay, dashboard) plus a Dex-based identity layer, and aims to keep advanced mesh networking + per-resource access control accessible to teams that don't have a multi-million dollar IT budget.",
     "webpageUrl": {
       "url": "https://github.com/openzro"
     }
@@ -14,8 +14,8 @@
   "projects": [
     {
       "guid": "openzro",
-      "name": "Openzro",
-      "description": "Openzro is a configuration-free peer-to-peer private network and a centralized access control system combined in a single open-source platform. It makes it easy to create secure WireGuard-based private networks for your organization or home.",
+      "name": "openZro",
+      "description": "openZro is a configuration-free peer-to-peer private network and a centralized access control system combined in a single open-source platform. It makes it easy to create secure WireGuard-based private networks for your organization or home. Community-maintained fork of NetBird, licensed under BSD-3-Clause.",
       "webpageUrl": {
         "url": "https://github.com/openzro/openzro"
       },
@@ -51,7 +51,7 @@
         "guid": "bank-transfer",
         "type": "bank",
         "address": "",
-        "description": "Contact us at hello@openzro.io for bank transfer details."
+        "description": "Contact the maintainers at dev@openzro.io for bank transfer details."
       }
     ],
     "plans": [

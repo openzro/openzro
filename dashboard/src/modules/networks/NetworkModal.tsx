@@ -122,7 +122,7 @@ const Content = ({ network, onCreated, onUpdated }: ContentProps) => {
           </OzHelpText>
           <OzTextarea
             id="network-description"
-            placeholder={"e.g., Berlin, Münzstraße 12"}
+            placeholder={"e.g., Production database subnet (HQ datacenter)"}
             value={description}
             rows={3}
             onChange={(e) => setDescription(e.target.value)}

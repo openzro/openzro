@@ -1,7 +1,14 @@
 <Wix
 	xmlns="http://wixtoolset.org/schemas/v4/wxs"
 	xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
-	<Package Name="Openzro" Version="$(env.OPENZRO_VERSION)" Manufacturer="Openzro GmbH" Language="1033" UpgradeCode="6456ec4e-3ad6-4b9b-a2be-98e81cb21ccf"
+	<!-- Manufacturer is what shows in Windows "Apps & features" /
+	     "Programs and Features" / Add-Remove Programs. The legacy
+	     value was inherited from upstream and incorrectly identified
+	     openZro as a German GmbH (it isn't — openZro is an
+	     independent community-maintained open-source project, no
+	     legal entity). UpgradeCode is unchanged so existing installs
+	     keep upgrading in place. -->
+	<Package Name="openZro" Version="$(env.OPENZRO_VERSION)" Manufacturer="openZro Project" Language="1033" UpgradeCode="6456ec4e-3ad6-4b9b-a2be-98e81cb21ccf"
         InstallerVersion="500" Compressed="yes"  Codepage="utf-8" >
 
 
