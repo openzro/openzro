@@ -43,6 +43,10 @@ upstream tag, e.g. `0.53.1-alpha.65`).
 
 ![Add peer flow](./src/assets/screenshots/add-peer.png)
 
+![View Traffic flow](./src/assets/screenshots/traffic-flow.png)
+
+![Add integrations](./src/assets/screenshots/integrations.png)
+
 ## Stack
 
 - **Next.js 14** (App Router, stable line — Next 15 bump tracked
