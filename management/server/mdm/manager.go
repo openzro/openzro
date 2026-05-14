@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -15,24 +14,34 @@ import (
 //   - reads provider rows from the Store
 //   - constructs concrete drivers (Intune / SentinelOne / Huntress /
 //     CrowdStrike)
-//   - wraps them in a CachedProvider with the configured TTL
+//   - wraps them in a CachedProvider with the per-provider configured
+//     TTL (MDMProvider.RefreshIntervalMinutes)
 //   - serves status lookups to posture checks via Lookup()
+//   - keeps a per-provider RefreshWorker warming the cache so big
+//     tenants don't thunder-herd the vendor API on rollout
 //
 // One Manager per process. Hot-reload happens via Refresh() — called
-// after the admin API mutates a provider.
+// after the admin API mutates a provider. Refresh swaps the provider
+// map atomically and tears down stale workers before starting new
+// ones, so an interval change on the form takes effect on the next
+// admin save without a process restart.
 type Manager struct {
-	store    *Store
-	cacheTTL time.Duration
+	store *Store
 
 	mu        sync.RWMutex
-	providers map[uint64]Provider // by row ID
+	providers map[uint64]*CachedProvider // by row ID
+	workers   map[uint64]*refreshWorker  // by row ID, one per CachedProvider
 }
 
-func NewManager(ctx context.Context, store *Store, cacheTTL time.Duration) (*Manager, error) {
+func NewManager(ctx context.Context, store *Store) (*Manager, error) {
 	if store == nil {
 		return nil, errors.New("mdm: store is required")
 	}
-	m := &Manager{store: store, cacheTTL: cacheTTL, providers: map[uint64]Provider{}}
+	m := &Manager{
+		store:     store,
+		providers: map[uint64]*CachedProvider{},
+		workers:   map[uint64]*refreshWorker{},
+	}
 	if err := m.Refresh(ctx); err != nil {
 		return nil, err
 	}
@@ -40,16 +49,18 @@ func NewManager(ctx context.Context, store *Store, cacheTTL time.Duration) (*Man
 }
 
 // Refresh re-reads the Store and reconstructs the provider map.
-// Existing providers' Close() runs after the swap. Errors building
-// individual providers are logged loud but do not fail the refresh —
-// a misconfigured row never takes the whole posture pipeline down.
+// Existing providers' Close() and worker Stop() run after the swap.
+// Errors building individual providers are logged loud but do not
+// fail the refresh — a misconfigured row never takes the whole
+// posture pipeline down.
 func (m *Manager) Refresh(ctx context.Context) error {
 	rows, err := m.store.List(ctx)
 	if err != nil {
 		return fmt.Errorf("mdm: list providers: %w", err)
 	}
 
-	next := map[uint64]Provider{}
+	nextProviders := map[uint64]*CachedProvider{}
+	nextWorkers := map[uint64]*refreshWorker{}
 	for _, row := range rows {
 		if !row.Enabled {
 			continue
@@ -60,15 +71,23 @@ func (m *Manager) Refresh(ctx context.Context) error {
 				row.ID, row.Type, row.Name, err)
 			continue
 		}
-		next[row.ID] = NewCachedProvider(p, m.cacheTTL)
+		ttl := row.ResolvedRefreshInterval()
+		cached := NewCachedProvider(p, ttl)
+		nextProviders[row.ID] = cached
+		nextWorkers[row.ID] = startRefreshWorker(cached, ttl, row.ID, row.Type)
 	}
 
 	m.mu.Lock()
-	old := m.providers
-	m.providers = next
+	oldProviders := m.providers
+	oldWorkers := m.workers
+	m.providers = nextProviders
+	m.workers = nextWorkers
 	m.mu.Unlock()
 
-	for _, p := range old {
+	for _, w := range oldWorkers {
+		w.Stop()
+	}
+	for _, p := range oldProviders {
 		_ = p.Close()
 	}
 	return nil
@@ -106,14 +125,18 @@ func (m *Manager) Lookup(ctx context.Context, providerID uint64, lookup DeviceLo
 	return p.GetDeviceStatus(ctx, lookup)
 }
 
-// Close shuts the manager down — closes every active provider.
-// Idempotent.
+// Close shuts the manager down — stops every refresh worker and
+// closes every active provider. Idempotent.
 func (m *Manager) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	for _, w := range m.workers {
+		w.Stop()
+	}
 	for _, p := range m.providers {
 		_ = p.Close()
 	}
-	m.providers = map[uint64]Provider{}
+	m.workers = map[uint64]*refreshWorker{}
+	m.providers = map[uint64]*CachedProvider{}
 	return nil
 }

@@ -442,7 +442,7 @@ var (
 				if err != nil {
 					return fmt.Errorf("mdm store: %w", err)
 				}
-				mdmManager, err = mdm.NewManager(ctx, mdmStore, 0)
+				mdmManager, err = mdm.NewManager(ctx, mdmStore)
 				if err != nil {
 					return fmt.Errorf("mdm manager: %w", err)
 				}

@@ -46,34 +46,41 @@ func AddEndpoints(perms permissions.Manager, store *mdm.Store, manager *mdm.Mana
 }
 
 type requestBody struct {
-	Name        string                 `json:"name"`
-	Type        mdm.ProviderType       `json:"type"`
-	Enabled     *bool                  `json:"enabled,omitempty"`
-	Intune      *mdm.IntuneConfig      `json:"intune,omitempty"`
-	SentinelOne *mdm.SentinelOneConfig `json:"sentinelone,omitempty"`
-	Huntress    *mdm.HuntressConfig    `json:"huntress,omitempty"`
-	CrowdStrike *mdm.CrowdStrikeConfig `json:"crowdstrike,omitempty"`
+	Name    string           `json:"name"`
+	Type    mdm.ProviderType `json:"type"`
+	Enabled *bool            `json:"enabled,omitempty"`
+	// RefreshIntervalMinutes pins how often the cache for this
+	// provider expires and the background worker refreshes it.
+	// Validated 1-60 in mdm.SaveInput.Validate; 0 / omitted means
+	// "use server default" (5 minutes).
+	RefreshIntervalMinutes uint16                 `json:"refresh_interval_minutes,omitempty"`
+	Intune                 *mdm.IntuneConfig      `json:"intune,omitempty"`
+	SentinelOne            *mdm.SentinelOneConfig `json:"sentinelone,omitempty"`
+	Huntress               *mdm.HuntressConfig    `json:"huntress,omitempty"`
+	CrowdStrike            *mdm.CrowdStrikeConfig `json:"crowdstrike,omitempty"`
 }
 
 type responseBody struct {
-	ID        uint64           `json:"id"`
-	Name      string           `json:"name"`
-	Type      mdm.ProviderType `json:"type"`
-	Enabled   bool             `json:"enabled"`
-	Config    json.RawMessage  `json:"config,omitempty"`
-	CreatedAt time.Time        `json:"created_at"`
-	UpdatedAt time.Time        `json:"updated_at"`
+	ID                     uint64           `json:"id"`
+	Name                   string           `json:"name"`
+	Type                   mdm.ProviderType `json:"type"`
+	Enabled                bool             `json:"enabled"`
+	RefreshIntervalMinutes uint16           `json:"refresh_interval_minutes"`
+	Config                 json.RawMessage  `json:"config,omitempty"`
+	CreatedAt              time.Time        `json:"created_at"`
+	UpdatedAt              time.Time        `json:"updated_at"`
 }
 
 func toResponse(row *mdm.MDMProvider) responseBody {
 	return responseBody{
-		ID:        row.ID,
-		Name:      row.Name,
-		Type:      row.Type,
-		Enabled:   row.Enabled,
-		Config:    row.PublicConfig,
-		CreatedAt: row.CreatedAt,
-		UpdatedAt: row.UpdatedAt,
+		ID:                     row.ID,
+		Name:                   row.Name,
+		Type:                   row.Type,
+		Enabled:                row.Enabled,
+		RefreshIntervalMinutes: row.RefreshIntervalMinutes,
+		Config:                 row.PublicConfig,
+		CreatedAt:              row.CreatedAt,
+		UpdatedAt:              row.UpdatedAt,
 	}
 }
 
@@ -212,14 +219,15 @@ func bodyToInput(b requestBody, id uint64) mdm.SaveInput {
 		enabled = *b.Enabled
 	}
 	return mdm.SaveInput{
-		ID:          id,
-		Name:        b.Name,
-		Type:        b.Type,
-		Enabled:     enabled,
-		Intune:      b.Intune,
-		SentinelOne: b.SentinelOne,
-		Huntress:    b.Huntress,
-		CrowdStrike: b.CrowdStrike,
+		ID:                     id,
+		Name:                   b.Name,
+		Type:                   b.Type,
+		Enabled:                enabled,
+		RefreshIntervalMinutes: b.RefreshIntervalMinutes,
+		Intune:                 b.Intune,
+		SentinelOne:            b.SentinelOne,
+		Huntress:               b.Huntress,
+		CrowdStrike:            b.CrowdStrike,
 	}
 }
 

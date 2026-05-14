@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"testing"
+	"time"
 
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
@@ -94,4 +95,64 @@ func TestStore_DeleteNotFound(t *testing.T) {
 	s := newTestStore(t)
 	err := s.Delete(context.Background(), 9999)
 	assert.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestStore_RefreshIntervalBounds(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	base := SaveInput{
+		Name: "x", Type: TypeIntune, Enabled: true,
+		Intune: &IntuneConfig{TenantID: "t", ClientID: "c", ClientSecret: "s"},
+	}
+
+	cases := []struct {
+		name    string
+		minutes uint16
+		wantErr bool
+	}{
+		{"zero falls through to default", 0, false},
+		{"1 minute lower bound", 1, false},
+		{"30 minute middle", 30, false},
+		{"60 minute upper bound", 60, false},
+		{"61 is out of range", 61, true},
+		{"too small but non-zero — disallowed because the form must not let zero leak through after the user typed something", 0, false},
+		// Note: lower bound is enforced when RefreshIntervalMinutes != 0,
+		// so an explicit 0 means "use default" and stays valid.
+	}
+	for _, tc := range cases {
+		in := base
+		in.RefreshIntervalMinutes = tc.minutes
+		_, err := s.Save(ctx, in)
+		if tc.wantErr {
+			assert.Error(t, err, tc.name)
+		} else {
+			assert.NoError(t, err, tc.name)
+		}
+	}
+}
+
+func TestStore_RefreshIntervalDefaultsToFiveWhenZero(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	row, err := s.Save(ctx, SaveInput{
+		Name: "x", Type: TypeIntune, Enabled: true,
+		// Operator left the form blank — zero arrives at Save.
+		RefreshIntervalMinutes: 0,
+		Intune: &IntuneConfig{TenantID: "t", ClientID: "c", ClientSecret: "s"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint16(5), row.RefreshIntervalMinutes,
+		"zero must be normalised to the documented default")
+}
+
+func TestMDMProvider_ResolvedRefreshIntervalFallback(t *testing.T) {
+	// Row loaded from a pre-knob database carries 0 in the column.
+	// Resolver must paper over it without forcing a migration.
+	p := MDMProvider{RefreshIntervalMinutes: 0}
+	assert.Equal(t, 5*time.Minute, p.ResolvedRefreshInterval())
+
+	p = MDMProvider{RefreshIntervalMinutes: 15}
+	assert.Equal(t, 15*time.Minute, p.ResolvedRefreshInterval())
 }

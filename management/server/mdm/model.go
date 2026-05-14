@@ -4,19 +4,52 @@ import (
 	"time"
 )
 
+// defaultRefreshIntervalMinutes is the fallback for rows that
+// predate the field (zero on read) and the seed value at create
+// time when the operator leaves the form blank. 5 matches the
+// hard-coded TTL the cache shipped with before this knob existed —
+// existing tenants see no behavior change on first boot.
+const defaultRefreshIntervalMinutes = 5
+
 // MDMProvider is the GORM-managed row holding one vendor's
 // credentials, encrypted at rest. PublicConfig carries the
 // non-sensitive subset (tenant ID, base URL) so the dashboard can
 // render the configuration without holding the secret.
 type MDMProvider struct {
-	ID           uint64       `gorm:"primaryKey;autoIncrement"`
-	Name         string       `gorm:"size:128;not null"`
-	Type         ProviderType `gorm:"size:32;not null;index"`
-	Enabled      bool         `gorm:"not null;default:true"`
-	PublicConfig []byte       `gorm:"type:bytea"`
-	ConfigCipher []byte       `gorm:"type:bytea;not null"`
+	ID      uint64       `gorm:"primaryKey;autoIncrement"`
+	Name    string       `gorm:"size:128;not null"`
+	Type    ProviderType `gorm:"size:32;not null;index"`
+	Enabled bool         `gorm:"not null;default:true"`
+
+	// RefreshIntervalMinutes is how often (in minutes) the cache for
+	// this provider expires and the background refresh worker
+	// re-queries the vendor for every device it tracks. The same
+	// value drives both: lazy cache invalidation (next Sync after
+	// expiry forces a fresh lookup) and the proactive worker that
+	// keeps the cache warm so a peer Sync after a long idle window
+	// doesn't pay the cold-start latency. Bounded 1-60 at the API
+	// boundary; 0 on read means "row predates this field" and the
+	// resolver in ResolvedRefreshInterval() falls back to 5 minutes
+	// — same as the pre-knob hard-coded TTL, so existing tenants see
+	// no behavior change on upgrade.
+	RefreshIntervalMinutes uint16 `gorm:"not null;default:5"`
+
+	PublicConfig []byte `gorm:"type:bytea"`
+	ConfigCipher []byte `gorm:"type:bytea;not null"`
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
+}
+
+// ResolvedRefreshInterval returns the configured interval as a
+// time.Duration, falling back to the default for legacy rows that
+// stored 0 (pre-knob) or values that bypassed the API layer's
+// validation. Always non-zero.
+func (p MDMProvider) ResolvedRefreshInterval() time.Duration {
+	m := p.RefreshIntervalMinutes
+	if m == 0 {
+		m = defaultRefreshIntervalMinutes
+	}
+	return time.Duration(m) * time.Minute
 }
 
 func (MDMProvider) TableName() string { return "mdm_providers" }

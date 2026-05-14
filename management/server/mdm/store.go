@@ -42,19 +42,42 @@ func NewStore(db *gorm.DB, key string) (*Store, error) {
 // SaveInput is the public-facing payload for Save/Update. Type
 // determines which of the per-vendor Config fields is consulted.
 type SaveInput struct {
-	ID          uint64
-	Name        string
-	Type        ProviderType
-	Enabled     bool
+	ID      uint64
+	Name    string
+	Type    ProviderType
+	Enabled bool
+
+	// RefreshIntervalMinutes is forwarded onto the row verbatim.
+	// 0 = "use default" — Save() rewrites it to
+	// defaultRefreshIntervalMinutes before insert so the column
+	// never holds zero in steady state. Bounded 1-60 by Validate.
+	RefreshIntervalMinutes uint16
+
 	Intune      *IntuneConfig
 	SentinelOne *SentinelOneConfig
 	Huntress    *HuntressConfig
 	CrowdStrike *CrowdStrikeConfig
 }
 
+// Bounds for SaveInput.RefreshIntervalMinutes. Validate enforces
+// these; the dashboard form mirrors them as input min/max.
+const (
+	minRefreshIntervalMinutes = 1
+	maxRefreshIntervalMinutes = 60
+)
+
 func (in *SaveInput) Validate() error {
 	if in.Name == "" {
 		return errors.New("mdm: name is required")
+	}
+	if in.RefreshIntervalMinutes != 0 &&
+		(in.RefreshIntervalMinutes < minRefreshIntervalMinutes ||
+			in.RefreshIntervalMinutes > maxRefreshIntervalMinutes) {
+		return fmt.Errorf(
+			"mdm: refresh_interval_minutes must be between %d and %d (got %d)",
+			minRefreshIntervalMinutes, maxRefreshIntervalMinutes,
+			in.RefreshIntervalMinutes,
+		)
 	}
 	switch in.Type {
 	case TypeIntune:
@@ -202,14 +225,24 @@ func (s *Store) Save(ctx context.Context, in SaveInput) (*MDMProvider, error) {
 	if err != nil {
 		return nil, err
 	}
+	refreshMinutes := in.RefreshIntervalMinutes
+	if refreshMinutes == 0 {
+		// Collapse 0 (operator didn't fill the form, or upgrader hasn't
+		// re-saved a pre-knob row) to the default so the column is
+		// never persisted as zero. The resolver in
+		// MDMProvider.ResolvedRefreshInterval also tolerates zero, but
+		// keeping the DB clean makes the form roundtrip readable.
+		refreshMinutes = defaultRefreshIntervalMinutes
+	}
 	row := MDMProvider{
-		ID:           in.ID,
-		Name:         in.Name,
-		Type:         in.Type,
-		Enabled:      in.Enabled,
-		PublicConfig: publicBlob,
-		ConfigCipher: cipherBytes,
-		UpdatedAt:    time.Now().UTC(),
+		ID:                     in.ID,
+		Name:                   in.Name,
+		Type:                   in.Type,
+		Enabled:                in.Enabled,
+		RefreshIntervalMinutes: refreshMinutes,
+		PublicConfig:           publicBlob,
+		ConfigCipher:           cipherBytes,
+		UpdatedAt:              time.Now().UTC(),
 	}
 	if in.ID == 0 {
 		row.CreatedAt = row.UpdatedAt

@@ -44,6 +44,7 @@ export default function MDMProviderModal({
   const isEdit = !!existing;
   const [name, setName] = useState("");
   const [type, setType] = useState<MDMProviderType>("intune");
+  const [refreshInterval, setRefreshInterval] = useState<number>(5);
   const [saving, setSaving] = useState(false);
 
   // Intune fields
@@ -76,6 +77,7 @@ export default function MDMProviderModal({
     if (existing) {
       setName(existing.name);
       setType(existing.type);
+      setRefreshInterval(existing.refresh_interval_minutes || 5);
       const cfg = existing.config as any;
       switch (existing.type) {
         case "intune":
@@ -101,6 +103,7 @@ export default function MDMProviderModal({
     } else {
       setName("");
       setType("intune");
+      setRefreshInterval(5);
       setIntuneTenant("");
       setIntuneClient("");
       setIntuneSecret("");
@@ -116,7 +119,12 @@ export default function MDMProviderModal({
   }, [open, existing]);
 
   const buildInput = (): MDMProviderInput => {
-    const base: MDMProviderInput = { name, type, enabled: true };
+    const base: MDMProviderInput = {
+      name,
+      type,
+      enabled: true,
+      refresh_interval_minutes: refreshInterval,
+    };
     if (type === "intune") {
       base.intune = {
         tenant_id: intuneTenant,
@@ -146,6 +154,13 @@ export default function MDMProviderModal({
 
   const validate = (): string | null => {
     if (!name.trim()) return "Name is required";
+    if (
+      !Number.isInteger(refreshInterval) ||
+      refreshInterval < 1 ||
+      refreshInterval > 60
+    ) {
+      return "Refresh interval must be a whole number between 1 and 60 minutes";
+    }
     if (type === "intune") {
       if (!intuneTenant || !intuneClient) {
         return "Intune tenant and client IDs are required";
@@ -235,6 +250,29 @@ export default function MDMProviderModal({
                 </OzSelectItem>
               </OzSelectContent>
             </OzSelect>
+          </div>
+
+          <div>
+            <OzLabel htmlFor="mdm-refresh-interval">
+              Refresh interval (minutes)
+            </OzLabel>
+            <OzInput
+              id="mdm-refresh-interval"
+              type="number"
+              min={1}
+              max={60}
+              step={1}
+              value={refreshInterval}
+              onChange={(e) =>
+                setRefreshInterval(parseInt(e.target.value || "0", 10))
+              }
+            />
+            <p className="mt-1.5 text-[11.5px] leading-[1.5] text-oz2-text-muted">
+              How often openZro re-checks each device with the vendor and
+              refreshes its cached compliance status. Lower = fresher
+              posture, more API calls; higher = fewer calls, slightly
+              staler data. Default is 5 minutes; allowed range 1–60.
+            </p>
           </div>
 
           {type === "intune" && (

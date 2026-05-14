@@ -14,6 +14,10 @@ export interface MDMProvider {
   name: string;
   type: MDMProviderType;
   enabled: boolean;
+  // How often (in minutes) the cache for this provider expires and
+  // the background worker re-queries the vendor. Bounded 1–60 server
+  // side; defaults to 5 when omitted on create.
+  refresh_interval_minutes: number;
   config?:
     | IntunePublicConfig
     | SentinelOnePublicConfig
@@ -65,6 +69,9 @@ export interface MDMProviderInput {
   name: string;
   type: MDMProviderType;
   enabled?: boolean;
+  // Optional refresh cadence in minutes (1–60). Omit / 0 = server
+  // default of 5 minutes.
+  refresh_interval_minutes?: number;
   intune?: {
     tenant_id: string;
     client_id: string;

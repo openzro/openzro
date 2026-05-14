@@ -2,6 +2,7 @@ package mdm
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 )
@@ -48,6 +49,41 @@ func (c *statusCache) put(key string, status DeviceStatus) {
 	c.mu.Unlock()
 }
 
+// snapshot returns a list of the lookups currently in the cache,
+// decoded back from their string keys. Used by the refresh worker
+// to iterate "every device we've seen for this provider" and tick
+// each through the cache so entries refresh before they expire.
+// The set is captured under the read lock — subsequent mutations
+// are invisible to this snapshot, which is fine for the worker's
+// best-effort semantics.
+func (c *statusCache) snapshot() []DeviceLookup {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := make([]DeviceLookup, 0, len(c.e))
+	for key := range c.e {
+		out = append(out, decodeCacheKey(key))
+	}
+	return out
+}
+
+// encodeCacheKey + decodeCacheKey are the single source of truth for
+// the cache's key shape. Centralised so the refresh worker can
+// round-trip lookups through the cache without re-implementing the
+// hostname/user-email join.
+func encodeCacheKey(lookup DeviceLookup) string {
+	if lookup.UserEmail != "" {
+		return lookup.Hostname + "\x00" + lookup.UserEmail
+	}
+	return lookup.Hostname
+}
+
+func decodeCacheKey(key string) DeviceLookup {
+	if i := strings.IndexByte(key, 0); i >= 0 {
+		return DeviceLookup{Hostname: key[:i], UserEmail: key[i+1:]}
+	}
+	return DeviceLookup{Hostname: key}
+}
+
 // CachedProvider wraps any Provider with a TTL cache. Callers
 // instantiate this around the raw provider in the Manager.
 type CachedProvider struct {
@@ -69,10 +105,7 @@ func (c *CachedProvider) GetDeviceStatus(ctx context.Context, lookup DeviceLooku
 	// reassigned during the cache window) don't read each other's
 	// status. UserEmail is usually empty for vendors that don't use it,
 	// in which case the key collapses to the hostname.
-	key := lookup.Hostname
-	if lookup.UserEmail != "" {
-		key = lookup.Hostname + "\x00" + lookup.UserEmail
-	}
+	key := encodeCacheKey(lookup)
 	if cached, ok := c.cache.get(key); ok {
 		return cached, nil
 	}
