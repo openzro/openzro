@@ -427,6 +427,13 @@ var (
 				postureEvalRecorder = posture.NewBufferedRecorder(postureEvalStore, posture.BufferedRecorderOpts{})
 				posture.SetDefaultEvalRecorder(postureEvalRecorder)
 				defer postureEvalRecorder.Close()
+				// Background retention worker — purges evaluations
+				// older than 24h every 10 min. Same store handle, no
+				// extra config knobs at this stage (operators with
+				// regulated retention needs can extend via the
+				// EvalRetentionOpts later).
+				postureEvalRetention := posture.NewEvalRetention(postureEvalStore, posture.EvalRetentionOpts{})
+				defer postureEvalRetention.Close()
 				flowExportsStore, err = flowExports.NewStore(sqlStore.GetGormDB(), config.DataStoreEncryptionKey)
 				if err != nil {
 					return fmt.Errorf("flow_exports store: %w", err)
