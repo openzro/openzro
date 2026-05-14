@@ -188,6 +188,14 @@ export default function NetworkTrafficV2() {
   // /accounts would re-stomp on operator-side range changes made via
   // the date picker.
   const [defaultApplied, setDefaultApplied] = useState(false);
+  // Tracks whether the current `range` was set by the user via the
+  // DateRangePicker (true) or auto-derived from the operator-level
+  // default setting (false). When false, Refresh re-derives the
+  // window against the current clock so a "Last 1h" view actually
+  // slides forward instead of staying pinned to the original page
+  // load time — which made Refresh look broken because new events
+  // arrived past the frozen `until` bound and never showed up.
+  const [userPickedRange, setUserPickedRange] = useState(false);
 
   // Apply the operator's default range exactly once per page mount.
   useEffect(() => {
@@ -278,6 +286,22 @@ export default function NetworkTrafficV2() {
 
   const onRefresh = () => {
     setRefreshing(true);
+    // Slide the window forward when the operator hasn't manually
+    // picked a date range. Without this, Refresh kept re-querying the
+    // same `{from, to}` frozen at page-mount time and never surfaced
+    // events newer than the original `to`.
+    if (!userPickedRange) {
+      const pref =
+        accounts?.[0]?.settings?.extra?.network_traffic_default_range;
+      const windowed = pref ? defaultRangeFromSetting(pref) : undefined;
+      if (windowed) {
+        setRange(windowed);
+        // Setting range changes queryUrl → SWR refetches automatically;
+        // calling mutateFlows() on the OLD URL would be a wasted RTT.
+        setRefreshing(false);
+        return;
+      }
+    }
     mutateFlows().finally(() => setRefreshing(false));
   };
 
@@ -328,7 +352,13 @@ export default function NetworkTrafficV2() {
               />
             </div>
 
-            <DateRangePickerV2 value={range} onChange={setRange} />
+            <DateRangePickerV2
+              value={range}
+              onChange={(r) => {
+                setUserPickedRange(true);
+                setRange(r);
+              }}
+            />
 
             <PeerFilterV2
               value={peerFilter}
