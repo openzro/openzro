@@ -51,27 +51,38 @@ func decodeDedupBroadcast(payload []byte) (dedupKey, dedupValue, error) {
 }
 
 // publishDedup is fired by Record() right after it commits a new
-// dedup-cache entry. Errors are logged at Warn and swallowed — the
-// local write already succeeded; a failed broadcast only means
-// peers may write a duplicate, not a correctness break.
+// dedup-cache entry. Runs in a goroutine — the broker round-trip
+// must not stall validatePostureChecksOnPeer when the broker is
+// slow or hung. State changes are rare (only on compliance flips
+// or refresh-TTL bypass) so the unbounded goroutine spawn here is
+// bounded in practice.
+//
+// Errors are logged at Warn and swallowed — the local write already
+// succeeded; a failed broadcast only means peers may write a
+// duplicate, not a correctness break.
 func publishDedup(coord cluster.Coordinator, key dedupKey, value dedupValue) {
 	if coord == nil {
 		return
 	}
+	// Encode eagerly (cheap, deterministic) so a malformed key/value
+	// surfaces in the caller's goroutine instead of being swallowed
+	// silently in the detached one.
 	payload, err := encodeDedupBroadcast(key, value)
 	if err != nil {
 		log.Warnf("posture: encode dedup broadcast: %v", err)
 		return
 	}
-	// Detached short ctx — the publish is best-effort. We don't want
-	// to inherit cancellation from the Record() caller (eval hot
-	// path) and we don't want to block the caller either; a small
-	// timeout caps the worst case.
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-	if err := coord.Publish(ctx, dedupTopic, payload); err != nil {
-		log.Warnf("posture: publish dedup broadcast: %v", err)
-	}
+	go func() {
+		// Detached short ctx — caps the worst case if the broker
+		// hangs. The caller is no longer blocked on this, but we
+		// still don't want a stuck goroutine pile-up under a long
+		// outage.
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+		if err := coord.Publish(ctx, dedupTopic, payload); err != nil {
+			log.Warnf("posture: publish dedup broadcast: %v", err)
+		}
+	}()
 }
 
 // subscribeDedup wires a goroutine that consumes peer dedup

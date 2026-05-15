@@ -2,6 +2,7 @@ package posture
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -227,6 +228,117 @@ func TestBufferedRecorder_OlderInboundDoesNotClobberFresherLocal(t *testing.T) {
 	assert.Equal(t, uint64(0), fp,
 		"stale inbound must not increment fromPeers — it was a no-op")
 }
+
+func TestBufferedRecorder_SelfEchoIsNoOp(t *testing.T) {
+	// The broker fans out every message to ALL subscribers, including
+	// the publisher itself. When Record() commits + publishes, the
+	// same recorder receives its own broadcast back via the
+	// subscriber goroutine. That self-echo must be a no-op:
+	//
+	//   * It must not republish (N² amplification trap).
+	//   * It must not bump fromPeers (which is reserved for genuine
+	//     peer broadcasts — a useful signal that the cluster pub/sub
+	//     is doing work).
+	//   * It must not clobber the entry we just wrote with the same
+	//     value (last-writer-wins guard: equal LastRecordedAt is NOT
+	//     "after", so the inbound is dropped).
+	coord := newFakeDedupCoord()
+	store := &fakeEvalStore{}
+	r := NewBufferedRecorder(store, BufferedRecorderOpts{
+		QueueSize:     128,
+		BatchSize:     1,
+		FlushInterval: 1 * time.Hour,
+	}, coord)
+	defer r.Close()
+
+	now := time.Now().UTC()
+	r.Record(context.Background(), PostureEvaluation{
+		AccountID:      "a",
+		PeerID:         "p",
+		PostureCheckID: "c",
+		CheckType:      "EndpointSecurityCheck",
+		Compliant:      false,
+		Reason:         "denied",
+		EvaluatedAt:    now,
+	})
+
+	// Let the subscriber goroutine process the self-echo.
+	deadline := time.After(1 * time.Second)
+	for {
+		if coord.published.Load() >= 1 {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatal("publish never fired")
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	r.mu.Lock()
+	fp := r.fromPeers
+	r.mu.Unlock()
+	assert.Equal(t, uint64(0), fp,
+		"self-echo must NOT increment fromPeers — it's reserved for genuine peer broadcasts")
+	assert.Equal(t, uint64(1), coord.published.Load(),
+		"self-echo must NOT re-publish; only the original Record() should publish")
+}
+
+func TestBufferedRecorder_SubscribeFailureDegradesGracefully(t *testing.T) {
+	// If the cluster coordinator's Subscribe() call fails at boot,
+	// the recorder must still operate — just without the
+	// cross-replica dedup feature. This protects against transient
+	// broker hiccups at startup and against misconfigurations.
+	coord := &subscribeErrCoord{}
+	store := &fakeEvalStore{}
+	r := NewBufferedRecorder(store, BufferedRecorderOpts{
+		QueueSize:     128,
+		BatchSize:     1,
+		FlushInterval: 1 * time.Hour,
+	}, coord)
+	defer r.Close()
+
+	// Record() must still work end-to-end even though subscription
+	// failed. The write goes to the store via the channel/drainer.
+	r.Record(context.Background(), PostureEvaluation{
+		AccountID:      "a",
+		PeerID:         "p",
+		PostureCheckID: "c",
+		CheckType:      "EndpointSecurityCheck",
+		Compliant:      false,
+		Reason:         "denied",
+		EvaluatedAt:    time.Now().UTC(),
+	})
+
+	deadline := time.After(2 * time.Second)
+	for {
+		if len(store.snapshot()) >= 1 {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatal("Record() did not reach the store after subscribe failure — recorder degraded too far")
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+}
+
+// subscribeErrCoord returns an error from Subscribe but otherwise
+// behaves like a working coordinator. Models a partial broker
+// failure during recorder boot.
+type subscribeErrCoord struct{}
+
+func (subscribeErrCoord) Lock(_ context.Context, _ string) (func(), error) {
+	return func() {}, nil
+}
+func (subscribeErrCoord) Publish(_ context.Context, _ string, _ []byte) error { return nil }
+func (subscribeErrCoord) Subscribe(_ context.Context, _ string) (<-chan cluster.Event, error) {
+	return nil, fmt.Errorf("subscribe boom")
+}
+func (subscribeErrCoord) Close() error { return nil }
 
 func TestBufferedRecorder_NilCoordIsSafe(t *testing.T) {
 	// Single-instance mode passes nil. Every dedup-pubsub call path
