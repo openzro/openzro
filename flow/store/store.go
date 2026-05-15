@@ -143,6 +143,26 @@ type Store interface {
 	// match.
 	Query(ctx context.Context, filter Filter) ([]*Event, error)
 
+	// ResolvedAddressesForResources returns the distinct destination
+	// IPs observed in flow events for each given resource ID over the
+	// `since` window, scoped to one account. Used by the
+	// /networks/resources API to expose the dynamic
+	// IP-set a Domain-type NetworkResource currently resolves to —
+	// which the management never directly resolves (each peer agent
+	// does DNS locally and reports the resolved IP alongside the
+	// resource ID in every flow event).
+	//
+	// resourceIDs is the set of resource ID strings the caller is
+	// interested in. The result map keys by the same string. Resources
+	// with no observed flows in the window simply don't appear in the
+	// map (callers must tolerate missing keys; no error there).
+	//
+	// Returns an empty map (not an error) when the store has nothing
+	// to say — engine=none, archive-only Query that doesn't apply,
+	// etc. Best-effort: a slow archive backend may legitimately
+	// return empty without flagging it as failure.
+	ResolvedAddressesForResources(ctx context.Context, accountID string, resourceIDs []string, since time.Time) (map[string][]string, error)
+
 	// Purge deletes events older than the cutoff and returns the
 	// number deleted. Backends with native partitioning may implement
 	// this as DROP PARTITION rather than DELETE for O(1) cost.

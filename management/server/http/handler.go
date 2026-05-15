@@ -116,7 +116,7 @@ func NewAPIHandler(
 	routes.AddEndpoints(accountManager, router)
 	dns.AddEndpoints(accountManager, router)
 	events.AddEndpoints(accountManager, router)
-	networks.AddEndpoints(networksManager, resourceManager, routerManager, groupsManager, accountManager, router)
+	networks.AddEndpoints(networksManager, resourceManager, routerManager, groupsManager, accountManager, flowEventsStore, router)
 	network_events.AddEndpoints(permissionsManager, flowEventsStore, router)
 	flowExportsHandler.AddEndpoints(permissionsManager, flowExportsStore, flowExportsManager, router)
 	mdmProvidersHandler.AddEndpoints(permissionsManager, mdmStore, mdmManager, router)

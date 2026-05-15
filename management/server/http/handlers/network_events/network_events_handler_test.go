@@ -30,12 +30,15 @@ type fakeStore struct {
 	err       error
 }
 
-func (f *fakeStore) Save(context.Context, []*store.Event) error          { return nil }
-func (f *fakeStore) Purge(context.Context, time.Time) (int64, error)     { return 0, nil }
-func (f *fakeStore) Close() error                                        { return nil }
+func (f *fakeStore) Save(context.Context, []*store.Event) error      { return nil }
+func (f *fakeStore) Purge(context.Context, time.Time) (int64, error) { return 0, nil }
+func (f *fakeStore) Close() error                                    { return nil }
 func (f *fakeStore) Query(_ context.Context, fl store.Filter) ([]*store.Event, error) {
 	f.gotFilter = fl
 	return f.out, f.err
+}
+func (f *fakeStore) ResolvedAddressesForResources(context.Context, string, []string, time.Time) (map[string][]string, error) {
+	return map[string][]string{}, nil
 }
 
 // fakePermissions implements permissions.Manager with a single-knob

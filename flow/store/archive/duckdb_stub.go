@@ -21,9 +21,12 @@ func New(_ Config) (store.Store, error) {
 // modes. It is never returned from New() in this build.
 type stub struct{}
 
-func (s *stub) Save(_ context.Context, _ []*store.Event) error    { return nil }
+func (s *stub) Save(_ context.Context, _ []*store.Event) error { return nil }
 func (s *stub) Query(_ context.Context, _ store.Filter) ([]*store.Event, error) {
 	return nil, nil
 }
+func (s *stub) ResolvedAddressesForResources(_ context.Context, _ string, _ []string, _ time.Time) (map[string][]string, error) {
+	return map[string][]string{}, nil
+}
 func (s *stub) Purge(_ context.Context, _ time.Time) (int64, error) { return 0, nil }
-func (s *stub) Close() error                                         { return nil }
+func (s *stub) Close() error                                        { return nil }

@@ -212,3 +212,107 @@ func TestSQL_BulkInsertHandlesLargeBatch(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, got, n)
 }
+
+func TestSQL_ResolvedAddressesForResources_GroupsByResource(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	mk := func(peerID, destIP, resourceID string, t time.Time) *store.Event {
+		e := sampleEvent("acct-1", peerID, t)
+		e.DestIP = destIP
+		e.DestResource = []byte(resourceID)
+		return e
+	}
+
+	// 3 peers resolve "domain-A" to two IPs total, 1 peer resolves
+	// "domain-B" to a third IP. "domain-C" gets no traffic — must NOT
+	// appear in the result.
+	events := []*store.Event{
+		mk("peer-1", "10.0.0.10", "res-domain-A", now.Add(-1*time.Hour)),
+		mk("peer-2", "10.0.0.10", "res-domain-A", now.Add(-30*time.Minute)), // dupe IP, must collapse via DISTINCT
+		mk("peer-3", "10.0.0.11", "res-domain-A", now.Add(-15*time.Minute)),
+		mk("peer-1", "10.0.0.20", "res-domain-B", now.Add(-2*time.Hour)),
+	}
+	require.NoError(t, s.Save(ctx, events))
+
+	out, err := s.ResolvedAddressesForResources(ctx, "acct-1",
+		[]string{"res-domain-A", "res-domain-B", "res-domain-C"},
+		now.Add(-24*time.Hour),
+	)
+	require.NoError(t, err)
+
+	assert.ElementsMatch(t, []string{"10.0.0.10", "10.0.0.11"}, out["res-domain-A"])
+	assert.ElementsMatch(t, []string{"10.0.0.20"}, out["res-domain-B"])
+	_, hasC := out["res-domain-C"]
+	assert.False(t, hasC, "resources with no flow events must be absent from the result map")
+}
+
+func TestSQL_ResolvedAddressesForResources_RespectsWindow(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	mk := func(destIP string, t time.Time) *store.Event {
+		e := sampleEvent("acct-1", "peer-1", t)
+		e.DestIP = destIP
+		e.DestResource = []byte("res-A")
+		return e
+	}
+	require.NoError(t, s.Save(ctx, []*store.Event{
+		mk("10.0.0.1", now.Add(-48*time.Hour)), // outside window
+		mk("10.0.0.2", now.Add(-2*time.Hour)),  // inside window
+	}))
+
+	out, err := s.ResolvedAddressesForResources(ctx, "acct-1",
+		[]string{"res-A"}, now.Add(-24*time.Hour))
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"10.0.0.2"}, out["res-A"],
+		"events older than the window must be excluded")
+}
+
+func TestSQL_ResolvedAddressesForResources_ScopedByAccount(t *testing.T) {
+	// Cross-tenant safety: an event in account B with the same
+	// resource ID must NOT leak into account A's response. The
+	// resource-ID namespace is per-account by design but the query
+	// must still hard-filter at the row level.
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	mk := func(accountID, destIP string) *store.Event {
+		e := sampleEvent(accountID, "peer-1", now.Add(-1*time.Hour))
+		e.DestIP = destIP
+		e.DestResource = []byte("res-shared-id")
+		return e
+	}
+	require.NoError(t, s.Save(ctx, []*store.Event{
+		mk("acct-A", "10.0.0.1"),
+		mk("acct-B", "10.0.0.2"),
+	}))
+
+	out, err := s.ResolvedAddressesForResources(ctx, "acct-A",
+		[]string{"res-shared-id"}, now.Add(-24*time.Hour))
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"10.0.0.1"}, out["res-shared-id"])
+}
+
+func TestSQL_ResolvedAddressesForResources_EmptyInputsAreNoOps(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	// Empty resource ID slice → empty map, no error, no query needed.
+	out, err := s.ResolvedAddressesForResources(ctx, "acct-1", nil, time.Time{})
+	require.NoError(t, err)
+	assert.Empty(t, out)
+
+	// All-empty-string IDs → same.
+	out, err = s.ResolvedAddressesForResources(ctx, "acct-1", []string{"", ""}, time.Time{})
+	require.NoError(t, err)
+	assert.Empty(t, out)
+
+	// Missing account ID is a programming error → returns an error,
+	// never an accidental cross-tenant scan.
+	_, err = s.ResolvedAddressesForResources(ctx, "", []string{"r1"}, time.Time{})
+	assert.Error(t, err)
+}

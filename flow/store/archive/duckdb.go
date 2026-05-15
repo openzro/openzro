@@ -104,6 +104,19 @@ func (d *duckdbStore) Purge(_ context.Context, _ time.Time) (int64, error) {
 	return 0, nil
 }
 
+// ResolvedAddressesForResources is a no-op on the archive: the
+// feature reads the most-recent 24h window which always lives in
+// the hot store. Implementing it here would scan archive Parquet
+// objects on every networks/resources listing call — expensive and
+// pointless. The federated store short-circuits to the hot side
+// before this is ever called; the empty-map return here is a
+// safety net.
+func (d *duckdbStore) ResolvedAddressesForResources(
+	_ context.Context, _ string, _ []string, _ time.Time,
+) (map[string][]string, error) {
+	return map[string][]string{}, nil
+}
+
 // Close releases any cached DuckDB resources. Today there are none —
 // each Query opens its own connection — so this is a no-op kept for
 // interface symmetry.

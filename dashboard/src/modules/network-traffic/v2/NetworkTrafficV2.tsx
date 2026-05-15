@@ -872,15 +872,30 @@ function groupFlows(
     }
   }
 
-  // Event-based ambiguity discovery: when the loaded flows show the
-  // SAME dst_ip being attributed to multiple resource_ids by the
-  // agents, those resource_ids share the IP at the dataplane layer.
-  // This is the only reliable signal we have for Domain-type
-  // resources whose resolved IP lives on the management side and is
-  // not exposed in /networks/resources yet (TODO: add resolved_addresses
-  // to the API so we can detect this proactively even before traffic
-  // arrives).
+  // Domain-resource IP-set lookup: which resources answer at a given
+  // dst_ip. Two sources merged:
+  //
+  //   (a) resource.resolved_addresses (authoritative, populated by the
+  //       backend from the rolling 24h window of flow events keyed by
+  //       resource_id). Works even before any events render and
+  //       covers IPs that aren't in the current event slice.
+  //   (b) The events themselves — fallback that survives talking to
+  //       an older backend without resolved_addresses, and also picks
+  //       up super-fresh traffic whose IP hasn't made it into the
+  //       backend's aggregate yet.
+  //
+  // Both sources contribute to the same set per IP; the consumer
+  // below uses set-size > 1 as the ambiguity signal for the
+  // PeerCell badge.
   const resourceIDsByDestIP = new Map<string, Set<string>>();
+  for (const r of resources) {
+    if (!r.id || !r.resolved_addresses) continue;
+    for (const ip of r.resolved_addresses) {
+      const set = resourceIDsByDestIP.get(ip) ?? new Set<string>();
+      set.add(r.id);
+      resourceIDsByDestIP.set(ip, set);
+    }
+  }
   for (const e of events) {
     if (!e.dest_resource_id || !e.dest_ip) continue;
     const set = resourceIDsByDestIP.get(e.dest_ip) ?? new Set<string>();
