@@ -127,44 +127,48 @@ const SidebarModalContent = React.forwardRef<
     ref,
   ) => {
     return (
+      // Mirror the exact Portal > Overlay > Content nesting the
+      // centred ModalContent uses — that nesting is what keeps a
+      // Radix Select/Popover inside the dialog interactive. The
+      // overlay overrides neutralise its centred-modal grid
+      // (top placement + md:py-16) so the sheet can sit flush to
+      // the right edge at full viewport height.
       <ModalPortal>
-        {/* Scrim — reuse the centred-modal overlay so the dim/blur
-            treatment is identical across both surfaces. Radix wires
-            outside-click + Esc close from Overlay+Content siblings;
-            no manual onClick juggling needed. */}
-        <ModalOverlay />
-        <DialogPrimitive.Content
-          ref={ref}
-          className={cn(
-            // Full-height drawer pinned to the right edge. flex-col so
-            // a consumer can pin its own header/footer and let only
-            // the body scroll (min-h-0 on the body makes that work).
-            "fixed inset-y-0 right-0 z-[52] flex h-full w-full flex-col",
-            "border-l border-oz2-border bg-oz2-surface shadow-oz2-md",
-            "duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out",
-            "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-            "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
-            "focus:outline-0",
-            className,
-            maxWidthClass,
-          )}
-          {...props}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <VisuallyHidden.Root>
-            <DialogPrimitive.Title>{accessibilityTitle}</DialogPrimitive.Title>
-          </VisuallyHidden.Root>
-          {children}
-          {showClose && (
-            <DialogPrimitive.Close
-              data-cy={"modal-close"}
-              className="absolute right-4 top-4 z-10 grid h-7 w-7 place-items-center rounded-[8px] text-oz2-text-faint transition-colors hover:bg-oz2-hover hover:text-oz2-text focus:outline-none focus-visible:ring-2 focus-visible:ring-oz2-acc/30 disabled:pointer-events-none"
-            >
-              <X className="h-4 w-4" />
-              <span className="sr-only">Close</span>
-            </DialogPrimitive.Close>
-          )}
-        </DialogPrimitive.Content>
+        <ModalOverlay className="place-items-stretch justify-items-end overflow-hidden p-0 md:p-0">
+          <DialogPrimitive.Content
+            ref={ref}
+            className={cn(
+              // Full-height drawer pinned to the right edge. flex-col
+              // so the consumer can pin its own header/footer and let
+              // only the body scroll (the body uses flex-1 + min-h-0).
+              "relative z-[52] flex h-full w-full flex-col focus:outline-0",
+              "border-l border-oz2-border bg-oz2-surface shadow-oz2-md duration-200",
+              "data-[state=open]:animate-in data-[state=closed]:animate-out",
+              "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+              "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
+              className,
+              maxWidthClass,
+            )}
+            {...props}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <VisuallyHidden.Root>
+              <DialogPrimitive.Title>
+                {accessibilityTitle}
+              </DialogPrimitive.Title>
+            </VisuallyHidden.Root>
+            {children}
+            {showClose && (
+              <DialogPrimitive.Close
+                data-cy={"modal-close"}
+                className="absolute right-4 top-4 z-10 grid h-7 w-7 place-items-center rounded-[8px] text-oz2-text-faint transition-colors hover:bg-oz2-hover hover:text-oz2-text focus:outline-none focus-visible:ring-2 focus-visible:ring-oz2-acc/30 disabled:pointer-events-none"
+              >
+                <X className="h-4 w-4" />
+                <span className="sr-only">Close</span>
+              </DialogPrimitive.Close>
+            )}
+          </DialogPrimitive.Content>
+        </ModalOverlay>
       </ModalPortal>
     );
   },

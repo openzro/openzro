@@ -267,25 +267,25 @@ export default function MDMProviderModal({
   return (
     <Modal open={open} onOpenChange={setOpen}>
       <SidebarModalContent maxWidthClass="max-w-xl">
-        {/* Sheet is a fixed-height side panel: header pinned, body
-            scrolls, footer pinned — so a long provider form (e.g.
-            SentinelOne's compliance block) never pushes the actions
-            off-screen the way it did in the centred modal. */}
-        <div className="flex h-full flex-col">
-          <div className="shrink-0">
-            <ModalHeader
-              icon={<ShieldCheckIcon size={20} />}
-              title={isEdit ? "Edit MDM/EDR provider" : "Add MDM/EDR provider"}
-              description={
-                isEdit
-                  ? "Update credentials. Leave secret fields blank to keep the current value."
-                  : "Connect Microsoft Intune, SentinelOne, Huntress, or CrowdStrike Falcon to require devices in good security standing."
-              }
-              truncate
-            />
-          </div>
+        {/* SidebarModalContent is itself a flex-col full-height
+            panel, so header/body/footer are direct children: header
+            and footer pin (shrink-0), only the body scrolls
+            (flex-1 + min-h-0) — a long provider form never pushes
+            the actions off-screen the way the centred modal did. */}
+        <div className="shrink-0">
+          <ModalHeader
+            icon={<ShieldCheckIcon size={20} />}
+            title={isEdit ? "Edit MDM/EDR provider" : "Add MDM/EDR provider"}
+            description={
+              isEdit
+                ? "Update credentials. Leave secret fields blank to keep the current value."
+                : "Connect Microsoft Intune, SentinelOne, Huntress, or CrowdStrike Falcon to require devices in good security standing."
+            }
+            truncate
+          />
+        </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-8 pt-3 pb-6 grid gap-4">
+        <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-8 pt-3 pb-6">
           <div>
             <OzLabel htmlFor="mdm-name">Name</OzLabel>
             <OzInput
@@ -576,16 +576,15 @@ export default function MDMProviderModal({
           )}
         </div>
 
-          <div className="shrink-0">
-            <ModalFooter className="items-center gap-3">
-              <ModalClose asChild>
-                <OzButton variant="default">Cancel</OzButton>
-              </ModalClose>
-              <OzButton variant="primary" onClick={onSave} disabled={saving}>
-                {saving ? "Saving..." : isEdit ? "Save changes" : "Create"}
-              </OzButton>
-            </ModalFooter>
-          </div>
+        <div className="shrink-0">
+          <ModalFooter className="items-center gap-3">
+            <ModalClose asChild>
+              <OzButton variant="default">Cancel</OzButton>
+            </ModalClose>
+            <OzButton variant="primary" onClick={onSave} disabled={saving}>
+              {saving ? "Saving..." : isEdit ? "Save changes" : "Create"}
+            </OzButton>
+          </ModalFooter>
         </div>
       </SidebarModalContent>
     </Modal>
