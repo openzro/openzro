@@ -4,13 +4,13 @@ Section:
 Installed-Size: 32800
 Maintainer: openZro <dev@openzro.io>
 Architecture: amd64
-Version: 0.53.1~alpha.70
-Filename: pool/main/o/openzro/openzro_0.53.1-alpha.70_linux_amd64.deb
-Size: 12547228
-MD5sum: 0222f2b1fa8b52c7d85858d221420ce4
-SHA1: ce775fde59e7281480320fb663fe7099deb2e1ae
-SHA256: 52d6b250f280c829ec7c36caaba8a284b97186cc1f49e12449c32743563323e6
-SHA512: d59f81dae64224543e61f3cde224e0c36a93f7f9316fa0142c9c8ee0d05243886e21b57d7fc0591a2a9cc6dd7c3311fab2e02a8c9449ab8b90875bde7375a52a
+Version: 0.53.1~alpha.71
+Filename: pool/main/o/openzro/openzro_0.53.1-alpha.71_linux_amd64.deb
+Size: 12547222
+MD5sum: 483b72892e1ddb007c96f2ae1fca1732
+SHA1: ef6b4a8d369e18774db0129fa16e928f28418fe0
+SHA256: 80174042e640ed12ffb5a1216fe21ca263af5037beb188b4790e16ffad99f8ee
+SHA512: 127d3c543475ec57732fee9fb91d05ee4eec66f8e47acf4e3fded33773e3bc84d451951298031999d7a75d13e90d32ba0c6477258ca3102bc2f06eb6aa42693b
 Description: openZro client (zero-trust mesh networking).
 Homepage: https://openzro.io/
 License: BSD-3-Clause
@@ -21,13 +21,13 @@ Section: net
 Installed-Size: 10017
 Maintainer: openZro <dev@openzro.io>
 Architecture: amd64
-Version: 0.53.1~alpha.70
-Filename: pool/main/o/openzro-dashboard/openzro-dashboard_0.53.1.alpha.70_amd64.deb
-Size: 3591934
-MD5sum: 225180a13fdd2b3a92b84ffdf214b6ab
-SHA1: ac824dba2602cff4c033521c11fbea1c0e156d18
-SHA256: e87fc4ce02c69836afc699922fe26152abe2807dd06935077e64752ea36d367f
-SHA512: e5a69c33fdb6676130590dfd18ca1eba002159c522bbd10250f5c3b56b61f85de2f6bc1c16765ec5c79076514b9b30591bb5d93724682ec1f8e1f52956b41a6f
+Version: 0.53.1~alpha.71
+Filename: pool/main/o/openzro-dashboard/openzro-dashboard_0.53.1.alpha.71_amd64.deb
+Size: 3592074
+MD5sum: f02d6aa7bbee1ad08cf1a479e07aa39c
+SHA1: 79a2848228fca6d8339b50c9557338fdc411c5e2
+SHA256: 50e4ea9e56db2a10f47181212d6bb5cdd847c8804e25b94304779f765164a6c5
+SHA512: 4b9c347e597602421a55f443aa96da85677ba72795bfc77417692abcdec9bcca9a539c27e13692b42e9faae5965420e4ee58c46b35e0eec8e67f31e464368642
 Description: openZro web dashboard (static SPA).
  .
  Ships the Next.js static export bundle plus example nginx /
@@ -38,16 +38,16 @@ Homepage: https://openzro.io
 Package: openzro-management
 Priority: optional
 Section: 
-Installed-Size: 86348
+Installed-Size: 86356
 Maintainer: openZro <dev@openzro.io>
 Architecture: amd64
-Version: 0.53.1~alpha.70
-Filename: pool/main/o/openzro-management/openzro-management_0.53.1-alpha.70_linux_amd64.deb
-Size: 27592860
-MD5sum: 586217b319ccd63a69c771e13e3732f1
-SHA1: bce4f40be56e84d17f7736562fccaae1e4ca185e
-SHA256: 976911e0fa15e6276396c4b8a07af5c92a5b81b74767cfe39df10806114d2619
-SHA512: 1c441f608b6fc6263bb207de2af34694e81e270380d219e004bb3569ad666422790688b4935ae452bf11d835195d99f41405876cd169aebf1786a891653afa27
+Version: 0.53.1~alpha.71
+Filename: pool/main/o/openzro-management/openzro-management_0.53.1-alpha.71_linux_amd64.deb
+Size: 27594676
+MD5sum: cc41ece6edc11eeff001224c625e657c
+SHA1: 672d94f17b7f99b0dc3edd1e881391ad94388564
+SHA256: ea634fbe2700989965c181dd9dfb65626e92e62d1c8cea0312c0b69f8f84141f
+SHA512: e69326baea5b3b392026432faf8d335c3ada43de7fd1293f4c8026d4df7f50ece9e1ccffe9845a0a8c26d9f033e91d6fa7a961b006cb06dc9362584525997d49
 Description: openZro management server (control plane, IdP integration, peer registry).
 Homepage: https://openzro.io/
 License: BSD-3-Clause
@@ -58,13 +58,13 @@ Section:
 Installed-Size: 22793
 Maintainer: openZro <dev@openzro.io>
 Architecture: amd64
-Version: 0.53.1~alpha.70
-Filename: pool/main/o/openzro-relay/openzro-relay_0.53.1-alpha.70_linux_amd64.deb
+Version: 0.53.1~alpha.71
+Filename: pool/main/o/openzro-relay/openzro-relay_0.53.1-alpha.71_linux_amd64.deb
 Size: 8146046
-MD5sum: 5018a3c3d186d98f56b42a64aec73503
-SHA1: 3d4cc9399aad10f629ad58bc64aa7e398f914d43
-SHA256: edcc2f2b337eb3139c380f653d89e02aa6ce855c4c8109f0326ccd924aaa6cfe
-SHA512: edbf7fbd5138361b868a96ad6523f14e251b301194ae088f8bdf9b71c911cab90f26f5d4d4bf104d467b82efdb748c28f320122822759e33ec6eea40369490cc
+MD5sum: 5f36b885439d10e372f691973a3fa42e
+SHA1: c8e6bc569dad27650d27d94c13c4b05711e508db
+SHA256: 215ffb56d70bf41cacbf29ac001762ca8aaa414e74b9be03297e031e615976bf
+SHA512: 05a721b4affad1ccd87988d61143cd00bc5996453d19f3c664bfa242c108209f6dc58a7686405e1769c2d8eb4d3b7ce434b9ef00441efd1e5fd9866bab59e371
 Description: openZro relay server (TURN-style fallback for peers behind symmetric NAT).
 Homepage: https://openzro.io/
 License: BSD-3-Clause
@@ -75,13 +75,13 @@ Section:
 Installed-Size: 30853
 Maintainer: openZro <dev@openzro.io>
 Architecture: amd64
-Version: 0.53.1~alpha.70
-Filename: pool/main/o/openzro-signal/openzro-signal_0.53.1-alpha.70_linux_amd64.deb
-Size: 11372032
-MD5sum: 2fd421e8dee0163fd60a2cdaa1e2db83
-SHA1: 3adc54bde82507f6f44a98973924d835ae1d6682
-SHA256: 24fd6df52c443a6e349ea34c871dd81199b57a37e82074ec66398942e9055866
-SHA512: 2f8d6147caf94e46c84b3cdcaaa8fbd6df4b76fc62b53226d08d1bd2fe965ed5847b41f48272100923a74757c6d86857c3c0c964adbfa31d5afa8f9a002ed54c
+Version: 0.53.1~alpha.71
+Filename: pool/main/o/openzro-signal/openzro-signal_0.53.1-alpha.71_linux_amd64.deb
+Size: 11372056
+MD5sum: c4d7daf162da5dfe469a2953289ae92d
+SHA1: 8743b7075964700016aef020cc854d8342ad3cf8
+SHA256: eeefb69f2b6374ea69fb303a288a172def167fd480da103256aba7d702cfc405
+SHA512: 4607bdcd0b2937f0409feabac050485b6ec828c22d2e0257beff5d8434290b372fe9b804df0b740d23b7977205fb9990f4e8aab82bb34a23331134382322e650
 Description: openZro signal server (peer rendezvous, stateless).
 Homepage: https://openzro.io/
 License: BSD-3-Clause
@@ -92,14 +92,14 @@ Section:
 Installed-Size: 37058
 Maintainer: openZro <dev@openzro.io>
 Architecture: amd64
-Version: 0.53.1~alpha.70
+Version: 0.53.1~alpha.71
 Depends: openzro
-Filename: pool/main/o/openzro-ui/openzro-ui_0.53.1-alpha.70_linux_amd64.deb
-Size: 16483276
-MD5sum: 9cbf73fb587cac3f8f82886c2c88a051
-SHA1: c12a62f14af600bdda614ad5d1918e2e4b70e174
-SHA256: efb546f797db4f4798f7b360e335af758aafc0ff7aedf7bc15203f0c327b3372
-SHA512: 18f79f61e7224f9df3a37adba0a3dc9efb04b5ba3bd7178bab57dff772e91a4ec7f553622c14625fd09a0fd4be71673470521301381286c537e016e7234ee1e1
+Filename: pool/main/o/openzro-ui/openzro-ui_0.53.1-alpha.71_linux_amd64.deb
+Size: 16483286
+MD5sum: 5495113de1a978d9e2d05d1ba01120bd
+SHA1: 081232f737d64ce71beb21f01f6f9b47411a416a
+SHA256: 69121c53547cabaf508cd36c04ae57dfbc35c35c62296736d1450f91e3e83e23
+SHA512: 13793ea03828b9b0f5163c4860b45d4a4c25230c730cc9de0f493c879ff8e91eb52f2255ec6ba418ea1e0ed8a7f37cda8d7adf1d573a4a60a680c0cb4c6c652f
 Description: openZro desktop client (system tray GUI).
 Homepage: https://openzro.io/
 License: BSD-3-Clause
