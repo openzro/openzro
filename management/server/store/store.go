@@ -114,6 +114,13 @@ type Store interface {
 
 	GetPostureCheckByChecksDefinition(accountID string, checks *posture.ChecksDefinition) (*posture.Checks, error)
 	GetAccountPostureChecks(ctx context.Context, lockStrength LockingStrength, accountID string) ([]*posture.Checks, error)
+	// GetAllPostureChecks returns every posture-check record across all
+	// accounts in a single query. Used by the posture scheduler's
+	// account-discovery path to avoid an N+1 (one GetAccountPostureChecks
+	// per account). The cluster-wide row count is small (typically
+	// well under a few thousand records), so loading them all and
+	// filtering in Go is far cheaper than a query per account.
+	GetAllPostureChecks(ctx context.Context, lockStrength LockingStrength) ([]*posture.Checks, error)
 	GetPostureChecksByID(ctx context.Context, lockStrength LockingStrength, accountID, postureCheckID string) (*posture.Checks, error)
 	GetPostureChecksByIDs(ctx context.Context, lockStrength LockingStrength, accountID string, postureChecksIDs []string) (map[string]*posture.Checks, error)
 	SavePostureChecks(ctx context.Context, lockStrength LockingStrength, postureCheck *posture.Checks) error
