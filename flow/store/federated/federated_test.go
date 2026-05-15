@@ -16,18 +16,15 @@ import (
 // the federated wrapper makes so tests can assert on routing
 // behaviour without standing up a real backend.
 type fakeStore struct {
-	name           string
-	queryCalls     []store.Filter
-	saveCalls      [][]*store.Event
-	purgeCalls     []time.Time
-	resolvedCalls  int
-	resolvedResult map[string][]string
-	resolvedErr    error
-	closeCalls     int
-	queryResult    []*store.Event
-	queryErr       error
-	saveErr        error
-	purgeErr       error
+	name        string
+	queryCalls  []store.Filter
+	saveCalls   [][]*store.Event
+	purgeCalls  []time.Time
+	closeCalls  int
+	queryResult []*store.Event
+	queryErr    error
+	saveErr     error
+	purgeErr    error
 }
 
 func (s *fakeStore) Save(_ context.Context, events []*store.Event) error {
@@ -37,12 +34,6 @@ func (s *fakeStore) Save(_ context.Context, events []*store.Event) error {
 func (s *fakeStore) Query(_ context.Context, f store.Filter) ([]*store.Event, error) {
 	s.queryCalls = append(s.queryCalls, f)
 	return s.queryResult, s.queryErr
-}
-func (s *fakeStore) ResolvedAddressesForResources(
-	_ context.Context, _ string, _ []string, _ time.Time,
-) (map[string][]string, error) {
-	s.resolvedCalls++
-	return s.resolvedResult, s.resolvedErr
 }
 func (s *fakeStore) Purge(_ context.Context, t time.Time) (int64, error) {
 	s.purgeCalls = append(s.purgeCalls, t)

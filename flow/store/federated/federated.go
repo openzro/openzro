@@ -81,17 +81,6 @@ func (f *Federated) Purge(ctx context.Context, olderThan time.Time) (int64, erro
 	return f.hot.Purge(ctx, olderThan)
 }
 
-// ResolvedAddressesForResources delegates to the hot store only.
-// The resolved-addresses feature reads recent (24h-ish) windows
-// that always fall inside hot retention; archive lookups would
-// add S3/DuckDB latency to every networks/resources listing
-// without changing the result.
-func (f *Federated) ResolvedAddressesForResources(
-	ctx context.Context, accountID string, resourceIDs []string, since time.Time,
-) (map[string][]string, error) {
-	return f.hot.ResolvedAddressesForResources(ctx, accountID, resourceIDs, since)
-}
-
 // Close closes both backends. Errors from either are wrapped so the
 // caller can see which side failed.
 func (f *Federated) Close() error {

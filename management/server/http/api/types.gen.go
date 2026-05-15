@@ -900,18 +900,6 @@ type NetworkResource struct {
 	// Name Network resource name
 	Name string `json:"name"`
 
-	// ResolvedAddresses For `type=domain` resources only — the distinct destination IPs
-	// observed in flow events over the last 24 hours, aggregated across
-	// every peer that has resolved the domain. Each peer agent does its
-	// own DNS lookup locally and tags every flow with the resource ID it
-	// was used for; the management server aggregates the unique IPs
-	// here so the dashboard can display "currently resolves to ..."
-	// without doing any server-side DNS resolution (which would not work
-	// under split-horizon DNS anyway).
-	// Omitted for `host` and `subnet` resources — their address is
-	// already explicit in the `address` field.
-	ResolvedAddresses *[]string `json:"resolved_addresses,omitempty"`
-
 	// Type Network resource type based of the address
 	Type NetworkResourceType `json:"type"`
 }

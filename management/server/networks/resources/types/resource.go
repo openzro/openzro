@@ -64,22 +64,13 @@ func NewNetworkResource(accountID, networkID, name, description, address string,
 	}, nil
 }
 
-// ToAPIResponse projects the persisted NetworkResource into its
-// wire-level API shape.
-//
-// resolvedAddresses is the dynamic, observed-from-flow-events set of
-// IPs a Domain-type resource currently resolves to (each peer
-// agent's DNS lookup, aggregated). Pass nil or an empty slice for
-// non-domain resources or when no flow data is available — the API
-// field stays omitted in those cases so clients don't misread an
-// empty list as "no IPs in use".
-func (n *NetworkResource) ToAPIResponse(groups []api.GroupMinimum, resolvedAddresses []string) *api.NetworkResource {
+func (n *NetworkResource) ToAPIResponse(groups []api.GroupMinimum) *api.NetworkResource {
 	addr := n.Prefix.String()
 	if n.Type == Domain {
 		addr = n.Domain
 	}
 
-	resp := &api.NetworkResource{
+	return &api.NetworkResource{
 		Id:          n.ID,
 		Name:        n.Name,
 		Description: &n.Description,
@@ -88,20 +79,6 @@ func (n *NetworkResource) ToAPIResponse(groups []api.GroupMinimum, resolvedAddre
 		Groups:      groups,
 		Enabled:     n.Enabled,
 	}
-
-	// resolved_addresses only makes sense for Domain resources — for
-	// host/subnet the IP/prefix is already in `address`, and
-	// surfacing it again would be redundant and risk implying
-	// host/subnet endpoints are dynamic when they are not. We also
-	// short-circuit on an empty slice so the JSON omitempty kicks
-	// in instead of serialising `[]` (which clients could misread
-	// as "we know there are zero IPs").
-	if n.Type == Domain && len(resolvedAddresses) > 0 {
-		ips := append([]string(nil), resolvedAddresses...)
-		resp.ResolvedAddresses = &ips
-	}
-
-	return resp
 }
 
 func (n *NetworkResource) FromAPIRequest(req *api.NetworkResourceRequest) {

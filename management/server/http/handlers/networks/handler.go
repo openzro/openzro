@@ -9,7 +9,6 @@ import (
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
 
-	flowstore "github.com/openzro/openzro/flow/store"
 	"github.com/openzro/openzro/management/server/account"
 	nbcontext "github.com/openzro/openzro/management/server/context"
 	"github.com/openzro/openzro/management/server/groups"
@@ -34,9 +33,9 @@ type handler struct {
 	groupsManager groups.Manager
 }
 
-func AddEndpoints(networksManager networks.Manager, resourceManager resources.Manager, routerManager routers.Manager, groupsManager groups.Manager, accountManager account.Manager, flowStore flowstore.Store, router *mux.Router) {
+func AddEndpoints(networksManager networks.Manager, resourceManager resources.Manager, routerManager routers.Manager, groupsManager groups.Manager, accountManager account.Manager, router *mux.Router) {
 	addRouterEndpoints(routerManager, router)
-	addResourceEndpoints(resourceManager, groupsManager, flowStore, router)
+	addResourceEndpoints(resourceManager, groupsManager, router)
 
 	networksHandler := newHandler(networksManager, resourceManager, routerManager, groupsManager, accountManager)
 	router.HandleFunc("/networks", networksHandler.getAllNetworks).Methods("GET", "OPTIONS")
