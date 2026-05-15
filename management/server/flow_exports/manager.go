@@ -51,10 +51,10 @@ func archiveFormatFor(rowFormat string) string {
 type Manager struct {
 	store        *Store
 	flowSvc      sinkSetter
-	hotStore     store.Sink     // queryable hot tier (optional)
-	envSinks     []store.Sink   // baseline from env vars (immutable)
+	hotStore     store.Sink   // queryable hot tier (optional)
+	envSinks     []store.Sink // baseline from env vars (immutable)
 	mu           sync.Mutex
-	dynamicSinks []store.Sink   // sinks built from DB rows; closed on rebuild
+	dynamicSinks []store.Sink // sinks built from DB rows; closed on rebuild
 }
 
 // sinkSetter is the slice of *FlowService that Manager actually
@@ -191,10 +191,14 @@ func (m *Manager) buildSink(ctx context.Context, row *FlowExport) (store.Sink, e
 		})
 
 	case TypeHTTP:
-		// HTTP webhook for flow events lives in flow/sinks too — but
-		// the package does not expose one yet (PR-E only added Elastic).
-		// Reject the configuration cleanly until it does.
-		return nil, fmt.Errorf("type=http for flow events not yet supported (Elastic and S3 only)")
+		c := plain.(*HTTPDestConfig)
+		return sinks.NewHTTP(sinks.HTTPConfig{
+			URL:            c.URL,
+			Headers:        c.Headers,
+			Timeout:        c.Timeout,
+			MaxAttempts:    c.MaxAttempts,
+			InitialBackoff: c.InitialBackoff,
+		})
 
 	case TypeDatadog:
 		c := plain.(*DatadogDestConfig)

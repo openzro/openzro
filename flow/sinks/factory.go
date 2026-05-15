@@ -57,6 +57,18 @@ const (
 	envGCSMaxEventsPerFile = "OPENZRO_FLOW_ARCHIVE_GCS_MAX_EVENTS_PER_FILE"
 	envGCSBufferSize       = "OPENZRO_FLOW_ARCHIVE_GCS_BUFFER_SIZE"
 
+	// Generic HTTP webhook (streaming). HEADERS is comma-separated
+	// "Name: Value" pairs — that is where auth lives (Authorization,
+	// X-Api-Key, …), so any scheme works without a dedicated knob.
+	envHTTPURL            = "OPENZRO_FLOW_EXPORT_HTTP_URL"
+	envHTTPHeaders        = "OPENZRO_FLOW_EXPORT_HTTP_HEADERS"
+	envHTTPTimeout        = "OPENZRO_FLOW_EXPORT_HTTP_TIMEOUT"
+	envHTTPMaxAttempts    = "OPENZRO_FLOW_EXPORT_HTTP_MAX_ATTEMPTS"
+	envHTTPInitialBackoff = "OPENZRO_FLOW_EXPORT_HTTP_INITIAL_BACKOFF"
+	envHTTPBatchSize      = "OPENZRO_FLOW_EXPORT_HTTP_BATCH_SIZE"
+	envHTTPFlushInterval  = "OPENZRO_FLOW_EXPORT_HTTP_FLUSH_INTERVAL"
+	envHTTPBufferSize     = "OPENZRO_FLOW_EXPORT_HTTP_BUFFER_SIZE"
+
 	// Archive on-disk format. Per ADR-0012: shared between S3 and GCS
 	// so an operator running both backends doesn't have to duplicate
 	// the knob. Empty / unrecognized values default to "ndjson"
@@ -95,7 +107,35 @@ func NewFromEnv(ctx context.Context) ([]store.Sink, error) {
 		out = append(out, exp)
 	}
 
+	if exp, err := newHTTPFromEnv(ctx); err != nil {
+		return nil, err
+	} else if exp != nil {
+		out = append(out, exp)
+	}
+
 	return out, nil
+}
+
+func newHTTPFromEnv(ctx context.Context) (store.Sink, error) {
+	url := os.Getenv(envHTTPURL)
+	if url == "" {
+		return nil, nil
+	}
+	exp, err := NewHTTP(HTTPConfig{
+		URL:            url,
+		Headers:        parseHTTPHeaders(os.Getenv(envHTTPHeaders)),
+		Timeout:        envDuration(envHTTPTimeout),
+		MaxAttempts:    envInt(envHTTPMaxAttempts),
+		InitialBackoff: envDuration(envHTTPInitialBackoff),
+		BatchSize:      envInt(envHTTPBatchSize),
+		FlushInterval:  envDuration(envHTTPFlushInterval),
+		BufferSize:     envInt(envHTTPBufferSize),
+	})
+	if err != nil {
+		return nil, err
+	}
+	log.WithContext(ctx).Infof("flow streaming enabled: HTTP webhook → %s", url)
+	return exp, nil
 }
 
 func newDatadogFromEnv(ctx context.Context) (store.Sink, error) {
