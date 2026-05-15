@@ -141,7 +141,10 @@ const SidebarModalContent = React.forwardRef<
               // Full-height drawer pinned to the right edge. flex-col
               // so the consumer can pin its own header/footer and let
               // only the body scroll (the body uses flex-1 + min-h-0).
-              "relative z-[52] flex h-full w-full flex-col focus:outline-0",
+              // py-6 matches the centred modal's vertical rhythm so
+              // the header/footer aren't flush against the viewport
+              // edges; the scrolling body sits inset between them.
+              "relative z-[52] flex h-full w-full flex-col py-6 focus:outline-0",
               "border-l border-oz2-border bg-oz2-surface shadow-oz2-md duration-200",
               "data-[state=open]:animate-in data-[state=closed]:animate-out",
               "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
