@@ -134,17 +134,20 @@ const SidebarModalContent = React.forwardRef<
       // (top placement + md:py-16) so the sheet can sit flush to
       // the right edge at full viewport height.
       <ModalPortal>
-        <ModalOverlay className="place-items-stretch justify-items-end overflow-hidden p-0 md:p-0">
+        <ModalOverlay className="justify-items-end overflow-hidden p-0 md:p-0">
           <DialogPrimitive.Content
             ref={ref}
             className={cn(
-              // Full-height drawer pinned to the right edge. flex-col
-              // so the consumer can pin its own header/footer and let
-              // only the body scroll (the body uses flex-1 + min-h-0).
-              // py-6 matches the centred modal's vertical rhythm so
-              // the header/footer aren't flush against the viewport
-              // edges; the scrolling body sits inset between them.
-              "relative z-[52] flex h-full w-full flex-col py-6 focus:outline-0",
+              // Right-edge drawer. The height MUST be deterministic
+              // (h-[100dvh], not h-full): the overlay grid row is
+              // auto-sized, so a percentage height resolves against
+              // an indefinite parent and the flex body can't compute
+              // its scroll box — the form would grow past the
+              // viewport and shove the footer off-screen. A fixed
+              // 100dvh + overflow-hidden gives the flex column a real
+              // height so flex-1 + min-h-0 on the body scrolls.
+              // py-6 matches the centred modal's vertical rhythm.
+              "relative z-[52] flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden py-6 focus:outline-0",
               "border-l border-oz2-border bg-oz2-surface shadow-oz2-md duration-200",
               "data-[state=open]:animate-in data-[state=closed]:animate-out",
               "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
