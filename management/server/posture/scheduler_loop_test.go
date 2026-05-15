@@ -50,6 +50,11 @@ type fakeLoader struct {
 	checks   map[string][]ScheduleCheck
 	loadErr  error
 	listErr  error
+	// listCalls counts AccountsWithActiveSchedules invocations — one
+	// per reconcile pass. Used by the debounce regression test to
+	// prove a burst of global-topic events collapses into a single
+	// reconcile rather than one scan per event.
+	listCalls atomic.Uint64
 }
 
 func (f *fakeLoader) LoadActiveSchedules(_ context.Context, accountID string) ([]ScheduleCheck, error) {
@@ -62,6 +67,7 @@ func (f *fakeLoader) LoadActiveSchedules(_ context.Context, accountID string) ([
 }
 
 func (f *fakeLoader) AccountsWithActiveSchedules(_ context.Context) ([]string, error) {
+	f.listCalls.Add(1)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.listErr != nil {
@@ -416,6 +422,7 @@ func TestScheduler_AutoDiscoversNewAccountViaReconcileTick(t *testing.T) {
 	s.afterFn = fastAfter(20 * time.Millisecond)
 	s.minTickInterval = time.Millisecond
 	s.reconcileEvery = 30 * time.Millisecond // collapse the 3-min default
+	s.reconcileDebounce = 5 * time.Millisecond
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -455,6 +462,7 @@ func TestScheduler_AutoDiscoversNewAccountViaGlobalTopic(t *testing.T) {
 	// Long reconcile so a pass within the test window can only come
 	// from the global-topic fast path, not the periodic safety net.
 	s.reconcileEvery = time.Hour
+	s.reconcileDebounce = 5 * time.Millisecond
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -499,6 +507,7 @@ func TestScheduler_ReconcileIsAddOnly(t *testing.T) {
 	s.afterFn = fastAfter(20 * time.Millisecond)
 	s.minTickInterval = time.Millisecond
 	s.reconcileEvery = 15 * time.Millisecond
+	s.reconcileDebounce = 5 * time.Millisecond
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -540,6 +549,7 @@ func TestScheduler_SubscribeFailureFallsBackToPeriodic(t *testing.T) {
 	s.afterFn = fastAfter(20 * time.Millisecond)
 	s.minTickInterval = time.Millisecond
 	s.reconcileEvery = 20 * time.Millisecond
+	s.reconcileDebounce = 5 * time.Millisecond
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -564,6 +574,63 @@ func (c *subFailCoord) Subscribe(ctx context.Context, topic string) (<-chan clus
 		return nil, errors.New("subscribe boom")
 	}
 	return c.fakeCoord.Subscribe(ctx, topic)
+}
+
+// TestScheduler_GlobalTopicBurstIsDebounced is the Concern-B
+// regression: PublishScheduleChange fires the global topic on every
+// posture-check mutation cluster-wide, and each reconcile is a full
+// GetAllPostureChecks scan on every subscribed replica. Without
+// debounce a bulk policy edit fans one scan per mutation across the
+// fleet. This proves a rapid burst of global-topic events collapses
+// into a single reconcile (one AccountsWithActiveSchedules call),
+// not one per event.
+func TestScheduler_GlobalTopicBurstIsDebounced(t *testing.T) {
+	t.Parallel()
+	coord := newFakeCoord()
+	updater := &fakeUpdater{}
+	loader := &fakeLoader{
+		accounts: []string{"acct-1"},
+		checks: map[string][]ScheduleCheck{
+			"acct-1": {{Window: TimeWindow{StartTime: "09:00", EndTime: "18:00"}, Action: CheckActionAllow}},
+		},
+	}
+	s := NewScheduler(coord, updater, loader)
+	s.now = fixedClockAtMidnight()
+	s.afterFn = fastAfter(20 * time.Millisecond)
+	s.minTickInterval = time.Millisecond
+	s.reconcileEvery = time.Hour // periodic must not interfere
+	s.reconcileDebounce = 80 * time.Millisecond
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = s.Run(ctx) }()
+
+	// Let the initial (startup) reconcile land.
+	require.Eventually(t,
+		func() bool { return loader.listCalls.Load() >= 1 },
+		time.Second, 5*time.Millisecond,
+		"startup reconcile should run once",
+	)
+	baseline := loader.listCalls.Load()
+
+	// Fire a tight burst of 30 global-topic events well inside the
+	// 80ms debounce window.
+	for i := 0; i < 30; i++ {
+		PublishScheduleChange(ctx, coord, "acct-1")
+		time.Sleep(time.Millisecond)
+	}
+
+	// After the debounce settles, the whole burst must have produced
+	// exactly ONE extra reconcile, not 30.
+	require.Eventually(t,
+		func() bool { return loader.listCalls.Load() > baseline },
+		time.Second, 5*time.Millisecond,
+		"debounced reconcile should eventually fire once",
+	)
+	time.Sleep(150 * time.Millisecond) // let any stragglers (there should be none) show
+	got := loader.listCalls.Load() - baseline
+	assert.LessOrEqual(t, got, uint64(2),
+		"a 30-event burst must collapse to ~1 reconcile, got %d", got)
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────

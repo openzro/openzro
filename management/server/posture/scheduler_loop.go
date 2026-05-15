@@ -55,6 +55,15 @@ const schedulerLockKeyPrefix = "posture-scheduler:"
 // (see the N+1 fix) so running it on a timer is cheap.
 const reconcileInterval = 3 * time.Minute
 
+// reconcileDebounceInterval is how long the discovery loop waits
+// after the first global-topic event before reconciling, absorbing
+// any further events that land in the window into the same single
+// reconcile. Short enough that a newly schedule-bearing account is
+// still picked up within a couple seconds; long enough that a
+// bulk policy edit doesn't fan one full posture_checks scan per
+// mutation across every replica.
+const reconcileDebounceInterval = 2 * time.Second
+
 // AccountUpdater is the subset of the account-manager surface the
 // Scheduler depends on. Defining it here keeps the scheduler package
 // importable from management/server without creating a cycle —
@@ -128,6 +137,17 @@ type Scheduler struct {
 	// default into milliseconds; defaults to reconcileInterval in
 	// NewScheduler.
 	reconcileEvery time.Duration
+
+	// reconcileDebounce coalesces a burst of global-topic events
+	// into a single reconcile. PublishScheduleChange fires the
+	// global topic on EVERY posture-check mutation cluster-wide, and
+	// each reconcile is a full GetAllPostureChecks scan on every
+	// subscribed replica — without debounce, an operator bulk-editing
+	// policies would fan a storm of full scans across the fleet. A
+	// few seconds is invisible latency for "an account just gained a
+	// schedule" while absorbing edit bursts into one scan. Injectable
+	// for tests; defaults to reconcileDebounceInterval.
+	reconcileDebounce time.Duration
 }
 
 // NewScheduler wires the dependencies. Callers must call Run on the
@@ -141,14 +161,15 @@ func NewScheduler(coord cluster.Coordinator, updater AccountUpdater, loader Sche
 		panic("posture.NewScheduler: nil dependency")
 	}
 	return &Scheduler{
-		coord:           coord,
-		updater:         updater,
-		loader:          loader,
-		now:             time.Now,
-		afterFn:         time.After,
-		minTickInterval: 100 * time.Millisecond,
-		backoff:         time.Second,
-		reconcileEvery:  reconcileInterval,
+		coord:             coord,
+		updater:           updater,
+		loader:            loader,
+		now:               time.Now,
+		afterFn:           time.After,
+		minTickInterval:   100 * time.Millisecond,
+		backoff:           time.Second,
+		reconcileEvery:    reconcileInterval,
+		reconcileDebounce: reconcileDebounceInterval,
 	}
 }
 
@@ -219,9 +240,25 @@ func (s *Scheduler) Run(ctx context.Context) error {
 	ticker := time.NewTicker(s.reconcileEvery)
 	defer ticker.Stop()
 
+	// debounce coalesces a burst of global-topic events into one
+	// reconcile. PublishScheduleChange fires the global topic on
+	// every posture-check mutation cluster-wide and each reconcile is
+	// a full GetAllPostureChecks scan on every subscribed replica —
+	// reconciling per-event would fan a scan storm across the fleet
+	// during a bulk policy edit. The timer is armed by the first
+	// event and only re-armed after it fires, so any number of events
+	// inside the window collapse into a single reconcile. A nil
+	// channel blocks its select case forever (standard Go idiom) —
+	// that is the "no debounce pending" state.
+	var debounceTimer *time.Timer
+	var debounceCh <-chan time.Time
+
 	for {
 		select {
 		case <-ctx.Done():
+			if debounceTimer != nil {
+				debounceTimer.Stop()
+			}
 			// Children derive from ctx and unwind on their own; wait
 			// so Run only returns once they have actually stopped.
 			wg.Wait()
@@ -235,6 +272,15 @@ func (s *Scheduler) Run(ctx context.Context) error {
 				changed = nil
 				continue
 			}
+			if debounceTimer == nil {
+				debounceTimer = time.NewTimer(s.reconcileDebounce)
+				debounceCh = debounceTimer.C
+			}
+			// else: a debounce is already pending — this event folds
+			// into the reconcile it will trigger.
+		case <-debounceCh:
+			debounceTimer = nil
+			debounceCh = nil
 			reconcile()
 		}
 	}
@@ -246,10 +292,35 @@ func (s *Scheduler) Run(ctx context.Context) error {
 // replica is the elected leader for the account.
 func (s *Scheduler) runForAccount(ctx context.Context, accountID string) {
 	lockKey := schedulerLockKeyPrefix + accountID
-	invalidations, err := s.coord.Subscribe(ctx, scheduleChangedTopicPrefix+accountID)
-	if err != nil {
-		log.WithContext(ctx).Errorf("posture scheduler: subscribe failed for %s: %v", accountID, err)
-		return
+
+	// Subscribe with retry. A transient broker failure here used to
+	// `return`, killing the goroutine permanently — and because the
+	// discovery reconcile is add-only (it records the account as
+	// "running" and never respawns), that left the account with NO
+	// scheduler until a management restart. That is exactly the bug
+	// class auto-discovery set out to eliminate, just triggered by a
+	// broker hiccup instead of a post-boot account. So we now retry
+	// with backoff and only ever exit on ctx cancellation, preserving
+	// the add-only invariant: a live `running` entry always maps to a
+	// goroutine that is either working or retrying, never dead.
+	var invalidations <-chan cluster.Event
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		ch, err := s.coord.Subscribe(ctx, scheduleChangedTopicPrefix+accountID)
+		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return
+			}
+			log.WithContext(ctx).Warnf("posture scheduler: subscribe for %s failed: %v — retrying", accountID, err)
+			if !s.sleepBackoff(ctx) {
+				return
+			}
+			continue
+		}
+		invalidations = ch
+		break
 	}
 
 	for {
