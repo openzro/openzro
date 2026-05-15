@@ -424,7 +424,7 @@ var (
 					return fmt.Errorf("posture evaluations migrate: %w", err)
 				}
 				postureEvalStore = posture.NewGormEvalStore(gdb)
-				postureEvalRecorder = posture.NewBufferedRecorder(postureEvalStore, posture.BufferedRecorderOpts{})
+				postureEvalRecorder = posture.NewBufferedRecorder(postureEvalStore, posture.BufferedRecorderOpts{}, clusterCoord)
 				posture.SetDefaultEvalRecorder(postureEvalRecorder)
 				defer postureEvalRecorder.Close()
 				// Background retention worker — purges evaluations

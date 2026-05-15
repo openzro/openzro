@@ -80,7 +80,7 @@ func TestBufferedRecorder_FlushesOnBatchSize(t *testing.T) {
 		QueueSize:     128,
 		BatchSize:     3, // small so we hit it quickly
 		FlushInterval: 1 * time.Hour,
-	})
+	}, nil)
 	defer r.Close()
 
 	now := time.Now().UTC()
@@ -119,7 +119,7 @@ func TestBufferedRecorder_FlushesOnInterval(t *testing.T) {
 		QueueSize:     128,
 		BatchSize:     1000, // never hit
 		FlushInterval: 50 * time.Millisecond,
-	})
+	}, nil)
 	defer r.Close()
 
 	r.Record(context.Background(), PostureEvaluation{
@@ -151,7 +151,7 @@ func TestBufferedRecorder_FlushesOnClose(t *testing.T) {
 		QueueSize:     128,
 		BatchSize:     1000,
 		FlushInterval: 1 * time.Hour,
-	})
+	}, nil)
 
 	r.Record(context.Background(), PostureEvaluation{
 		AccountID:      "acct",
@@ -179,7 +179,7 @@ func TestBufferedRecorder_DropsOnOverflow(t *testing.T) {
 		QueueSize:     2,
 		BatchSize:     1,
 		FlushInterval: 1 * time.Hour,
-	})
+	}, nil)
 	// Defer order matters: close(released) must run BEFORE r.Close()
 	// so the drainer's blocked Insert can return. Register Close last
 	// so LIFO unwind runs close(released) first.
@@ -321,7 +321,7 @@ func BenchmarkRecord_HotPath(b *testing.B) {
 		QueueSize:     65536, // sized large so we never block in this loop
 		BatchSize:     200,
 		FlushInterval: 1 * time.Hour,
-	})
+	}, nil)
 	defer r.Close()
 
 	ev := PostureEvaluation{
@@ -347,7 +347,7 @@ func TestBufferedRecorder_DedupesIdenticalConsecutiveStates(t *testing.T) {
 		QueueSize:     128,
 		BatchSize:     1, // flush every record so we can assert on store
 		FlushInterval: 1 * time.Hour,
-	})
+	}, nil)
 	defer r.Close()
 
 	now := time.Now().UTC()
@@ -404,7 +404,7 @@ func TestBufferedRecorder_StateChangeBreaksDedup(t *testing.T) {
 		QueueSize:     128,
 		BatchSize:     1,
 		FlushInterval: 1 * time.Hour,
-	})
+	}, nil)
 	defer r.Close()
 
 	now := time.Now().UTC()
@@ -455,7 +455,7 @@ func TestBufferedRecorder_RefreshTTLBypassesDedup(t *testing.T) {
 		BatchSize:     1,
 		FlushInterval: 1 * time.Hour,
 		RefreshTTL:    100 * time.Millisecond,
-	})
+	}, nil)
 	defer r.Close()
 
 	now := time.Now().UTC()
@@ -505,7 +505,7 @@ func TestBufferedRecorder_DedupIsPerCheckType(t *testing.T) {
 		QueueSize:     128,
 		BatchSize:     1,
 		FlushInterval: 1 * time.Hour,
-	})
+	}, nil)
 	defer r.Close()
 
 	now := time.Now().UTC()

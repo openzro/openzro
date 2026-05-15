@@ -6,6 +6,8 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+
+	"github.com/openzro/openzro/cluster"
 )
 
 // BufferedRecorder is the production EvalRecorder: a non-blocking
@@ -30,23 +32,38 @@ import (
 // at startup and re-used across every Sync/policy-eval cycle.
 type BufferedRecorder struct {
 	store EvalStore
+	// coord is the optional cluster coordinator. When set, the
+	// recorder broadcasts every committed dedup-cache entry to peer
+	// replicas via dedupTopic so they can pre-populate their own
+	// caches and stop writing duplicates to the persistent store.
+	// nil in single-instance mode — falls back to per-replica dedup
+	// with no cross-replica chatter (i.e. each replica writes its
+	// own first row for a new state, up to N rows per state change
+	// in an N-replica cluster).
+	coord cluster.Coordinator
 
 	queueSize     int
 	batchSize     int
 	flushInterval time.Duration
 	refreshTTL    time.Duration
 
-	in        chan PostureEvaluation
-	closeOnce sync.Once
-	stop      chan struct{}
-	done      chan struct{}
+	in           chan PostureEvaluation
+	closeOnce    sync.Once
+	stop         chan struct{}
+	done         chan struct{}
+	subCtx       context.Context
+	subCancel    context.CancelFunc
 
-	mu       sync.Mutex
-	dropped  uint64
-	flushed  uint64
-	errored  uint64
-	deduped  uint64
-	cache    map[dedupKey]dedupValue
+	mu      sync.Mutex
+	dropped uint64
+	flushed uint64
+	errored uint64
+	deduped uint64
+	// fromPeers counts inbound dedup-broadcast hits — peer replica
+	// commits applied to the local cache. Useful as a signal that
+	// the cluster pub/sub layer is actually serving its purpose.
+	fromPeers uint64
+	cache     map[dedupKey]dedupValue
 }
 
 // dedupKey is the natural key the cache tracks. Includes check_type
@@ -102,7 +119,14 @@ type BufferedRecorderOpts struct {
 
 // NewBufferedRecorder starts the drainer goroutine. Close() must be
 // called at shutdown to flush the tail and stop the goroutine.
-func NewBufferedRecorder(store EvalStore, opts BufferedRecorderOpts) *BufferedRecorder {
+//
+// coord is the optional cluster coordinator wired in HA deployments.
+// When non-nil, the recorder broadcasts every committed dedup entry
+// to sibling replicas so they can pre-populate their local caches,
+// dropping the duplicate-row count on state changes from N (replica
+// count) to ~1 in steady state, ~2 in the race window. nil = single
+// instance mode, behaves as before.
+func NewBufferedRecorder(store EvalStore, opts BufferedRecorderOpts, coord cluster.Coordinator) *BufferedRecorder {
 	if opts.QueueSize <= 0 {
 		opts.QueueSize = 4096
 	}
@@ -115,8 +139,10 @@ func NewBufferedRecorder(store EvalStore, opts BufferedRecorderOpts) *BufferedRe
 	if opts.RefreshTTL <= 0 {
 		opts.RefreshTTL = 1 * time.Hour
 	}
+	subCtx, subCancel := context.WithCancel(context.Background())
 	r := &BufferedRecorder{
 		store:         store,
+		coord:         coord,
 		queueSize:     opts.QueueSize,
 		batchSize:     opts.BatchSize,
 		flushInterval: opts.FlushInterval,
@@ -124,9 +150,19 @@ func NewBufferedRecorder(store EvalStore, opts BufferedRecorderOpts) *BufferedRe
 		in:            make(chan PostureEvaluation, opts.QueueSize),
 		stop:          make(chan struct{}),
 		done:          make(chan struct{}),
+		subCtx:        subCtx,
+		subCancel:     subCancel,
 		cache:         make(map[dedupKey]dedupValue),
 	}
 	go r.run()
+
+	// Subscribe to peer broadcasts AFTER the drainer is up so we
+	// never drop an inbound event into a half-built recorder. The
+	// subscription is tied to a recorder-owned ctx (NOT the caller's)
+	// so it survives whatever request lifetime spawned the recorder.
+	if _, err := subscribeDedup(subCtx, coord, r); err != nil {
+		log.Warnf("posture: subscribe dedup failed: %v — cross-replica dedup disabled this instance", err)
+	}
 	return r
 }
 
@@ -161,15 +197,24 @@ func (r *BufferedRecorder) Record(ctx context.Context, e PostureEvaluation) {
 		r.mu.Unlock()
 		return
 	}
-	r.cache[key] = dedupValue{
+	commitVal := dedupValue{
 		Compliant:      e.Compliant,
 		Reason:         e.Reason,
 		LastRecordedAt: e.EvaluatedAt,
 	}
+	r.cache[key] = commitVal
 	r.mu.Unlock()
 
 	select {
 	case r.in <- e:
+		// Broadcast the freshly-committed dedup entry to sibling
+		// replicas so they can suppress their own write of the same
+		// state. We publish AFTER the local channel send, not before:
+		// the channel send is non-blocking, while publish goes over
+		// the broker and might add ms of latency. Order matters here
+		// because the publish's purpose is to prevent peer dupes,
+		// and dupes only matter once OUR local row is on its way.
+		publishDedup(r.coord, key, commitVal)
 	default:
 		r.mu.Lock()
 		r.dropped++
@@ -183,12 +228,47 @@ func (r *BufferedRecorder) Record(ctx context.Context, e PostureEvaluation) {
 	}
 }
 
-// Close flushes the in-flight buffer and stops the drainer. Idempotent.
+// applyDedupBroadcast updates the local cache with a state another
+// replica committed. Called by the subscriber goroutine on every
+// inbound event — NOT exposed publicly because it bypasses
+// publishDedup deliberately (an inbound event echoed back to the
+// broker would cause N² amplification across the cluster).
+//
+// Newer-wins by EvaluatedAt timestamp: if the local cache already
+// holds an entry with the same or fresher LastRecordedAt, the
+// inbound event is ignored. This is the simplest path to dedup
+// across replicas when both happen to evaluate the same peer in
+// the same window — whoever's timestamp is later wins, and the
+// loser becomes a no-op on its next Record(). Without this guard
+// a slow broadcast could clobber a fresher local state and
+// re-enable a duplicate write on the next Record().
+func (r *BufferedRecorder) applyDedupBroadcast(key dedupKey, value dedupValue) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if prev, ok := r.cache[key]; ok && !value.LastRecordedAt.After(prev.LastRecordedAt) {
+		return
+	}
+	r.cache[key] = value
+	r.fromPeers++
+}
+
+// Close flushes the in-flight buffer, tears down the cluster
+// subscription, and stops the drainer. Idempotent.
 func (r *BufferedRecorder) Close() {
 	if r == nil {
 		return
 	}
 	r.closeOnce.Do(func() {
+		// Cancel the subscriber ctx first so the subscriber goroutine
+		// stops trying to apply peer broadcasts to a recorder that's
+		// about to drain its tail. The stop signal then unwinds the
+		// main drainer loop after a final flush.
+		if r.subCancel != nil {
+			r.subCancel()
+		}
 		close(r.stop)
 		<-r.done
 	})
@@ -244,12 +324,12 @@ func (r *BufferedRecorder) run() {
 			flushTimer.Reset(r.flushInterval)
 		case <-statsTicker.C:
 			r.mu.Lock()
-			d, f, e, dd, sz := r.dropped, r.flushed, r.errored, r.deduped, len(r.cache)
+			d, f, e, dd, fp, sz := r.dropped, r.flushed, r.errored, r.deduped, r.fromPeers, len(r.cache)
 			r.mu.Unlock()
 			if d > 0 || e > 0 {
 				log.Infof(
-					"posture eval recorder stats: flushed=%d deduped=%d dropped=%d errored=%d cache_size=%d",
-					f, dd, d, e, sz,
+					"posture eval recorder stats: flushed=%d deduped=%d from_peers=%d dropped=%d errored=%d cache_size=%d",
+					f, dd, fp, d, e, sz,
 				)
 			}
 		case <-r.stop:
