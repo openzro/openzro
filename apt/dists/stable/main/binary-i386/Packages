@@ -4,13 +4,13 @@ Section:
 Installed-Size: 30828
 Maintainer: openZro <dev@openzro.io>
 Architecture: i386
-Version: 0.53.1~alpha.73
-Filename: pool/main/o/openzro/openzro_0.53.1-alpha.73_linux_386.deb
-Size: 11865210
-MD5sum: 38420452511b42fbe4a1faac7ff31941
-SHA1: 7609b10018a62451cd440aa92c39992b80d62551
-SHA256: 80a3eb0c56bf3236f0dd71733087f8e4a324e9fbb84472799a778b30c2a1d96f
-SHA512: 52fe6c872c78dc8b7bb5ad7ede9fc759f7b253627d0b9c86c762f887f839f24920363e2de96a01a94d8b8e71816a8a1a2a4dbeb3c16ec012fa615083a687f42a
+Version: 0.53.1~alpha.74
+Filename: pool/main/o/openzro/openzro_0.53.1-alpha.74_linux_386.deb
+Size: 11865214
+MD5sum: b25803400c516338f1c6e3a566011358
+SHA1: b59c5ca0170d06b2145bfd4e5f699ca09d600140
+SHA256: c66b84e0769b6bf0c761dc07e8621659054f1b6be8548dc9497349a918403a2c
+SHA512: f45eeaeeb752b3caffea6bda79004ff741dee687e1af7cb084cea0d6db3b4c35bcfb8a7220dd747cb6b5f6ed5ed22c950d31e7a473062223ee0ff2a8eef2aa70
 Description: openZro client (zero-trust mesh networking).
 Homepage: https://openzro.io/
 License: BSD-3-Clause
