@@ -140,7 +140,7 @@ func TestStore_RefreshIntervalDefaultsToFiveWhenZero(t *testing.T) {
 		Name: "x", Type: TypeIntune, Enabled: true,
 		// Operator left the form blank — zero arrives at Save.
 		RefreshIntervalMinutes: 0,
-		Intune: &IntuneConfig{TenantID: "t", ClientID: "c", ClientSecret: "s"},
+		Intune:                 &IntuneConfig{TenantID: "t", ClientID: "c", ClientSecret: "s"},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, uint16(5), row.RefreshIntervalMinutes,
@@ -155,4 +155,83 @@ func TestMDMProvider_ResolvedRefreshIntervalFallback(t *testing.T) {
 
 	p = MDMProvider{RefreshIntervalMinutes: 15}
 	assert.Equal(t, 15*time.Minute, p.ResolvedRefreshInterval())
+}
+
+func TestStore_SentinelOneComplianceRoundTrips(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	maxThreats := 0
+	in := SaveInput{
+		Name: "s1", Type: TypeSentinelOne, Enabled: true,
+		SentinelOne: &SentinelOneConfig{
+			ManagementURL: "https://acme.sentinelone.net",
+			APIToken:      "super-secret-token",
+			Compliance: SentinelOneCompliance{
+				MaxActiveThreats:        &maxThreats,
+				RequireDiskEncryption:   true,
+				RequireFirewall:         true,
+				RequireNetworkConnected: true,
+				MinAgentVersion:         "23.4.1",
+				SyncWindowMinutes:       1440,
+			},
+		},
+	}
+	row, err := s.Save(ctx, in)
+	require.NoError(t, err)
+
+	// Token must not leak into the public projection, but the
+	// (non-secret) compliance toggles must be present so the
+	// dashboard can render current state.
+	assert.NotContains(t, string(row.PublicConfig), "super-secret-token")
+	assert.Contains(t, string(row.PublicConfig), "require_disk_encryption")
+
+	decoded, err := s.Decrypt(row)
+	require.NoError(t, err)
+	cfg := decoded.(*SentinelOneConfig)
+	assert.Equal(t, "super-secret-token", cfg.APIToken, "secret round-trips via decrypt")
+	require.NotNil(t, cfg.Compliance.MaxActiveThreats)
+	assert.Equal(t, 0, *cfg.Compliance.MaxActiveThreats)
+	assert.True(t, cfg.Compliance.RequireDiskEncryption)
+	assert.True(t, cfg.Compliance.RequireFirewall)
+	assert.True(t, cfg.Compliance.RequireNetworkConnected)
+	assert.Equal(t, "23.4.1", cfg.Compliance.MinAgentVersion)
+	assert.Equal(t, 1440, cfg.Compliance.SyncWindowMinutes)
+
+	pub := cfg.PublicView()
+	assert.True(t, pub.Compliance.RequireFirewall)
+	assert.False(t, pub.HasAPIToken == false, "has_api_token must reflect the stored token")
+}
+
+func TestStore_SentinelOneComplianceValidation(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	neg := -1
+
+	bad := []SentinelOneCompliance{
+		{MaxActiveThreats: &neg},           // negative threshold
+		{SyncWindowMinutes: -5},            // negative window
+		{MinAgentVersion: "not-a-version"}, // unparseable floor
+	}
+	for i, comp := range bad {
+		_, err := s.Save(ctx, SaveInput{
+			Name: "s1", Type: TypeSentinelOne, Enabled: true,
+			SentinelOne: &SentinelOneConfig{
+				ManagementURL: "https://acme.sentinelone.net",
+				APIToken:      "t",
+				Compliance:    comp,
+			},
+		})
+		assert.Error(t, err, "case %d should be rejected at Save", i)
+	}
+
+	// Zero-value compliance is valid (the backward-compat baseline).
+	_, err := s.Save(ctx, SaveInput{
+		Name: "s1ok", Type: TypeSentinelOne, Enabled: true,
+		SentinelOne: &SentinelOneConfig{
+			ManagementURL: "https://acme.sentinelone.net",
+			APIToken:      "t",
+		},
+	})
+	assert.NoError(t, err, "empty compliance must be accepted")
 }

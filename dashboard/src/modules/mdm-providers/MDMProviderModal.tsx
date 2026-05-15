@@ -56,6 +56,15 @@ export default function MDMProviderModal({
   // SentinelOne fields
   const [s1URL, setS1URL] = useState("");
   const [s1Token, setS1Token] = useState("");
+  // SentinelOne compliance gates (all optional; empty/false = don't
+  // enforce — the always-on baseline still blocks
+  // decommissioned/infected/inactive server-side).
+  const [s1DiskEncryption, setS1DiskEncryption] = useState(false);
+  const [s1Firewall, setS1Firewall] = useState(false);
+  const [s1NetworkConnected, setS1NetworkConnected] = useState(false);
+  const [s1MinVersion, setS1MinVersion] = useState("");
+  const [s1MaxThreats, setS1MaxThreats] = useState(""); // "" = no threshold
+  const [s1SyncWindow, setS1SyncWindow] = useState(""); // minutes; "" = no recency req
 
   // Huntress fields
   const [huntressKey, setHuntressKey] = useState("");
@@ -86,10 +95,24 @@ export default function MDMProviderModal({
           setIntuneSecret("");
           setIntuneStrict(!!cfg?.strict_compliance);
           break;
-        case "sentinelone":
+        case "sentinelone": {
           setS1URL(cfg?.management_url ?? "");
           setS1Token("");
+          const sc = cfg?.compliance ?? {};
+          setS1DiskEncryption(!!sc.require_disk_encryption);
+          setS1Firewall(!!sc.require_firewall);
+          setS1NetworkConnected(!!sc.require_network_connected);
+          setS1MinVersion(sc.min_agent_version ?? "");
+          setS1MaxThreats(
+            sc.max_active_threats === undefined
+              ? ""
+              : String(sc.max_active_threats),
+          );
+          setS1SyncWindow(
+            sc.sync_window_minutes ? String(sc.sync_window_minutes) : "",
+          );
           break;
+        }
         case "huntress":
           setHuntressKey("");
           setHuntressSecret("");
@@ -110,6 +133,12 @@ export default function MDMProviderModal({
       setIntuneStrict(false);
       setS1URL("");
       setS1Token("");
+      setS1DiskEncryption(false);
+      setS1Firewall(false);
+      setS1NetworkConnected(false);
+      setS1MinVersion("");
+      setS1MaxThreats("");
+      setS1SyncWindow("");
       setHuntressKey("");
       setHuntressSecret("");
       setCSCloud("us-1");
@@ -133,9 +162,26 @@ export default function MDMProviderModal({
         strict_compliance: intuneStrict,
       };
     } else if (type === "sentinelone") {
+      // Only include keys the operator actually set so the wire
+      // payload stays a faithful "enforce exactly these" statement
+      // and the server's omitempty / zero-value defaults apply.
+      const compliance: NonNullable<
+        NonNullable<MDMProviderInput["sentinelone"]>["compliance"]
+      > = {};
+      if (s1DiskEncryption) compliance.require_disk_encryption = true;
+      if (s1Firewall) compliance.require_firewall = true;
+      if (s1NetworkConnected) compliance.require_network_connected = true;
+      if (s1MinVersion.trim())
+        compliance.min_agent_version = s1MinVersion.trim();
+      if (s1MaxThreats.trim() !== "")
+        compliance.max_active_threats = parseInt(s1MaxThreats, 10);
+      if (s1SyncWindow.trim() !== "")
+        compliance.sync_window_minutes = parseInt(s1SyncWindow, 10);
       base.sentinelone = {
         management_url: s1URL,
         api_token: s1Token || undefined,
+        compliance:
+          Object.keys(compliance).length > 0 ? compliance : undefined,
       };
     } else if (type === "huntress") {
       base.huntress = {
@@ -169,6 +215,18 @@ export default function MDMProviderModal({
     } else if (type === "sentinelone") {
       if (!s1URL) return "Management URL is required";
       if (!isEdit && !s1Token) return "API token is required";
+      if (s1MaxThreats.trim() !== "") {
+        const n = Number(s1MaxThreats);
+        if (!Number.isInteger(n) || n < 0)
+          return "Max active threats must be a whole number ≥ 0";
+      }
+      if (s1SyncWindow.trim() !== "") {
+        const n = Number(s1SyncWindow);
+        if (!Number.isInteger(n) || n < 1)
+          return "Sync window must be a whole number of minutes ≥ 1";
+      }
+      if (s1MinVersion.trim() && !/^\d+(\.\d+){0,3}/.test(s1MinVersion.trim()))
+        return "Minimum agent version must look like 23.4 or 23.4.1.234";
     } else if (type === "huntress") {
       if (!isEdit && (!huntressKey || !huntressSecret)) {
         return "API key and secret are required";
@@ -346,6 +404,77 @@ export default function MDMProviderModal({
                   value={s1Token}
                   onChange={(e) => setS1Token(e.target.value)}
                   placeholder={isEdit ? "(unchanged)" : ""}
+                />
+              </div>
+
+              <div className="mt-1 border-t border-oz2-border-soft pt-4">
+                <p className="text-[12px] leading-[1.5] text-oz2-text-muted">
+                  Compliance conditions. Decommissioned, infected, and
+                  inactive agents are always blocked. The conditions below
+                  are optional — enable only the ones you want enforced.
+                </p>
+              </div>
+              <FancyToggleSwitch
+                value={s1DiskEncryption}
+                onChange={setS1DiskEncryption}
+                label={"Require disk encryption"}
+                helpText={
+                  "Block devices whose SentinelOne agent does not report disk encryption enabled."
+                }
+              />
+              <FancyToggleSwitch
+                value={s1Firewall}
+                onChange={setS1Firewall}
+                label={"Require host firewall"}
+                helpText={
+                  "Block devices whose host firewall is not enabled per SentinelOne."
+                }
+              />
+              <FancyToggleSwitch
+                value={s1NetworkConnected}
+                onChange={setS1NetworkConnected}
+                label={"Require console connectivity"}
+                helpText={
+                  "Block agents not currently connected to the SentinelOne console — their posture data is stale even if the agent is locally active."
+                }
+              />
+              <div>
+                <OzLabel htmlFor="mdm-s1-maxthreats">
+                  Max active threats (optional)
+                </OzLabel>
+                <OzInput
+                  id="mdm-s1-maxthreats"
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={s1MaxThreats}
+                  onChange={(e) => setS1MaxThreats(e.target.value)}
+                  placeholder="e.g. 0 — leave blank to not enforce a threshold"
+                />
+              </div>
+              <div>
+                <OzLabel htmlFor="mdm-s1-minver">
+                  Minimum agent version (optional)
+                </OzLabel>
+                <OzInput
+                  id="mdm-s1-minver"
+                  value={s1MinVersion}
+                  onChange={(e) => setS1MinVersion(e.target.value)}
+                  placeholder="e.g. 23.4.1.234 — blank = no version floor"
+                />
+              </div>
+              <div>
+                <OzLabel htmlFor="mdm-s1-syncwindow">
+                  Sync window in minutes (optional)
+                </OzLabel>
+                <OzInput
+                  id="mdm-s1-syncwindow"
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={s1SyncWindow}
+                  onChange={(e) => setS1SyncWindow(e.target.value)}
+                  placeholder="e.g. 1440 (24h) — blank = no recency requirement"
                 />
               </div>
             </>

@@ -7,10 +7,29 @@ import (
 	"fmt"
 	"time"
 
+	goversion "github.com/hashicorp/go-version"
 	"gorm.io/gorm"
 
 	flowExports "github.com/openzro/openzro/management/server/flow_exports"
 )
+
+// validateSentinelOneCompliance rejects nonsensical operator input
+// at save time so a bad config can never reach the eval hot path
+// (where a misparse would fail-closed and silently block peers).
+func validateSentinelOneCompliance(c SentinelOneCompliance) error {
+	if c.MaxActiveThreats != nil && *c.MaxActiveThreats < 0 {
+		return errors.New("mdm: sentinelone max_active_threats must be >= 0")
+	}
+	if c.SyncWindowMinutes < 0 {
+		return errors.New("mdm: sentinelone sync_window_minutes must be >= 0")
+	}
+	if c.MinAgentVersion != "" {
+		if _, err := goversion.NewVersion(c.MinAgentVersion); err != nil {
+			return fmt.Errorf("mdm: sentinelone min_agent_version %q is not a valid version", c.MinAgentVersion)
+		}
+	}
+	return nil
+}
 
 // ErrNotFound is returned when no row matches the lookup. Callers
 // translate it to HTTP 404 at the API layer.
@@ -90,6 +109,9 @@ func (in *SaveInput) Validate() error {
 	case TypeSentinelOne:
 		if in.SentinelOne == nil || in.SentinelOne.ManagementURL == "" {
 			return errors.New("mdm: sentinelone management_url is required")
+		}
+		if err := validateSentinelOneCompliance(in.SentinelOne.Compliance); err != nil {
+			return err
 		}
 	case TypeHuntress:
 		if in.Huntress == nil {

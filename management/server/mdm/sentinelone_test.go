@@ -6,10 +6,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func intPtr(n int) *int { return &n }
 
 func newS1Server(t *testing.T, agents map[string]s1Agent, status int) *httptest.Server {
 	t.Helper()
@@ -119,4 +122,138 @@ func TestSentinelOne_403GivesActionableError(t *testing.T) {
 	_, err := newS1For(t, srv).lookupAt(context.Background(), srv.URL, "any")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Viewer role")
+}
+
+// ─── configurable compliance gates ────────────────────────────────────
+
+// healthy is a baseline-passing agent: active, not infected, not
+// decommissioned. Each subtest layers one opt-in gate on top.
+func healthy() s1Agent {
+	return s1Agent{
+		ComputerName: "host", IsActive: true, OperationalState: "active",
+		NetworkStatus: "connected", AgentVersion: "23.4.1.234",
+		LastActiveDate: time.Now().UTC().Format(time.RFC3339Nano),
+	}
+}
+
+func TestStatusFromS1Agent_ZeroComplianceIsLegacyBaseline(t *testing.T) {
+	// The whole point of the backward-compat contract: an empty
+	// compliance config must reproduce the pre-feature behavior.
+	st := statusFromS1Agent(healthy(), SentinelOneCompliance{})
+	assert.True(t, st.Compliant)
+
+	for _, a := range []s1Agent{
+		{IsDecommissioned: true},
+		{IsActive: true, Infected: true},
+		{IsActive: false},
+	} {
+		st := statusFromS1Agent(a, SentinelOneCompliance{})
+		assert.False(t, st.Compliant, "baseline gate must still block %+v", a)
+	}
+}
+
+func TestStatusFromS1Agent_BaselineWinsOverOptInGates(t *testing.T) {
+	// A decommissioned agent that would satisfy every opt-in gate is
+	// still blocked, and the reason is the baseline one (most
+	// fundamental signal wins the Reason string).
+	a := healthy()
+	a.IsDecommissioned = true
+	a.EncryptedApplications = true
+	a.FirewallEnabled = true
+	st := statusFromS1Agent(a, SentinelOneCompliance{
+		RequireDiskEncryption:   true,
+		RequireFirewall:         true,
+		RequireNetworkConnected: true,
+	})
+	assert.False(t, st.Compliant)
+	assert.Contains(t, st.Reason, "decommissioned")
+}
+
+func TestStatusFromS1Agent_MaxActiveThreats(t *testing.T) {
+	a := healthy()
+	a.ActiveThreats = 3
+
+	// nil = no threshold → baseline only → compliant.
+	assert.True(t, statusFromS1Agent(a, SentinelOneCompliance{}).Compliant)
+	// 0 tolerance → blocked.
+	st := statusFromS1Agent(a, SentinelOneCompliance{MaxActiveThreats: intPtr(0)})
+	assert.False(t, st.Compliant)
+	assert.Contains(t, st.Reason, "active threats")
+	// threshold above the count → allowed.
+	assert.True(t, statusFromS1Agent(a, SentinelOneCompliance{MaxActiveThreats: intPtr(5)}).Compliant)
+}
+
+func TestStatusFromS1Agent_DiskEncryptionAndFirewall(t *testing.T) {
+	a := healthy() // EncryptedApplications/FirewallEnabled default false
+
+	st := statusFromS1Agent(a, SentinelOneCompliance{RequireDiskEncryption: true})
+	assert.False(t, st.Compliant)
+	assert.Contains(t, st.Reason, "disk encryption")
+
+	st = statusFromS1Agent(a, SentinelOneCompliance{RequireFirewall: true})
+	assert.False(t, st.Compliant)
+	assert.Contains(t, st.Reason, "firewall")
+
+	a.EncryptedApplications = true
+	a.FirewallEnabled = true
+	assert.True(t, statusFromS1Agent(a, SentinelOneCompliance{
+		RequireDiskEncryption: true, RequireFirewall: true,
+	}).Compliant)
+}
+
+func TestStatusFromS1Agent_NetworkConnected(t *testing.T) {
+	a := healthy()
+	a.NetworkStatus = "disconnected"
+	st := statusFromS1Agent(a, SentinelOneCompliance{RequireNetworkConnected: true})
+	assert.False(t, st.Compliant)
+	assert.Contains(t, st.Reason, "not connected")
+
+	// Case-insensitive match on the keyword.
+	a.NetworkStatus = "Connected"
+	assert.True(t, statusFromS1Agent(a, SentinelOneCompliance{RequireNetworkConnected: true}).Compliant)
+}
+
+func TestStatusFromS1Agent_MinAgentVersion(t *testing.T) {
+	a := healthy()
+	a.AgentVersion = "23.1.0.1"
+	st := statusFromS1Agent(a, SentinelOneCompliance{MinAgentVersion: "23.4"})
+	assert.False(t, st.Compliant)
+	assert.Contains(t, st.Reason, "below the required")
+
+	a.AgentVersion = "23.5.0.0"
+	assert.True(t, statusFromS1Agent(a, SentinelOneCompliance{MinAgentVersion: "23.4"}).Compliant)
+
+	// Fail-closed: unparseable agent version cannot prove the floor.
+	a.AgentVersion = "garbage"
+	st = statusFromS1Agent(a, SentinelOneCompliance{MinAgentVersion: "23.4"})
+	assert.False(t, st.Compliant)
+	assert.Contains(t, st.Reason, "unparseable")
+
+	// Fail-closed: misconfigured floor surfaces, does not silently pass.
+	a.AgentVersion = "99.0"
+	st = statusFromS1Agent(a, SentinelOneCompliance{MinAgentVersion: "not-a-version"})
+	assert.False(t, st.Compliant)
+	assert.Contains(t, st.Reason, "invalid")
+}
+
+func TestStatusFromS1Agent_SyncWindow(t *testing.T) {
+	a := healthy()
+	a.LastActiveDate = time.Now().UTC().Add(-3 * time.Hour).Format(time.RFC3339Nano)
+
+	// 24h window → 3h-old check-in is fine.
+	assert.True(t, statusFromS1Agent(a, SentinelOneCompliance{SyncWindowMinutes: 1440}).Compliant)
+
+	// 60m window → 3h-old check-in is stale.
+	st := statusFromS1Agent(a, SentinelOneCompliance{SyncWindowMinutes: 60})
+	assert.False(t, st.Compliant)
+	assert.Contains(t, st.Reason, "sync window")
+
+	// Fail-closed: empty / unparseable timestamp is treated as stale.
+	a.LastActiveDate = ""
+	st = statusFromS1Agent(a, SentinelOneCompliance{SyncWindowMinutes: 60})
+	assert.False(t, st.Compliant)
+
+	a.LastActiveDate = "not-a-date"
+	st = statusFromS1Agent(a, SentinelOneCompliance{SyncWindowMinutes: 60})
+	assert.False(t, st.Compliant)
 }

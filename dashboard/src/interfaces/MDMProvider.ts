@@ -38,9 +38,29 @@ export interface IntunePublicConfig {
   has_client_secret: boolean;
 }
 
+// SentinelOneCompliance mirrors the backend operator-tunable gate
+// set. All fields optional; an absent/zero value means "don't
+// enforce this condition". The baseline gates (decommissioned /
+// infected / inactive) are always-on server-side and intentionally
+// NOT represented here — they are not operator-tunable.
+export interface SentinelOneCompliance {
+  // Max active threats tolerated. Omitted = no threshold (the
+  // always-on infected gate still blocks confirmed infections).
+  max_active_threats?: number;
+  require_disk_encryption?: boolean;
+  require_firewall?: boolean;
+  require_network_connected?: boolean;
+  // Semver floor; agents older than this are blocked. Empty = none.
+  min_agent_version?: string;
+  // Block agents whose last check-in is older than this many
+  // minutes. 0 / omitted = no recency requirement.
+  sync_window_minutes?: number;
+}
+
 export interface SentinelOnePublicConfig {
   management_url: string;
   has_api_token: boolean;
+  compliance?: SentinelOneCompliance;
 }
 
 export interface HuntressPublicConfig {
@@ -82,6 +102,7 @@ export interface MDMProviderInput {
   sentinelone?: {
     management_url: string;
     api_token?: string;
+    compliance?: SentinelOneCompliance;
   };
   huntress?: {
     api_key?: string;
