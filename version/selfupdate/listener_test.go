@@ -28,7 +28,7 @@ func TestNewListener_UnsupportedPlatform(t *testing.T) {
 }
 
 func TestNewListener_SingleFlight(t *testing.T) {
-	srv := updaterServer(t, 0, "2.0.0")
+	srv := updaterServer(t, 100, "2.0.0")
 	defer srv.Close()
 	cfg := baseCfg(srv)
 	bi := &blockingInstaller{release: make(chan struct{})}
@@ -86,7 +86,7 @@ func (p *panicInstaller) Install(_ context.Context, _ string) error {
 }
 
 func TestNewListener_PanicRecovered(t *testing.T) {
-	srv := updaterServer(t, 0, "2.0.0")
+	srv := updaterServer(t, 100, "2.0.0")
 	defer srv.Close()
 	cfg := baseCfg(srv)
 	pi := &panicInstaller{}

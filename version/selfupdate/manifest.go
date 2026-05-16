@@ -41,6 +41,11 @@ import (
 // misconfigured endpoint streaming forever.
 const maxManifestBytes = 256 * 1024
 
+// httpDrainCap bounds the keep-alive drain on a finished/rejected
+// response so a hostile endpoint cannot turn the cleanup into a
+// bandwidth/latency DoS (Codex-4).
+const httpDrainCap = 4 * 1024
+
 // envManifestURL overrides the manifest location. Empty disables
 // self-update (parity with the version-check env switch). The default
 // publishing path on the release infra is an open release-pipeline
@@ -69,10 +74,15 @@ type Manifest struct {
 	// release we will not keep alive (e.g. a security cut). It makes
 	// the update critical — see gate.go.
 	MinVersion string `json:"min_version,omitempty"`
-	// StagedRollout is the percent of the fleet eligible (0..100).
-	// 0 and 100 both mean "everyone"; an intermediate N gates by a
-	// stable per-client bucket so a bad release is caught on a slice.
-	StagedRollout int `json:"staged_rollout"`
+	// StagedRollout is the percent of the fleet eligible. It is a
+	// POINTER on purpose (review finding S1/Codex-1): an omitted JSON
+	// field must be distinguishable from an explicit 0, otherwise a
+	// malformed/incomplete manifest silently becomes a full rollout via
+	// Go's zero value. ParseManifest REQUIRES it. Semantics are
+	// fail-closed: 100 = everyone, 0 = nobody (not "everyone"), 1..99 =
+	// stable-bucket gate; an absent field is a rejected manifest, never
+	// a full rollout.
+	StagedRollout *int `json:"staged_rollout"`
 	// Artifacts is keyed by "<goos>/<goarch>" (e.g. "darwin/arm64").
 	Artifacts map[string]Artifact `json:"artifacts"`
 }
@@ -92,13 +102,24 @@ func ParseManifest(body []byte) (*Manifest, error) {
 	if _, err := goversion.NewVersion(m.Version); err != nil {
 		return nil, fmt.Errorf("selfupdate: manifest version %q invalid: %w", m.Version, err)
 	}
+	ver, _ := goversion.NewVersion(m.Version)
 	if m.MinVersion != "" {
-		if _, err := goversion.NewVersion(m.MinVersion); err != nil {
+		minv, err := goversion.NewVersion(m.MinVersion)
+		if err != nil {
 			return nil, fmt.Errorf("selfupdate: manifest min_version %q invalid: %w", m.MinVersion, err)
 		}
+		// A floor above the offered version is an incoherent manifest:
+		// installing it still leaves the client below its own declared
+		// floor (Codex-5). Reject at the edge.
+		if minv.GreaterThan(ver) {
+			return nil, fmt.Errorf("selfupdate: min_version %s is greater than version %s", m.MinVersion, m.Version)
+		}
 	}
-	if m.StagedRollout < 0 || m.StagedRollout > 100 {
-		return nil, fmt.Errorf("selfupdate: staged_rollout %d out of range 0..100", m.StagedRollout)
+	if m.StagedRollout == nil {
+		return nil, fmt.Errorf("selfupdate: manifest must declare staged_rollout explicitly")
+	}
+	if *m.StagedRollout < 0 || *m.StagedRollout > 100 {
+		return nil, fmt.Errorf("selfupdate: staged_rollout %d out of range 0..100", *m.StagedRollout)
 	}
 	if len(m.Artifacts) == 0 {
 		return nil, fmt.Errorf("selfupdate: manifest has no artifacts")
@@ -143,6 +164,7 @@ func FetchManifest(ctx context.Context, client *http.Client, url, userAgent stri
 	if err := requireSafeScheme(url); err != nil {
 		return nil, err
 	}
+	client = clientWithRedirectGuard(client)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("selfupdate: build manifest request: %w", err)
@@ -155,15 +177,24 @@ func FetchManifest(ctx context.Context, client *http.Client, url, userAgent stri
 		return nil, fmt.Errorf("selfupdate: fetch manifest: %w", err)
 	}
 	defer func() {
-		_, _ = io.Copy(io.Discard, resp.Body)
+		// Bounded drain only (Codex-4): for a rejected/hostile/oversized
+		// response, draining the whole body wastes bandwidth and holds
+		// the goroutine. A small drain is enough for keep-alive reuse on
+		// the normal small-body path; anything bigger is abandoned.
+		_, _ = io.CopyN(io.Discard, resp.Body, httpDrainCap)
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("selfupdate: manifest endpoint returned HTTP %d", resp.StatusCode)
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxManifestBytes))
+	// Read one byte past the cap so an over-limit body is DETECTED
+	// (Codex-3), not silently truncated to a valid-looking prefix.
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxManifestBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("selfupdate: read manifest body: %w", err)
+	}
+	if int64(len(body)) > maxManifestBytes {
+		return nil, fmt.Errorf("selfupdate: manifest exceeds %d byte cap", maxManifestBytes)
 	}
 	return ParseManifest(body)
 }

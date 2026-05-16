@@ -27,6 +27,7 @@ func Download(ctx context.Context, client *http.Client, a Artifact, dir string) 
 	if err := requireSafeScheme(a.URL); err != nil {
 		return "", err
 	}
+	client = clientWithRedirectGuard(client)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, a.URL, nil)
 	if err != nil {
 		return "", fmt.Errorf("selfupdate: build download request: %w", err)
@@ -36,7 +37,11 @@ func Download(ctx context.Context, client *http.Client, a Artifact, dir string) 
 		return "", fmt.Errorf("selfupdate: download: %w", err)
 	}
 	defer func() {
-		_, _ = io.Copy(io.Discard, resp.Body)
+		// Bounded drain (Codex-4): on an oversized/hostile/404 body,
+		// draining it all wastes bandwidth and holds the goroutine. A
+		// small drain preserves keep-alive on the normal path; anything
+		// bigger is abandoned (the connection is dropped instead).
+		_, _ = io.CopyN(io.Discard, resp.Body, httpDrainCap)
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode != http.StatusOK {

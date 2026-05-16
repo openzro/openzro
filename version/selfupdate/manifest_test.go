@@ -32,8 +32,10 @@ func TestParseManifest(t *testing.T) {
 		{"rollout over 100", `{"version":"1.0.0","staged_rollout":101,"artifacts":{"x/y":{"url":"u","sha256":"s"}}}`, true},
 		{"rollout negative", `{"version":"1.0.0","staged_rollout":-1,"artifacts":{"x/y":{"url":"u","sha256":"s"}}}`, true},
 		{"no artifacts", `{"version":"1.0.0","staged_rollout":0,"artifacts":{}}`, true},
-		{"artifact missing url", `{"version":"1.0.0","artifacts":{"x/y":{"sha256":"s"}}}`, true},
-		{"artifact missing sha256", `{"version":"1.0.0","artifacts":{"x/y":{"url":"u"}}}`, true},
+		{"artifact missing url", `{"version":"1.0.0","staged_rollout":0,"artifacts":{"x/y":{"sha256":"s"}}}`, true},
+		{"artifact missing sha256", `{"version":"1.0.0","staged_rollout":0,"artifacts":{"x/y":{"url":"u"}}}`, true},
+		{"missing staged_rollout (must be explicit)", `{"version":"1.0.0","artifacts":{"x/y":{"url":"u","sha256":"s"}}}`, true},
+		{"min_version greater than version", `{"version":"1.0.0","min_version":"2.0.0","staged_rollout":0,"artifacts":{"x/y":{"url":"u","sha256":"s"}}}`, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

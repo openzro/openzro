@@ -27,7 +27,7 @@ func TestRunOnce_CycleTimeoutAborts(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/manifest", func(w http.ResponseWriter, r *http.Request) {
 		base := "http://" + r.Host
-		_, _ = w.Write([]byte(`{"version":"9.9.9","staged_rollout":0,
+		_, _ = w.Write([]byte(`{"version":"9.9.9","staged_rollout":100,
 		  "artifacts":{"darwin/arm64":{"url":"` + base + `/artifact","sha256":"` + sha256hex(payload) + `"}}}`))
 	})
 	mux.HandleFunc("/artifact", func(w http.ResponseWriter, r *http.Request) {

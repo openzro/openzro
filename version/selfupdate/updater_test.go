@@ -72,7 +72,7 @@ func TestNew_PlatformGate(t *testing.T) {
 }
 
 func TestRunOnce_HappyPath(t *testing.T) {
-	srv := updaterServer(t, 0, "1.2.0")
+	srv := updaterServer(t, 100, "1.2.0")
 	defer srv.Close()
 	cfg := baseCfg(srv)
 	v, in := &fakeVerifier{}, &fakeInstaller{}
@@ -95,7 +95,7 @@ func TestRunOnce_HappyPath(t *testing.T) {
 }
 
 func TestRunOnce_NotEligibleIsSkipNotError(t *testing.T) {
-	srv := updaterServer(t, 0, "1.2.0")
+	srv := updaterServer(t, 100, "1.2.0")
 	defer srv.Close()
 	cfg := baseCfg(srv)
 	cfg.AutoInstallEnabled = false // default-off: surface only
@@ -116,7 +116,7 @@ func TestRunOnce_NotEligibleIsSkipNotError(t *testing.T) {
 }
 
 func TestRunOnce_VerifyFailsAbortsBeforeInstall(t *testing.T) {
-	srv := updaterServer(t, 0, "1.2.0")
+	srv := updaterServer(t, 100, "1.2.0")
 	defer srv.Close()
 	cfg := baseCfg(srv)
 	v := &fakeVerifier{err: fmt.Errorf("not notarized")}
@@ -133,7 +133,7 @@ func TestRunOnce_VerifyFailsAbortsBeforeInstall(t *testing.T) {
 }
 
 func TestRunOnce_InstallFailsIsError(t *testing.T) {
-	srv := updaterServer(t, 0, "1.2.0")
+	srv := updaterServer(t, 100, "1.2.0")
 	defer srv.Close()
 	cfg := baseCfg(srv)
 	cfg.Verifier = &fakeVerifier{}
@@ -154,7 +154,7 @@ func TestRunOnce_DisabledWhenNoManifestURL(t *testing.T) {
 }
 
 func TestRunOnce_NoArtifactForPlatform(t *testing.T) {
-	srv := updaterServer(t, 0, "1.2.0")
+	srv := updaterServer(t, 100, "1.2.0")
 	defer srv.Close()
 	cfg := baseCfg(srv)
 	cfg.GOARCH = "amd64" // manifest only has darwin/arm64

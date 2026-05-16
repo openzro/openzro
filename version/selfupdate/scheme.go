@@ -3,8 +3,34 @@ package selfupdate
 import (
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 )
+
+// clientWithRedirectGuard returns a shallow copy of c whose
+// CheckRedirect re-applies requireSafeScheme to EVERY hop. Without
+// this, requireSafeScheme on the initial URL is bypassable: a
+// 302 https://… -> http://mirror downgrades the (phase-1 unsigned)
+// manifest/artifact onto plain HTTP, the exact MITM the guard exists
+// to stop (Codex-2). The copy is non-mutating to the caller's client
+// and preserves any existing CheckRedirect and the Transport.
+func clientWithRedirectGuard(c *http.Client) *http.Client {
+	cp := *c
+	prev := cp.CheckRedirect
+	cp.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return fmt.Errorf("selfupdate: too many redirects")
+		}
+		if err := requireSafeScheme(req.URL.String()); err != nil {
+			return err
+		}
+		if prev != nil {
+			return prev(req, via)
+		}
+		return nil
+	}
+	return &cp
+}
 
 // requireSafeScheme refuses any URL that is not https, EXCEPT http to
 // a loopback host (127.0.0.0/8, ::1, localhost) — loopback cannot be

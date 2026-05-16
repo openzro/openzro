@@ -77,10 +77,26 @@ func Evaluate(in GateInput) Decision {
 	}
 
 	// Staged rollout is the last gate, and critical updates skip it: a
-	// security floor breach should not be slow-rolled.
-	if !critical && in.Manifest.StagedRollout > 0 && in.Manifest.StagedRollout < 100 {
-		if b := bucketOf(in.ClientID); b >= in.Manifest.StagedRollout {
-			return Decision{Reason: fmt.Sprintf("not in staged rollout (bucket %d >= %d%%)", b, in.Manifest.StagedRollout)}
+	// security floor breach should not be slow-rolled. Everything here
+	// is fail-CLOSED (Codex-1): absent declaration, 0%, or no stable
+	// client id all mean "do not update", never "update everyone".
+	if !critical {
+		if in.Manifest.StagedRollout == nil {
+			return Decision{Reason: "manifest declares no staged_rollout — refusing"}
+		}
+		r := *in.Manifest.StagedRollout
+		switch {
+		case r <= 0:
+			return Decision{Reason: "staged_rollout 0% — not released to any client yet"}
+		case r >= 100:
+			// everyone — no per-client gate
+		default:
+			if in.ClientID == "" {
+				return Decision{Reason: fmt.Sprintf("no stable client id — excluded from %d%% staged rollout", r)}
+			}
+			if b := bucketOf(in.ClientID); b >= r {
+				return Decision{Reason: fmt.Sprintf("not in staged rollout (bucket %d >= %d%%)", b, r)}
+			}
 		}
 	}
 
