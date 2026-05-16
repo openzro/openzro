@@ -42,3 +42,21 @@ func TestDownload_RejectsUnsafeScheme(t *testing.T) {
 		t.Fatal("plain-http non-loopback artifact URL must be refused before any fetch")
 	}
 }
+
+// TestDownload_RejectsDowngradeRedirect mirrors the manifest redirect
+// test on the artifact path (Codex follow-up): the initial URL passes
+// (loopback http) but a 302 to a routable plain-http mirror must be
+// rejected at the hop, not silently followed. The redirect guard is a
+// shared helper and correct today — this blinds the intent against a
+// future regression that only kept it on the manifest path.
+func TestDownload_RejectsDowngradeRedirect(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://updates.evil.example/openzro.pkg", http.StatusFound)
+	}))
+	defer srv.Close()
+	_, err := Download(context.Background(), srv.Client(),
+		Artifact{URL: srv.URL, SHA256: "irrelevant"}, t.TempDir())
+	if err == nil {
+		t.Fatal("a redirect downgrading the artifact to non-loopback http must be refused")
+	}
+}
