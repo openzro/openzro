@@ -1,7 +1,9 @@
 // Package safedial builds net/http clients whose dialer refuses to
 // connect to addresses that are never a legitimate destination for an
-// operator-configured outbound URL: the local loopback and the cloud
-// instance-metadata service.
+// operator-configured outbound URL: local loopback (including the
+// 0.0.0.0/:: unspecified address, which connect()s to loopback on
+// Linux) and the cloud instance/container-credential metadata
+// endpoints (classic IMDS plus the AWS ECS/EKS credential addresses).
 //
 // Scope is deliberately narrow (see openzro/openzro#40). It does NOT
 // block RFC1918 or general link-local: self-host operators legitimately
@@ -11,9 +13,9 @@
 // can point an exporter at an internal RFC1918 service" is an accepted
 // property of "admin configures an outbound URL" and is out of scope —
 // this guard does not pretend to solve what cannot be solved without
-// breaking the feature. It blocks only the two things that are never
-// legitimate: the process talking to its own loopback (Redis, NATS,
-// the management API) and metadata-based cloud-credential theft.
+// breaking the feature. It blocks only what is never legitimate: the
+// process talking to its own loopback (Redis, NATS, the management
+// API) and metadata-based cloud-credential theft.
 //
 // The check runs in net.Dialer.ControlContext, i.e. AFTER name
 // resolution on the concrete IP the connection will use. That is what
@@ -36,13 +38,21 @@ import (
 	"time"
 )
 
-// metaV4 is the IPv4 instance-metadata address used by AWS, GCP,
-// Azure, DigitalOcean and OpenStack. metaV6 is AWS' IMDSv6 address.
+// blockedMeta are the cloud instance/container-credential metadata
+// addresses. Stealing creds from one of these is the canonical SSRF
+// payoff, so all of them are refused — not just the classic IMDS IP.
+// The 169.254.170.x pair matters specifically because openZro ships a
+// Helm chart: EKS/ECS is a first-class deployment and that is where
+// the credential endpoint is NOT 169.254.169.254.
+//
 // Alibaba's 100.100.100.200 is intentionally out of scope (#40).
-var (
-	metaV4 = net.IPv4(169, 254, 169, 254)
-	metaV6 = net.ParseIP("fd00:ec2::254")
-)
+var blockedMeta = []net.IP{
+	net.IPv4(169, 254, 169, 254), // AWS/GCP/Azure/DigitalOcean/OpenStack IMDS
+	net.IPv4(169, 254, 170, 2),   // AWS ECS task-credentials endpoint
+	net.IPv4(169, 254, 170, 23),  // AWS EKS Pod Identity (IPv4)
+	net.ParseIP("fd00:ec2::254"), // AWS IMDSv6
+	net.ParseIP("fd00:ec2::23"),  // AWS EKS Pod Identity (IPv6)
+}
 
 // isBlocked reports whether ip must never be dialed. A nil / unparsed
 // ip fails closed: an address we cannot classify is one we refuse.
@@ -50,10 +60,18 @@ func isBlocked(ip net.IP) bool {
 	if ip == nil {
 		return true
 	}
-	if ip.IsLoopback() {
+	// IsUnspecified catches 0.0.0.0 / :: — on Linux a connect() to the
+	// unspecified address goes to loopback, so it is a loopback bypass
+	// that IsLoopback() does not cover.
+	if ip.IsLoopback() || ip.IsUnspecified() {
 		return true
 	}
-	return ip.Equal(metaV4) || ip.Equal(metaV6)
+	for _, m := range blockedMeta {
+		if ip.Equal(m) {
+			return true
+		}
+	}
+	return false
 }
 
 // guardedControl is the net.Dialer.ControlContext hook. address is the

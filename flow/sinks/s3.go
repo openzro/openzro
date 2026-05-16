@@ -124,6 +124,14 @@ func NewS3(ctx context.Context, cfg S3Config) (*S3, error) {
 		// dialer (loopback + cloud metadata) but pass timeout 0: the
 		// AWS SDK manages its own per-operation deadlines and retries,
 		// so only the dial-time block is wanted, not a client timeout.
+		//
+		// Sharp edge: WithHTTPClient applies to the whole aws.Config,
+		// including the EC2 IMDS credential provider. So a custom
+		// endpoint + reliance on instance-role creds (no static
+		// AccessKey) breaks: the SDK's own IMDS fetch to 169.254.169.254
+		// is now guard-blocked. This is acceptable because a custom
+		// endpoint means a non-AWS target (MinIO/R2/B2) where auth is
+		// static keys, not instance roles — set AccessKey/SecretKey.
 		loadOpts = append(loadOpts, awsconfig.WithHTTPClient(safedial.Client(0)))
 	}
 
