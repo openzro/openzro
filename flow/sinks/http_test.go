@@ -197,6 +197,60 @@ func TestHTTP_DropsAfterMaxAttempts(t *testing.T) {
 	}
 }
 
+// TestHTTP_4xxIsNotRetried locks the poison-response posture: a
+// permanent config error (401/404) must NOT be retried per batch even
+// with MaxAttempts>1 — otherwise a misconfigured receiver becomes a
+// retry storm that stalls the single drainer. Mirrors the activity
+// HTTP webhook's deliberate 4xx handling.
+func TestHTTP_4xxIsNotRetried(t *testing.T) {
+	var attempts int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&attempts, 1)
+		w.WriteHeader(http.StatusUnauthorized) // 401 — permanent
+	}))
+	defer srv.Close()
+
+	exp, err := NewHTTP(HTTPConfig{
+		URL:            srv.URL,
+		BatchSize:      1,
+		FlushInterval:  50 * time.Millisecond,
+		MaxAttempts:    3,
+		InitialBackoff: 5 * time.Millisecond,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = exp.Close() })
+
+	require.NoError(t, exp.Save(context.Background(), []*store.Event{sampleEvent()}))
+
+	time.Sleep(300 * time.Millisecond)
+	assert.Equal(t, int32(1), atomic.LoadInt32(&attempts),
+		"4xx must be delivered-once-then-dropped, never retried")
+}
+
+// TestHTTP_RejectsInvalidURL fails fast at construction so an
+// env-configured typo does not silently fail every flush forever.
+func TestHTTP_RejectsInvalidURL(t *testing.T) {
+	for _, bad := range []string{
+		"", "   ", "notaurl", "ftp://host/x", "http://", "://nohost",
+	} {
+		_, err := NewHTTP(HTTPConfig{URL: bad})
+		assert.Error(t, err, "must reject %q", bad)
+	}
+}
+
+// TestHTTP_LogURLStripsCredentials proves the log endpoint never
+// carries userinfo / path / query — an operator who put a secret in
+// the URL must not see it echoed to logs (CLAUDE.md: no secrets in
+// logs).
+func TestHTTP_LogURLStripsCredentials(t *testing.T) {
+	exp, err := NewHTTP(HTTPConfig{
+		URL: "https://user:s3cr3t@collector.example:9200/ingest?token=abc",
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = exp.Close() })
+	assert.Equal(t, "https://collector.example:9200", exp.logURL)
+}
+
 // TestHTTP_Save_NonBlockingDropsOnFullQueue locks the hot-path
 // contract from store.go: Save MUST NOT block past a small bounded
 // buffer. A wedged destination + a tiny buffer must still return

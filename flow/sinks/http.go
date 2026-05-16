@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -22,11 +24,22 @@ import (
 // exponential growth can never wedge the drainer for minutes.
 const httpMaxBackoffStep = 30 * time.Second
 
-// httpMaxAttemptsCap bounds worst-case flush time to
-// MaxAttempts*(Timeout+backoff). Without a ceiling a fat-fingered
-// MaxAttempts=10000 against a dead endpoint would stall every
-// subsequent batch and fill the buffer.
+// httpMaxAttemptsCap bounds worst-case flush time. The single drainer
+// goroutine runs flush() inline, so a slow/flapping endpoint with a
+// high operator-set MaxAttempts stalls draining for roughly
+// MaxAttempts*(Timeout+backoff) — at the cap that is ~10*(15s+30s) ≈
+// 7m, during which the buffer fills and Save drops. The default
+// MaxAttempts=1 makes retry opt-in precisely so this footgun is off
+// unless an operator deliberately accepts it; the cap bounds the
+// blast radius if they do. (4xx is non-retryable — see doRequest — so
+// a misconfig does not pay this cost every batch forever.)
 const httpMaxAttemptsCap = 10
+
+// httpDropLogInterval throttles the queue-full drop log. Under a
+// sustained outage Save is called continuously by the fan-out; an
+// unthrottled per-call Errorf would be a thousands-per-second log
+// flood. One line per interval carries the cumulative count instead.
+const httpDropLogInterval = 10 * time.Second
 
 // HTTPConfig configures the generic webhook sink for flow events. It
 // is the runtime twin of flow_exports.HTTPDestConfig: the management
@@ -74,14 +87,27 @@ type HTTPConfig struct {
 // best-effort: after MaxAttempts the batch is logged and dropped —
 // durability lives in the hot store and (when configured) the archive,
 // never in a webhook receiver.
+//
+// Delivery is at-least-once: a retry after a timeout where the server
+// actually processed the batch double-delivers it. Every record
+// carries event_id so receivers can deduplicate.
 type HTTP struct {
 	cfg    HTTPConfig
 	client *http.Client
+
+	// logURL is scheme://host only — never the path/query/userinfo of
+	// cfg.URL. All log lines use it so an operator who put credentials
+	// in the URL (https://user:pass@host) does not leak them to logs.
+	logURL string
 
 	queue  chan *store.Event
 	wg     sync.WaitGroup
 	stopCh chan struct{}
 	closed sync.Once
+
+	// drop accounting for the throttled queue-full log.
+	dropped          atomic.Uint64
+	lastDropLogNanos atomic.Int64
 
 	// baseCtx is the parent of every request context; baseCancel fires
 	// on Close so an in-flight request and any pending backoff abort
@@ -92,8 +118,18 @@ type HTTP struct {
 
 // NewHTTP constructs and starts the generic HTTP flow sink.
 func NewHTTP(cfg HTTPConfig) (*HTTP, error) {
-	if strings.TrimSpace(cfg.URL) == "" {
+	raw := strings.TrimSpace(cfg.URL)
+	if raw == "" {
 		return nil, fmt.Errorf("flow sink HTTP: URL is required")
+	}
+	// Fail fast on a malformed URL. Without this an env-configured
+	// typo (no model-layer validation on the env path) constructs a
+	// sink that fails every flush forever. The error never echoes the
+	// raw URL — it may carry credentials.
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" ||
+		(parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return nil, fmt.Errorf("flow sink HTTP: invalid URL — need an absolute http(s) URL")
 	}
 	if cfg.MaxAttempts <= 0 {
 		cfg.MaxAttempts = 1
@@ -124,6 +160,7 @@ func NewHTTP(cfg HTTPConfig) (*HTTP, error) {
 	h := &HTTP{
 		cfg:        cfg,
 		client:     client,
+		logURL:     parsed.Scheme + "://" + parsed.Host,
 		queue:      make(chan *store.Event, cfg.BufferSize),
 		stopCh:     make(chan struct{}),
 		baseCtx:    baseCtx,
@@ -137,15 +174,33 @@ func NewHTTP(cfg HTTPConfig) (*HTTP, error) {
 // Save enqueues a batch. Non-blocking; drops on full queue. The Sink
 // contract (store.go) forbids back-pressuring the gRPC fan-out.
 func (h *HTTP) Save(_ context.Context, events []*store.Event) error {
-	for _, ev := range events {
+	for i, ev := range events {
 		select {
 		case h.queue <- ev:
 		default:
-			log.Errorf("flow sink HTTP: queue full (size=%d), dropping events", h.cfg.BufferSize)
+			h.recordDrop(len(events) - i)
 			return nil
 		}
 	}
 	return nil
+}
+
+// recordDrop accounts dropped events and logs at most once per
+// httpDropLogInterval with the cumulative count, so a sustained
+// outage cannot turn the hot-path drop into a log flood. Lock-free:
+// the timestamp CAS elects a single logger per window.
+func (h *HTTP) recordDrop(n int) {
+	total := h.dropped.Add(uint64(n))
+	now := time.Now().UnixNano()
+	last := h.lastDropLogNanos.Load()
+	if now-last < int64(httpDropLogInterval) {
+		return
+	}
+	if !h.lastDropLogNanos.CompareAndSwap(last, now) {
+		return // another goroutine owns this window's log line
+	}
+	log.Errorf("flow sink HTTP: queue full (size=%d), %d events dropped cumulatively — %s slow/unreachable",
+		h.cfg.BufferSize, total, h.logURL)
 }
 
 // Close stops the loop, flushes whatever is buffered (best-effort,
@@ -170,6 +225,12 @@ func (h *HTTP) loop() {
 	for {
 		select {
 		case <-h.stopCh:
+			// Shutdown drain: coalesces the whole backlog (up to
+			// BufferSize) into one batch and one POST — it does NOT
+			// chunk by BatchSize like steady state. A receiver may 413
+			// a very large body; shutdown delivery is best-effort and
+			// the hot store remains the durable record, so this is an
+			// accepted trade for a single fast drain.
 			for {
 				select {
 				case ev := <-h.queue:
@@ -206,7 +267,16 @@ func (h *HTTP) flush(batch []*store.Event) {
 		return
 	}
 	for attempt := 1; attempt <= h.cfg.MaxAttempts; attempt++ {
-		if h.doRequest(body) {
+		ok, retryable := h.doRequest(body)
+		if ok {
+			return
+		}
+		if !retryable {
+			// 4xx / unbuildable request: a misconfigured receiver must
+			// not become a per-batch retry storm (same posture as the
+			// activity HTTP webhook).
+			log.Errorf("flow sink HTTP: permanent failure to %s, dropping %d events",
+				h.logURL, len(batch))
 			return
 		}
 		if attempt == h.cfg.MaxAttempts {
@@ -218,19 +288,22 @@ func (h *HTTP) flush(batch []*store.Event) {
 		}
 	}
 	log.Errorf("flow sink HTTP: %s unreachable after %d attempt(s), dropping %d events",
-		h.cfg.URL, h.cfg.MaxAttempts, len(batch))
+		h.logURL, h.cfg.MaxAttempts, len(batch))
 }
 
-// doRequest performs a single attempt. Returns true on a 2xx. The
-// per-attempt context derives from baseCtx so Close aborts in flight.
-func (h *HTTP) doRequest(body []byte) bool {
+// doRequest performs a single attempt. ok=true means delivered (2xx).
+// retryable reports whether a non-ok outcome is worth another try:
+// 4xx (and an unbuildable request) are permanent — the caller must
+// not loop on them. The per-attempt context derives from baseCtx so
+// Close aborts in flight. Log lines use logURL, never cfg.URL.
+func (h *HTTP) doRequest(body []byte) (ok bool, retryable bool) {
 	ctx, cancel := context.WithTimeout(h.baseCtx, h.cfg.Timeout)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.cfg.URL, bytes.NewReader(body))
 	if err != nil {
-		log.Errorf("flow sink HTTP: build request: %v", err)
-		return false
+		log.Errorf("flow sink HTTP: build request for %s: %v", h.logURL, err)
+		return false, false
 	}
 	req.Header.Set("Content-Type", "application/json")
 	for k, v := range h.cfg.Headers {
@@ -239,18 +312,24 @@ func (h *HTTP) doRequest(body []byte) bool {
 
 	resp, err := h.client.Do(req)
 	if err != nil {
-		log.Errorf("flow sink HTTP: transport: %v", err)
-		return false
+		log.Errorf("flow sink HTTP: transport to %s: %v", h.logURL, err)
+		return false, true
 	}
 	defer func() {
 		_, _ = io.Copy(io.Discard, resp.Body)
 		_ = resp.Body.Close()
 	}()
-	if resp.StatusCode >= 300 {
-		log.Errorf("flow sink HTTP: %s returned HTTP %d", h.cfg.URL, resp.StatusCode)
-		return false
+	switch {
+	case resp.StatusCode >= 200 && resp.StatusCode < 300:
+		return true, false
+	case resp.StatusCode >= 400 && resp.StatusCode < 500:
+		log.Errorf("flow sink HTTP: %s returned HTTP %d (config error — not retrying)",
+			h.logURL, resp.StatusCode)
+		return false, false
+	default:
+		log.Errorf("flow sink HTTP: %s returned HTTP %d", h.logURL, resp.StatusCode)
+		return false, true
 	}
-	return true
 }
 
 // backoff sleeps before the next attempt, aborting immediately if the
@@ -339,6 +418,13 @@ func toHTTPEntries(batch []*store.Event) []httpFlowEntry {
 // colon) are skipped rather than failing the whole sink — a bad
 // header should not silently disable flow export entirely, but it
 // must also not crash boot.
+//
+// Limitation: the separator is a literal comma, so a header VALUE
+// containing a comma (Accept lists, an RFC1123 Date, multi-value
+// headers) splits wrong here. Auth headers (Bearer/Basic/API-key)
+// have no comma, so the common case is fine; callers needing
+// comma-bearing values must use the DB-configured path, which carries
+// a structured map and is unaffected.
 func parseHTTPHeaders(s string) map[string]string {
 	out := map[string]string{}
 	for _, pair := range strings.Split(s, ",") {
