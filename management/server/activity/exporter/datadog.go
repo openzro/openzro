@@ -14,6 +14,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/openzro/openzro/management/server/activity"
+	"github.com/openzro/openzro/safedial"
 )
 
 // DatadogConfig configures the Datadog Logs Intake exporter.
@@ -146,7 +147,7 @@ func NewDatadog(cfg DatadogConfig) (*Datadog, error) {
 	}
 	client := cfg.HTTPClient
 	if client == nil {
-		client = &http.Client{Timeout: cfg.Timeout}
+		client = safedial.Client(cfg.Timeout)
 	}
 
 	d := &Datadog{

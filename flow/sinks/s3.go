@@ -18,6 +18,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/openzro/openzro/flow/store"
+	"github.com/openzro/openzro/safedial"
 )
 
 // S3Config configures the cold-archive Sink. The endpoint and region
@@ -117,6 +118,13 @@ func NewS3(ctx context.Context, cfg S3Config) (*S3, error) {
 	}
 	if cfg.HTTPClient != nil {
 		loadOpts = append(loadOpts, awsconfig.WithHTTPClient(cfg.HTTPClient))
+	} else if cfg.Endpoint != "" {
+		// A custom endpoint is the only SSRF surface here — the default
+		// AWS regional endpoint is a fixed public domain. Guard the
+		// dialer (loopback + cloud metadata) but pass timeout 0: the
+		// AWS SDK manages its own per-operation deadlines and retries,
+		// so only the dial-time block is wanted, not a client timeout.
+		loadOpts = append(loadOpts, awsconfig.WithHTTPClient(safedial.Client(0)))
 	}
 
 	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, loadOpts...)

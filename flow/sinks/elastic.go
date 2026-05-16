@@ -23,6 +23,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/openzro/openzro/flow/store"
+	"github.com/openzro/openzro/safedial"
 )
 
 // ElasticConfig configures an Elasticsearch sink for flow events.
@@ -83,7 +84,7 @@ func NewElastic(cfg ElasticConfig) (*Elastic, error) {
 	}
 	client := cfg.HTTPClient
 	if client == nil {
-		client = &http.Client{Timeout: cfg.Timeout}
+		client = safedial.Client(cfg.Timeout)
 	}
 
 	e := &Elastic{

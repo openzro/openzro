@@ -15,6 +15,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/openzro/openzro/flow/store"
+	"github.com/openzro/openzro/safedial"
 )
 
 // Per-attempt backoff is capped so an operator-set InitialBackoff plus
@@ -117,7 +118,7 @@ func NewHTTP(cfg HTTPConfig) (*HTTP, error) {
 	}
 	client := cfg.HTTPClient
 	if client == nil {
-		client = &http.Client{Timeout: cfg.Timeout}
+		client = safedial.Client(cfg.Timeout)
 	}
 	baseCtx, baseCancel := context.WithCancel(context.Background())
 	h := &HTTP{
