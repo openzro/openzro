@@ -25,6 +25,24 @@ func TestGCS_RequiresBucket(t *testing.T) {
 	require.Error(t, err)
 }
 
+// TestGCS_CustomEndpoint_ConstructsWithGuardedClient is the SDK
+// option-combo guard. Wiring the SSRF dialer means the custom-endpoint
+// branch now passes option.WithHTTPClient alongside WithEndpoint +
+// WithoutAuthentication. Some google.golang.org/api versions reject
+// WithHTTPClient when combined with other transport options; this
+// asserts our pinned SDK accepts the combo and storage.NewClient
+// still constructs (it is lazy — no network at construction). Without
+// a Bucket NewGCS errors before reaching storage.NewClient, so this
+// path was previously untested.
+func TestGCS_CustomEndpoint_ConstructsWithGuardedClient(t *testing.T) {
+	g, err := NewGCS(context.Background(), GCSConfig{
+		Bucket:   "b",
+		Endpoint: "http://127.0.0.1:4443",
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = g.Close() })
+}
+
 // TestGCS_ObjectKey locks the partitioned key shape so the operator
 // can rely on it for downstream tools (BigQuery external tables,
 // Athena, DuckDB) that key off these prefixes.
