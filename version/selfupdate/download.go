@@ -24,6 +24,9 @@ const maxArtifactBytes int64 = 512 * 1024 * 1024
 // the partial file and returns an error with an empty path — a
 // download we cannot fully trust never reaches the verifier.
 func Download(ctx context.Context, client *http.Client, a Artifact, dir string) (string, error) {
+	if err := requireSafeScheme(a.URL); err != nil {
+		return "", err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, a.URL, nil)
 	if err != nil {
 		return "", fmt.Errorf("selfupdate: build download request: %w", err)
@@ -40,15 +43,27 @@ func Download(ctx context.Context, client *http.Client, a Artifact, dir string) 
 		return "", fmt.Errorf("selfupdate: download endpoint returned HTTP %d", resp.StatusCode)
 	}
 
-	f, err := os.CreateTemp(dir, "openzro-update-*.pkg")
+	// Review finding C3: stage inside a per-run 0700 dir, not directly
+	// in a world-writable parent (os.TempDir()). MkdirTemp creates the
+	// dir 0700 owned by us, so a root-consumed installer can't be
+	// swapped via a TOCTOU race by another local user. The whole dir
+	// is the unit of cleanup (see RunOnce).
+	stageDir, err := os.MkdirTemp(dir, "openzro-update-")
 	if err != nil {
+		return "", fmt.Errorf("selfupdate: create staging dir: %w", err)
+	}
+	f, err := os.CreateTemp(stageDir, "openzro-*.pkg")
+	if err != nil {
+		_ = os.RemoveAll(stageDir)
 		return "", fmt.Errorf("selfupdate: create staging file: %w", err)
 	}
 	path := f.Name()
 
+	// Any failure removes the whole private staging dir — a download we
+	// cannot fully trust never lingers on disk.
 	cleanup := func() {
 		_ = f.Close()
-		_ = os.Remove(path)
+		_ = os.RemoveAll(stageDir)
 	}
 
 	h := sha256.New()
@@ -65,13 +80,13 @@ func Download(ctx context.Context, client *http.Client, a Artifact, dir string) 
 		return "", fmt.Errorf("selfupdate: artifact exceeds %d byte cap", maxArtifactBytes)
 	}
 	if err := f.Close(); err != nil {
-		_ = os.Remove(path)
+		_ = os.RemoveAll(stageDir)
 		return "", fmt.Errorf("selfupdate: flush staging file: %w", err)
 	}
 
 	sum := hex.EncodeToString(h.Sum(nil))
 	if !strings.EqualFold(sum, a.SHA256) {
-		_ = os.Remove(path)
+		_ = os.RemoveAll(stageDir)
 		return "", fmt.Errorf("selfupdate: integrity check failed: got %s want %s", sum, a.SHA256)
 	}
 	return path, nil

@@ -140,6 +140,9 @@ func ResolveManifestURL() string {
 // oversized or truncated body fails ParseManifest rather than being
 // trusted.
 func FetchManifest(ctx context.Context, client *http.Client, url, userAgent string) (*Manifest, error) {
+	if err := requireSafeScheme(url); err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("selfupdate: build manifest request: %w", err)

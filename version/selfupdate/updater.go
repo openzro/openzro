@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"time"
 
@@ -23,6 +24,18 @@ type Config struct {
 	ClientID           string // stable per-client id for staged-rollout bucketing
 	ServiceLabel       string // optional explicit launchctl label (see install.go)
 	StagingDir         string
+
+	// ExpectedTeamID is openZro's Apple Developer Team ID. Verify pins
+	// the package's signing identity to it (review finding S1:
+	// notarization alone only proves "signed by *some* Apple dev").
+	// Empty => Verify fails closed. The value is a release-infra input
+	// wired at the binding layer, like the signing cert itself.
+	ExpectedTeamID string
+
+	// CycleTimeout bounds one full cycle (fetch+download+verify+
+	// install). Without it a hung installer wedges self-update forever
+	// behind single-flight. Default 15m.
+	CycleTimeout time.Duration
 
 	// Injection seams (defaulted by New).
 	GOOS       string
@@ -67,8 +80,11 @@ func New(cfg Config) (*Updater, error) {
 	if cfg.StagingDir == "" {
 		cfg.StagingDir = os.TempDir()
 	}
+	if cfg.CycleTimeout <= 0 {
+		cfg.CycleTimeout = 15 * time.Minute
+	}
 	if cfg.Verifier == nil {
-		cfg.Verifier = macVerifier{run: execRunner}
+		cfg.Verifier = macVerifier{run: execRunner, expectedTeamID: cfg.ExpectedTeamID}
 	}
 	if cfg.Installer == nil {
 		cfg.Installer = macInstaller{run: execRunner, serviceLabel: cfg.ServiceLabel}
@@ -85,6 +101,12 @@ func (u *Updater) RunOnce(ctx context.Context) (Result, error) {
 	if c.ManifestURL == "" {
 		return Result{Skipped: true, Reason: "self-update disabled (no manifest URL)"}, nil
 	}
+
+	// Bound the whole cycle. execRunner uses exec.CommandContext, so a
+	// hung pkgutil/spctl/installer is killed at the deadline rather
+	// than wedging self-update forever behind single-flight.
+	ctx, cancel := context.WithTimeout(ctx, c.CycleTimeout)
+	defer cancel()
 
 	m, err := FetchManifest(ctx, c.HTTPClient, c.ManifestURL, c.UserAgent)
 	if err != nil {
@@ -112,7 +134,9 @@ func (u *Updater) RunOnce(ctx context.Context) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	defer func() { _ = os.Remove(path) }()
+	// Download stages into its own private 0700 dir (C3); that dir is
+	// the unit of cleanup, not just the file.
+	defer func() { _ = os.RemoveAll(filepath.Dir(path)) }()
 
 	if err := c.Verifier.Verify(ctx, path); err != nil {
 		return Result{}, err

@@ -34,36 +34,71 @@ func (f *fakeRunner) names() []string {
 	return out
 }
 
-func TestVerifyMacPkg(t *testing.T) {
-	t.Run("both ok -> nil, pkgutil then spctl", func(t *testing.T) {
+const pkgutilOut = `Package "openzro.pkg":
+   Status: signed by a developer certificate issued by Apple for distribution
+   Notarization: trusted by the Apple notary service
+   Certificate Chain:
+    1. Developer ID Installer: openZro (AB12CD34EF)
+       Expires: 2027-01-01
+    2. Developer ID Certification Authority
+    3. Apple Root CA
+`
+
+func TestVerifyMacPkg_S1IdentityPin(t *testing.T) {
+	t.Run("empty expected Team ID -> fail-closed, nothing run", func(t *testing.T) {
 		f := &fakeRunner{}
-		if err := verifyMacPkg(context.Background(), f.run, "/tmp/x.pkg"); err != nil {
-			t.Fatal(err)
+		if err := verifyMacPkg(context.Background(), f.run, "/tmp/x.pkg", ""); err == nil {
+			t.Fatal("no configured pin must refuse")
 		}
-		if strings.Join(f.names(), ",") != "pkgutil,spctl" {
-			t.Fatalf("order/commands wrong: %v", f.names())
-		}
-		if got := f.calls[0].args; strings.Join(got, " ") != "--check-signature /tmp/x.pkg" {
-			t.Fatalf("pkgutil args: %v", got)
-		}
-		if got := f.calls[1].args; strings.Join(got, " ") != "--assess --type install --verbose /tmp/x.pkg" {
-			t.Fatalf("spctl args: %v", got)
+		if len(f.calls) != 0 {
+			t.Fatalf("must refuse before running anything: %v", f.names())
 		}
 	})
 
-	t.Run("pkgutil fails -> error, spctl NOT run", func(t *testing.T) {
+	t.Run("team id matches + spctl ok -> nil", func(t *testing.T) {
+		f := &fakeRunner{output: map[string]string{"pkgutil": pkgutilOut}}
+		if err := verifyMacPkg(context.Background(), f.run, "/tmp/x.pkg", "AB12CD34EF"); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Join(f.names(), ",") != "pkgutil,spctl" {
+			t.Fatalf("order wrong: %v", f.names())
+		}
+	})
+
+	t.Run("team id MISMATCH -> refuse, spctl NOT run", func(t *testing.T) {
+		f := &fakeRunner{output: map[string]string{"pkgutil": pkgutilOut}}
+		err := verifyMacPkg(context.Background(), f.run, "/tmp/x.pkg", "ZZZZZZZZZZ")
+		if err == nil {
+			t.Fatal("a different developer's notarized pkg must be refused")
+		}
+		if len(f.calls) != 1 {
+			t.Fatalf("must not assess a wrong-identity pkg: %v", f.names())
+		}
+	})
+
+	t.Run("no identity in pkgutil output -> refuse", func(t *testing.T) {
+		f := &fakeRunner{output: map[string]string{"pkgutil": "Status: no signature"}}
+		if err := verifyMacPkg(context.Background(), f.run, "/tmp/x.pkg", "AB12CD34EF"); err == nil {
+			t.Fatal("unparseable identity must refuse")
+		}
+	})
+
+	t.Run("pkgutil exits non-zero -> refuse, spctl NOT run", func(t *testing.T) {
 		f := &fakeRunner{fail: map[string]error{"pkgutil": fmt.Errorf("no signature")}}
-		if err := verifyMacPkg(context.Background(), f.run, "/tmp/x.pkg"); err == nil {
+		if err := verifyMacPkg(context.Background(), f.run, "/tmp/x.pkg", "AB12CD34EF"); err == nil {
 			t.Fatal("expected refusal on unsigned package")
 		}
-		if len(f.calls) != 1 || f.calls[0].name != "pkgutil" {
+		if len(f.calls) != 1 {
 			t.Fatalf("spctl must not run after pkgutil fails: %v", f.names())
 		}
 	})
 
-	t.Run("spctl fails -> error (not notarized / revoked)", func(t *testing.T) {
-		f := &fakeRunner{fail: map[string]error{"spctl": fmt.Errorf("rejected")}}
-		if err := verifyMacPkg(context.Background(), f.run, "/tmp/x.pkg"); err == nil {
+	t.Run("identity ok but spctl fails -> refuse (not notarized / revoked)", func(t *testing.T) {
+		f := &fakeRunner{
+			output: map[string]string{"pkgutil": pkgutilOut},
+			fail:   map[string]error{"spctl": fmt.Errorf("rejected")},
+		}
+		if err := verifyMacPkg(context.Background(), f.run, "/tmp/x.pkg", "AB12CD34EF"); err == nil {
 			t.Fatal("expected refusal when Gatekeeper rejects")
 		}
 	})

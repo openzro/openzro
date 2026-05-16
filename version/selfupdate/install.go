@@ -9,6 +9,14 @@ import (
 
 // Installer applies a verified installer. It must NOT be reached for
 // an artifact that failed Verify.
+//
+// PRIVILEGE CONTRACT (review finding C1): `installer -target /`
+// requires root. This package does NOT elevate — wrapping the call in
+// sudo/authopen from a user-level UI is the wrong layer and a UX
+// footgun. The agreed architecture is that the privileged openZro
+// daemon runs the update cycle (the Fyne UI only signals it over the
+// existing control socket). On EACCES the installer error is surfaced
+// verbatim so the cause is unambiguous rather than silent.
 type Installer interface {
 	Install(ctx context.Context, pkgPath string) error
 }
