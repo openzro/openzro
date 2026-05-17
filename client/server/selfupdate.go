@@ -200,6 +200,21 @@ func (s *Server) maybeAutoInstall(target string, force, available bool, gen uint
 	s.autoInstallMu.Unlock()
 
 	go func() {
+		// Declared first => runs LAST (after the recover defer has
+		// cleared inFlight). If a NEWER directive arrived while this
+		// attempt was in flight (it was blocked by the global inFlight
+		// guard), wake the scheduler now instead of letting it sit
+		// until the ~30m steady refresh (review-3 #1). gen advances
+		// only on a real change (review-3 #2), so a bare reconnect
+		// does NOT spuriously re-trigger here.
+		defer func() {
+			s.updateDirectiveMu.Lock()
+			live := s.updateDirective
+			s.updateDirectiveMu.Unlock()
+			if live.seen && live.gen != gen {
+				s.triggerUpdatePreflight()
+			}
+		}()
 		defer func() {
 			if r := recover(); r != nil {
 				s.autoInstallMu.Lock()
@@ -283,12 +298,15 @@ type updateDirective struct {
 	targetVersion string
 	force         bool
 	seen          bool
-	// gen is a monotonic id bumped on every onUpdateDirective call
-	// (the engine already dedupes by (target,force), so each call is a
-	// genuinely new logical directive — incl. a force flip or a
-	// clear). The auto-install latch keys on gen, not just target, so
-	// a new directive always re-enables one fresh attempt even for the
-	// same version. gen==0 means "no directive ever".
+	// gen is a monotonic id advanced only on a SEMANTIC change of
+	// (target,force) — see onUpdateDirective. The engine's per-Engine
+	// dedupe is not sufficient on its own (a reconnect rebuilds the
+	// Engine and re-delivers the same decision), so the daemon
+	// dedupes too. The auto-install latch keys on gen, so a genuine
+	// new directive (incl. a force flip / clear, or the same version
+	// re-issued after a different one) re-enables one fresh attempt,
+	// while a bare reconnect does not. gen==0 means "no directive
+	// ever"; a daemon restart starts empty and correctly re-arms.
 	gen uint64
 }
 
@@ -323,7 +341,20 @@ type updatePreflight struct {
 // goroutines and reads s.updateDirective — never from this callback.
 func (s *Server) onUpdateDirective(targetVersion string, force bool) {
 	s.updateDirectiveMu.Lock()
-	gen := s.updateDirective.gen + 1
+	cur := s.updateDirective
+	// Semantic dedupe in the DAEMON (review-3 #2): the engine's
+	// (target,force) dedupe lives per-Engine, and a management
+	// reconnect builds a fresh Engine that re-delivers the SAME
+	// decision. Bumping gen on every delivery would re-arm the
+	// install latch on a mere reconnect — defeating "a failed
+	// auto-install waits for a NEW operator decision". So only a
+	// genuine change (or the first-ever delivery) advances the
+	// generation. A daemon RESTART still re-arms correctly because
+	// its state starts empty (cur.seen == false).
+	gen := cur.gen
+	if !(cur.seen && cur.targetVersion == targetVersion && cur.force == force) {
+		gen++
+	}
 	s.updateDirective = updateDirective{
 		targetVersion: targetVersion,
 		force:         force,

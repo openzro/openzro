@@ -399,3 +399,154 @@ func TestIsTransientFetchErr(t *testing.T) {
 		}
 	}
 }
+
+func awaitAutoIdle(t *testing.T, s *Server) autoInstallState {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		s.autoInstallMu.Lock()
+		ai := s.autoInstall
+		s.autoInstallMu.Unlock()
+		if ai.target != "" && !ai.inFlight {
+			return ai
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("auto-install did not settle")
+	return autoInstallState{}
+}
+
+func curGen(s *Server) uint64 {
+	s.updateDirectiveMu.Lock()
+	defer s.updateDirectiveMu.Unlock()
+	return s.updateDirective.gen
+}
+
+// TestOnUpdateDirective_SemanticGen pins review-3 #2: the generation
+// advances only on a real (target,force) change — a reconnect that
+// re-delivers the SAME decision must NOT bump it (else the install
+// latch would re-arm with no operator action).
+func TestOnUpdateDirective_SemanticGen(t *testing.T) {
+	t.Setenv("OPENZRO_UPDATE_MANIFEST_TEMPLATE", "")
+	s := &Server{}
+
+	s.onUpdateDirective("2.1.0", true)
+	g1 := curGen(s)
+	if g1 == 0 {
+		t.Fatal("first directive must advance gen past 0")
+	}
+	// Reconnect re-delivery of the identical decision: gen stays.
+	s.onUpdateDirective("2.1.0", true)
+	s.onUpdateDirective("2.1.0", true)
+	if curGen(s) != g1 {
+		t.Fatalf("reconnect re-delivery must NOT bump gen (was %d, now %d)", g1, curGen(s))
+	}
+	// Real changes each advance it.
+	s.onUpdateDirective("2.1.0", false) // force flip
+	g2 := curGen(s)
+	if g2 == g1 {
+		t.Fatal("force flip must bump gen")
+	}
+	s.onUpdateDirective("2.2.0", false) // target change
+	g3 := curGen(s)
+	if g3 == g2 {
+		t.Fatal("target change must bump gen")
+	}
+	s.onUpdateDirective("", false) // clear (target change)
+	g4 := curGen(s)
+	if g4 == g3 {
+		t.Fatal("clear must bump gen")
+	}
+	s.onUpdateDirective("2.2.0", false) // re-issue after clear
+	if curGen(s) == g4 {
+		t.Fatal("re-issue after clear must bump gen")
+	}
+}
+
+// TestMaybeAutoInstall_ReconnectDoesNotRearm pins review-3 #2 at the
+// behavior level: a failed attempt is NOT retried just because a
+// reconnect re-delivered the same directive; only a genuine new
+// directive re-arms.
+func TestMaybeAutoInstall_ReconnectDoesNotRearm(t *testing.T) {
+	t.Setenv("OPENZRO_UPDATE_MANIFEST_TEMPLATE", "")
+	s := &Server{}
+
+	s.onUpdateDirective("2.1.0", true)
+	g := curGen(s)
+	s.maybeAutoInstall("2.1.0", true, true, g)
+	ai := awaitAutoIdle(t, s)
+	if !ai.attempted || ai.gen != g {
+		t.Fatalf("expected an attempt for gen %d, got %+v", g, ai)
+	}
+
+	// Reconnect: same decision re-delivered, gen unchanged.
+	s.onUpdateDirective("2.1.0", true)
+	if curGen(s) != g {
+		t.Fatalf("reconnect must keep gen %d, got %d", g, curGen(s))
+	}
+	before := ai
+	s.maybeAutoInstall("2.1.0", true, true, curGen(s))
+	s.autoInstallMu.Lock()
+	after := s.autoInstall
+	s.autoInstallMu.Unlock()
+	if after != before {
+		t.Fatalf("reconnect must NOT re-arm a consumed attempt: %+v -> %+v", before, after)
+	}
+
+	// A genuine operator change DOES re-arm.
+	s.onUpdateDirective("2.2.0", true)
+	g2 := curGen(s)
+	s.maybeAutoInstall("2.2.0", true, true, g2)
+	ai2 := awaitAutoIdle(t, s)
+	if !ai2.attempted || ai2.gen != g2 {
+		t.Fatalf("a real new directive must re-arm, got %+v", ai2)
+	}
+}
+
+// TestMaybeAutoInstall_RetriggersWhenNewerPending pins review-3 #1:
+// when an attempt ends and a newer directive is already current, the
+// scheduler is woken immediately instead of waiting the ~30m steady
+// refresh. A matching-gen completion must NOT spuriously kick.
+func TestMaybeAutoInstall_RetriggersWhenNewerPending(t *testing.T) {
+	t.Setenv("OPENZRO_UPDATE_MANIFEST_TEMPLATE", "")
+
+	t.Run("superseded attempt wakes the scheduler", func(t *testing.T) {
+		s := &Server{}
+		s.preflightKick = make(chan struct{}, 1)
+		s.preflightRunning = true // pretend the scheduler is alive
+
+		// A newer directive (gen 2) is already current.
+		s.updateDirectiveMu.Lock()
+		s.updateDirective = updateDirective{targetVersion: "2.2.0", force: true, seen: true, gen: 2}
+		s.updateDirectiveMu.Unlock()
+
+		// An attempt for the OLD gen 1 runs and finds itself superseded.
+		s.maybeAutoInstall("2.1.0", true, true, 1)
+		_ = awaitAutoIdle(t, s)
+
+		select {
+		case <-s.preflightKick:
+		case <-time.After(time.Second):
+			t.Fatal("a superseded attempt must wake the scheduler for the newer directive")
+		}
+	})
+
+	t.Run("matching-gen completion does not kick", func(t *testing.T) {
+		s := &Server{}
+		s.preflightKick = make(chan struct{}, 1)
+		s.preflightRunning = true
+
+		s.updateDirectiveMu.Lock()
+		s.updateDirective = updateDirective{targetVersion: "2.1.0", force: true, seen: true, gen: 1}
+		s.updateDirectiveMu.Unlock()
+
+		s.maybeAutoInstall("2.1.0", true, true, 1)
+		_ = awaitAutoIdle(t, s)
+
+		select {
+		case <-s.preflightKick:
+			t.Fatal("a completed attempt for the CURRENT directive must not self-kick")
+		case <-time.After(150 * time.Millisecond):
+		}
+	})
+}
