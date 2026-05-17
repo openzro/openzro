@@ -34,5 +34,21 @@ export interface Account {
     admission_enforcement_enabled?: boolean;
     admission_posture_checks?: string[];
     admission_exempt_groups?: string[];
+    // Desktop client self-update directive (openZro #5). Empty target
+    // version = no directive. force = silent install vs. offered for a
+    // manual install. The *_groups / *_peers / *_percent fields scope
+    // the directive to a subset SERVER-SIDE; the client never receives
+    // them, only the resolved directive (or nothing). Precedence:
+    // exclude beats everything incl. explicit peers; explicit peers
+    // pierce the ring; target groups are ring-gated; empty groups AND
+    // peers = whole fleet.
+    client_update_target_version?: string;
+    client_update_force?: boolean;
+    client_update_target_groups?: string[];
+    client_update_target_peers?: string[];
+    client_update_exclude_groups?: string[];
+    // 0..100 staged ring. undefined = no ring (everyone in scope); an
+    // explicit 0 = nobody (fail-closed).
+    client_update_rollout_percent?: number;
   };
 }
