@@ -770,3 +770,154 @@ func (s *Server) buildUpdateState() *proto.UpdateState {
 		LastDecision:  decision,
 	}
 }
+
+// ---- R6: critical-only static-manifest fallback ----
+//
+// Last resort for an UNMANAGED client: when management has been
+// unreachable for a sustained period AND no operator directive is
+// recorded AND the client is below the static manifest's security
+// floor (min_version), self-heal SILENTLY — but never slow-roll a
+// routine update behind the operator's back (CriticalOnly). Reuses
+// the shared install gate so it can never collide with the directive
+// or manual install paths; a recorded directive always wins (the
+// directive scheduler owns updates even while mgmt is down).
+const (
+	// Observe connectivity often; the grace + min-interval gate the
+	// ACTUAL attempt so a short mgmt blip never triggers a self-heal.
+	criticalFallbackTick        = 10 * time.Minute
+	criticalFallbackGrace       = time.Hour
+	criticalFallbackMinInterval = time.Hour
+)
+
+func (s *Server) startCriticalFallbackOnce() {
+	s.criticalFallbackOnce.Do(func() { go s.runCriticalFallbackWorker() })
+}
+
+// criticalFallbackEligible is the pure attempt decision (extracted so
+// the timing policy is unit-testable without driving the goroutine).
+// Caller has already established management is currently DOWN.
+func criticalFallbackEligible(downSince, lastAttempt, now time.Time, d updateDirective) bool {
+	if downSince.IsZero() || now.Sub(downSince) < criticalFallbackGrace {
+		return false // not down long enough
+	}
+	if d.seen && d.targetVersion != "" {
+		return false // a directive is recorded — the directive path owns it
+	}
+	if !lastAttempt.IsZero() && now.Sub(lastAttempt) < criticalFallbackMinInterval {
+		return false // rate-limit re-attempts
+	}
+	return true
+}
+
+func (s *Server) runCriticalFallbackWorker() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("client self-update: critical fallback worker recovered from panic: %v", r)
+		}
+	}()
+
+	base := s.rootCtx
+	if base == nil {
+		base = context.Background()
+	}
+	ticker := time.NewTicker(criticalFallbackTick)
+	defer ticker.Stop()
+
+	var downSince, lastAttempt time.Time
+	for {
+		select {
+		case <-base.Done():
+			return
+		case <-ticker.C:
+		}
+
+		if s.statusRecorder.GetManagementState().Connected {
+			downSince, lastAttempt = time.Time{}, time.Time{}
+			continue
+		}
+		now := time.Now()
+		if downSince.IsZero() {
+			downSince = now
+		}
+
+		s.updateDirectiveMu.Lock()
+		d := s.updateDirective
+		s.updateDirectiveMu.Unlock()
+
+		if !criticalFallbackEligible(downSince, lastAttempt, now, d) {
+			continue
+		}
+		lastAttempt = now
+		s.attemptCriticalFallback(base)
+	}
+}
+
+// buildCriticalFallbackConfig assembles the non-authoritative,
+// critical-only static-manifest cycle. No operator-directed target
+// (ExpectedVersion=""), so the static manifest's own version is the
+// target; verify + Team-ID pin are unchanged. AutoInstallEnabled is
+// true because this fires only when the client is vulnerable AND
+// unmanaged AND a tray prompt cannot be relied on — the
+// owner-signed-off silent self-heal posture. An explicitly empty
+// OPENZRO_UPDATE_MANIFEST_URL disables the fallback (escape hatch).
+func (s *Server) buildCriticalFallbackConfig() (selfupdate.Config, error) {
+	url := selfupdate.ResolveManifestURL()
+	if url == "" {
+		return selfupdate.Config{}, errors.New("static fallback disabled (OPENZRO_UPDATE_MANIFEST_URL set empty)")
+	}
+	return selfupdate.Config{
+		CurrentVersion:     version.OpenzroVersion(),
+		ManifestURL:        url,
+		ExpectedVersion:    "",
+		UserAgent:          "openzro-daemon/" + version.OpenzroVersion(),
+		ExpectedTeamID:     selfupdate.BuildTeamID(),
+		AutoInstallEnabled: true,
+		Authoritative:      false,
+		CriticalOnly:       true,
+		ClientID:           s.clientUpdateBucketID(),
+	}, nil
+}
+
+func (s *Server) attemptCriticalFallback(base context.Context) {
+	// Shared single-flight: if a directive/manual install is running,
+	// back off — the fallback is the lowest-priority path.
+	if !s.acquireInstallGate() {
+		return
+	}
+	defer s.releaseInstallGate()
+
+	cfg, err := s.buildCriticalFallbackConfig()
+	if err != nil {
+		log.Infof("client self-update: critical fallback not configured: %v", err)
+		return
+	}
+	// Same pre-restart state flush as the directive path (#5128):
+	// best-effort, never aborts a security self-heal.
+	cfg.BeforeInstall = func(context.Context) error {
+		if s.connectClient != nil {
+			if perr := s.connectClient.PersistState(); perr != nil {
+				log.Warnf("client self-update: critical-fallback pre-install flush failed (continuing): %v", perr)
+			}
+		}
+		return nil
+	}
+
+	u, err := selfupdate.New(cfg)
+	if err == selfupdate.ErrUnsupportedPlatform {
+		return // macOS-only in phase 1
+	}
+	if err != nil {
+		log.Errorf("client self-update: critical fallback init: %v", err)
+		return
+	}
+	res, err := u.RunOnce(base)
+	if err != nil {
+		log.Errorf("client self-update: critical fallback: %v", err)
+		return
+	}
+	if res.Installed {
+		log.Infof("client self-update: critical fallback installed %s — service will restart", res.Version)
+		return
+	}
+	log.Infof("client self-update: critical fallback: %s", res.Reason)
+}

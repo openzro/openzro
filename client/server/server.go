@@ -112,6 +112,13 @@ type Server struct {
 	installGateMu sync.Mutex
 	installActive bool
 
+	// criticalFallbackOnce starts the R6 last-resort worker exactly
+	// once per daemon lifetime: when management is unreachable for a
+	// sustained period AND no directive is recorded AND the client is
+	// below the static manifest's security floor, self-heal silently
+	// (critical-only). Reuses the shared install gate.
+	criticalFallbackOnce sync.Once
+
 	profileManager   profilemanager.ServiceManager
 	profilesDisabled bool
 }
@@ -212,6 +219,11 @@ func (s *Server) Start() error {
 	if config.DisableAutoConnect {
 		return nil
 	}
+
+	// R6: last-resort critical self-heal. Started only on the
+	// auto-connect path (a deliberately-disconnected client is not
+	// "unmanaged + should be managed"); once per daemon lifetime.
+	s.startCriticalFallbackOnce()
 
 	go s.connectWithRetryRuns(ctx, config, s.statusRecorder, nil)
 
