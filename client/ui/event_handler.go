@@ -248,11 +248,15 @@ func (h *eventHandler) installSucceededAfterRestart(preVersion, target string) b
 		if now == "" {
 			continue
 		}
-		if target != "" {
-			if now == target {
-				return true
-			}
-			continue
+		// target (the directive at snapshot time) is the strongest
+		// signal but NOT the only one: the manual RPC installs the
+		// LIVE directive, which may have moved A->B between our
+		// snapshot and the call. ANY post-restart version change vs
+		// preVersion means the install succeeded (#5 R5 review). A
+		// genuine pre-install failure never restarts the daemon, so
+		// the version is unchanged and this stays false.
+		if target != "" && now == target {
+			return true
 		}
 		if preVersion != "" && now != preVersion {
 			return true

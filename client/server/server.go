@@ -225,11 +225,6 @@ func (s *Server) Start() error {
 		return nil
 	}
 
-	// R6: last-resort critical self-heal. Started only on the
-	// auto-connect path (a deliberately-disconnected client is not
-	// "unmanaged + should be managed"); once per daemon lifetime.
-	s.startCriticalFallbackOnce()
-
 	go s.connectWithRetryRuns(ctx, config, s.statusRecorder, nil)
 
 	return nil
@@ -272,6 +267,16 @@ func (s *Server) connectWithRetryRuns(ctx context.Context, config *profilemanage
 	// (#5 R6 review #2): managementState.Connected alone cannot tell
 	// "network down" from "user pressed Down".
 	s.connectActive.Store(true)
+
+	// R6: start the last-resort critical self-heal worker here — the
+	// SAME single funnel as connectActive, so it covers Start AND a
+	// manual Up after a DisableAutoConnect boot AND reconnects, with
+	// no path missed (#5 R6 review #3). sync.Once => idempotent; a
+	// client that never connects (DisableAutoConnect + no Up) never
+	// reaches here, so a deliberately-disconnected client still gets
+	// no fallback. A later Down() is handled by the connectActive
+	// guard, not by stopping the worker.
+	s.startCriticalFallbackOnce()
 
 	backOff := getConnectWithBackoff(ctx)
 	retryStarted := false
