@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"math/rand"
 	"net/http"
 	"runtime"
 	"time"
@@ -20,8 +21,50 @@ import (
 
 // preflightTimeout bounds one manifest preflight (resolve + fetch +
 // gate). It is network-only — no download/verify/install — so it is
-// short; a hung endpoint must not pin the single-flight worker.
+// short; a hung endpoint must not pin the scheduler.
 const preflightTimeout = 30 * time.Second
+
+const (
+	// preflightRetryBase/Cap drive the exponential backoff used ONLY
+	// for transient fetch failures, so a brief outage recovers in
+	// tens of seconds, not at the next directive change.
+	preflightRetryBase = 30 * time.Second
+	preflightRetryCap  = 8 * time.Minute
+
+	// preflightSteadyInterval re-checks a settled directive so a
+	// later staged_rollout bump (or recovered infra) flips
+	// availability without needing a new directive — and so the user
+	// is never permanently stuck on a stale verdict.
+	preflightSteadyInterval = 30 * time.Minute
+)
+
+// jitter returns a random duration in [0, d) — spreads fleet-wide
+// re-checks so a synchronized directive change does not become a
+// thundering herd on the manifest endpoint.
+func jitter(d time.Duration) time.Duration {
+	if d <= 0 {
+		return 0
+	}
+	return time.Duration(rand.Int63n(int64(d)))
+}
+
+// preflightBaseDelay is the pure backoff/refresh decision (jitter is
+// added by the caller). 0 means "park until kicked" — there is no
+// actionable directive to poll. Extracted so the review-#2 retry
+// policy is unit-testable without driving the timing loop.
+func preflightBaseDelay(seen bool, target string, transient bool, attempt int) time.Duration {
+	if !seen || target == "" {
+		return 0
+	}
+	if !transient {
+		return preflightSteadyInterval
+	}
+	backoff := preflightRetryBase << attempt
+	if backoff <= 0 || backoff > preflightRetryCap {
+		backoff = preflightRetryCap
+	}
+	return backoff
+}
 
 // clientUpdateID derives a stable, opaque per-install id for staged-
 // rollout bucketing from the WireGuard identity (D2: hash the PUBLIC
@@ -144,6 +187,13 @@ type updatePreflight struct {
 	available bool
 	reason    string
 	done      bool
+	// transient is true only when the verdict is "not available
+	// because the manifest fetch failed" (network/DNS/5xx/timeout) —
+	// i.e. it may flip on its own. The scheduler retries these with
+	// backoff; settled outcomes (config error, I2 mismatch, gate
+	// decision, macOS-only, disabled) are not retried fast. Internal
+	// only — never crosses the proto boundary.
+	transient bool
 }
 
 // onUpdateDirective is the daemon side of the management-driven
@@ -177,32 +227,46 @@ func (s *Server) onUpdateDirective(targetVersion string, force bool) {
 	s.triggerUpdatePreflight()
 }
 
-// triggerUpdatePreflight starts the preflight worker if idle. If a
-// worker is already in flight it just sets the rerun flag — the
-// directive may have changed, and the worker must finish against the
-// LATEST directive, not the one it started on.
+// triggerUpdatePreflight ensures the scheduler goroutine is running
+// and wakes it immediately (non-blocking) so a directive change is
+// acted on at once instead of at the next steady tick.
 func (s *Server) triggerUpdatePreflight() {
 	s.preflightMu.Lock()
-	if s.preflightRunning {
-		s.preflightRerun = true
-		s.preflightMu.Unlock()
-		return
+	if s.preflightKick == nil {
+		s.preflightKick = make(chan struct{}, 1)
 	}
-	s.preflightRunning = true
-	s.preflightMu.Unlock()
+	kick := s.preflightKick
+	if !s.preflightRunning {
+		s.preflightRunning = true
+		s.preflightMu.Unlock()
+		go s.updatePreflightScheduler(kick)
+	} else {
+		s.preflightMu.Unlock()
+	}
 
-	go s.updatePreflightWorker()
+	select {
+	case kick <- struct{}{}:
+	default: // a wake is already pending — coalesce
+	}
 }
 
-// updatePreflightWorker drains the preflight single-flight: it keeps
-// recomputing while the directive changed mid-flight, then exits.
-// Bounded to one goroutine; ctx is process-lifetime with a per-pass
-// timeout so a hung manifest endpoint cannot wedge it.
-func (s *Server) updatePreflightWorker() {
+// updatePreflightScheduler is the single long-lived preflight loop.
+// It recomputes the active directive's verdict, then sleeps:
+//   - transient fetch failure  -> exponential backoff (fast recovery)
+//   - settled, has a target    -> steady interval + jitter (lets a
+//     later staged_rollout bump / recovered infra flip availability,
+//     and guarantees the user is never permanently stuck)
+//   - no/blank directive       -> park until kicked (nothing to poll)
+//
+// A directive change kicks the loop awake and resets the backoff.
+// Bounded to one goroutine; ctx is process-lifetime, each pass has
+// preflightTimeout so a hung endpoint cannot wedge it.
+func (s *Server) updatePreflightScheduler(kick <-chan struct{}) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Errorf("client self-update: preflight worker recovered from panic: %v", r)
+			log.Errorf("client self-update: preflight scheduler recovered from panic: %v", r)
 		}
+		// Allow a later trigger to restart the loop.
 		s.preflightMu.Lock()
 		s.preflightRunning = false
 		s.preflightMu.Unlock()
@@ -211,38 +275,69 @@ func (s *Server) updatePreflightWorker() {
 	base := s.rootCtx
 	if base == nil {
 		// Only nil for a unit-constructed &Server{}; real New() always
-		// sets it. Keeps the worker panic-free in tests.
+		// sets it. Keeps the scheduler panic-free in tests.
 		base = context.Background()
 	}
+
+	attempt := 0
+	lastTarget := "\x00not-a-target" // force a reset on first pass
 
 	for {
 		s.updateDirectiveMu.Lock()
 		d := s.updateDirective
 		s.updateDirectiveMu.Unlock()
 
+		if d.targetVersion != lastTarget {
+			attempt = 0 // a new directive: start backoff fresh
+			lastTarget = d.targetVersion
+		}
+
 		ctx, cancel := context.WithTimeout(base, preflightTimeout)
 		pf := s.computeUpdatePreflight(ctx, d.targetVersion, d.force)
 		cancel()
 
 		s.updateDirectiveMu.Lock()
-		// Only publish if the directive has not moved on under us.
+		// Publish only if the directive has not moved on under us, so
+		// a slow compute for an old target never clobbers a newer one.
 		if s.updateDirective.targetVersion == pf.forTarget {
 			s.updatePreflight = pf
 		}
 		s.updateDirectiveMu.Unlock()
 
-		log.Infof("client self-update: preflight target=%q available=%t reason=%q",
-			pf.forTarget, pf.available, pf.reason)
+		log.Infof("client self-update: preflight target=%q available=%t transient=%t reason=%q",
+			pf.forTarget, pf.available, pf.transient, pf.reason)
 
-		s.preflightMu.Lock()
-		if s.preflightRerun {
-			s.preflightRerun = false
-			s.preflightMu.Unlock()
-			continue
+		baseDelay := preflightBaseDelay(d.seen, d.targetVersion, pf.transient, attempt)
+		var delay time.Duration
+		switch {
+		case baseDelay == 0:
+			// No actionable directive: park until kicked.
+			delay = 0
+		case pf.transient:
+			delay = baseDelay + jitter(baseDelay/3)
+			attempt++
+		default:
+			attempt = 0
+			delay = baseDelay + jitter(baseDelay/6)
 		}
-		s.preflightRunning = false
-		s.preflightMu.Unlock()
-		return
+
+		if delay == 0 {
+			select {
+			case <-base.Done():
+				return
+			case <-kick:
+				continue
+			}
+		}
+		timer := time.NewTimer(delay)
+		select {
+		case <-base.Done():
+			timer.Stop()
+			return
+		case <-kick:
+			timer.Stop()
+		case <-timer.C:
+		}
 	}
 }
 
@@ -285,7 +380,12 @@ func (s *Server) computeUpdatePreflight(ctx context.Context, target string, _ bo
 	hc := &http.Client{Timeout: preflightTimeout}
 	m, err := selfupdate.FetchManifest(ctx, hc, manifestURL, ua)
 	if err != nil {
-		pf.reason = "manifest fetch failed: " + err.Error()
+		// Transient: the endpoint may be momentarily down, DNS not yet
+		// up, network still coming online during boot, etc. The
+		// scheduler retries this with backoff so a single blip does
+		// not pin the client "unavailable" until reconnect/restart.
+		pf.transient = true
+		pf.reason = "manifest temporarily unreachable, retrying: " + err.Error()
 		return pf
 	}
 

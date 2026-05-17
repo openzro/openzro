@@ -82,13 +82,16 @@ type Server struct {
 	updateDirective   updateDirective
 	updatePreflight   updatePreflight
 
-	// preflight single-flight (#5 R3c). The preflight does network
-	// IO so it never runs on the Sync hot path; one worker at a time,
-	// and if the directive changes mid-flight the worker re-runs
-	// against the newest directive before clearing.
+	// preflight scheduler (#5 R3c + review-#2). One long-lived
+	// goroutine does the network IO off the Sync hot path. It
+	// re-checks the active directive on a steady interval and retries
+	// transient fetch failures with backoff, so a momentary outage
+	// (DNS not up at boot, a 5xx, infra blip during a rollout) is not
+	// a permanent "unavailable" until reconnect/restart. preflightKick
+	// wakes it immediately on a directive change.
 	preflightMu      sync.Mutex
-	preflightRunning bool
-	preflightRerun   bool
+	preflightRunning bool // the scheduler goroutine is alive
+	preflightKick    chan struct{}
 
 	profileManager   profilemanager.ServiceManager
 	profilesDisabled bool

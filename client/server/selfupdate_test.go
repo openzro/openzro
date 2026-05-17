@@ -192,3 +192,46 @@ func TestBuildSelfUpdateConfig(t *testing.T) {
 		}
 	})
 }
+
+// TestPreflightBaseDelay pins the review-#2 retry policy: no
+// actionable directive parks (0), a transient failure backs off
+// exponentially and capped, and a settled directive re-checks on the
+// steady interval (so a later staged_rollout bump / recovered infra
+// flips availability without a new directive).
+func TestPreflightBaseDelay(t *testing.T) {
+	if d := preflightBaseDelay(false, "", false, 0); d != 0 {
+		t.Fatalf("unseen directive must park, got %v", d)
+	}
+	if d := preflightBaseDelay(true, "", false, 0); d != 0 {
+		t.Fatalf("cleared directive must park, got %v", d)
+	}
+	if d := preflightBaseDelay(true, "1.2.3", false, 5); d != preflightSteadyInterval {
+		t.Fatalf("settled directive must use the steady interval, got %v", d)
+	}
+
+	if d := preflightBaseDelay(true, "1.2.3", true, 0); d != preflightRetryBase {
+		t.Fatalf("first transient retry must be the base, got %v", d)
+	}
+	if d := preflightBaseDelay(true, "1.2.3", true, 2); d != preflightRetryBase<<2 {
+		t.Fatalf("transient retry must double per attempt, got %v", d)
+	}
+	// Large attempt count must clamp at the cap, never overflow to <=0.
+	for _, a := range []int{8, 20, 62, 100} {
+		d := preflightBaseDelay(true, "1.2.3", true, a)
+		if d != preflightRetryCap {
+			t.Fatalf("attempt %d must clamp to cap %v, got %v", a, preflightRetryCap, d)
+		}
+	}
+}
+
+func TestJitterBounds(t *testing.T) {
+	if jitter(0) != 0 || jitter(-1) != 0 {
+		t.Fatal("non-positive jitter must be 0")
+	}
+	for i := 0; i < 1000; i++ {
+		j := jitter(100 * time.Millisecond)
+		if j < 0 || j >= 100*time.Millisecond {
+			t.Fatalf("jitter out of [0,d): %v", j)
+		}
+	}
+}
