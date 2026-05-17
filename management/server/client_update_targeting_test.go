@@ -1,8 +1,12 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/openzro/openzro/management/server/types"
 )
@@ -262,4 +266,76 @@ func TestIsGroupLinkedToClientUpdate(t *testing.T) {
 		isGroupLinkedToClientUpdate(inactive, "infra") {
 		t.Fatal("no active target version => not linked (cheap unused path)")
 	}
+}
+
+// TestClientUpdateGroupDeleteFanout is the channel-level regression for
+// the Q2 review-2 wiring (#5): a group referenced only by the
+// client-update directive is NOT in any delete-prevention chain (so it
+// can be deleted), but deleting it MUST still wake peers, because the
+// resolved per-peer UpdateConfig may change. This is the deferred E2E
+// that issue #45 tracked. The original #45 blocker (in-memory store
+// couldn't seed/round-trip account Settings) no longer reproduces:
+// ClientUpdate* settings round-trip cleanly through
+// manager.UpdateAccountSettings on the same automigrate store
+// setupNetworkMapTest uses, so the E2E is writable as-is with no
+// store-layer change.
+//
+// It asserts three things over a real peer update channel:
+//  1. activating the directive (UpdateAccountSettings) fans out;
+//  2. deleting an unrelated, unlinked group is silent (no false wake);
+//  3. deleting the directive-linked group fans out
+//     (isGroupLinkedToClientUpdate -> areGroupChangesAffectPeers ->
+//     UpdateAccountPeers, reached via DeleteGroups).
+func TestClientUpdateGroupDeleteFanout(t *testing.T) {
+	manager, account, peer1, _, _ := setupNetworkMapTest(t)
+
+	err := manager.SaveGroups(context.Background(), account.Id, userID, []*types.Group{
+		{ID: "cu-group", Name: "CUGroup", Peers: []string{peer1.ID}},
+		{ID: "unrelated", Name: "Unrelated", Peers: []string{}},
+	}, true)
+	require.NoError(t, err)
+
+	updMsg := manager.peersUpdateManager.CreateChannel(context.Background(), peer1.ID)
+	t.Cleanup(func() {
+		manager.peersUpdateManager.CloseChannel(context.Background(), peer1.ID)
+	})
+
+	s, err := manager.GetAccountSettings(context.Background(), account.Id, userID)
+	require.NoError(t, err)
+	s.ClientUpdateTargetVersion = "1.2.3"
+	s.ClientUpdateTargetGroups = []string{"cu-group"}
+	_, err = manager.UpdateAccountSettings(context.Background(), account.Id, userID, s)
+	require.NoError(t, err)
+
+	t.Run("activating the directive fans out", func(t *testing.T) {
+		peerShouldReceiveUpdate(t, updMsg)
+	})
+
+	t.Run("unrelated unlinked group delete is silent", func(t *testing.T) {
+		done := make(chan struct{})
+		go func() {
+			peerShouldNotReceiveUpdate(t, updMsg)
+			close(done)
+		}()
+		require.NoError(t, manager.DeleteGroups(context.Background(), account.Id, userID, []string{"unrelated"}))
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Error("timeout waiting for peerShouldNotReceiveUpdate")
+		}
+	})
+
+	t.Run("directive-linked group delete fans out", func(t *testing.T) {
+		done := make(chan struct{})
+		go func() {
+			peerShouldReceiveUpdate(t, updMsg)
+			close(done)
+		}()
+		require.NoError(t, manager.DeleteGroups(context.Background(), account.Id, userID, []string{"cu-group"}))
+		select {
+		case <-done:
+		case <-time.After(6 * time.Second):
+			t.Error("timeout waiting for peerShouldReceiveUpdate")
+		}
+	})
 }
