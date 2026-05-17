@@ -4,6 +4,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"net/http"
+	"runtime"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
@@ -14,6 +17,11 @@ import (
 	"github.com/openzro/openzro/version"
 	"github.com/openzro/openzro/version/selfupdate"
 )
+
+// preflightTimeout bounds one manifest preflight (resolve + fetch +
+// gate). It is network-only — no download/verify/install — so it is
+// short; a hung endpoint must not pin the single-flight worker.
+const preflightTimeout = 30 * time.Second
 
 // clientUpdateID derives a stable, opaque per-install id for staged-
 // rollout bucketing from the WireGuard identity (D2: hash the PUBLIC
@@ -96,14 +104,28 @@ type updateDirective struct {
 	seen          bool
 }
 
+// updatePreflight is the async verdict for the recorded directive
+// (openZro #5 R3c). forTarget binds the verdict to the target it was
+// computed for, so buildUpdateState can detect (and not surface) a
+// verdict that a newer directive has already superseded. done=false
+// means "still checking". No signature verification happens here —
+// that is deferred to the install path (R3d); preflight is
+// network-cheap and read-only.
+type updatePreflight struct {
+	forTarget string
+	available bool
+	reason    string
+	done      bool
+}
+
 // onUpdateDirective is the daemon side of the management-driven
 // self-update seam (openZro #5). The engine invokes it — deduped by
 // (target,force), while holding syncMsgMux — whenever the operator's
 // fleet decision changes on the Sync stream. It MUST stay cheap and
-// non-blocking: R3a only records the directive and logs it. The
-// rollout-gated secure pipeline (preflight in R3c, install in R3d)
-// runs on the daemon's own goroutines and reads s.updateDirective —
-// it is never driven from inside this callback.
+// non-blocking: it only records the directive, marks the preflight
+// pending for the new target, and kicks the single-flight preflight
+// worker. The rollout-gated secure pipeline runs on the daemon's own
+// goroutines and reads s.updateDirective — never from this callback.
 func (s *Server) onUpdateDirective(targetVersion string, force bool) {
 	s.updateDirectiveMu.Lock()
 	s.updateDirective = updateDirective{
@@ -111,46 +133,199 @@ func (s *Server) onUpdateDirective(targetVersion string, force bool) {
 		force:         force,
 		seen:          true,
 	}
+	// Drop any prior verdict immediately: until the worker re-checks,
+	// the honest answer for the NEW target is "checking", never the
+	// stale verdict of the previous target.
+	s.updatePreflight = updatePreflight{forTarget: targetVersion}
 	s.updateDirectiveMu.Unlock()
 
 	if targetVersion == "" {
 		log.Infof("client self-update: management cleared the update directive")
-		return
+	} else {
+		log.Infof("client self-update: management directive target=%s force=%t (recorded; preflight queued)",
+			targetVersion, force)
 	}
-	log.Infof("client self-update: management directive target=%s force=%t "+
-		"(recorded; preflight/install land in R3c/R3d)", targetVersion, force)
+
+	s.triggerUpdatePreflight()
 }
 
-// buildUpdateState renders the latest recorded directive into the
-// proto surface the UI reads (openZro #5). Returns nil when no
-// directive has been seen this daemon lifetime — after a daemon
-// restart the state is empty until the next Sync re-delivers it
-// (state is keyed off the live Sync stream, never persisted; this is
-// the Codex post-restart-staleness fix). available is a deliberately
-// minimal target!=running check for R3b; R3c replaces it with the
-// full rollout-gated preflight (manifest resolve + staged bucket).
+// triggerUpdatePreflight starts the preflight worker if idle. If a
+// worker is already in flight it just sets the rerun flag — the
+// directive may have changed, and the worker must finish against the
+// LATEST directive, not the one it started on.
+func (s *Server) triggerUpdatePreflight() {
+	s.preflightMu.Lock()
+	if s.preflightRunning {
+		s.preflightRerun = true
+		s.preflightMu.Unlock()
+		return
+	}
+	s.preflightRunning = true
+	s.preflightMu.Unlock()
+
+	go s.updatePreflightWorker()
+}
+
+// updatePreflightWorker drains the preflight single-flight: it keeps
+// recomputing while the directive changed mid-flight, then exits.
+// Bounded to one goroutine; ctx is process-lifetime with a per-pass
+// timeout so a hung manifest endpoint cannot wedge it.
+func (s *Server) updatePreflightWorker() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("client self-update: preflight worker recovered from panic: %v", r)
+		}
+		s.preflightMu.Lock()
+		s.preflightRunning = false
+		s.preflightMu.Unlock()
+	}()
+
+	base := s.rootCtx
+	if base == nil {
+		// Only nil for a unit-constructed &Server{}; real New() always
+		// sets it. Keeps the worker panic-free in tests.
+		base = context.Background()
+	}
+
+	for {
+		s.updateDirectiveMu.Lock()
+		d := s.updateDirective
+		s.updateDirectiveMu.Unlock()
+
+		ctx, cancel := context.WithTimeout(base, preflightTimeout)
+		pf := s.computeUpdatePreflight(ctx, d.targetVersion, d.force)
+		cancel()
+
+		s.updateDirectiveMu.Lock()
+		// Only publish if the directive has not moved on under us.
+		if s.updateDirective.targetVersion == pf.forTarget {
+			s.updatePreflight = pf
+		}
+		s.updateDirectiveMu.Unlock()
+
+		log.Infof("client self-update: preflight target=%q available=%t reason=%q",
+			pf.forTarget, pf.available, pf.reason)
+
+		s.preflightMu.Lock()
+		if s.preflightRerun {
+			s.preflightRerun = false
+			s.preflightMu.Unlock()
+			continue
+		}
+		s.preflightRunning = false
+		s.preflightMu.Unlock()
+		return
+	}
+}
+
+// computeUpdatePreflight resolves the per-version manifest for target
+// and runs the rollout gate WITHOUT downloading or verifying — that
+// is the install path's job (R3d). force is intentionally NOT a gate
+// input here: "is an update available to this client" is independent
+// of whether the operator wants it installed silently; force only
+// decides silent-vs-prompt at install time. AutoInstallEnabled is
+// pinned true so the gate reports pure version+pin+staged
+// eligibility rather than the surface-only short-circuit.
+func (s *Server) computeUpdatePreflight(ctx context.Context, target string, _ bool) updatePreflight {
+	pf := updatePreflight{forTarget: target, done: true}
+
+	// A cleared directive is the same truth on every platform — answer
+	// it before the macOS-only gate so the UI shows the real reason.
+	if target == "" {
+		pf.reason = "no directive (operator cleared the target)"
+		return pf
+	}
+	if runtime.GOOS != "darwin" {
+		pf.reason = "self-update is macOS-only in phase 1"
+		return pf
+	}
+
+	manifestURL, err := selfupdate.ResolveManifestTemplateURL(target)
+	if err != nil {
+		// Fail-closed config error (e.g. template missing {version}).
+		pf.reason = err.Error()
+		return pf
+	}
+	if manifestURL == "" {
+		pf.reason = "management-driven manifest path not configured (OPENZRO_UPDATE_MANIFEST_TEMPLATE unset)"
+		return pf
+	}
+
+	ua := "openzro-daemon/" + version.OpenzroVersion()
+	hc := &http.Client{Timeout: preflightTimeout}
+	m, err := selfupdate.FetchManifest(ctx, hc, manifestURL, ua)
+	if err != nil {
+		pf.reason = "manifest fetch failed: " + err.Error()
+		return pf
+	}
+
+	// I2 — strict target binding. A per-version manifest endpoint that
+	// serves a manifest for a different version than we asked for is
+	// either misconfigured or hostile; refuse rather than risk
+	// installing an unrequested version.
+	if m.Version != target {
+		pf.reason = "served manifest version " + m.Version + " != directed target " + target + " — refusing"
+		return pf
+	}
+
+	d := selfupdate.Evaluate(selfupdate.GateInput{
+		Current:            version.OpenzroVersion(),
+		Manifest:           m,
+		AutoInstallEnabled: true,
+		ClientID:           s.clientUpdateBucketID(),
+	})
+	pf.available = d.Eligible
+	pf.reason = d.Reason
+	return pf
+}
+
+// clientUpdateBucketID snapshots the stable staged-rollout bucket id
+// (wg-pubkey hash) from the live config. Empty when config is unset —
+// the gate fail-closes such a client OUT of any partial staged
+// rollout, which is the safe default.
+func (s *Server) clientUpdateBucketID() string {
+	s.mutex.Lock()
+	cfg := s.config
+	s.mutex.Unlock()
+	if cfg == nil {
+		return ""
+	}
+	return clientUpdateID(cfg.PrivateKey)
+}
+
+// buildUpdateState renders the latest recorded directive + its
+// preflight verdict into the proto surface the UI reads (openZro #5).
+// Returns nil when no directive has been seen this daemon lifetime —
+// after a daemon restart the state is empty until the next Sync
+// re-delivers it (state is keyed off the live Sync stream, never
+// persisted; the Codex post-restart-staleness fix). available now
+// comes from the full rollout-gated preflight (R3c), not the R3b
+// minimal check.
 func (s *Server) buildUpdateState() *proto.UpdateState {
 	s.updateDirectiveMu.Lock()
 	d := s.updateDirective
+	pf := s.updatePreflight
 	s.updateDirectiveMu.Unlock()
 
 	if !d.seen {
 		return nil
 	}
 
-	running := version.OpenzroVersion()
-	available := d.targetVersion != "" && d.targetVersion != running
+	// A verdict only counts if it was computed for the current target
+	// and has completed; otherwise we are still checking.
+	verdictReady := pf.done && pf.forTarget == d.targetVersion
+	available := verdictReady && pf.available
 
 	var decision string
 	switch {
-	case d.targetVersion == "":
-		decision = "no directive (operator cleared the target)"
+	case !verdictReady:
+		decision = "checking update availability…"
 	case !available:
-		decision = "up to date (running the directed version)"
+		decision = pf.reason
 	case d.force:
-		decision = "update available — operator forced (silent install)"
+		decision = "update available — operator forced (silent install): " + pf.reason
 	default:
-		decision = "update available — operator offered (user opt-in)"
+		decision = "update available — operator offered (user opt-in): " + pf.reason
 	}
 
 	return &proto.UpdateState{

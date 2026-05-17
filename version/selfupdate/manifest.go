@@ -11,11 +11,22 @@
 // the structure follows upstream NetBird's Win/Mac client self-update
 // (BSD), adapted; no AGPL management code is involved.
 //
-// Design (agreed in #5):
-//   - The manifest is STATIC, served from the release infra (GitHub
-//     Releases / openzro-bin), NOT the management API. A peer must be
-//     able to self-update even when its management is older; coupling
-//     client-update to the control plane is an outage footgun.
+// Design (agreed in #5, management-driven model — superseded the
+// earlier decoupled-static design):
+//   - The TRIGGER is management-driven: Management conveys the
+//     operator's fleet decision (target version + force/silent) over
+//     the existing peer Sync stream. Management conveys only the
+//     decision, never the binary.
+//   - The client still fetches a release manifest and the signed
+//     package itself and verifies them — the trust root is unchanged
+//     (the engine here is the security reinforcement over a bare
+//     "management said so"). For the management-driven path the
+//     manifest is per-version, resolved from a TEMPLATE
+//     (ResolveManifestTemplateURL) so the fetched descriptor is
+//     bound to the exact directed version.
+//   - The legacy single static manifest (ResolveManifestURL) is
+//     retained as the critical-only fallback for when management is
+//     unreachable AND the client is below min_version (#5 R6).
 //   - Rollout control is MANDATORY (see gate.go): opt-out, version
 //     pin, min-version floor, staged rollout. One bad release must not
 //     be able to take the whole fleet down.
@@ -30,6 +41,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -54,6 +66,17 @@ const httpDrainCap = 4 * 1024
 const envManifestURL = "OPENZRO_UPDATE_MANIFEST_URL"
 
 const defaultManifestURL = "https://github.com/openzro/openzro/releases/download/update/update-manifest.json"
+
+// envManifestTemplate is the per-version manifest URL template used by
+// the management-driven path (#5). It MUST contain manifestVersionToken;
+// the daemon substitutes the directed target version into it so the
+// fetched manifest is bound to exactly that release. Unset/empty means
+// the management-driven manifest path is not configured.
+const envManifestTemplate = "OPENZRO_UPDATE_MANIFEST_TEMPLATE"
+
+// manifestVersionToken is the placeholder replaced with the directed
+// target version in envManifestTemplate.
+const manifestVersionToken = "{version}"
 
 // Artifact is one platform's downloadable. Signature is an optional
 // detached signature; on macOS authenticity comes from notarization
@@ -154,6 +177,43 @@ func ResolveManifestURL() string {
 		return strings.TrimSpace(v)
 	}
 	return defaultManifestURL
+}
+
+// ResolveManifestTemplateURL builds the per-version manifest URL for
+// the management-driven path (#5) by substituting target into
+// OPENZRO_UPDATE_MANIFEST_TEMPLATE.
+//
+//   - env unset or empty  -> ("", nil): the management-driven manifest
+//     path is simply not configured; the caller treats this as "cannot
+//     preflight" (NOT as an error — an operator who never enabled it
+//     must not see error noise).
+//   - env set but missing {version} -> fail-closed config error: such a
+//     template resolves EVERY target to the same URL, which would
+//     silently install the wrong version. Refuse loudly.
+//   - empty target with a configured template -> error: nothing to
+//     resolve.
+//
+// target is path-escaped before substitution so a hostile/garbled
+// version string cannot inject extra path segments or a different host.
+func ResolveManifestTemplateURL(target string) (string, error) {
+	v, ok := os.LookupEnv(envManifestTemplate)
+	if !ok {
+		return "", nil
+	}
+	tpl := strings.TrimSpace(v)
+	if tpl == "" {
+		return "", nil
+	}
+	if !strings.Contains(tpl, manifestVersionToken) {
+		return "", fmt.Errorf(
+			"selfupdate: %s is set but missing the %s token — refusing "+
+				"(it would resolve every target to one URL and install the wrong version)",
+			envManifestTemplate, manifestVersionToken)
+	}
+	if strings.TrimSpace(target) == "" {
+		return "", fmt.Errorf("selfupdate: cannot resolve manifest template with an empty target version")
+	}
+	return strings.ReplaceAll(tpl, manifestVersionToken, url.PathEscape(target)), nil
 }
 
 // FetchManifest GETs and validates the manifest. The body is hard

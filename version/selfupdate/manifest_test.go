@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -116,6 +118,71 @@ func TestFetchManifest(t *testing.T) {
 		defer cancel()
 		if _, err := FetchManifest(ctx, srv.Client(), srv.URL, "ua/1"); err == nil {
 			t.Fatal("expected error on context timeout")
+		}
+	})
+}
+
+// TestResolveManifestTemplateURL pins the openZro #5 management-driven
+// per-version manifest resolution and its fail-closed posture.
+func TestResolveManifestTemplateURL(t *testing.T) {
+	t.Run("unset env is not-configured, not an error", func(t *testing.T) {
+		old, had := os.LookupEnv(envManifestTemplate)
+		_ = os.Unsetenv(envManifestTemplate)
+		t.Cleanup(func() {
+			if had {
+				_ = os.Setenv(envManifestTemplate, old)
+			}
+		})
+		got, err := ResolveManifestTemplateURL("1.2.3")
+		if err != nil || got != "" {
+			t.Fatalf("unset must be (\"\",nil), got (%q,%v)", got, err)
+		}
+	})
+
+	t.Run("empty env is not-configured, not an error", func(t *testing.T) {
+		t.Setenv(envManifestTemplate, "   ")
+		got, err := ResolveManifestTemplateURL("1.2.3")
+		if err != nil || got != "" {
+			t.Fatalf("empty must be (\"\",nil), got (%q,%v)", got, err)
+		}
+	})
+
+	t.Run("set without {version} token is a fail-closed config error", func(t *testing.T) {
+		t.Setenv(envManifestTemplate, "https://dl.example.com/manifest.json")
+		got, err := ResolveManifestTemplateURL("1.2.3")
+		if err == nil {
+			t.Fatalf("missing token must error, got url %q", got)
+		}
+		if !strings.Contains(err.Error(), manifestVersionToken) {
+			t.Fatalf("error should name the required token: %v", err)
+		}
+	})
+
+	t.Run("configured template but empty target errors", func(t *testing.T) {
+		t.Setenv(envManifestTemplate, "https://dl.example.com/{version}/manifest.json")
+		if _, err := ResolveManifestTemplateURL("  "); err == nil {
+			t.Fatal("empty target with a configured template must error")
+		}
+	})
+
+	t.Run("substitutes and path-escapes the target", func(t *testing.T) {
+		t.Setenv(envManifestTemplate, "https://dl.example.com/{version}/update-manifest.json")
+		got, err := ResolveManifestTemplateURL("0.30.0")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "https://dl.example.com/0.30.0/update-manifest.json" {
+			t.Fatalf("unexpected url: %q", got)
+		}
+
+		// A garbled version must not be able to inject a path segment
+		// or escape the intended host/path layout.
+		got, err = ResolveManifestTemplateURL("../../evil")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if strings.Contains(got, "../") {
+			t.Fatalf("target must be path-escaped, got %q", got)
 		}
 	})
 }

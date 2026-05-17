@@ -75,9 +75,20 @@ type Server struct {
 	// this is the authoritative latest directive for the daemon. R3a
 	// records + logs it; preflight (R3c) and install (R3d) build on
 	// this. Own mutex — the Sync path must not contend on s.mutex
-	// (the config lock).
+	// (the config lock). updatePreflight is the async verdict for the
+	// recorded directive; it shares updateDirectiveMu because
+	// buildUpdateState reads both atomically.
 	updateDirectiveMu sync.Mutex
 	updateDirective   updateDirective
+	updatePreflight   updatePreflight
+
+	// preflight single-flight (#5 R3c). The preflight does network
+	// IO so it never runs on the Sync hot path; one worker at a time,
+	// and if the directive changes mid-flight the worker re-runs
+	// against the newest directive before clearing.
+	preflightMu      sync.Mutex
+	preflightRunning bool
+	preflightRerun   bool
 
 	profileManager   profilemanager.ServiceManager
 	profilesDisabled bool
