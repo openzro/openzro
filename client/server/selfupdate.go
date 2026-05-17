@@ -4,8 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"runtime"
-	"sync"
 
 	log "github.com/sirupsen/logrus"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
@@ -86,52 +84,39 @@ func (s *Server) Update(ctx context.Context, _ *proto.UpdateRequest) (*proto.Upd
 	return s.runSelfUpdate(ctx)
 }
 
-// startSelfUpdateWatcher is the background path: the existing 30-min
-// version check fires the (single-flighted) cycle. It deliberately
-// does NOT use selfupdate.NewListener — that binds a STATIC Config,
-// but the daemon must read fresh config every cycle (runtime toggle).
-// NewListener stays the documented seam for embedders without that
-// requirement. Blocks until ctx is done; launch as a goroutine.
-func (s *Server) startSelfUpdateWatcher(ctx context.Context) {
-	// Platform gate WITHOUT reading s.config: this goroutine is
-	// launched from inside Start(), which mutates s.config without
-	// s.mutex (the existing code never had a concurrent reader). A
-	// runtime.GOOS check needs no config, so the watcher never races
-	// Start()'s config writes. Phase 1 is macOS-only anyway.
-	if runtime.GOOS != "darwin" {
+// updateDirective is the latest management-conveyed client
+// self-update decision (openZro #5). targetVersion == "" means the
+// operator has no active directive — clients do nothing. seen
+// distinguishes "never received a Sync directive" from "operator
+// explicitly cleared the target", which R3b/R3c need to surface
+// Available correctly.
+type updateDirective struct {
+	targetVersion string
+	force         bool
+	seen          bool
+}
+
+// onUpdateDirective is the daemon side of the management-driven
+// self-update seam (openZro #5). The engine invokes it — deduped by
+// (target,force), while holding syncMsgMux — whenever the operator's
+// fleet decision changes on the Sync stream. It MUST stay cheap and
+// non-blocking: R3a only records the directive and logs it. The
+// rollout-gated secure pipeline (preflight in R3c, install in R3d)
+// runs on the daemon's own goroutines and reads s.updateDirective —
+// it is never driven from inside this callback.
+func (s *Server) onUpdateDirective(targetVersion string, force bool) {
+	s.updateDirectiveMu.Lock()
+	s.updateDirective = updateDirective{
+		targetVersion: targetVersion,
+		force:         force,
+		seen:          true,
+	}
+	s.updateDirectiveMu.Unlock()
+
+	if targetVersion == "" {
+		log.Infof("client self-update: management cleared the update directive")
 		return
 	}
-
-	up := version.NewUpdate("openzro-daemon")
-	up.SetDaemonVersion(version.OpenzroVersion())
-
-	var mu sync.Mutex
-	running := false
-	up.SetOnUpdateListener(func() {
-		mu.Lock()
-		if running {
-			mu.Unlock()
-			return
-		}
-		running = true
-		mu.Unlock()
-		defer func() {
-			if r := recover(); r != nil {
-				log.Errorf("selfupdate watcher: recovered from panic: %v", r)
-			}
-			mu.Lock()
-			running = false
-			mu.Unlock()
-		}()
-		res, err := s.runSelfUpdate(ctx)
-		if err != nil {
-			log.Errorf("selfupdate watcher: %v", err)
-			return
-		}
-		log.Infof("selfupdate watcher: installed=%v skipped=%v version=%s reason=%q",
-			res.Installed, res.Skipped, res.Version, res.Reason)
-	})
-
-	<-ctx.Done()
-	up.StopWatch()
+	log.Infof("client self-update: management directive target=%s force=%t "+
+		"(recorded; preflight/install land in R3c/R3d)", targetVersion, force)
 }

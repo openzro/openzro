@@ -69,6 +69,16 @@ type Server struct {
 	persistNetworkMap bool
 	isSessionActive   atomic.Bool
 
+	// updateDirective holds the latest management-conveyed client
+	// self-update decision (openZro #5). The engine dedupes by
+	// (target,force) and only calls onUpdateDirective on change, so
+	// this is the authoritative latest directive for the daemon. R3a
+	// records + logs it; preflight (R3c) and install (R3d) build on
+	// this. Own mutex — the Sync path must not contend on s.mutex
+	// (the config lock).
+	updateDirectiveMu sync.Mutex
+	updateDirective   updateDirective
+
 	profileManager   profilemanager.ServiceManager
 	profilesDisabled bool
 }
@@ -161,11 +171,6 @@ func (s *Server) Start() error {
 	s.statusRecorder.UpdateRosenpass(config.RosenpassEnabled, config.RosenpassPermissive)
 	s.statusRecorder.UpdateLazyConnection(config.LazyConnectionEnabled)
 
-	// Background client self-update (#5). Launched once, process-
-	// lifetime, regardless of auto-connect; macOS-only in phase 1
-	// (the watcher self-disarms on other platforms).
-	go s.startSelfUpdateWatcher(s.rootCtx)
-
 	if s.sessionWatcher == nil {
 		s.sessionWatcher = internal.NewSessionWatcher(s.rootCtx, s.statusRecorder)
 		s.sessionWatcher.SetOnExpireListener(s.onSessionExpire)
@@ -240,6 +245,7 @@ func (s *Server) connectWithRetryRuns(ctx context.Context, config *profilemanage
 		log.Tracef("running client connection")
 		s.connectClient = internal.NewConnectClient(ctx, config, statusRecorder)
 		s.connectClient.SetNetworkMapPersistence(s.persistNetworkMap)
+		s.connectClient.SetUpdateDirectiveHandler(s.onUpdateDirective)
 
 		err := s.connectClient.Run(runningChan)
 		if err != nil {

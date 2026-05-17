@@ -1605,3 +1605,72 @@ func getPeers(e *Engine) int {
 
 	return len(e.peerStore.PeersPubKey())
 }
+
+// TestEngine_HandleUpdateDirective_Dedupe pins the openZro #5
+// management-driven self-update seam contract: the directive rides
+// every Sync, so handleUpdateDirective must fire the handler exactly
+// once per distinct (target,force) — including the nil→"" transition
+// — and SetUpdateDirectiveHandler must reset the dedupe so a fresh
+// handler (post-reconnect) re-receives the current directive.
+func TestEngine_HandleUpdateDirective_Dedupe(t *testing.T) {
+	type call struct {
+		target string
+		force  bool
+	}
+
+	t.Run("dedupes unchanged directive across repeated syncs", func(t *testing.T) {
+		e := &Engine{syncMsgMux: &sync.Mutex{}}
+		var got []call
+		e.SetUpdateDirectiveHandler(func(target string, force bool) {
+			got = append(got, call{target, force})
+		})
+
+		v1 := &mgmtProto.UpdateConfig{TargetVersion: "0.30.0", Force: true}
+		e.handleUpdateDirective(v1)
+		e.handleUpdateDirective(v1)
+		e.handleUpdateDirective(&mgmtProto.UpdateConfig{TargetVersion: "0.30.0", Force: true})
+
+		require.Equal(t, []call{{"0.30.0", true}}, got, "unchanged directive must fire once")
+
+		// force flip is a distinct decision -> one more call
+		e.handleUpdateDirective(&mgmtProto.UpdateConfig{TargetVersion: "0.30.0", Force: false})
+		// nil (operator cleared) normalises to "" and is a distinct,
+		// once-delivered state.
+		e.handleUpdateDirective(nil)
+		e.handleUpdateDirective(nil)
+
+		require.Equal(t, []call{
+			{"0.30.0", true},
+			{"0.30.0", false},
+			{"", false},
+		}, got)
+	})
+
+	t.Run("SetUpdateDirectiveHandler resets dedupe so a new handler re-receives", func(t *testing.T) {
+		e := &Engine{syncMsgMux: &sync.Mutex{}}
+		var first, second []call
+		e.SetUpdateDirectiveHandler(func(target string, force bool) {
+			first = append(first, call{target, force})
+		})
+		e.handleUpdateDirective(&mgmtProto.UpdateConfig{TargetVersion: "0.31.0"})
+		require.Len(t, first, 1)
+
+		// Reconnect rebuilds the engine seam: a new handler must see
+		// the directive that was already on the wire.
+		e.SetUpdateDirectiveHandler(func(target string, force bool) {
+			second = append(second, call{target, force})
+		})
+		e.handleUpdateDirective(&mgmtProto.UpdateConfig{TargetVersion: "0.31.0"})
+		require.Equal(t, []call{{"0.31.0", false}}, second)
+		require.Len(t, first, 1, "old handler must not be called again")
+	})
+
+	t.Run("nil handler is a safe no-op but still dedupes", func(t *testing.T) {
+		e := &Engine{syncMsgMux: &sync.Mutex{}}
+		require.NotPanics(t, func() {
+			e.handleUpdateDirective(&mgmtProto.UpdateConfig{TargetVersion: "0.32.0"})
+		})
+		assert.True(t, e.updateDirectiveSeen)
+		assert.Equal(t, "0.32.0", e.lastUpdateTarget)
+	})
+}

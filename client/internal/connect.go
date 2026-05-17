@@ -44,6 +44,12 @@ type ConnectClient struct {
 	engineMutex    sync.Mutex
 
 	persistNetworkMap bool
+
+	// updateDirectiveHandler is the management-driven client
+	// self-update seam (openZro #5). Stored here so it survives an
+	// engine rebuild (reconnect) and is re-applied to every fresh
+	// Engine, exactly like persistNetworkMap.
+	updateDirectiveHandler func(targetVersion string, force bool)
 }
 
 func NewConnectClient(
@@ -271,6 +277,7 @@ func (c *ConnectClient) run(mobileDependency MobileDependency, runningChan chan 
 		c.engineMutex.Lock()
 		c.engine = NewEngine(engineCtx, cancel, signalClient, mgmClient, relayManager, engineConfig, mobileDependency, c.statusRecorder, checks)
 		c.engine.SetNetworkMapPersistence(c.persistNetworkMap)
+		c.engine.SetUpdateDirectiveHandler(c.updateDirectiveHandler)
 		c.engineMutex.Unlock()
 
 		if err := c.engine.Start(); err != nil {
@@ -410,6 +417,21 @@ func (c *ConnectClient) SetNetworkMapPersistence(enabled bool) {
 	engine := c.Engine()
 	if engine != nil {
 		engine.SetNetworkMapPersistence(enabled)
+	}
+}
+
+// SetUpdateDirectiveHandler registers the management-driven client
+// self-update handler (openZro #5) and applies it to the live engine
+// if one already exists, mirroring SetNetworkMapPersistence so the
+// seam survives reconnects.
+func (c *ConnectClient) SetUpdateDirectiveHandler(h func(targetVersion string, force bool)) {
+	c.engineMutex.Lock()
+	c.updateDirectiveHandler = h
+	c.engineMutex.Unlock()
+
+	engine := c.Engine()
+	if engine != nil {
+		engine.SetUpdateDirectiveHandler(h)
 	}
 }
 
