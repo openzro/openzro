@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/systray"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/openzro/openzro/client/proto"
-	"github.com/openzro/openzro/version"
 )
 
 type eventHandler struct {
@@ -55,8 +55,6 @@ func (h *eventHandler) listen(ctx context.Context) {
 			return
 		case <-h.client.mGitHub.ClickedCh:
 			h.handleGitHubClick()
-		case <-h.client.mUpdate.ClickedCh:
-			h.handleUpdateClick()
 		case <-h.client.mInstallUpdate.ClickedCh:
 			h.handleInstallUpdateClick()
 		case <-h.client.mNetworks.ClickedCh:
@@ -172,12 +170,6 @@ func (h *eventHandler) handleGitHubClick() {
 	}
 }
 
-func (h *eventHandler) handleUpdateClick() {
-	if err := openURL(version.DownloadUrl()); err != nil {
-		log.Errorf("failed to open download URL: %v", err)
-	}
-}
-
 // handleInstallUpdateClick asks the privileged daemon to run the
 // rollout-gated self-update cycle (#5, C1). Long-running
 // (download+verify+install): runs off the menu loop with the item
@@ -194,10 +186,29 @@ func (h *eventHandler) handleInstallUpdateClick() {
 			h.client.app.SendNotification(fyne.NewNotification("Update", "Cannot reach the openZro daemon"))
 			return
 		}
+
+		// Snapshot pre-install state so a successful install (which
+		// restarts the daemon and DROPS this RPC) is not misread as a
+		// failure (#5 R5).
+		var preVersion, target string
+		if st, serr := conn.Status(h.client.ctx, &proto.StatusRequest{}); serr == nil {
+			preVersion = st.GetDaemonVersion()
+			target = st.GetUpdateState().GetTargetVersion()
+		}
+
 		h.client.app.SendNotification(fyne.NewNotification("Update", "Downloading and verifying the update…"))
 
 		resp, err := conn.Update(h.client.ctx, &proto.UpdateRequest{})
 		if err != nil {
+			// The install restarts the daemon, killing THIS RPC — an
+			// error here is ambiguous. Poll the daemon back up: if it
+			// now runs the target (or simply a different version when
+			// the target is unknown) the install actually SUCCEEDED.
+			if h.installSucceededAfterRestart(preVersion, target) {
+				h.client.app.SendNotification(fyne.NewNotification("Update installed",
+					"openZro updated — the service restarted."))
+				return
+			}
 			log.Errorf("self-update failed: %v", err)
 			h.client.app.SendNotification(fyne.NewNotification("Update failed", err.Error()))
 			return
@@ -212,6 +223,42 @@ func (h *eventHandler) handleInstallUpdateClick() {
 			h.client.app.SendNotification(fyne.NewNotification("Update", resp.GetReason()))
 		}
 	}()
+}
+
+// installSucceededAfterRestart resolves the ambiguous post-install
+// RPC drop: the install replaces+restarts the daemon, so the Update
+// RPC connection dies even on success. Poll the daemon back up and
+// report whether it is now running the update target (or, when the
+// target is unknown, simply a different version than before). A
+// genuine pre-install failure leaves the daemon untouched, so the
+// version never changes and this correctly returns false (#5 R5).
+func (h *eventHandler) installSucceededAfterRestart(preVersion, target string) bool {
+	deadline := time.Now().Add(45 * time.Second)
+	for time.Now().Before(deadline) {
+		time.Sleep(2 * time.Second)
+		conn, err := h.client.getSrvClient(failFastTimeout)
+		if err != nil {
+			continue // daemon still restarting
+		}
+		st, err := conn.Status(h.client.ctx, &proto.StatusRequest{})
+		if err != nil {
+			continue
+		}
+		now := st.GetDaemonVersion()
+		if now == "" {
+			continue
+		}
+		if target != "" {
+			if now == target {
+				return true
+			}
+			continue
+		}
+		if preVersion != "" && now != preVersion {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *eventHandler) handleNetworksClick() {
