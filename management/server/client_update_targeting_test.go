@@ -187,3 +187,79 @@ func TestBuildUpdateConfig_Q2(t *testing.T) {
 		t.Fatal("excluded peer must get NO directive (nil), never the targeting metadata")
 	}
 }
+
+// TestClientUpdateSettingsChanged pins the predicate that drives BOTH
+// the audit event and the connected-peer fanout (review-Q2 #1): every
+// directive field must count as a change; nothing else should.
+func TestClientUpdateSettingsChanged(t *testing.T) {
+	base := func() *types.Settings {
+		p := 10
+		return &types.Settings{
+			ClientUpdateTargetVersion:  "0.40.0",
+			ClientUpdateForce:          true,
+			ClientUpdateTargetGroups:   []string{"g1"},
+			ClientUpdateTargetPeers:    []string{"p1"},
+			ClientUpdateExcludeGroups:  []string{"infra"},
+			ClientUpdateRolloutPercent: &p,
+		}
+	}
+	if clientUpdateSettingsChanged(base(), base()) {
+		t.Fatal("identical settings must not be a change")
+	}
+	// An unrelated field flip must NOT be seen as a directive change.
+	other := base()
+	other.DNSDomain = "x.example"
+	if clientUpdateSettingsChanged(base(), other) {
+		t.Fatal("a non-directive field must not count")
+	}
+
+	mut := []func(s *types.Settings){
+		func(s *types.Settings) { s.ClientUpdateTargetVersion = "0.41.0" },
+		func(s *types.Settings) { s.ClientUpdateTargetVersion = "" }, // clear
+		func(s *types.Settings) { s.ClientUpdateForce = false },
+		func(s *types.Settings) { s.ClientUpdateTargetGroups = []string{"g1", "g2"} },
+		func(s *types.Settings) { s.ClientUpdateTargetPeers = nil },
+		func(s *types.Settings) { s.ClientUpdateExcludeGroups = []string{"infra2"} },
+		func(s *types.Settings) { s.ClientUpdateRolloutPercent = nil },        // ring -> nil
+		func(s *types.Settings) { z := 0; s.ClientUpdateRolloutPercent = &z }, // 10 -> 0
+	}
+	for i, m := range mut {
+		n := base()
+		m(n)
+		if !clientUpdateSettingsChanged(base(), n) {
+			t.Fatalf("mutation %d must be detected as a directive change", i)
+		}
+	}
+}
+
+// TestIsGroupLinkedToClientUpdate pins review-Q2 #2: a group used only
+// by client-update must register as peer-affecting — but only while a
+// directive is active (no version => membership cannot change any
+// delivered directive, keep the unused path cheap).
+func TestIsGroupLinkedToClientUpdate(t *testing.T) {
+	active := &types.Settings{
+		ClientUpdateTargetVersion: "0.40.0",
+		ClientUpdateTargetGroups:  []string{"rollout"},
+		ClientUpdateExcludeGroups: []string{"infra"},
+	}
+	if !isGroupLinkedToClientUpdate(active, "rollout") {
+		t.Fatal("a target group must be linked")
+	}
+	if !isGroupLinkedToClientUpdate(active, "infra") {
+		t.Fatal("an exclude group must be linked")
+	}
+	if isGroupLinkedToClientUpdate(active, "unrelated") {
+		t.Fatal("an unrelated group must not be linked")
+	}
+	if isGroupLinkedToClientUpdate(nil, "rollout") {
+		t.Fatal("nil settings must not be linked")
+	}
+	inactive := &types.Settings{
+		ClientUpdateTargetGroups:  []string{"rollout"},
+		ClientUpdateExcludeGroups: []string{"infra"},
+	}
+	if isGroupLinkedToClientUpdate(inactive, "rollout") ||
+		isGroupLinkedToClientUpdate(inactive, "infra") {
+		t.Fatal("no active target version => not linked (cheap unused path)")
+	}
+}
