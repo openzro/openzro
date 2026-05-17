@@ -54,6 +54,24 @@ var (
 // TestConnectWithRetryRuns checks that the connectWithRetry function runs and runs the retries according to the times specified via environment variables
 // we will use a management server started via to simulate the server and capture the number of retries
 func TestConnectWithRetryRuns(t *testing.T) {
+	// Redirect privileged profile state to a temp dir so the test runs
+	// unprivileged (default is /var/lib/openzro, root-only). Mirrors the
+	// override TestServer_Up already uses; see issue #46.
+	stateDir := t.TempDir()
+	origDefaultProfileDir := profilemanager.DefaultConfigPathDir
+	origDefaultConfigPath := profilemanager.DefaultConfigPath
+	origActiveProfileStatePath := profilemanager.ActiveProfileStatePath
+	profilemanager.ConfigDirOverride = stateDir
+	profilemanager.DefaultConfigPathDir = stateDir
+	profilemanager.ActiveProfileStatePath = filepath.Join(stateDir, "active_profile.json")
+	profilemanager.DefaultConfigPath = filepath.Join(stateDir, "default.json")
+	t.Cleanup(func() {
+		profilemanager.DefaultConfigPathDir = origDefaultProfileDir
+		profilemanager.ActiveProfileStatePath = origActiveProfileStatePath
+		profilemanager.DefaultConfigPath = origDefaultConfigPath
+		profilemanager.ConfigDirOverride = ""
+	})
+
 	// start the signal server
 	_, signalAddr, err := startSignal(t)
 	if err != nil {
