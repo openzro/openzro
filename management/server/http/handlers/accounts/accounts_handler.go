@@ -174,6 +174,39 @@ func (h *handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 		settings.AdmissionExemptGroups = *req.Settings.AdmissionExemptGroups
 	}
 
+	// openZro #5 Q2: the client self-update directive + its server-side
+	// subset targeting. Group/peer IDs are not existence-checked here
+	// (consistent with admission_exempt_groups / admission_posture_checks
+	// above — a dangling ID is a no-op; the dangling-EXCLUDE risk is a
+	// documented operator concern, not enforced one-off). The rollout
+	// percent IS hard-validated: OpenAPI min/max is documentation only
+	// (no runtime validation middleware), and an out-of-range ring
+	// would otherwise reach the fail-closed gate as silently "nobody".
+	if req.Settings.ClientUpdateTargetVersion != nil {
+		settings.ClientUpdateTargetVersion = *req.Settings.ClientUpdateTargetVersion
+	}
+	if req.Settings.ClientUpdateForce != nil {
+		settings.ClientUpdateForce = *req.Settings.ClientUpdateForce
+	}
+	if req.Settings.ClientUpdateTargetGroups != nil {
+		settings.ClientUpdateTargetGroups = *req.Settings.ClientUpdateTargetGroups
+	}
+	if req.Settings.ClientUpdateTargetPeers != nil {
+		settings.ClientUpdateTargetPeers = *req.Settings.ClientUpdateTargetPeers
+	}
+	if req.Settings.ClientUpdateExcludeGroups != nil {
+		settings.ClientUpdateExcludeGroups = *req.Settings.ClientUpdateExcludeGroups
+	}
+	if req.Settings.ClientUpdateRolloutPercent != nil {
+		p := *req.Settings.ClientUpdateRolloutPercent
+		if p < 0 || p > 100 {
+			util.WriteError(r.Context(), status.Errorf(status.InvalidArgument,
+				"client_update_rollout_percent must be between 0 and 100"), w)
+			return
+		}
+		settings.ClientUpdateRolloutPercent = &p
+	}
+
 	var onboarding *types.AccountOnboarding
 	if req.Onboarding != nil {
 		onboarding = &types.AccountOnboarding{
@@ -244,6 +277,21 @@ func toAccountResponse(accountID string, settings *types.Settings, meta *types.A
 		admissionExemptGroups = []string{}
 	}
 
+	// Normalise the Q2 targeting slices to [] (not null) so the
+	// dashboard always gets arrays, mirroring admissionExemptGroups.
+	clientUpdateTargetGroups := settings.ClientUpdateTargetGroups
+	if clientUpdateTargetGroups == nil {
+		clientUpdateTargetGroups = []string{}
+	}
+	clientUpdateTargetPeers := settings.ClientUpdateTargetPeers
+	if clientUpdateTargetPeers == nil {
+		clientUpdateTargetPeers = []string{}
+	}
+	clientUpdateExcludeGroups := settings.ClientUpdateExcludeGroups
+	if clientUpdateExcludeGroups == nil {
+		clientUpdateExcludeGroups = []string{}
+	}
+
 	apiSettings := api.AccountSettings{
 		PeerLoginExpiration:             int(settings.PeerLoginExpiration.Seconds()),
 		PeerLoginExpirationEnabled:      settings.PeerLoginExpirationEnabled,
@@ -260,6 +308,12 @@ func toAccountResponse(accountID string, settings *types.Settings, meta *types.A
 		AdmissionEnforcementEnabled:     &settings.AdmissionEnforcementEnabled,
 		AdmissionPostureChecks:          &admissionPostureChecks,
 		AdmissionExemptGroups:           &admissionExemptGroups,
+		ClientUpdateTargetVersion:       &settings.ClientUpdateTargetVersion,
+		ClientUpdateForce:               &settings.ClientUpdateForce,
+		ClientUpdateTargetGroups:        &clientUpdateTargetGroups,
+		ClientUpdateTargetPeers:         &clientUpdateTargetPeers,
+		ClientUpdateExcludeGroups:       &clientUpdateExcludeGroups,
+		ClientUpdateRolloutPercent:      settings.ClientUpdateRolloutPercent,
 	}
 
 	apiOnboarding := api.AccountOnboarding{
