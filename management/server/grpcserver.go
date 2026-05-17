@@ -600,7 +600,26 @@ func (s *GRPCServer) prepareLoginResponse(ctx context.Context, peer *nbpeer.Peer
 		Checks:        toProtocolChecks(ctx, postureChecks),
 	}
 	if loginResp.OpenzroConfig != nil {
-		loginResp.OpenzroConfig.Update = buildUpdateConfig(settings) // #5 self-update directive
+		// #5 Q2: the directive is per-peer subset-scoped. Resolve this
+		// peer's groups only when the operator scoped by group (login
+		// has no flow filter, so this is the sole reason to look up
+		// groups here). Fail-closed on resolution error: withhold the
+		// directive rather than risk updating an ExcludeGroup peer.
+		var peerGroupIDs []string
+		peerGroupsKnown := true
+		if clientUpdateNeedsGroups(settings) {
+			groups, gErr := s.accountManager.GetPeerGroups(ctx, peer.AccountID, peer.ID)
+			if gErr != nil {
+				log.WithContext(ctx).Warnf("client-update targeting: failed resolving groups for peer %s: %v (directive withheld this login)", peer.ID, gErr)
+				peerGroupsKnown = false
+			} else {
+				peerGroupIDs = make([]string, 0, len(groups))
+				for _, g := range groups {
+					peerGroupIDs = append(peerGroupIDs, g.ID)
+				}
+			}
+		}
+		loginResp.OpenzroConfig.Update = buildUpdateConfig(settings, peer.ID, peer.Key, peerGroupIDs, peerGroupsKnown)
 	}
 
 	return loginResp, nil
@@ -715,20 +734,8 @@ func toOpenzroConfig(config *types.Config, turnCredentials *Token, relayToken *T
 	return nbConfig
 }
 
-// buildUpdateConfig maps the operator-set account Settings into the
-// per-peer client self-update directive (openZro #5). nil when no
-// target is set (the client then does nothing). Clean-room: modelled
-// from public NetBird v0.61 behaviour only; no upstream AGPL
-// management consulted.
-func buildUpdateConfig(settings *types.Settings) *proto.UpdateConfig {
-	if settings == nil || settings.ClientUpdateTargetVersion == "" {
-		return nil
-	}
-	return &proto.UpdateConfig{
-		TargetVersion: settings.ClientUpdateTargetVersion,
-		Force:         settings.ClientUpdateForce,
-	}
-}
+// buildUpdateConfig moved to client_update_targeting.go (openZro #5
+// Q2 — now per-peer subset-aware).
 
 // defaultFlowReportInterval is how often peers flush their queued flow
 // events to the management's FlowService gRPC stream. 10s matches the
@@ -906,7 +913,7 @@ func toPeerConfig(peer *nbpeer.Peer, network *types.Network, dnsName string, set
 // peer's group memberships, supplied by the caller — only consulted
 // when the operator scoped flow capture to a non-empty group list,
 // so callers can pass nil when not needed.
-func toSyncResponse(ctx context.Context, config *types.Config, peer *nbpeer.Peer, turnCredentials *Token, relayCredentials *Token, networkMap *types.NetworkMap, dnsName string, checks []*posture.Checks, dnsCache *DNSConfigCache, settings *types.Settings, extraSettings *types.ExtraSettings, peerGroups []string) *proto.SyncResponse {
+func toSyncResponse(ctx context.Context, config *types.Config, peer *nbpeer.Peer, turnCredentials *Token, relayCredentials *Token, networkMap *types.NetworkMap, dnsName string, checks []*posture.Checks, dnsCache *DNSConfigCache, settings *types.Settings, extraSettings *types.ExtraSettings, peerGroups []string, peerGroupsKnown bool) *proto.SyncResponse {
 	response := &proto.SyncResponse{
 		PeerConfig: toPeerConfig(peer, networkMap.Network, dnsName, settings),
 		NetworkMap: &proto.NetworkMap{
@@ -927,7 +934,7 @@ func toSyncResponse(ctx context.Context, config *types.Config, peer *nbpeer.Peer
 	// ExtendOpenzroConfig), so it survives whatever the integrations
 	// stub does, and is conveyed on every Sync.
 	if response.OpenzroConfig != nil {
-		response.OpenzroConfig.Update = buildUpdateConfig(settings)
+		response.OpenzroConfig.Update = buildUpdateConfig(settings, peer.ID, peer.Key, peerGroups, peerGroupsKnown)
 	}
 
 	response.NetworkMap.PeerConfig = response.PeerConfig
@@ -1004,19 +1011,26 @@ func (s *GRPCServer) sendInitialSync(ctx context.Context, peerKey wgtypes.Key, p
 	}
 
 	// Lazy-resolve peer groups only when the operator actually scoped
-	// flow capture to a subset; otherwise we skip the lookup entirely.
-	// This keeps the hot path one cheap settings.Extra read away from
-	// returning, which matters because this runs on every Sync.
+	// flow capture OR the client-update directive to a group subset;
+	// otherwise skip the lookup entirely. One resolution feeds both
+	// consumers (#5 Q2: do not double-call GetPeerGroups). This keeps
+	// the hot path one cheap settings read away from returning, which
+	// matters because this runs on every Sync.
 	var peerGroupIDs []string
-	if extra := settings.Extra; extra != nil && extra.FlowEnabled && len(extra.FlowEventsGroups) > 0 {
+	peerGroupsKnown := true
+	extra := settings.Extra
+	flowNeedsGroups := extra != nil && extra.FlowEnabled && len(extra.FlowEventsGroups) > 0
+	if flowNeedsGroups || clientUpdateNeedsGroups(settings) {
 		groups, gErr := s.accountManager.GetPeerGroups(ctx, peer.AccountID, peer.ID)
 		if gErr != nil {
-			// Fail-closed: if we cannot determine peer groups while a
-			// scoped filter is active, we cannot safely include the
-			// peer — pass an empty slice and let applyFlowGroupFilter
-			// disable capture for this peer until the next Sync.
-			log.WithContext(ctx).Warnf("flow group filter: failed resolving groups for peer %s: %v (capture disabled this sync)", peer.ID, gErr)
+			// Fail-closed for BOTH consumers: flow capture is disabled
+			// for this peer until the next Sync (empty slice), and the
+			// update directive is withheld (groupsKnown=false) so we
+			// never risk auto-updating a peer we cannot prove is
+			// outside an ExcludeGroup.
+			log.WithContext(ctx).Warnf("peer group resolution failed for peer %s: %v (flow capture + update directive withheld this sync)", peer.ID, gErr)
 			peerGroupIDs = []string{}
+			peerGroupsKnown = false
 		} else {
 			peerGroupIDs = make([]string, 0, len(groups))
 			for _, g := range groups {
@@ -1025,7 +1039,7 @@ func (s *GRPCServer) sendInitialSync(ctx context.Context, peerKey wgtypes.Key, p
 		}
 	}
 
-	plainResp := toSyncResponse(ctx, s.config, peer, turnToken, relayToken, networkMap, s.accountManager.GetDNSDomain(settings), postureChecks, nil, settings, settings.Extra, peerGroupIDs)
+	plainResp := toSyncResponse(ctx, s.config, peer, turnToken, relayToken, networkMap, s.accountManager.GetDNSDomain(settings), postureChecks, nil, settings, settings.Extra, peerGroupIDs, peerGroupsKnown)
 
 	encryptedResp, err := encryption.EncryptMessage(peerKey, s.wgKey, plainResp)
 	if err != nil {
