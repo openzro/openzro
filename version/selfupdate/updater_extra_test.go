@@ -51,3 +51,53 @@ func TestRunOnce_CycleTimeoutAborts(t *testing.T) {
 		t.Fatalf("RunOnce did not honour the %v cycle timeout (took %v)", cfg.CycleTimeout, time.Since(start))
 	}
 }
+
+// TestRunOnce_ExpectedVersionMismatchRefused pins openZro #5 I2: when
+// the cycle is bound to a directed target, a manifest advertising any
+// other version is refused BEFORE download/verify/install — a
+// misconfigured or hostile per-version endpoint cannot smuggle in an
+// unrequested release.
+func TestRunOnce_ExpectedVersionMismatchRefused(t *testing.T) {
+	srv := updaterServer(t, 100, "1.2.0") // endpoint serves 1.2.0
+	defer srv.Close()
+
+	cfg := baseCfg(srv)
+	cfg.ExpectedVersion = "9.9.9" // but we directed 9.9.9
+	v, in := &fakeVerifier{}, &fakeInstaller{}
+	cfg.Verifier, cfg.Installer = v, in
+
+	u, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := u.RunOnce(context.Background()); err == nil {
+		t.Fatal("a version mismatch must be a hard refusal, not an install")
+	}
+	if v.called || in.called {
+		t.Fatalf("refusal must precede verify(%v)/install(%v)", v.called, in.called)
+	}
+}
+
+// TestRunOnce_ExpectedVersionMatchInstalls is the positive control:
+// the same binding is transparent when the manifest matches.
+func TestRunOnce_ExpectedVersionMatchInstalls(t *testing.T) {
+	srv := updaterServer(t, 100, "1.2.0")
+	defer srv.Close()
+
+	cfg := baseCfg(srv)
+	cfg.ExpectedVersion = "1.2.0"
+	v, in := &fakeVerifier{}, &fakeInstaller{}
+	cfg.Verifier, cfg.Installer = v, in
+
+	u, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := u.RunOnce(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Installed || res.Version != "1.2.0" || !v.called || !in.called {
+		t.Fatalf("matched binding must install: %+v verify=%v install=%v", res, v.called, in.called)
+	}
+}

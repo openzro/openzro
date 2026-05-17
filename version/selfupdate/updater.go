@@ -32,6 +32,15 @@ type Config struct {
 	// wired at the binding layer, like the signing cert itself.
 	ExpectedTeamID string
 
+	// ExpectedVersion, when set, binds this cycle to exactly that
+	// release: RunOnce refuses if the fetched manifest advertises a
+	// different version (openZro #5, I2 — fail-closed). The
+	// management-driven path sets it to the operator's directed
+	// target so a misconfigured/hostile per-version manifest endpoint
+	// cannot trick the client into installing an unrequested version.
+	// Empty disables the check (legacy single-manifest / R6 fallback).
+	ExpectedVersion string
+
 	// CycleTimeout bounds one full cycle (fetch+download+verify+
 	// install). Without it a hung installer wedges self-update forever
 	// behind single-flight. Default 15m.
@@ -111,6 +120,16 @@ func (u *Updater) RunOnce(ctx context.Context) (Result, error) {
 	m, err := FetchManifest(ctx, c.HTTPClient, c.ManifestURL, c.UserAgent)
 	if err != nil {
 		return Result{}, err
+	}
+
+	// I2 — strict target binding (openZro #5). When the caller
+	// directed an exact version, a manifest advertising anything else
+	// is misconfigured or hostile: refuse before the gate, never
+	// install an unrequested version.
+	if c.ExpectedVersion != "" && m.Version != c.ExpectedVersion {
+		return Result{}, fmt.Errorf(
+			"selfupdate: manifest version %q != directed target %q — refusing",
+			m.Version, c.ExpectedVersion)
 	}
 
 	d := Evaluate(GateInput{

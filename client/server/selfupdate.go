@@ -37,34 +37,58 @@ func clientUpdateID(wgPrivKey string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// selfUpdateConfig snapshots the live client config into a
-// selfupdate.Config. The server mutex is held only for the snapshot;
-// the (network + install) cycle runs without it.
-func (s *Server) selfUpdateConfig() selfupdate.Config {
-	s.mutex.Lock()
-	cfg := s.config
-	s.mutex.Unlock()
+// buildSelfUpdateConfig assembles a selfupdate.Config bound to the
+// management-directed target (openZro #5). The manifest is the
+// per-version TEMPLATE one (never the legacy rolling manifest), and
+// ExpectedVersion pins the cycle to target so a wrong-version
+// manifest is refused (I2). manual reflects an explicit user "Install
+// now": per Codex finding #1, a manual click is itself the opt-in, so
+// it bypasses ONLY the auto/force gate — AutoInstallEnabled becomes
+// manual || force. Everything else (version check, staged rollout,
+// min-version, signature/Team-ID verify) still applies.
+func (s *Server) buildSelfUpdateConfig(target string, manual, force bool) (selfupdate.Config, error) {
+	manifestURL, err := selfupdate.ResolveManifestTemplateURL(target)
+	if err != nil {
+		return selfupdate.Config{}, err // fail-closed config error
+	}
 
-	c := selfupdate.Config{
-		CurrentVersion: version.OpenzroVersion(),
-		ManifestURL:    selfupdate.ResolveManifestURL(),
-		UserAgent:      "openzro-daemon/" + version.OpenzroVersion(),
-		ExpectedTeamID: selfupdate.BuildTeamID(),
-	}
-	if cfg != nil {
-		c.AutoInstallEnabled = cfg.AutoInstallUpdates
-		c.PinnedVersion = cfg.UpdatePinnedVersion
-		c.ClientID = clientUpdateID(cfg.PrivateKey)
-	}
-	return c
+	return selfupdate.Config{
+		CurrentVersion:     version.OpenzroVersion(),
+		ManifestURL:        manifestURL, // "" => RunOnce reports disabled/skipped
+		ExpectedVersion:    target,
+		UserAgent:          "openzro-daemon/" + version.OpenzroVersion(),
+		ExpectedTeamID:     selfupdate.BuildTeamID(),
+		AutoInstallEnabled: manual || force,
+		ClientID:           s.clientUpdateBucketID(),
+		// PinnedVersion intentionally empty: in the management-driven
+		// model the directive target IS the pin and ExpectedVersion
+		// enforces it. There is no client-side pin/auto toggle.
+	}, nil
 }
 
-// runSelfUpdate executes one rollout-gated cycle. Shared by the
-// Update RPC (manual "Install now") and the periodic watcher so both
-// always read FRESH config — the user can toggle AutoInstallUpdates
-// or the pin at runtime and it takes effect next cycle, no restart.
-func (s *Server) runSelfUpdate(ctx context.Context) (*proto.UpdateResponse, error) {
-	u, err := selfupdate.New(s.selfUpdateConfig())
+// runSelfUpdate executes one rollout-gated cycle for the CURRENT
+// management directive. manual=true is the explicit user "Install
+// now" path. With no directive (or a cleared one) there is nothing to
+// install — that is a normal Skipped result, not an error.
+func (s *Server) runSelfUpdate(ctx context.Context, manual bool) (*proto.UpdateResponse, error) {
+	s.updateDirectiveMu.Lock()
+	d := s.updateDirective
+	s.updateDirectiveMu.Unlock()
+
+	if !d.seen || d.targetVersion == "" {
+		return &proto.UpdateResponse{
+			Skipped: true,
+			Reason:  "no update directive from management — nothing to install",
+		}, nil
+	}
+
+	cfg, err := s.buildSelfUpdateConfig(d.targetVersion, manual, d.force)
+	if err != nil {
+		// Fail-closed config error (e.g. template missing {version}).
+		return nil, status.Errorf(codes.FailedPrecondition, "selfupdate config: %v", err)
+	}
+
+	u, err := selfupdate.New(cfg)
 	if err == selfupdate.ErrUnsupportedPlatform {
 		return nil, status.Error(codes.Unimplemented, "self-update is macOS-only in phase 1")
 	}
@@ -86,10 +110,14 @@ func (s *Server) runSelfUpdate(ctx context.Context) (*proto.UpdateResponse, erro
 
 // Update is DaemonService.Update: the unprivileged Fyne UI asks the
 // privileged daemon to run the cycle (C1 — only the daemon can run
-// `installer -target /` as root). "skipped" (not eligible) is a
-// normal response; a genuine failure is a gRPC status error.
+// `installer -target /` as root) for whatever version management has
+// directed. Clicking it IS the explicit opt-in (manual=true), so it
+// proceeds even when the directive is force=false; it still refuses
+// if there is no directive or the manifest/version checks fail.
+// "skipped" (not eligible) is a normal response; a genuine failure is
+// a gRPC status error.
 func (s *Server) Update(ctx context.Context, _ *proto.UpdateRequest) (*proto.UpdateResponse, error) {
-	return s.runSelfUpdate(ctx)
+	return s.runSelfUpdate(ctx, true)
 }
 
 // updateDirective is the latest management-conveyed client

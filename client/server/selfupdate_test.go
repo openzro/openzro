@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -116,6 +117,78 @@ func TestBuildUpdateState(t *testing.T) {
 		if st.GetTargetVersion() != "4.5.6" || !st.GetForce() {
 			t.Fatalf("expected the latest directive to win, got %q force=%v",
 				st.GetTargetVersion(), st.GetForce())
+		}
+	})
+}
+
+// TestRunSelfUpdate_NoDirectiveIsSkip pins openZro #5 R3d: a manual
+// "Install now" with no (or a cleared) management directive is a
+// normal Skipped result, never an error or an accidental install.
+func TestRunSelfUpdate_NoDirectiveIsSkip(t *testing.T) {
+	t.Run("never received a directive", func(t *testing.T) {
+		s := &Server{}
+		resp, err := s.runSelfUpdate(context.Background(), true)
+		if err != nil {
+			t.Fatalf("no-directive must not error: %v", err)
+		}
+		if !resp.GetSkipped() || !strings.Contains(resp.GetReason(), "no update directive") {
+			t.Fatalf("expected skip w/ reason, got %+v", resp)
+		}
+	})
+
+	t.Run("directive explicitly cleared", func(t *testing.T) {
+		s := &Server{}
+		s.onUpdateDirective("", false)
+		resp, err := s.runSelfUpdate(context.Background(), true)
+		if err != nil {
+			t.Fatalf("cleared directive must not error: %v", err)
+		}
+		if !resp.GetSkipped() {
+			t.Fatalf("cleared directive must skip, got %+v", resp)
+		}
+	})
+}
+
+// TestBuildSelfUpdateConfig pins the Codex-#1 fix and I2 binding:
+// AutoInstallEnabled = manual || force, ExpectedVersion = target,
+// the per-version TEMPLATE manifest, and a fail-closed config error
+// when the template is misconfigured.
+func TestBuildSelfUpdateConfig(t *testing.T) {
+	t.Run("manual or force opens the auto gate; target is bound", func(t *testing.T) {
+		t.Setenv("OPENZRO_UPDATE_MANIFEST_TEMPLATE", "https://dl.example.com/{version}/m.json")
+		s := &Server{}
+
+		matrix := []struct {
+			manual, force, wantAuto bool
+		}{
+			{false, false, false},
+			{true, false, true},
+			{false, true, true},
+			{true, true, true},
+		}
+		for _, m := range matrix {
+			cfg, err := s.buildSelfUpdateConfig("0.30.0", m.manual, m.force)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if cfg.AutoInstallEnabled != m.wantAuto {
+				t.Fatalf("manual=%v force=%v: AutoInstallEnabled=%v want %v",
+					m.manual, m.force, cfg.AutoInstallEnabled, m.wantAuto)
+			}
+			if cfg.ExpectedVersion != "0.30.0" {
+				t.Fatalf("ExpectedVersion must bind to target, got %q", cfg.ExpectedVersion)
+			}
+			if cfg.ManifestURL != "https://dl.example.com/0.30.0/m.json" {
+				t.Fatalf("manifest must be the per-version template URL, got %q", cfg.ManifestURL)
+			}
+		}
+	})
+
+	t.Run("template missing {version} is a fail-closed config error", func(t *testing.T) {
+		t.Setenv("OPENZRO_UPDATE_MANIFEST_TEMPLATE", "https://dl.example.com/m.json")
+		s := &Server{}
+		if _, err := s.buildSelfUpdateConfig("0.30.0", true, false); err == nil {
+			t.Fatal("a template without the {version} token must fail closed")
 		}
 	})
 }
