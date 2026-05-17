@@ -160,3 +160,90 @@ func TestRunOnce_BeforeInstallHook(t *testing.T) {
 		}
 	})
 }
+
+// criticalManifestServer serves a manifest with an optional
+// min_version so tests can drive the gate's Critical flag.
+func criticalManifestServer(t *testing.T, version, minVersion string) *httptest.Server {
+	t.Helper()
+	payload := []byte("notarized-pkg-bytes")
+	mux := http.NewServeMux()
+	mux.HandleFunc("/artifact", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(payload)
+	})
+	mux.HandleFunc("/manifest", func(w http.ResponseWriter, r *http.Request) {
+		mv := ""
+		if minVersion != "" {
+			mv = `"min_version":"` + minVersion + `",`
+		}
+		_, _ = w.Write([]byte(`{"version":"` + version + `",` + mv +
+			`"staged_rollout":100,"artifacts":{"darwin/arm64":{"url":"http://` +
+			r.Host + `/artifact","sha256":"` + sha256hex(payload) + `"}}}`))
+	})
+	return httptest.NewServer(mux)
+}
+
+// TestRunOnce_CriticalOnly pins openZro #5 R6: the last-resort
+// fallback self-heals ONLY a security-floor breach (Critical) and
+// never slow-rolls a routine update while unmanaged.
+func TestRunOnce_CriticalOnly(t *testing.T) {
+	t.Run("eligible but NOT critical -> skipped, no install", func(t *testing.T) {
+		srv := criticalManifestServer(t, "1.2.0", "") // no min_version
+		defer srv.Close()
+		cfg := baseCfg(srv) // Current 1.0.0 < 1.2.0, AutoInstall true
+		cfg.CriticalOnly = true
+		v, in := &fakeVerifier{}, &fakeInstaller{}
+		cfg.Verifier, cfg.Installer = v, in
+		u, err := New(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := u.RunOnce(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.Installed || !res.Skipped || in.called || v.called {
+			t.Fatalf("non-critical must be skipped without install: %+v verify=%v install=%v", res, v.called, in.called)
+		}
+	})
+
+	t.Run("critical -> installs", func(t *testing.T) {
+		// min_version 1.5.0 > Current 1.0.0 => Critical.
+		srv := criticalManifestServer(t, "1.6.0", "1.5.0")
+		defer srv.Close()
+		cfg := baseCfg(srv)
+		cfg.CriticalOnly = true
+		v, in := &fakeVerifier{}, &fakeInstaller{}
+		cfg.Verifier, cfg.Installer = v, in
+		u, err := New(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := u.RunOnce(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !res.Installed || !res.Critical || !in.called {
+			t.Fatalf("critical breach must install: %+v install=%v", res, in.called)
+		}
+	})
+
+	t.Run("control: CriticalOnly=false installs the routine eligible update", func(t *testing.T) {
+		srv := criticalManifestServer(t, "1.2.0", "")
+		defer srv.Close()
+		cfg := baseCfg(srv)
+		cfg.CriticalOnly = false
+		v, in := &fakeVerifier{}, &fakeInstaller{}
+		cfg.Verifier, cfg.Installer = v, in
+		u, err := New(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := u.RunOnce(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !res.Installed || !in.called {
+			t.Fatalf("without CriticalOnly the eligible update must install: %+v", res)
+		}
+	})
+}
