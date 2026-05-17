@@ -103,6 +103,15 @@ type Server struct {
 	autoInstallMu sync.Mutex
 	autoInstall   autoInstallState
 
+	// installGate is the SHARED single-flight over the privileged
+	// install cycle (#5 review-4). Both entry points — the manual
+	// Update RPC and the forced auto-install — must pass it, so two
+	// `installer -pkg -target /` runs (possibly for different
+	// versions) can never overlap. Non-blocking: a loser gets a clear
+	// "already in progress" instead of queueing.
+	installGateMu sync.Mutex
+	installActive bool
+
 	profileManager   profilemanager.ServiceManager
 	profilesDisabled bool
 }

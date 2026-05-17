@@ -111,14 +111,48 @@ func (s *Server) buildSelfUpdateConfig(target string, manual, force bool) (selfu
 	}, nil
 }
 
+// errSelfUpdateBusy is returned by runSelfUpdateDirective when the
+// shared install gate is already held. It is a sentinel, not a gRPC
+// status, so each caller can map it to its own clean outcome.
+var errSelfUpdateBusy = errors.New("self-update already in progress")
+
+// acquireInstallGate is a non-blocking try-lock over the privileged
+// install cycle (#5 review-4). false => another cycle (manual or
+// auto) is running; the caller must NOT start a second one.
+func (s *Server) acquireInstallGate() bool {
+	s.installGateMu.Lock()
+	defer s.installGateMu.Unlock()
+	if s.installActive {
+		return false
+	}
+	s.installActive = true
+	return true
+}
+
+// releaseInstallGate frees the gate and wakes the scheduler: a force
+// directive that lost the race (or arrived during the cycle) must be
+// re-evaluated now, not at the ~30m steady refresh.
+func (s *Server) releaseInstallGate() {
+	s.installGateMu.Lock()
+	s.installActive = false
+	s.installGateMu.Unlock()
+	s.triggerUpdatePreflight()
+}
+
 // runSelfUpdate executes one rollout-gated cycle for the CURRENT
 // management directive. manual=true is the explicit user "Install
 // now" path (the manual RPC always acts on whatever is live now).
+// A lost race for the shared install gate is reported as a normal
+// "already in progress" Skipped result, not an error.
 func (s *Server) runSelfUpdate(ctx context.Context, manual bool) (*proto.UpdateResponse, error) {
 	s.updateDirectiveMu.Lock()
 	d := s.updateDirective
 	s.updateDirectiveMu.Unlock()
-	return s.runSelfUpdateDirective(ctx, d, manual)
+	resp, err := s.runSelfUpdateDirective(ctx, d, manual)
+	if errors.Is(err, errSelfUpdateBusy) {
+		return &proto.UpdateResponse{Skipped: true, Reason: errSelfUpdateBusy.Error()}, nil
+	}
+	return resp, err
 }
 
 // runSelfUpdateDirective executes one rollout-gated cycle bound to an
@@ -140,6 +174,15 @@ func (s *Server) runSelfUpdateDirective(ctx context.Context, d updateDirective, 
 		// Fail-closed config error (e.g. template missing {version}).
 		return nil, status.Errorf(codes.FailedPrecondition, "selfupdate config: %v", err)
 	}
+
+	// Shared single-flight: at most one privileged install cycle at a
+	// time across BOTH the manual RPC and the forced auto-install
+	// (#5 review-4). A loser returns the sentinel rather than running
+	// a second `installer -pkg -target /` concurrently.
+	if !s.acquireInstallGate() {
+		return nil, errSelfUpdateBusy
+	}
+	defer s.releaseInstallGate()
 
 	u, err := selfupdate.New(cfg)
 	if err == selfupdate.ErrUnsupportedPlatform {
@@ -257,6 +300,21 @@ func (s *Server) maybeAutoInstall(target string, force, available bool, gen uint
 		// re-pointed mid-flight. Every other safety (version check,
 		// staged rollout, min-version, Team-ID verify, I2) still holds.
 		resp, err := s.runSelfUpdateDirective(base, live, false)
+
+		// Lost the shared gate to an in-flight cycle (manual or auto):
+		// DO NOT consume the attempt — releasing it (attempted=false)
+		// lets this same directive be retried once the gate frees
+		// (releaseInstallGate re-triggers the scheduler). Without
+		// this, a concurrent manual install would silently burn the
+		// forced directive's only attempt.
+		if errors.Is(err, errSelfUpdateBusy) {
+			s.autoInstallMu.Lock()
+			s.autoInstall.inFlight = false
+			s.autoInstall.lastErr = "another self-update cycle in progress — will retry"
+			s.autoInstallMu.Unlock()
+			log.Infof("client self-update: auto-install %s deferred — install gate busy", target)
+			return
+		}
 
 		s.autoInstallMu.Lock()
 		s.autoInstall.inFlight = false

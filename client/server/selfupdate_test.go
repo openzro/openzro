@@ -503,10 +503,10 @@ func TestMaybeAutoInstall_ReconnectDoesNotRearm(t *testing.T) {
 	}
 }
 
-// TestMaybeAutoInstall_RetriggersWhenNewerPending pins review-3 #1:
-// when an attempt ends and a newer directive is already current, the
-// scheduler is woken immediately instead of waiting the ~30m steady
-// refresh. A matching-gen completion must NOT spuriously kick.
+// TestMaybeAutoInstall_RetriggersWhenNewerPending pins review-3 #1
+// and review-4: a superseded attempt wakes the scheduler for the
+// newer directive (outer defer), and a completed cycle re-checks via
+// the gate release — but the latch still prevents a reinstall loop.
 func TestMaybeAutoInstall_RetriggersWhenNewerPending(t *testing.T) {
 	t.Setenv("OPENZRO_UPDATE_MANIFEST_TEMPLATE", "")
 
@@ -520,7 +520,8 @@ func TestMaybeAutoInstall_RetriggersWhenNewerPending(t *testing.T) {
 		s.updateDirective = updateDirective{targetVersion: "2.2.0", force: true, seen: true, gen: 2}
 		s.updateDirectiveMu.Unlock()
 
-		// An attempt for the OLD gen 1 runs and finds itself superseded.
+		// An attempt for the OLD gen 1 runs and finds itself superseded
+		// (returns before the install gate — no gate-release kick).
 		s.maybeAutoInstall("2.1.0", true, true, 1)
 		_ = awaitAutoIdle(t, s)
 
@@ -531,7 +532,7 @@ func TestMaybeAutoInstall_RetriggersWhenNewerPending(t *testing.T) {
 		}
 	})
 
-	t.Run("matching-gen completion does not kick", func(t *testing.T) {
+	t.Run("completed cycle re-checks via gate release without re-installing", func(t *testing.T) {
 		s := &Server{}
 		s.preflightKick = make(chan struct{}, 1)
 		s.preflightRunning = true
@@ -541,12 +542,103 @@ func TestMaybeAutoInstall_RetriggersWhenNewerPending(t *testing.T) {
 		s.updateDirectiveMu.Unlock()
 
 		s.maybeAutoInstall("2.1.0", true, true, 1)
-		_ = awaitAutoIdle(t, s)
-
+		ai := awaitAutoIdle(t, s)
+		// The attempt actually ran (acquired+released the gate), so it
+		// is consumed for this generation.
+		if !ai.attempted || ai.gen != 1 {
+			t.Fatalf("attempt must be consumed for gen 1, got %+v", ai)
+		}
+		// review-4: gate release re-triggers preflight so a force
+		// directive set DURING the cycle is not stranded for ~30m.
 		select {
 		case <-s.preflightKick:
-			t.Fatal("a completed attempt for the CURRENT directive must not self-kick")
-		case <-time.After(150 * time.Millisecond):
+		case <-time.After(time.Second):
+			t.Fatal("gate release must re-check the directive")
+		}
+		// ...but the consumed latch means the re-check is a no-op:
+		// a second attempt for the same generation must not run.
+		before := ai
+		s.maybeAutoInstall("2.1.0", true, true, 1)
+		s.autoInstallMu.Lock()
+		after := s.autoInstall
+		s.autoInstallMu.Unlock()
+		if after != before {
+			t.Fatalf("same-gen re-check must not re-install: %+v -> %+v", before, after)
+		}
+	})
+}
+
+// TestSharedInstallGate pins review-4: the privileged install cycle
+// is single-flighted across BOTH entry points (manual RPC + forced
+// auto-install), so two `installer -pkg -target /` runs can never
+// overlap. A loser gets a clear "already in progress" — and the auto
+// path does NOT burn its per-generation attempt on a gate loss.
+func TestSharedInstallGate(t *testing.T) {
+	t.Setenv("OPENZRO_UPDATE_MANIFEST_TEMPLATE", "")
+
+	t.Run("non-blocking try-lock semantics", func(t *testing.T) {
+		s := &Server{}
+		if !s.acquireInstallGate() {
+			t.Fatal("first acquire must succeed")
+		}
+		if s.acquireInstallGate() {
+			t.Fatal("second acquire while held must fail (no concurrent cycle)")
+		}
+		s.releaseInstallGate()
+		if !s.acquireInstallGate() {
+			t.Fatal("acquire must succeed again after release")
+		}
+		s.releaseInstallGate()
+	})
+
+	t.Run("manual RPC loses gate -> clean 'already in progress' skip", func(t *testing.T) {
+		s := &Server{}
+		s.updateDirectiveMu.Lock()
+		s.updateDirective = updateDirective{targetVersion: "2.1.0", force: false, seen: true, gen: 1}
+		s.updateDirectiveMu.Unlock()
+
+		if !s.acquireInstallGate() { // a cycle (e.g. auto) is "running"
+			t.Fatal("setup acquire failed")
+		}
+		defer s.releaseInstallGate()
+
+		resp, err := s.runSelfUpdate(context.Background(), true)
+		if err != nil {
+			t.Fatalf("a gate loss must not be a hard error, got %v", err)
+		}
+		if !resp.GetSkipped() || resp.GetReason() != errSelfUpdateBusy.Error() {
+			t.Fatalf("expected a clean busy skip, got %+v", resp)
+		}
+	})
+
+	t.Run("auto loses gate -> latch NOT consumed (retries when free)", func(t *testing.T) {
+		s := &Server{}
+		s.preflightKick = make(chan struct{}, 1)
+		s.preflightRunning = true
+		s.updateDirectiveMu.Lock()
+		s.updateDirective = updateDirective{targetVersion: "2.1.0", force: true, seen: true, gen: 7}
+		s.updateDirectiveMu.Unlock()
+
+		if !s.acquireInstallGate() { // a manual cycle is "running"
+			t.Fatal("setup acquire failed")
+		}
+
+		s.maybeAutoInstall("2.1.0", true, true, 7)
+		ai := awaitAutoIdle(t, s)
+		if ai.attempted {
+			t.Fatalf("a gate loss must NOT consume the forced attempt, got %+v", ai)
+		}
+		if !strings.Contains(ai.lastErr, "in progress") {
+			t.Fatalf("expected an 'in progress' note, got %q", ai.lastErr)
+		}
+
+		// Once the holder releases, the same generation can still
+		// install (latch was not burned) — proven by a fresh attempt.
+		s.releaseInstallGate()
+		s.maybeAutoInstall("2.1.0", true, true, 7)
+		ai2 := awaitAutoIdle(t, s)
+		if !ai2.attempted || ai2.gen != 7 {
+			t.Fatalf("after the gate frees, the forced gen must install, got %+v", ai2)
 		}
 	})
 }
