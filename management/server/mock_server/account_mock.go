@@ -14,6 +14,7 @@ import (
 	"github.com/openzro/openzro/management/server/account"
 	"github.com/openzro/openzro/management/server/activity"
 	nbcontext "github.com/openzro/openzro/management/server/context"
+	"github.com/openzro/openzro/management/server/controlcenter"
 	"github.com/openzro/openzro/management/server/idp"
 	nbpeer "github.com/openzro/openzro/management/server/peer"
 	"github.com/openzro/openzro/management/server/posture"
@@ -30,34 +31,35 @@ type MockAccountManager struct {
 	GetAccountFunc               func(ctx context.Context, accountID string) (*types.Account, error)
 	CreateSetupKeyFunc           func(ctx context.Context, accountId string, keyName string, keyType types.SetupKeyType,
 		expiresIn time.Duration, autoGroups []string, usageLimit int, userID string, ephemeral bool, allowExtraDNSLabels bool) (*types.SetupKey, error)
-	GetSetupKeyFunc                       func(ctx context.Context, accountID, userID, keyID string) (*types.SetupKey, error)
-	AccountExistsFunc                     func(ctx context.Context, accountID string) (bool, error)
-	GetAccountIDByUserIdFunc              func(ctx context.Context, userId, domain string) (string, error)
-	GetUserFromUserAuthFunc               func(ctx context.Context, userAuth nbcontext.UserAuth) (*types.User, error)
-	ListUsersFunc                         func(ctx context.Context, accountID string) ([]*types.User, error)
-	GetPeersFunc                          func(ctx context.Context, accountID, userID, nameFilter, ipFilter string) ([]*nbpeer.Peer, error)
-	MarkPeerConnectedFunc                 func(ctx context.Context, peerKey string, connected bool, realIP net.IP, streamID string) error
-	SyncAndMarkPeerFunc                   func(ctx context.Context, accountID string, peerPubKey string, meta nbpeer.PeerSystemMeta, realIP net.IP, streamID string) (*nbpeer.Peer, *types.NetworkMap, []*posture.Checks, error)
-	DeletePeerFunc                        func(ctx context.Context, accountID, peerKey, userID string) error
-	GetNetworkMapFunc                     func(ctx context.Context, peerKey string) (*types.NetworkMap, error)
-	GetPeerNetworkFunc                    func(ctx context.Context, peerKey string) (*types.Network, error)
-	AddPeerFunc                           func(ctx context.Context, setupKey string, userId string, peer *nbpeer.Peer) (*nbpeer.Peer, *types.NetworkMap, []*posture.Checks, error)
-	GetGroupFunc                          func(ctx context.Context, accountID, groupID, userID string) (*types.Group, error)
-	GetAllGroupsFunc                      func(ctx context.Context, accountID, userID string) ([]*types.Group, error)
-	GetGroupByNameFunc                    func(ctx context.Context, accountID, groupName string) (*types.Group, error)
-	SaveGroupFunc                         func(ctx context.Context, accountID, userID string, group *types.Group, create bool) error
-	SaveGroupsFunc                        func(ctx context.Context, accountID, userID string, groups []*types.Group, create bool) error
-	DeleteGroupFunc                       func(ctx context.Context, accountID, userId, groupID string) error
-	DeleteGroupsFunc                      func(ctx context.Context, accountId, userId string, groupIDs []string) error
-	GroupAddPeerFunc                      func(ctx context.Context, accountID, groupID, peerID string) error
-	GroupDeletePeerFunc                   func(ctx context.Context, accountID, groupID, peerID string) error
-	GetPeerGroupsFunc                     func(ctx context.Context, accountID, peerID string) ([]*types.Group, error)
-	DeleteRuleFunc                        func(ctx context.Context, accountID, ruleID, userID string) error
-	GetPolicyFunc                         func(ctx context.Context, accountID, policyID, userID string) (*types.Policy, error)
-	SavePolicyFunc                        func(ctx context.Context, accountID, userID string, policy *types.Policy, create bool) (*types.Policy, error)
-	DeletePolicyFunc                      func(ctx context.Context, accountID, policyID, userID string) error
-	ListPoliciesFunc                      func(ctx context.Context, accountID, userID string) ([]*types.Policy, error)
-	GetUsersFromAccountFunc               func(ctx context.Context, accountID, userID string) (map[string]*types.UserInfo, error)
+	GetSetupKeyFunc          func(ctx context.Context, accountID, userID, keyID string) (*types.SetupKey, error)
+	AccountExistsFunc        func(ctx context.Context, accountID string) (bool, error)
+	GetAccountIDByUserIdFunc func(ctx context.Context, userId, domain string) (string, error)
+	GetUserFromUserAuthFunc  func(ctx context.Context, userAuth nbcontext.UserAuth) (*types.User, error)
+	ListUsersFunc            func(ctx context.Context, accountID string) ([]*types.User, error)
+	GetPeersFunc             func(ctx context.Context, accountID, userID, nameFilter, ipFilter string) ([]*nbpeer.Peer, error)
+	MarkPeerConnectedFunc    func(ctx context.Context, peerKey string, connected bool, realIP net.IP, streamID string) error
+	SyncAndMarkPeerFunc      func(ctx context.Context, accountID string, peerPubKey string, meta nbpeer.PeerSystemMeta, realIP net.IP, streamID string) (*nbpeer.Peer, *types.NetworkMap, []*posture.Checks, error)
+	DeletePeerFunc           func(ctx context.Context, accountID, peerKey, userID string) error
+	GetNetworkMapFunc        func(ctx context.Context, peerKey string) (*types.NetworkMap, error)
+	GetAccessGraphFunc       func(ctx context.Context, accountID, view, focusID string) (*controlcenter.GraphDTO, error)
+	GetPeerNetworkFunc       func(ctx context.Context, peerKey string) (*types.Network, error)
+	AddPeerFunc              func(ctx context.Context, setupKey string, userId string, peer *nbpeer.Peer) (*nbpeer.Peer, *types.NetworkMap, []*posture.Checks, error)
+	GetGroupFunc             func(ctx context.Context, accountID, groupID, userID string) (*types.Group, error)
+	GetAllGroupsFunc         func(ctx context.Context, accountID, userID string) ([]*types.Group, error)
+	GetGroupByNameFunc       func(ctx context.Context, accountID, groupName string) (*types.Group, error)
+	SaveGroupFunc            func(ctx context.Context, accountID, userID string, group *types.Group, create bool) error
+	SaveGroupsFunc           func(ctx context.Context, accountID, userID string, groups []*types.Group, create bool) error
+	DeleteGroupFunc          func(ctx context.Context, accountID, userId, groupID string) error
+	DeleteGroupsFunc         func(ctx context.Context, accountId, userId string, groupIDs []string) error
+	GroupAddPeerFunc         func(ctx context.Context, accountID, groupID, peerID string) error
+	GroupDeletePeerFunc      func(ctx context.Context, accountID, groupID, peerID string) error
+	GetPeerGroupsFunc        func(ctx context.Context, accountID, peerID string) ([]*types.Group, error)
+	DeleteRuleFunc           func(ctx context.Context, accountID, ruleID, userID string) error
+	GetPolicyFunc            func(ctx context.Context, accountID, policyID, userID string) (*types.Policy, error)
+	SavePolicyFunc           func(ctx context.Context, accountID, userID string, policy *types.Policy, create bool) (*types.Policy, error)
+	DeletePolicyFunc         func(ctx context.Context, accountID, policyID, userID string) error
+	ListPoliciesFunc         func(ctx context.Context, accountID, userID string) ([]*types.Policy, error)
+	GetUsersFromAccountFunc  func(ctx context.Context, accountID, userID string) (map[string]*types.UserInfo, error)
 
 	SCIMCreateUserFunc     func(ctx context.Context, accountID, callerID string, input account.SCIMUserInput) (*types.User, error)
 	SCIMReplaceUserFunc    func(ctx context.Context, accountID, callerID, userID string, input account.SCIMUserInput) (*types.User, error)
@@ -66,14 +68,14 @@ type MockAccountManager struct {
 	SCIMListUsersFunc      func(ctx context.Context, accountID, callerID, userNameFilter string, startIndex, count int) ([]*types.User, int, error)
 	SCIMGetUserFunc        func(ctx context.Context, accountID, callerID, userID string) (*types.User, error)
 
-	SCIMCreateGroupFunc       func(ctx context.Context, accountID, callerID, displayName string, memberUserIDs []string) (*types.Group, error)
-	SCIMReplaceGroupFunc      func(ctx context.Context, accountID, callerID, groupID, displayName string, memberUserIDs []string) (*types.Group, error)
-	SCIMRenameGroupFunc       func(ctx context.Context, accountID, callerID, groupID, newName string) (*types.Group, error)
-	SCIMAddGroupMemberFunc    func(ctx context.Context, accountID, callerID, groupID, userID string) error
-	SCIMRemoveGroupMemberFunc func(ctx context.Context, accountID, callerID, groupID, userID string) error
-	SCIMDeleteGroupFunc       func(ctx context.Context, accountID, callerID, groupID string) error
-	SCIMListGroupsFunc        func(ctx context.Context, accountID, callerID, displayNameFilter string, startIndex, count int) ([]*types.Group, int, error)
-	SCIMGetGroupFunc          func(ctx context.Context, accountID, callerID, groupID string) (*types.Group, []string, error)
+	SCIMCreateGroupFunc                   func(ctx context.Context, accountID, callerID, displayName string, memberUserIDs []string) (*types.Group, error)
+	SCIMReplaceGroupFunc                  func(ctx context.Context, accountID, callerID, groupID, displayName string, memberUserIDs []string) (*types.Group, error)
+	SCIMRenameGroupFunc                   func(ctx context.Context, accountID, callerID, groupID, newName string) (*types.Group, error)
+	SCIMAddGroupMemberFunc                func(ctx context.Context, accountID, callerID, groupID, userID string) error
+	SCIMRemoveGroupMemberFunc             func(ctx context.Context, accountID, callerID, groupID, userID string) error
+	SCIMDeleteGroupFunc                   func(ctx context.Context, accountID, callerID, groupID string) error
+	SCIMListGroupsFunc                    func(ctx context.Context, accountID, callerID, displayNameFilter string, startIndex, count int) ([]*types.Group, int, error)
+	SCIMGetGroupFunc                      func(ctx context.Context, accountID, callerID, groupID string) (*types.Group, []string, error)
 	UpdatePeerMetaFunc                    func(ctx context.Context, peerID string, meta nbpeer.PeerSystemMeta) error
 	UpdatePeerFunc                        func(ctx context.Context, accountID, userID string, peer *nbpeer.Peer) (*nbpeer.Peer, error)
 	CreateRouteFunc                       func(ctx context.Context, accountID string, prefix netip.Prefix, networkType route.NetworkType, domains domain.List, peer string, peerGroups []string, description string, netID route.NetID, masquerade bool, metric int, groups, accessControlGroupIDs []string, enabled bool, userID string, keepRoute bool) (*route.Route, error)
@@ -419,6 +421,14 @@ func (am *MockAccountManager) GetNetworkMap(ctx context.Context, peerKey string)
 		return am.GetNetworkMapFunc(ctx, peerKey)
 	}
 	return nil, status.Errorf(codes.Unimplemented, "method GetNetworkMap is not implemented")
+}
+
+// GetAccessGraph mock implementation of GetAccessGraph from server.AccountManager interface
+func (am *MockAccountManager) GetAccessGraph(ctx context.Context, accountID, view, focusID string) (*controlcenter.GraphDTO, error) {
+	if am.GetAccessGraphFunc != nil {
+		return am.GetAccessGraphFunc(ctx, accountID, view, focusID)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method GetAccessGraph is not implemented")
 }
 
 // GetPeerNetwork mock implementation of GetPeerNetwork from server.AccountManager interface
