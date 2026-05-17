@@ -49,6 +49,18 @@ type Config struct {
 	// still honours staged_rollout. See GateInput.Authoritative.
 	Authoritative bool
 
+	// BeforeInstall, when set, is called AFTER Verify succeeds and
+	// IMMEDIATELY before Installer.Install — i.e. glued to the
+	// privileged install/restart, not merely before the whole cycle
+	// (openZro #5 R4 review #3). The daemon uses it to flush the
+	// user's route / exit-node selection right before the restart so
+	// the residual 10s-tick race window (selection changed during the
+	// download/verify) is closed. Returning an error aborts the cycle
+	// before any install; the daemon's hook is best-effort and
+	// returns nil even on flush failure so it never blocks a
+	// (potentially security) update.
+	BeforeInstall func(context.Context) error
+
 	// CycleTimeout bounds one full cycle (fetch+download+verify+
 	// install). Without it a hung installer wedges self-update forever
 	// behind single-flight. Default 15m.
@@ -168,6 +180,14 @@ func (u *Updater) RunOnce(ctx context.Context) (Result, error) {
 
 	if err := c.Verifier.Verify(ctx, path); err != nil {
 		return Result{}, err
+	}
+	// Glued to the install: last point before the privileged
+	// install + daemon restart (#5 R4 review #3 — closes the
+	// residual selection-change race window).
+	if c.BeforeInstall != nil {
+		if err := c.BeforeInstall(ctx); err != nil {
+			return Result{}, fmt.Errorf("selfupdate: before-install hook: %w", err)
+		}
 	}
 	if err := c.Installer.Install(ctx, path); err != nil {
 		return Result{}, err
