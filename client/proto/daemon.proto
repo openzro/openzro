@@ -81,9 +81,11 @@ service DaemonService {
   rpc GetActiveProfile(GetActiveProfileRequest) returns (GetActiveProfileResponse) {}
 
   // Update runs one rollout-gated client self-update cycle in the
-  // privileged daemon (openZro #5). The UI calls this for the manual
-  // "Install now" action; the daemon also runs it periodically when
-  // AutoInstallUpdates is enabled.
+  // privileged daemon for the CURRENT management directive (openZro
+  // #5, management-driven). The UI calls this for the manual "Install
+  // now" action (an explicit opt-in). There is no client-side
+  // auto/pin config; the operator drives the fleet from Management
+  // and a force=true directive is what installs silently.
   rpc Update(UpdateRequest) returns (UpdateResponse) {}
 }
 

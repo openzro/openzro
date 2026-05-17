@@ -62,9 +62,11 @@ type DaemonServiceClient interface {
 	ListProfiles(ctx context.Context, in *ListProfilesRequest, opts ...grpc.CallOption) (*ListProfilesResponse, error)
 	GetActiveProfile(ctx context.Context, in *GetActiveProfileRequest, opts ...grpc.CallOption) (*GetActiveProfileResponse, error)
 	// Update runs one rollout-gated client self-update cycle in the
-	// privileged daemon (openZro #5). The UI calls this for the manual
-	// "Install now" action; the daemon also runs it periodically when
-	// AutoInstallUpdates is enabled.
+	// privileged daemon for the CURRENT management directive (openZro
+	// #5, management-driven). The UI calls this for the manual "Install
+	// now" action (an explicit opt-in). There is no client-side
+	// auto/pin config; the operator drives the fleet from Management
+	// and a force=true directive is what installs silently.
 	Update(ctx context.Context, in *UpdateRequest, opts ...grpc.CallOption) (*UpdateResponse, error)
 }
 
@@ -390,9 +392,11 @@ type DaemonServiceServer interface {
 	ListProfiles(context.Context, *ListProfilesRequest) (*ListProfilesResponse, error)
 	GetActiveProfile(context.Context, *GetActiveProfileRequest) (*GetActiveProfileResponse, error)
 	// Update runs one rollout-gated client self-update cycle in the
-	// privileged daemon (openZro #5). The UI calls this for the manual
-	// "Install now" action; the daemon also runs it periodically when
-	// AutoInstallUpdates is enabled.
+	// privileged daemon for the CURRENT management directive (openZro
+	// #5, management-driven). The UI calls this for the manual "Install
+	// now" action (an explicit opt-in). There is no client-side
+	// auto/pin config; the operator drives the fleet from Management
+	// and a force=true directive is what installs silently.
 	Update(context.Context, *UpdateRequest) (*UpdateResponse, error)
 	mustEmbedUnimplementedDaemonServiceServer()
 }
