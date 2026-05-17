@@ -225,6 +225,7 @@ func (am *DefaultAccountManager) DeleteGroups(ctx context.Context, accountID, us
 	var allErrors error
 	var groupIDsToDelete []string
 	var deletedGroups []*types.Group
+	var updateAccountPeers bool
 
 	err = am.Store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
 		for _, groupID := range groupIDs {
@@ -243,6 +244,19 @@ func (am *DefaultAccountManager) DeleteGroups(ctx context.Context, accountID, us
 			deletedGroups = append(deletedGroups, group)
 		}
 
+		// review-Q2 #2 (remaining): unlike GroupAddPeer/GroupDeletePeer,
+		// DeleteGroups did NOT pass through areGroupChangesAffectPeers,
+		// so deleting a group referenced ONLY by client-update targeting
+		// left connected peers on a stale/over-broad directive until
+		// reconnect. Deleting a target group should revoke the directive
+		// for its members; deleting an exclude group changes the
+		// effective subset — both must fan out now. Evaluated while the
+		// groups still exist (their references are what matter).
+		updateAccountPeers, err = areGroupChangesAffectPeers(ctx, transaction, accountID, groupIDsToDelete)
+		if err != nil {
+			return err
+		}
+
 		if err = transaction.IncrementNetworkSerial(ctx, store.LockingStrengthUpdate, accountID); err != nil {
 			return err
 		}
@@ -255,6 +269,10 @@ func (am *DefaultAccountManager) DeleteGroups(ctx context.Context, accountID, us
 
 	for _, group := range deletedGroups {
 		am.StoreEvent(ctx, userID, group.ID, accountID, activity.GroupDeleted, group.EventMeta())
+	}
+
+	if updateAccountPeers {
+		am.UpdateAccountPeers(ctx, accountID)
 	}
 
 	return allErrors
