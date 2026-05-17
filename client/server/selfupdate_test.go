@@ -235,3 +235,78 @@ func TestJitterBounds(t *testing.T) {
 		}
 	}
 }
+
+// TestMaybeAutoInstall pins review-#1: force+available installs via
+// the secure pipeline exactly once per target, and is an inert no-op
+// otherwise. No directive is set, so the shared pipeline returns a
+// deterministic Skipped (no network / no macOS needed).
+func TestMaybeAutoInstall(t *testing.T) {
+	waitIdle := func(t *testing.T, s *Server) autoInstallState {
+		t.Helper()
+		deadline := time.Now().Add(3 * time.Second)
+		for time.Now().Before(deadline) {
+			s.autoInstallMu.Lock()
+			ai := s.autoInstall
+			s.autoInstallMu.Unlock()
+			if !ai.inFlight {
+				return ai
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		t.Fatal("auto-install did not settle")
+		return autoInstallState{}
+	}
+
+	t.Run("no-op unless force && available && target", func(t *testing.T) {
+		for _, c := range []struct {
+			target       string
+			force, avail bool
+		}{
+			{"", true, true},
+			{"9.9.9", false, true},
+			{"9.9.9", true, false},
+		} {
+			s := &Server{}
+			s.maybeAutoInstall(c.target, c.force, c.avail)
+			s.autoInstallMu.Lock()
+			ai := s.autoInstall
+			s.autoInstallMu.Unlock()
+			if ai != (autoInstallState{}) {
+				t.Fatalf("must be inert for %+v, got %+v", c, ai)
+			}
+		}
+	})
+
+	t.Run("force+available attempts once per target", func(t *testing.T) {
+		s := &Server{}
+		s.maybeAutoInstall("9.9.9", true, true)
+
+		ai := waitIdle(t, s)
+		if ai.target != "9.9.9" {
+			t.Fatalf("attempt must bind to target, got %q", ai.target)
+		}
+		// No directive set => the shared pipeline reports Skipped, so
+		// the attempt completed (proves it actually ran the pipeline)
+		// without an install.
+		if ai.lastErr == "" {
+			t.Fatal("expected a recorded skip/err from the pipeline")
+		}
+
+		// Same target again => guarded no-op (no fresh attempt).
+		before := ai
+		s.maybeAutoInstall("9.9.9", true, true)
+		s.autoInstallMu.Lock()
+		after := s.autoInstall
+		s.autoInstallMu.Unlock()
+		if after != before {
+			t.Fatalf("repeat target must be a no-op: before=%+v after=%+v", before, after)
+		}
+
+		// A different target IS allowed to attempt again.
+		s.maybeAutoInstall("1.0.0", true, true)
+		ai2 := waitIdle(t, s)
+		if ai2.target != "1.0.0" {
+			t.Fatalf("new target must start a fresh attempt, got %q", ai2.target)
+		}
+	})
+}

@@ -93,6 +93,16 @@ type Server struct {
 	preflightRunning bool // the scheduler goroutine is alive
 	preflightKick    chan struct{}
 
+	// auto-install state (#5 review-#1). A force=true directive whose
+	// preflight is positive is installed silently through the same
+	// rollout-gated secure pipeline as the manual RPC. One attempt
+	// per target (inFlight guards concurrency; target guards repeat —
+	// a success restarts the service, a failure waits for a new
+	// directive rather than hammering a root install). Own mutex so
+	// buildUpdateState can read it without contending the Sync path.
+	autoInstallMu sync.Mutex
+	autoInstall   autoInstallState
+
 	profileManager   profilemanager.ServiceManager
 	profilesDisabled bool
 }

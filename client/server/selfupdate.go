@@ -151,6 +151,78 @@ func (s *Server) runSelfUpdate(ctx context.Context, manual bool) (*proto.UpdateR
 	}, nil
 }
 
+// autoInstallState tracks the single in-flight / last forced
+// auto-install (#5 review-#1). target is the version the attempt was
+// for; one attempt per target — a success restarts the service onto
+// the new version (so the next directive's target == running and the
+// gate no-ops), a failure waits for a fresh directive rather than
+// looping a root install.
+type autoInstallState struct {
+	target   string
+	inFlight bool
+	lastErr  string
+}
+
+// maybeAutoInstall silently installs a force=true directive whose
+// preflight is positive, through the SAME rollout-gated secure
+// pipeline as the manual RPC (download → Team-ID verify → install).
+// This is what makes force actually mean "silent install" rather
+// than merely "available" (review finding #1). It is a no-op unless
+// force && available, and it never starts a second attempt for a
+// target it is already installing or has already attempted.
+func (s *Server) maybeAutoInstall(target string, force, available bool) {
+	if !force || !available || target == "" {
+		return
+	}
+
+	s.autoInstallMu.Lock()
+	if s.autoInstall.inFlight || s.autoInstall.target == target {
+		s.autoInstallMu.Unlock()
+		return
+	}
+	s.autoInstall = autoInstallState{target: target, inFlight: true}
+	s.autoInstallMu.Unlock()
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				s.autoInstallMu.Lock()
+				s.autoInstall.inFlight = false
+				s.autoInstall.lastErr = "panic during auto-install"
+				s.autoInstallMu.Unlock()
+				log.Errorf("client self-update: auto-install recovered from panic: %v", r)
+			}
+		}()
+
+		base := s.rootCtx
+		if base == nil {
+			base = context.Background()
+		}
+		log.Infof("client self-update: force directive — auto-installing %s", target)
+
+		// manual=false: the operator's force IS the opt-in, so
+		// buildSelfUpdateConfig sets AutoInstallEnabled = false||force
+		// = true. Every other safety (version check, staged rollout,
+		// min-version, Team-ID verify, I2 binding) still applies.
+		resp, err := s.runSelfUpdate(base, false)
+
+		s.autoInstallMu.Lock()
+		s.autoInstall.inFlight = false
+		switch {
+		case err != nil:
+			s.autoInstall.lastErr = err.Error()
+			log.Errorf("client self-update: auto-install %s failed: %v", target, err)
+		case resp.GetInstalled():
+			s.autoInstall.lastErr = ""
+			log.Infof("client self-update: auto-installed %s — service will restart", resp.GetVersion())
+		default:
+			s.autoInstall.lastErr = "skipped: " + resp.GetReason()
+			log.Infof("client self-update: auto-install %s skipped: %s", target, resp.GetReason())
+		}
+		s.autoInstallMu.Unlock()
+	}()
+}
+
 // Update is DaemonService.Update: the unprivileged Fyne UI asks the
 // privileged daemon to run the cycle (C1 — only the daemon can run
 // `installer -target /` as root) for whatever version management has
@@ -299,13 +371,21 @@ func (s *Server) updatePreflightScheduler(kick <-chan struct{}) {
 		s.updateDirectiveMu.Lock()
 		// Publish only if the directive has not moved on under us, so
 		// a slow compute for an old target never clobbers a newer one.
-		if s.updateDirective.targetVersion == pf.forTarget {
+		published := s.updateDirective.targetVersion == pf.forTarget
+		if published {
 			s.updatePreflight = pf
 		}
 		s.updateDirectiveMu.Unlock()
 
 		log.Infof("client self-update: preflight target=%q available=%t transient=%t reason=%q",
 			pf.forTarget, pf.available, pf.transient, pf.reason)
+
+		// Force directive + positive preflight => install silently
+		// now (review-#1). No-op otherwise; self-guards against
+		// repeat/concurrent attempts.
+		if published {
+			s.maybeAutoInstall(pf.forTarget, d.force, pf.available)
+		}
 
 		baseDelay := preflightBaseDelay(d.seen, d.targetVersion, pf.transient, attempt)
 		var delay time.Duration
@@ -446,12 +526,21 @@ func (s *Server) buildUpdateState() *proto.UpdateState {
 	verdictReady := pf.done && pf.forTarget == d.targetVersion
 	available := verdictReady && pf.available
 
+	s.autoInstallMu.Lock()
+	ai := s.autoInstall
+	s.autoInstallMu.Unlock()
+
 	var decision string
 	switch {
 	case !verdictReady:
 		decision = "checking update availability…"
 	case !available:
 		decision = pf.reason
+	case d.force && ai.target == d.targetVersion && ai.inFlight:
+		decision = "update available — operator forced: installing " + d.targetVersion + "…"
+	case d.force && ai.target == d.targetVersion && ai.lastErr != "":
+		decision = "update available — operator forced: install failed (" + ai.lastErr +
+			"); will retry on the next directive"
 	case d.force:
 		decision = "update available — operator forced (silent install): " + pf.reason
 	default:

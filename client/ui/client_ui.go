@@ -1087,19 +1087,27 @@ func protoConfigToConfig(cfg *proto.GetConfigResponse) *profilemanager.Config {
 // self-update verdict (openZro #5) into the tray menu. The caller
 // holds updateIndicationLock and runs the connected/disconnected
 // icon switch right after, which already branches on
-// isUpdateIconActive — so this only flips the flag and the two menu
+// isUpdateIconActive — so this only flips the flag and the menu
 // items, no icon call here (avoids a double-set fighting the switch).
-// us may be nil (no directive / post-restart): GetAvailable() is
-// nil-safe and yields the not-available, menus-hidden state.
+// us may be nil (no directive / post-restart): the getters are
+// nil-safe and yield the not-available, menus-hidden state.
+//
+// The manual "Install update now" item is shown ONLY for a NON-force
+// directive (review-#1): when the operator forced the update the
+// daemon installs it silently, so a manual CTA would be misleading.
 func (s *serviceClient) applyUpdateStateLocked(us *proto.UpdateState) {
 	available := us.GetAvailable()
 	s.isUpdateIconActive = available
 
 	if available {
 		s.mUpdate.Show()
-		s.mInstallUpdate.Show()
 	} else {
 		s.mUpdate.Hide()
+	}
+
+	if available && !us.GetForce() {
+		s.mInstallUpdate.Show()
+	} else {
 		s.mInstallUpdate.Hide()
 	}
 }
