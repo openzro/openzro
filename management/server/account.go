@@ -445,6 +445,7 @@ func (am *DefaultAccountManager) UpdateAccountSettings(ctx context.Context, acco
 	am.handleRoutingPeerDNSResolutionSettings(ctx, oldSettings, newSettings, userID, accountID)
 	am.handleLazyConnectionSettings(ctx, oldSettings, newSettings, userID, accountID)
 	am.handleAdmissionSettings(ctx, oldSettings, newSettings, userID, accountID)
+	am.handleClientUpdateSettings(ctx, oldSettings, newSettings, userID, accountID)
 	am.handlePeerLoginExpirationSettings(ctx, oldSettings, newSettings, userID, accountID)
 	am.handleGroupsPropagationSettings(ctx, oldSettings, newSettings, userID, accountID)
 	if err = am.handleInactivityExpirationSettings(ctx, oldSettings, newSettings, userID, accountID); err != nil {
@@ -531,6 +532,41 @@ func (am *DefaultAccountManager) handleAdmissionSettings(ctx context.Context, ol
 			"exempt_group_ids": newSettings.AdmissionExemptGroups,
 		})
 	}
+}
+
+// handleClientUpdateSettings audits any change to the desktop client
+// self-update directive (openZro #5 Q2). Directing remote code at a
+// fleet subset is a security-relevant operator action: a single event
+// records who set which target/force and how the subset was scoped,
+// so "who pushed version X to whom" is answerable from the audit log.
+func (am *DefaultAccountManager) handleClientUpdateSettings(ctx context.Context, oldSettings, newSettings *types.Settings, userID, accountID string) {
+	changed := oldSettings.ClientUpdateTargetVersion != newSettings.ClientUpdateTargetVersion ||
+		oldSettings.ClientUpdateForce != newSettings.ClientUpdateForce ||
+		!stringSlicesEqual(oldSettings.ClientUpdateTargetGroups, newSettings.ClientUpdateTargetGroups) ||
+		!stringSlicesEqual(oldSettings.ClientUpdateTargetPeers, newSettings.ClientUpdateTargetPeers) ||
+		!stringSlicesEqual(oldSettings.ClientUpdateExcludeGroups, newSettings.ClientUpdateExcludeGroups) ||
+		!intPtrEqual(oldSettings.ClientUpdateRolloutPercent, newSettings.ClientUpdateRolloutPercent)
+	if !changed {
+		return
+	}
+	meta := map[string]any{
+		"target_version": newSettings.ClientUpdateTargetVersion,
+		"force":          newSettings.ClientUpdateForce,
+		"target_groups":  newSettings.ClientUpdateTargetGroups,
+		"target_peers":   newSettings.ClientUpdateTargetPeers,
+		"exclude_groups": newSettings.ClientUpdateExcludeGroups,
+	}
+	if newSettings.ClientUpdateRolloutPercent != nil {
+		meta["rollout_percent"] = *newSettings.ClientUpdateRolloutPercent
+	}
+	am.StoreEvent(ctx, userID, accountID, accountID, activity.ClientUpdateDirectiveUpdated, meta)
+}
+
+func intPtrEqual(a, b *int) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }
 
 func stringSlicesEqual(a, b []string) bool {

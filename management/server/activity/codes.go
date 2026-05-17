@@ -211,6 +211,15 @@ const (
 	// constants are intentionally not redeclared here so the
 	// IDs stay reserved (do not reuse).
 
+	// ClientUpdateDirectiveUpdated records any change to the desktop
+	// client self-update directive — target version, force/silent
+	// flag, or the subset-targeting fields (groups / peers / exclude /
+	// rollout percent). Pushing remote code to a fleet subset is a
+	// security-relevant operator action; the auditor needs a trail of
+	// who directed which version to whom (openZro #5 Q2). 95–99 stay
+	// reserved per ADR-0006, so this takes 100.
+	ClientUpdateDirectiveUpdated Activity = 100
+
 	AccountDeleted Activity = 99999
 )
 
@@ -323,6 +332,8 @@ var activityMap = map[Activity]Code{
 	PeerAdmissionBypassRevoked:   {"Peer admission bypass revoked", "peer.admission.bypass.revoked"},
 	PeerAdmissionBypassExpired:   {"Peer admission bypass expired", "peer.admission.bypass.expired"},
 	AdmissionExemptGroupsUpdated: {"Admission exempt groups updated", "account.setting.admission.exempt_groups.update"},
+
+	ClientUpdateDirectiveUpdated: {"Client update directive updated", "account.setting.client_update.update"},
 }
 
 // StringCode returns a string code of the activity

@@ -54,6 +54,39 @@ type Settings struct {
 	// prompt.
 	ClientUpdateForce bool
 
+	// ClientUpdate{Target,Exclude}* scope the directive to a SUBSET of
+	// the fleet, evaluated per-peer SERVER-SIDE (openZro #5 Q2). They
+	// are never sent to the client — the client only ever receives the
+	// resolved UpdateConfig (or nothing). Precedence (signed-off
+	// spec): ExcludeGroups beats everything (incl. an explicit peer —
+	// infra/gateway safety); an explicit TargetPeers entry pierces the
+	// percentage ring; TargetGroups membership is subject to the ring.
+	// Empty TargetGroups AND empty TargetPeers => whole fleet (the
+	// pre-Q2 behaviour; never "nobody").
+
+	// ClientUpdateTargetGroups: member peers of any of these groups are
+	// in scope (subject to the rollout ring). Empty = no group
+	// constraint.
+	ClientUpdateTargetGroups []string `gorm:"serializer:json"`
+
+	// ClientUpdateTargetPeers: explicit peer IDs always in scope
+	// (canary / break-glass) — these pierce the rollout ring but NOT
+	// ClientUpdateExcludeGroups.
+	ClientUpdateTargetPeers []string `gorm:"serializer:json"`
+
+	// ClientUpdateExcludeGroups: member peers NEVER receive the
+	// directive, even if explicitly listed in TargetPeers. Motivating
+	// case mirrors AdmissionExemptGroups: routing/gateway/server peers
+	// that must never silently self-update.
+	ClientUpdateExcludeGroups []string `gorm:"serializer:json"`
+
+	// ClientUpdateRolloutPercent is the server-side staged ring,
+	// 0..100. Pointer so absent (nil = no ring, everyone in scope)
+	// is distinct from an explicit 0 (nobody — fail-closed, same
+	// nil-vs-0 discipline as the manifest StagedRollout). Bucketing is
+	// a pure, cluster-deterministic hash of the peer's stable key.
+	ClientUpdateRolloutPercent *int
+
 	// Extra is a dictionary of Account settings
 	Extra *ExtraSettings `gorm:"embedded;embeddedPrefix:extra_"`
 
@@ -111,6 +144,15 @@ func (s *Settings) Copy() *Settings {
 
 		ClientUpdateTargetVersion: s.ClientUpdateTargetVersion,
 		ClientUpdateForce:         s.ClientUpdateForce,
+		ClientUpdateTargetGroups:  append([]string(nil), s.ClientUpdateTargetGroups...),
+		ClientUpdateTargetPeers:   append([]string(nil), s.ClientUpdateTargetPeers...),
+		ClientUpdateExcludeGroups: append([]string(nil), s.ClientUpdateExcludeGroups...),
+	}
+	if s.ClientUpdateRolloutPercent != nil {
+		// Deep-copy the pointer so a mutation through the copy cannot
+		// race/alias the original (Copy() callers treat it as owned).
+		v := *s.ClientUpdateRolloutPercent
+		settings.ClientUpdateRolloutPercent = &v
 	}
 	if s.Extra != nil {
 		settings.Extra = s.Extra.Copy()
