@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"math/rand"
+	"net"
 	"net/http"
 	"runtime"
 	"time"
@@ -111,13 +113,21 @@ func (s *Server) buildSelfUpdateConfig(target string, manual, force bool) (selfu
 
 // runSelfUpdate executes one rollout-gated cycle for the CURRENT
 // management directive. manual=true is the explicit user "Install
-// now" path. With no directive (or a cleared one) there is nothing to
-// install — that is a normal Skipped result, not an error.
+// now" path (the manual RPC always acts on whatever is live now).
 func (s *Server) runSelfUpdate(ctx context.Context, manual bool) (*proto.UpdateResponse, error) {
 	s.updateDirectiveMu.Lock()
 	d := s.updateDirective
 	s.updateDirectiveMu.Unlock()
+	return s.runSelfUpdateDirective(ctx, d, manual)
+}
 
+// runSelfUpdateDirective executes one rollout-gated cycle bound to an
+// explicit directive snapshot. The auto-install path passes the
+// directive it already validated as still-current, so the install is
+// never silently re-pointed at a directive that changed under it
+// (review-2 #1). With no directive (or a cleared one) there is
+// nothing to install — a normal Skipped result, not an error.
+func (s *Server) runSelfUpdateDirective(ctx context.Context, d updateDirective, manual bool) (*proto.UpdateResponse, error) {
 	if !d.seen || d.targetVersion == "" {
 		return &proto.UpdateResponse{
 			Skipped: true,
@@ -152,35 +162,41 @@ func (s *Server) runSelfUpdate(ctx context.Context, manual bool) (*proto.UpdateR
 }
 
 // autoInstallState tracks the single in-flight / last forced
-// auto-install (#5 review-#1). target is the version the attempt was
-// for; one attempt per target — a success restarts the service onto
-// the new version (so the next directive's target == running and the
-// gate no-ops), a failure waits for a fresh directive rather than
-// looping a root install.
+// auto-install (#5 review-2 #1). gen binds the latch to the directive
+// GENERATION (not just the version), so a brand-new directive — even
+// for the same target, e.g. force toggled off then on — always
+// re-enables one fresh attempt. attempted is set only when an install
+// actually ran under the triggering directive: a pre-install
+// supersede reverts the latch instead of consuming it, so a later
+// legitimate force directive is not silently swallowed.
 type autoInstallState struct {
-	target   string
-	inFlight bool
-	lastErr  string
+	gen       uint64
+	target    string
+	inFlight  bool
+	attempted bool
+	lastErr   string
 }
 
 // maybeAutoInstall silently installs a force=true directive whose
 // preflight is positive, through the SAME rollout-gated secure
 // pipeline as the manual RPC (download → Team-ID verify → install).
 // This is what makes force actually mean "silent install" rather
-// than merely "available" (review finding #1). It is a no-op unless
-// force && available, and it never starts a second attempt for a
-// target it is already installing or has already attempted.
-func (s *Server) maybeAutoInstall(target string, force, available bool) {
+// than merely "available" (review-1 #1). One attempt per directive
+// generation (review-2 #1): no-op while in flight or once attempted
+// for this gen, and the latch is only consumed if the install really
+// begins under the SAME still-current force directive that triggered
+// it — otherwise it is released so the next directive can retry.
+func (s *Server) maybeAutoInstall(target string, force, available bool, gen uint64) {
 	if !force || !available || target == "" {
 		return
 	}
 
 	s.autoInstallMu.Lock()
-	if s.autoInstall.inFlight || s.autoInstall.target == target {
+	if s.autoInstall.inFlight || (s.autoInstall.attempted && s.autoInstall.gen == gen) {
 		s.autoInstallMu.Unlock()
 		return
 	}
-	s.autoInstall = autoInstallState{target: target, inFlight: true}
+	s.autoInstall = autoInstallState{gen: gen, target: target, inFlight: true}
 	s.autoInstallMu.Unlock()
 
 	go func() {
@@ -188,26 +204,48 @@ func (s *Server) maybeAutoInstall(target string, force, available bool) {
 			if r := recover(); r != nil {
 				s.autoInstallMu.Lock()
 				s.autoInstall.inFlight = false
+				s.autoInstall.attempted = true
 				s.autoInstall.lastErr = "panic during auto-install"
 				s.autoInstallMu.Unlock()
 				log.Errorf("client self-update: auto-install recovered from panic: %v", r)
 			}
 		}()
 
+		// Re-read the LIVE directive: only install if the exact
+		// directive that triggered this (same gen, still force, same
+		// target) is still current. If it changed under us, RELEASE
+		// the latch (attempted stays false) so a later legitimate
+		// force directive is not lost.
+		s.updateDirectiveMu.Lock()
+		live := s.updateDirective
+		s.updateDirectiveMu.Unlock()
+
+		if !live.seen || live.gen != gen || !live.force || live.targetVersion != target {
+			s.autoInstallMu.Lock()
+			s.autoInstall.inFlight = false
+			s.autoInstall.lastErr = "superseded before install — will retry on the next directive"
+			s.autoInstallMu.Unlock()
+			log.Infof("client self-update: auto-install %s superseded before start (gen %d) — latch released",
+				target, gen)
+			return
+		}
+
 		base := s.rootCtx
 		if base == nil {
 			base = context.Background()
 		}
-		log.Infof("client self-update: force directive — auto-installing %s", target)
+		log.Infof("client self-update: force directive — auto-installing %s (gen %d)", target, gen)
 
 		// manual=false: the operator's force IS the opt-in, so
 		// buildSelfUpdateConfig sets AutoInstallEnabled = false||force
-		// = true. Every other safety (version check, staged rollout,
-		// min-version, Team-ID verify, I2 binding) still applies.
-		resp, err := s.runSelfUpdate(base, false)
+		// = true. Bound to the validated snapshot so it cannot be
+		// re-pointed mid-flight. Every other safety (version check,
+		// staged rollout, min-version, Team-ID verify, I2) still holds.
+		resp, err := s.runSelfUpdateDirective(base, live, false)
 
 		s.autoInstallMu.Lock()
 		s.autoInstall.inFlight = false
+		s.autoInstall.attempted = true
 		switch {
 		case err != nil:
 			s.autoInstall.lastErr = err.Error()
@@ -245,6 +283,13 @@ type updateDirective struct {
 	targetVersion string
 	force         bool
 	seen          bool
+	// gen is a monotonic id bumped on every onUpdateDirective call
+	// (the engine already dedupes by (target,force), so each call is a
+	// genuinely new logical directive — incl. a force flip or a
+	// clear). The auto-install latch keys on gen, not just target, so
+	// a new directive always re-enables one fresh attempt even for the
+	// same version. gen==0 means "no directive ever".
+	gen uint64
 }
 
 // updatePreflight is the async verdict for the recorded directive
@@ -278,10 +323,12 @@ type updatePreflight struct {
 // goroutines and reads s.updateDirective — never from this callback.
 func (s *Server) onUpdateDirective(targetVersion string, force bool) {
 	s.updateDirectiveMu.Lock()
+	gen := s.updateDirective.gen + 1
 	s.updateDirective = updateDirective{
 		targetVersion: targetVersion,
 		force:         force,
 		seen:          true,
+		gen:           gen,
 	}
 	// Drop any prior verdict immediately: until the worker re-checks,
 	// the honest answer for the NEW target is "checking", never the
@@ -311,10 +358,13 @@ func (s *Server) triggerUpdatePreflight() {
 	if !s.preflightRunning {
 		s.preflightRunning = true
 		s.preflightMu.Unlock()
+		// A freshly started scheduler runs its first iteration
+		// immediately; kicking too would just cause a redundant
+		// back-to-back preflight (review-2 #3).
 		go s.updatePreflightScheduler(kick)
-	} else {
-		s.preflightMu.Unlock()
+		return
 	}
+	s.preflightMu.Unlock()
 
 	select {
 	case kick <- struct{}{}:
@@ -371,7 +421,8 @@ func (s *Server) updatePreflightScheduler(kick <-chan struct{}) {
 		s.updateDirectiveMu.Lock()
 		// Publish only if the directive has not moved on under us, so
 		// a slow compute for an old target never clobbers a newer one.
-		published := s.updateDirective.targetVersion == pf.forTarget
+		live := s.updateDirective
+		published := live.targetVersion == pf.forTarget
 		if published {
 			s.updatePreflight = pf
 		}
@@ -381,10 +432,11 @@ func (s *Server) updatePreflightScheduler(kick <-chan struct{}) {
 			pf.forTarget, pf.available, pf.transient, pf.reason)
 
 		// Force directive + positive preflight => install silently
-		// now (review-#1). No-op otherwise; self-guards against
-		// repeat/concurrent attempts.
+		// now (review-1 #1), latched per directive generation
+		// (review-2 #1). No-op otherwise; self-guards repeat/concurrent
+		// attempts and releases the latch if superseded before start.
 		if published {
-			s.maybeAutoInstall(pf.forTarget, d.force, pf.available)
+			s.maybeAutoInstall(pf.forTarget, live.force, pf.available, live.gen)
 		}
 
 		baseDelay := preflightBaseDelay(d.seen, d.targetVersion, pf.transient, attempt)
@@ -419,6 +471,43 @@ func (s *Server) updatePreflightScheduler(kick <-chan struct{}) {
 		case <-timer.C:
 		}
 	}
+}
+
+// isTransientFetchErr decides whether a FetchManifest failure is
+// worth the fast 30s→8m backoff (review-2 #2). Only genuinely
+// self-resolving conditions qualify: a deadline, a timeout, a DNS
+// failure (network not up at boot), a refused/unreachable socket, or
+// an HTTP 429/5xx. Everything else — a 4xx, a malformed/oversize
+// manifest, a refused scheme, an unsafe redirect — is structural and
+// will NOT fix itself on a 30s retry; it is left to the steady
+// refresh so we neither hammer the endpoint nor lie in the logs.
+// (net.Error is intentionally NOT matched broadly: *url.Error
+// satisfies it even for a redirect-guard rejection, so we match the
+// concrete transient types instead.)
+func isTransientFetchErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var ne net.Error
+	if errors.As(err, &ne) && ne.Timeout() {
+		return true
+	}
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return true
+	}
+	var opErr *net.OpError
+	if errors.As(err, &opErr) { // connection refused / reset / unreachable
+		return true
+	}
+	var httpErr *selfupdate.HTTPStatusError
+	if errors.As(err, &httpErr) {
+		return httpErr.StatusCode == 429 || httpErr.StatusCode >= 500
+	}
+	return false
 }
 
 // computeUpdatePreflight resolves the per-version manifest for target
@@ -460,12 +549,18 @@ func (s *Server) computeUpdatePreflight(ctx context.Context, target string, _ bo
 	hc := &http.Client{Timeout: preflightTimeout}
 	m, err := selfupdate.FetchManifest(ctx, hc, manifestURL, ua)
 	if err != nil {
-		// Transient: the endpoint may be momentarily down, DNS not yet
-		// up, network still coming online during boot, etc. The
-		// scheduler retries this with backoff so a single blip does
-		// not pin the client "unavailable" until reconnect/restart.
-		pf.transient = true
-		pf.reason = "manifest temporarily unreachable, retrying: " + err.Error()
+		if isTransientFetchErr(err) {
+			// Network may be momentarily down, DNS not up at boot, a
+			// 5xx/429 blip during a rollout: fast backoff so a single
+			// blip does not pin the client "unavailable".
+			pf.transient = true
+			pf.reason = "manifest temporarily unreachable, retrying: " + err.Error()
+			return pf
+		}
+		// Structural/permanent (4xx, bad/oversize manifest, refused
+		// scheme, unsafe redirect): NOT fast-retried — the steady
+		// refresh still covers a later fix.
+		pf.reason = "manifest fetch failed: " + err.Error()
 		return pf
 	}
 
@@ -530,17 +625,21 @@ func (s *Server) buildUpdateState() *proto.UpdateState {
 	ai := s.autoInstall
 	s.autoInstallMu.Unlock()
 
+	// Only surface auto-install status for THIS directive generation;
+	// a verdict from a superseded directive must not bleed through.
+	aiCurrent := ai.gen == d.gen && ai.target == d.targetVersion
+
 	var decision string
 	switch {
 	case !verdictReady:
 		decision = "checking update availability…"
 	case !available:
 		decision = pf.reason
-	case d.force && ai.target == d.targetVersion && ai.inFlight:
+	case d.force && aiCurrent && ai.inFlight:
 		decision = "update available — operator forced: installing " + d.targetVersion + "…"
-	case d.force && ai.target == d.targetVersion && ai.lastErr != "":
+	case d.force && aiCurrent && ai.attempted && ai.lastErr != "":
 		decision = "update available — operator forced: install failed (" + ai.lastErr +
-			"); will retry on the next directive"
+			"); will retry on the next management directive"
 	case d.force:
 		decision = "update available — operator forced (silent install): " + pf.reason
 	default:

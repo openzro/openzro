@@ -2,6 +2,7 @@ package selfupdate
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -85,13 +86,18 @@ func TestFetchManifest(t *testing.T) {
 		}
 	})
 
-	t.Run("non-200", func(t *testing.T) {
+	t.Run("non-200 returns a typed HTTPStatusError", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
 		defer srv.Close()
-		if _, err := FetchManifest(context.Background(), srv.Client(), srv.URL, "ua/1"); err == nil {
+		_, err := FetchManifest(context.Background(), srv.Client(), srv.URL, "ua/1")
+		if err == nil {
 			t.Fatal("expected error on 500")
+		}
+		var he *HTTPStatusError
+		if !errors.As(err, &he) || he.StatusCode != http.StatusInternalServerError {
+			t.Fatalf("expected *HTTPStatusError{500}, got %T %v", err, err)
 		}
 	})
 

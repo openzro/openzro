@@ -2,6 +2,10 @@ package server
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"net"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -9,6 +13,7 @@ import (
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
 	"github.com/openzro/openzro/client/proto"
+	"github.com/openzro/openzro/version/selfupdate"
 )
 
 func TestClientUpdateID(t *testing.T) {
@@ -241,6 +246,11 @@ func TestJitterBounds(t *testing.T) {
 // otherwise. No directive is set, so the shared pipeline returns a
 // deterministic Skipped (no network / no macOS needed).
 func TestMaybeAutoInstall(t *testing.T) {
+	// Hermetic: empty template => buildSelfUpdateConfig resolves to
+	// "disabled" and selfupdate.New fails closed on non-macOS BEFORE
+	// any network, so the pipeline returns deterministically.
+	t.Setenv("OPENZRO_UPDATE_MANIFEST_TEMPLATE", "")
+
 	waitIdle := func(t *testing.T, s *Server) autoInstallState {
 		t.Helper()
 		deadline := time.Now().Add(3 * time.Second)
@@ -256,6 +266,11 @@ func TestMaybeAutoInstall(t *testing.T) {
 		t.Fatal("auto-install did not settle")
 		return autoInstallState{}
 	}
+	genOf := func(s *Server) uint64 {
+		s.updateDirectiveMu.Lock()
+		defer s.updateDirectiveMu.Unlock()
+		return s.updateDirective.gen
+	}
 
 	t.Run("no-op unless force && available && target", func(t *testing.T) {
 		for _, c := range []struct {
@@ -267,7 +282,7 @@ func TestMaybeAutoInstall(t *testing.T) {
 			{"9.9.9", true, false},
 		} {
 			s := &Server{}
-			s.maybeAutoInstall(c.target, c.force, c.avail)
+			s.maybeAutoInstall(c.target, c.force, c.avail, 1)
 			s.autoInstallMu.Lock()
 			ai := s.autoInstall
 			s.autoInstallMu.Unlock()
@@ -277,36 +292,110 @@ func TestMaybeAutoInstall(t *testing.T) {
 		}
 	})
 
-	t.Run("force+available attempts once per target", func(t *testing.T) {
+	t.Run("one attempt per generation; a new generation re-enables", func(t *testing.T) {
 		s := &Server{}
-		s.maybeAutoInstall("9.9.9", true, true)
+		s.onUpdateDirective("9.9.9", true)
+		g1 := genOf(s)
 
+		s.maybeAutoInstall("9.9.9", true, true, g1)
 		ai := waitIdle(t, s)
-		if ai.target != "9.9.9" {
-			t.Fatalf("attempt must bind to target, got %q", ai.target)
-		}
-		// No directive set => the shared pipeline reports Skipped, so
-		// the attempt completed (proves it actually ran the pipeline)
-		// without an install.
-		if ai.lastErr == "" {
-			t.Fatal("expected a recorded skip/err from the pipeline")
+		if !ai.attempted || ai.gen != g1 || ai.target != "9.9.9" || ai.lastErr == "" {
+			t.Fatalf("expected a completed attempt for gen %d, got %+v", g1, ai)
 		}
 
-		// Same target again => guarded no-op (no fresh attempt).
+		// Same generation again => guarded no-op.
 		before := ai
-		s.maybeAutoInstall("9.9.9", true, true)
+		s.maybeAutoInstall("9.9.9", true, true, g1)
 		s.autoInstallMu.Lock()
 		after := s.autoInstall
 		s.autoInstallMu.Unlock()
 		if after != before {
-			t.Fatalf("repeat target must be a no-op: before=%+v after=%+v", before, after)
+			t.Fatalf("repeat within a generation must be a no-op: %+v -> %+v", before, after)
 		}
 
-		// A different target IS allowed to attempt again.
-		s.maybeAutoInstall("1.0.0", true, true)
-		ai2 := waitIdle(t, s)
-		if ai2.target != "1.0.0" {
-			t.Fatalf("new target must start a fresh attempt, got %q", ai2.target)
+		// The exact review-2 #1 bug: SAME version, new directive
+		// generation (force toggled off then on) must retry.
+		s.onUpdateDirective("9.9.9", false)
+		s.onUpdateDirective("9.9.9", true)
+		g3 := genOf(s)
+		if g3 == g1 {
+			t.Fatal("a force flip must bump the directive generation")
+		}
+		s.maybeAutoInstall("9.9.9", true, true, g3)
+		ai3 := waitIdle(t, s)
+		if !ai3.attempted || ai3.gen != g3 {
+			t.Fatalf("same version under a new generation must retry, got %+v", ai3)
 		}
 	})
+
+	t.Run("supersede before install releases the latch (not consumed)", func(t *testing.T) {
+		s := &Server{}
+		s.onUpdateDirective("2.1.0", true)
+		stale := genOf(s)
+		s.onUpdateDirective("", false) // operator clears it mid-flight
+
+		s.maybeAutoInstall("2.1.0", true, true, stale)
+		ai := waitIdle(t, s)
+		if ai.attempted {
+			t.Fatalf("a superseded directive must NOT consume the attempt, got %+v", ai)
+		}
+		if !strings.Contains(ai.lastErr, "superseded") {
+			t.Fatalf("expected a superseded note, got %q", ai.lastErr)
+		}
+
+		// The previously-superseded target must not be permanently
+		// blocked: a fresh legitimate directive installs it.
+		s.onUpdateDirective("2.1.0", true)
+		g := genOf(s)
+		s.maybeAutoInstall("2.1.0", true, true, g)
+		ai2 := waitIdle(t, s)
+		if !ai2.attempted || ai2.gen != g {
+			t.Fatalf("a fresh directive for the same target must attempt, got %+v", ai2)
+		}
+	})
+}
+
+// TestIsTransientFetchErr pins review-2 #2: only genuinely
+// self-resolving failures get the fast backoff; structural ones
+// (4xx, refused scheme, unsafe redirect, parse) are settled. In
+// particular a *url.Error must NOT be treated as transient just
+// because it satisfies net.Error.
+func TestIsTransientFetchErr(t *testing.T) {
+	transient := []struct {
+		name string
+		err  error
+	}{
+		{"deadline", context.DeadlineExceeded},
+		{"dns", &net.DNSError{Err: "no such host"}},
+		{"dns timeout", &net.DNSError{IsTimeout: true}},
+		{"conn refused", &net.OpError{Op: "dial", Err: errors.New("connection refused")}},
+		{"http 503", &selfupdate.HTTPStatusError{StatusCode: 503}},
+		{"http 429", &selfupdate.HTTPStatusError{StatusCode: 429}},
+		{"wrapped opErr in url.Error", &url.Error{Op: "Get", URL: "https://x",
+			Err: &net.OpError{Op: "dial", Err: errors.New("refused")}}},
+		{"wrapped http 500", fmt.Errorf("fetch: %w", &selfupdate.HTTPStatusError{StatusCode: 500})},
+	}
+	for _, c := range transient {
+		if !isTransientFetchErr(c.err) {
+			t.Errorf("%s must be transient", c.name)
+		}
+	}
+
+	settled := []struct {
+		name string
+		err  error
+	}{
+		{"nil", nil},
+		{"http 404", &selfupdate.HTTPStatusError{StatusCode: 404}},
+		{"http 400", &selfupdate.HTTPStatusError{StatusCode: 400}},
+		{"refused scheme", errors.New("selfupdate: refused non-HTTPS scheme")},
+		{"oversize", errors.New("selfupdate: manifest exceeds cap")},
+		{"redirect-guard url.Error", &url.Error{Op: "Get", URL: "https://x",
+			Err: errors.New("selfupdate: refusing HTTPS->HTTP downgrade redirect")}},
+	}
+	for _, c := range settled {
+		if isTransientFetchErr(c.err) {
+			t.Errorf("%s must be settled (not fast-retried)", c.name)
+		}
+	}
 }

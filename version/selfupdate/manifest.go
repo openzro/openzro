@@ -226,6 +226,16 @@ func ResolveManifestTemplateURL(target string) (string, error) {
 	return strings.ReplaceAll(tpl, manifestVersionToken, url.PathEscape(target)), nil
 }
 
+// HTTPStatusError is returned by FetchManifest when the manifest
+// endpoint answers with a non-200 status. It is a typed error so the
+// caller's retry policy can distinguish a transient 5xx/429 from a
+// permanent 4xx (review-2 #2) instead of string-matching.
+type HTTPStatusError struct{ StatusCode int }
+
+func (e *HTTPStatusError) Error() string {
+	return fmt.Sprintf("selfupdate: manifest endpoint returned HTTP %d", e.StatusCode)
+}
+
 // FetchManifest GETs and validates the manifest. The body is hard
 // size-capped so a hostile endpoint cannot exhaust memory; an
 // oversized or truncated body fails ParseManifest rather than being
@@ -255,7 +265,7 @@ func FetchManifest(ctx context.Context, client *http.Client, url, userAgent stri
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("selfupdate: manifest endpoint returned HTTP %d", resp.StatusCode)
+		return nil, &HTTPStatusError{StatusCode: resp.StatusCode}
 	}
 	// Read one byte past the cap so an over-limit body is DETECTED
 	// (Codex-3), not silently truncated to a valid-looking prefix.
