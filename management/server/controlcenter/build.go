@@ -20,6 +20,8 @@ func BuildGraph(ctx context.Context, acc *types.Account, focus Focus, validatedP
 	switch focus.Type {
 	case FocusPeer:
 		return buildPeerFocus(ctx, acc, focus, validatedPeers)
+	case FocusGroup:
+		return buildGroupFocus(ctx, acc, focus, validatedPeers)
 	default:
 		return nil, fmt.Errorf("unsupported focus type %q", focus.Type)
 	}
