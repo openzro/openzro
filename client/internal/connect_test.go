@@ -67,3 +67,22 @@ func Test_freePort(t *testing.T) {
 
 	}
 }
+
+// TestConnectClient_PersistState_NilSafe pins the openZro #5128
+// pre-install guard contract: flushing client state before a
+// self-update must be a safe no-op when no engine is connected — the
+// daemon calls it unconditionally and must never panic or block the
+// (potentially security) update on it.
+func TestConnectClient_PersistState_NilSafe(t *testing.T) {
+	c := &ConnectClient{}
+	if err := c.PersistState(); err != nil {
+		t.Fatalf("PersistState with no engine must be a nil no-op, got %v", err)
+	}
+	var e *Engine
+	if err := e.PersistState(); err != nil {
+		t.Fatalf("nil *Engine PersistState must be nil, got %v", err)
+	}
+	if err := (&Engine{}).PersistState(); err != nil {
+		t.Fatalf("Engine with nil stateManager must be nil, got %v", err)
+	}
+}

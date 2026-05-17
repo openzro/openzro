@@ -375,6 +375,18 @@ func (c *ConnectClient) GetLatestNetworkMap() (*mgmProto.NetworkMap, error) {
 	return networkMap, nil
 }
 
+// PersistState force-flushes the live engine's client state to disk
+// (see Engine.PersistState — the openZro #5128 pre-restart guard).
+// No-op when no engine is running, so the daemon can call it
+// unconditionally before a self-update without a nil check.
+func (c *ConnectClient) PersistState() error {
+	engine := c.Engine()
+	if engine == nil {
+		return nil
+	}
+	return engine.PersistState()
+}
+
 // Status returns the current client status
 func (c *ConnectClient) Status() StatusType {
 	if c == nil {

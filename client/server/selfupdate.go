@@ -201,6 +201,19 @@ func (s *Server) runSelfUpdateDirective(ctx context.Context, d updateDirective, 
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "selfupdate init: %v", err)
 	}
+
+	// #5128 (openZro side): the install restarts the daemon. Flush the
+	// user's latest route / exit-node selection NOW so it survives the
+	// restart regardless of how the PKG postinstall stops us — the 10s
+	// periodic state saver may not have run since the user's last
+	// change. Best-effort: never block a (potentially security) update
+	// on a state flush; no-op when no engine is connected.
+	if s.connectClient != nil {
+		if perr := s.connectClient.PersistState(); perr != nil {
+			log.Warnf("client self-update: pre-install state flush failed (continuing): %v", perr)
+		}
+	}
+
 	res, err := u.RunOnce(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "selfupdate: %v", err)
