@@ -79,6 +79,12 @@ service DaemonService {
   rpc ListProfiles(ListProfilesRequest) returns (ListProfilesResponse) {}
 
   rpc GetActiveProfile(GetActiveProfileRequest) returns (GetActiveProfileResponse) {}
+
+  // Update runs one rollout-gated client self-update cycle in the
+  // privileged daemon (openZro #5). The UI calls this for the manual
+  // "Install now" action; the daemon also runs it periodically when
+  // AutoInstallUpdates is enabled.
+  rpc Update(UpdateRequest) returns (UpdateResponse) {}
 }
 
 
@@ -614,4 +620,22 @@ message GetActiveProfileRequest {}
 message GetActiveProfileResponse {
   string profileName = 1;
   string username = 2;
+}
+
+// UpdateRequest is intentionally empty: the daemon decides everything
+// from its own config/version/identity and the static manifest. The
+// management never supplies the update (see #5).
+message UpdateRequest {}
+
+message UpdateResponse {
+  // installed: a newer release was downloaded, verified and applied.
+  bool installed = 1;
+  // skipped: not eligible (already current, opt-out, pinned, not in
+  // staged rollout, …) — reason carries the detail. Not an error;
+  // genuine failures come back as a gRPC status error instead.
+  bool skipped = 2;
+  string version = 3;
+  string reason = 4;
+  // critical: the client was below the manifest min_version floor.
+  bool critical = 5;
 }
