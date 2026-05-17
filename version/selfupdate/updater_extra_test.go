@@ -2,6 +2,7 @@ package selfupdate
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -100,4 +101,62 @@ func TestRunOnce_ExpectedVersionMatchInstalls(t *testing.T) {
 	if !res.Installed || res.Version != "1.2.0" || !v.called || !in.called {
 		t.Fatalf("matched binding must install: %+v verify=%v install=%v", res, v.called, in.called)
 	}
+}
+
+// TestRunOnce_BeforeInstallHook pins openZro #5 R4 review #3: the
+// BeforeInstall hook runs AFTER Verify and IMMEDIATELY before
+// Install (glued to the privileged restart), and a hook error aborts
+// the cycle before any install happens.
+func TestRunOnce_BeforeInstallHook(t *testing.T) {
+	t.Run("runs after verify, before install", func(t *testing.T) {
+		srv := updaterServer(t, 100, "1.2.0")
+		defer srv.Close()
+		cfg := baseCfg(srv)
+		v, in := &fakeVerifier{}, &fakeInstaller{}
+		cfg.Verifier, cfg.Installer = v, in
+		hookRan := false
+		cfg.BeforeInstall = func(context.Context) error {
+			if !v.called {
+				t.Error("BeforeInstall must run AFTER Verify")
+			}
+			if in.called {
+				t.Error("BeforeInstall must run BEFORE Install")
+			}
+			hookRan = true
+			return nil
+		}
+		u, err := New(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := u.RunOnce(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !hookRan || !res.Installed || !in.called {
+			t.Fatalf("hook=%v installed=%v install.called=%v", hookRan, res.Installed, in.called)
+		}
+	})
+
+	t.Run("hook error aborts before install", func(t *testing.T) {
+		srv := updaterServer(t, 100, "1.2.0")
+		defer srv.Close()
+		cfg := baseCfg(srv)
+		v, in := &fakeVerifier{}, &fakeInstaller{}
+		cfg.Verifier, cfg.Installer = v, in
+		cfg.BeforeInstall = func(context.Context) error { return errors.New("flush boom") }
+		u, err := New(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := u.RunOnce(context.Background()); err == nil {
+			t.Fatal("a BeforeInstall error must abort the cycle")
+		}
+		if in.called {
+			t.Fatal("install must NOT run after a BeforeInstall error")
+		}
+		if !v.called {
+			t.Fatal("verify should have run before the hook")
+		}
+	})
 }

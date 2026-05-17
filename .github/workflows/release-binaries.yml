@@ -117,6 +117,12 @@ jobs:
           # `--skip=homebrew` flag (set above when token is absent)
           # bypasses the brews step entirely.
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          # #5 R4: the openzro build ldflag pins
+          # selfupdate.buildTeamID via `{{ index .Env "APPLE_TEAM_ID" }}`.
+          # Without this export the shipped daemon has BuildTeamID()==""
+          # and every future self-update fails closed at Verify. Empty
+          # (no secret) stays fail-closed by design.
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Upload snapshot artifacts
         if: github.event_name != 'push'
@@ -553,22 +559,47 @@ jobs:
             "$APP"
           codesign --verify --deep --strict --verbose=2 "$APP"
 
-      - name: Author postinstall script
+      - name: Author pkg pre/postinstall scripts
         run: |
           set -euo pipefail
           mkdir -p pkg-scripts
 
+          # PREINSTALL runs BEFORE the payload is written. On an
+          # upgrade this is the OLD binary stopping its own daemon, so
+          # the stale process cannot keep running the old code after
+          # the new files land. Without this the pkg only replaced
+          # files on disk and the daemon kept executing the previous
+          # version — "installed" did not mean "running the new
+          # version" (openZro #5 R4 review #2). Best-effort.
+          cat > pkg-scripts/preinstall <<'PREINSTALL'
+          #!/bin/bash
+          set -u
+          /usr/local/bin/openzro service stop >/dev/null 2>&1 || true
+          /usr/bin/osascript -e 'quit app "openZro UI"' >/dev/null 2>&1 || true
+          exit 0
+          PREINSTALL
+          chmod 0755 pkg-scripts/preinstall
+
+          # POSTINSTALL registers the daemon then FORCES the freshly
+          # installed binary to be the running process. kardianos
+          # `service start` on macOS is only `launchctl load` — a
+          # no-op when the label is already loaded from the prior
+          # version, so an upgrade would otherwise keep the old daemon
+          # alive. stop+start clears a stale load; `launchctl
+          # kickstart -k` then guarantees a kill+respawn under the new
+          # binary. The launchd label is the kardianos service Name
+          # (`openzro`, see client/cmd/service.go defaultServiceName),
+          # NOT the pkg identifier io.openzro.client — kickstart must
+          # target `system/openzro` or it hits nothing. All non-fatal:
+          # the pkg still lays down the binaries even if launchd is
+          # unhappy.
           cat > pkg-scripts/postinstall <<'POSTINSTALL'
           #!/bin/bash
-          # openZro pkg postinstall — register the daemon via the
-          # binary's built-in `service install` (kardianos/service
-          # writes a /Library/LaunchDaemons/io.openzro.client.plist).
-          # Failures are non-fatal: the package still installs the
-          # binaries, the user can run `sudo openzro service install`
-          # by hand if anything blocks here.
           set -u
           /usr/local/bin/openzro service install >/dev/null 2>&1 || true
+          /usr/local/bin/openzro service stop    >/dev/null 2>&1 || true
           /usr/local/bin/openzro service start   >/dev/null 2>&1 || true
+          /bin/launchctl kickstart -k system/openzro >/dev/null 2>&1 || true
           exit 0
           POSTINSTALL
           chmod 0755 pkg-scripts/postinstall
@@ -670,6 +701,46 @@ jobs:
         run: |
           gh release upload "${{ steps.ver.outputs.tag }}" \
             "dist/openzro_${{ steps.ver.outputs.version }}_darwin_universal.pkg" \
+            --repo "${{ github.repository }}" --clobber
+
+      - name: Publish update-manifest.json (openZro #5 R4b)
+        # Only advertise an update when the pkg was actually
+        # signed+notarized (same gate as Productsign/Notarize). An
+        # unsigned build ships with BuildTeamID()=="" so the client's
+        # Verify fail-closes — publishing a manifest then would
+        # announce, by default, an update every client necessarily
+        # rejects. No signing rights => no manifest (#5 R4 review).
+        if: ${{ env.APPLE_TEAM_ID != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.ver.outputs.tag }}"
+          VERSION="${{ steps.ver.outputs.version }}"
+          PKG="dist/openzro_${VERSION}_darwin_universal.pkg"
+          # sha256 of the FINAL notarized+stapled pkg. Stapling rewrites
+          # the pkg, so this MUST run after stapler/upload — never hash
+          # a pre-staple artifact (openZro #5 R4b spec, corner case).
+          SHA="$(shasum -a 256 "$PKG" | awk '{print $1}')"
+          URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/openzro_${VERSION}_darwin_universal.pkg"
+          # Schema = version/selfupdate.Manifest (pinned by the Go test
+          # TestManifest_ReleasePipelineShape). One universal pkg, so
+          # both arch keys point at it — selfupdate.ArtifactFor resolves
+          # darwin/<arch> and both map to the universal artifact.
+          # staged_rollout=100 + min_version="" per the signed-off R4
+          # spec: the management-driven path skips staged_rollout (Q2
+          # Authoritative); only the future critical-only fallback (R6)
+          # reads it. jq guarantees valid JSON (no heredoc pitfalls).
+          jq -n \
+            --arg v "$VERSION" --arg u "$URL" --arg s "$SHA" \
+            '{version:$v, min_version:"", staged_rollout:100,
+              artifacts:{"darwin/arm64":{url:$u,sha256:$s},
+                         "darwin/amd64":{url:$u,sha256:$s}}}' \
+            > update-manifest.json
+          # Resolver (ResolveManifestTemplateURL) expects exactly this
+          # asset at the v{version} tag:
+          #   https://github.com/<repo>/releases/download/v{version}/update-manifest.json
+          gh release upload "${TAG}" update-manifest.json \
             --repo "${{ github.repository }}" --clobber
 
   release_dex:

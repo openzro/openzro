@@ -196,3 +196,48 @@ func TestResolveManifestTemplateURL(t *testing.T) {
 		}
 	})
 }
+
+// TestManifest_ReleasePipelineShape pins the exact update-manifest.json
+// the release pipeline emits (.github/workflows/release-binaries.yml,
+// openZro #5 R4b). The CI YAML is not unit-testable here, so this is
+// the contract guard: if Manifest/ParseManifest drifts, this fails and
+// reminds whoever changed it that the pipeline generator must match.
+// Shape: single universal pkg, both darwin arches -> same url+sha256,
+// min_version "" (no floor), staged_rollout 100 (R6-only; the
+// management-driven path skips it via GateInput.Authoritative).
+func TestManifest_ReleasePipelineShape(t *testing.T) {
+	const url = "https://github.com/openzro/openzro/releases/download/v0.53.1-alpha.1/openzro_0.53.1-alpha.1_darwin_universal.pkg"
+	const sha = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+	body := `{
+	  "version": "0.53.1-alpha.1",
+	  "min_version": "",
+	  "staged_rollout": 100,
+	  "artifacts": {
+	    "darwin/arm64": { "url": "` + url + `", "sha256": "` + sha + `" },
+	    "darwin/amd64": { "url": "` + url + `", "sha256": "` + sha + `" }
+	  }
+	}`
+
+	m, err := ParseManifest([]byte(body))
+	if err != nil {
+		t.Fatalf("pipeline manifest must parse, got %v", err)
+	}
+	if m.Version != "0.53.1-alpha.1" {
+		t.Fatalf("version: got %q", m.Version)
+	}
+	if m.MinVersion != "" {
+		t.Fatalf("min_version must be empty (no floor), got %q", m.MinVersion)
+	}
+	if m.StagedRollout == nil || *m.StagedRollout != 100 {
+		t.Fatalf("staged_rollout must be 100, got %v", m.StagedRollout)
+	}
+	for _, arch := range []string{"arm64", "amd64"} {
+		a, ok := m.ArtifactFor("darwin", arch)
+		if !ok {
+			t.Fatalf("missing artifact for darwin/%s", arch)
+		}
+		if a.URL != url || a.SHA256 != sha {
+			t.Fatalf("darwin/%s artifact mismatch: %+v", arch, a)
+		}
+	}
+}

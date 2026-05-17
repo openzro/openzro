@@ -1839,6 +1839,21 @@ func (e *Engine) SetNetworkMapPersistence(enabled bool) {
 	}
 }
 
+// PersistState force-flushes any dirty client state (route /
+// exit-node selection, etc.) to disk synchronously. The state
+// manager's periodic saver only runs every 10s; a client self-update
+// restarts the daemon, so the daemon calls this right before the
+// install to guarantee the user's latest selection survives the
+// restart — the openZro side of NetBird's auto-update state-loss
+// lesson (#5128). Best-effort + nil-safe: a flush failure must never
+// block a (potentially security) update.
+func (e *Engine) PersistState() error {
+	if e == nil || e.stateManager == nil {
+		return nil
+	}
+	return e.stateManager.PersistState(context.Background())
+}
+
 // SetUpdateDirectiveHandler registers (or clears, with nil) the
 // management-driven client self-update callback (openZro #5). Locks
 // syncMsgMux exactly like SetNetworkMapPersistence so it cannot race
