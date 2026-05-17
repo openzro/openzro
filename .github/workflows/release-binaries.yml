@@ -586,16 +586,20 @@ jobs:
           # no-op when the label is already loaded from the prior
           # version, so an upgrade would otherwise keep the old daemon
           # alive. stop+start clears a stale load; `launchctl
-          # kickstart -k` guarantees a kill+respawn under the new
-          # binary. All non-fatal: the pkg still lays down the
-          # binaries even if launchd is unhappy.
+          # kickstart -k` then guarantees a kill+respawn under the new
+          # binary. The launchd label is the kardianos service Name
+          # (`openzro`, see client/cmd/service.go defaultServiceName),
+          # NOT the pkg identifier io.openzro.client — kickstart must
+          # target `system/openzro` or it hits nothing. All non-fatal:
+          # the pkg still lays down the binaries even if launchd is
+          # unhappy.
           cat > pkg-scripts/postinstall <<'POSTINSTALL'
           #!/bin/bash
           set -u
           /usr/local/bin/openzro service install >/dev/null 2>&1 || true
           /usr/local/bin/openzro service stop    >/dev/null 2>&1 || true
           /usr/local/bin/openzro service start   >/dev/null 2>&1 || true
-          /bin/launchctl kickstart -k system/io.openzro.client >/dev/null 2>&1 || true
+          /bin/launchctl kickstart -k system/openzro >/dev/null 2>&1 || true
           exit 0
           POSTINSTALL
           chmod 0755 pkg-scripts/postinstall
