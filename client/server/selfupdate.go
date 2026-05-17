@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"runtime"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -92,8 +93,13 @@ func (s *Server) Update(ctx context.Context, _ *proto.UpdateRequest) (*proto.Upd
 // NewListener stays the documented seam for embedders without that
 // requirement. Blocks until ctx is done; launch as a goroutine.
 func (s *Server) startSelfUpdateWatcher(ctx context.Context) {
-	if _, err := selfupdate.New(s.selfUpdateConfig()); err == selfupdate.ErrUnsupportedPlatform {
-		return // phase 1: only arm on macOS
+	// Platform gate WITHOUT reading s.config: this goroutine is
+	// launched from inside Start(), which mutates s.config without
+	// s.mutex (the existing code never had a concurrent reader). A
+	// runtime.GOOS check needs no config, so the watcher never races
+	// Start()'s config writes. Phase 1 is macOS-only anyway.
+	if runtime.GOOS != "darwin" {
+		return
 	}
 
 	up := version.NewUpdate("openzro-daemon")
