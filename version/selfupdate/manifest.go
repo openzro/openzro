@@ -75,8 +75,16 @@ const defaultManifestURL = "https://github.com/openzro/openzro/releases/download
 const envManifestTemplate = "OPENZRO_UPDATE_MANIFEST_TEMPLATE"
 
 // manifestVersionToken is the placeholder replaced with the directed
-// target version in envManifestTemplate.
+// target version in the manifest template.
 const manifestVersionToken = "{version}"
+
+// defaultManifestTemplate is the per-version manifest published by the
+// release infra: one manifest per GitHub release tag. The
+// management-driven path is therefore live in a normal build with NO
+// external configuration; OPENZRO_UPDATE_MANIFEST_TEMPLATE only
+// overrides it (e.g. an internal mirror), and an explicitly empty env
+// value remains the operator escape hatch that disables the path.
+const defaultManifestTemplate = "https://github.com/openzro/openzro/releases/download/v{version}/update-manifest.json"
 
 // Artifact is one platform's downloadable. Signature is an optional
 // detached signature; on macOS authenticity comes from notarization
@@ -180,29 +188,31 @@ func ResolveManifestURL() string {
 }
 
 // ResolveManifestTemplateURL builds the per-version manifest URL for
-// the management-driven path (#5) by substituting target into
-// OPENZRO_UPDATE_MANIFEST_TEMPLATE.
+// the management-driven path (#5) by substituting target into the
+// template.
 //
-//   - env unset or empty  -> ("", nil): the management-driven manifest
-//     path is simply not configured; the caller treats this as "cannot
-//     preflight" (NOT as an error — an operator who never enabled it
-//     must not see error noise).
-//   - env set but missing {version} -> fail-closed config error: such a
-//     template resolves EVERY target to the same URL, which would
-//     silently install the wrong version. Refuse loudly.
-//   - empty target with a configured template -> error: nothing to
+//   - env unset -> use defaultManifestTemplate (the path is live by
+//     default in a normal build).
+//   - env set, non-empty -> override with that value.
+//   - env set but EXPLICITLY empty/whitespace -> ("", nil): the
+//     operator escape hatch that disables the path; the caller treats
+//     "" as "not configured" (NOT an error — a deliberate opt-out
+//     must not be log noise).
+//   - effective template missing {version} -> fail-closed config
+//     error: it would resolve EVERY target to one URL and silently
+//     install the wrong version. Refuse loudly.
+//   - empty target with a usable template -> error: nothing to
 //     resolve.
 //
 // target is path-escaped before substitution so a hostile/garbled
 // version string cannot inject extra path segments or a different host.
 func ResolveManifestTemplateURL(target string) (string, error) {
-	v, ok := os.LookupEnv(envManifestTemplate)
-	if !ok {
-		return "", nil
-	}
-	tpl := strings.TrimSpace(v)
-	if tpl == "" {
-		return "", nil
+	tpl := defaultManifestTemplate
+	if v, ok := os.LookupEnv(envManifestTemplate); ok {
+		tpl = strings.TrimSpace(v)
+		if tpl == "" {
+			return "", nil // explicit opt-out
+		}
 	}
 	if !strings.Contains(tpl, manifestVersionToken) {
 		return "", fmt.Errorf(

@@ -125,7 +125,7 @@ func TestFetchManifest(t *testing.T) {
 // TestResolveManifestTemplateURL pins the openZro #5 management-driven
 // per-version manifest resolution and its fail-closed posture.
 func TestResolveManifestTemplateURL(t *testing.T) {
-	t.Run("unset env is not-configured, not an error", func(t *testing.T) {
+	t.Run("unset env falls back to the built-in default template", func(t *testing.T) {
 		old, had := os.LookupEnv(envManifestTemplate)
 		_ = os.Unsetenv(envManifestTemplate)
 		t.Cleanup(func() {
@@ -134,16 +134,20 @@ func TestResolveManifestTemplateURL(t *testing.T) {
 			}
 		})
 		got, err := ResolveManifestTemplateURL("1.2.3")
-		if err != nil || got != "" {
-			t.Fatalf("unset must be (\"\",nil), got (%q,%v)", got, err)
+		if err != nil {
+			t.Fatalf("unset must use the default, got error %v", err)
+		}
+		want := "https://github.com/openzro/openzro/releases/download/v1.2.3/update-manifest.json"
+		if got != want {
+			t.Fatalf("unset must resolve the default template: got %q want %q", got, want)
 		}
 	})
 
-	t.Run("empty env is not-configured, not an error", func(t *testing.T) {
+	t.Run("explicitly empty env is the disable escape hatch", func(t *testing.T) {
 		t.Setenv(envManifestTemplate, "   ")
 		got, err := ResolveManifestTemplateURL("1.2.3")
 		if err != nil || got != "" {
-			t.Fatalf("empty must be (\"\",nil), got (%q,%v)", got, err)
+			t.Fatalf("explicit-empty must disable -> (\"\",nil), got (%q,%v)", got, err)
 		}
 	})
 

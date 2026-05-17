@@ -275,7 +275,9 @@ func (s *Server) computeUpdatePreflight(ctx context.Context, target string, _ bo
 		return pf
 	}
 	if manifestURL == "" {
-		pf.reason = "management-driven manifest path not configured (OPENZRO_UPDATE_MANIFEST_TEMPLATE unset)"
+		// Only reachable when the operator explicitly emptied the env
+		// (the disable escape hatch); unset uses the built-in default.
+		pf.reason = "self-update disabled by operator (OPENZRO_UPDATE_MANIFEST_TEMPLATE set empty)"
 		return pf
 	}
 
