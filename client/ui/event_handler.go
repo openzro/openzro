@@ -13,6 +13,7 @@ import (
 	"fyne.io/systray"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/openzro/openzro/client/proto"
 	"github.com/openzro/openzro/version"
 )
 
@@ -56,6 +57,8 @@ func (h *eventHandler) listen(ctx context.Context) {
 			h.handleGitHubClick()
 		case <-h.client.mUpdate.ClickedCh:
 			h.handleUpdateClick()
+		case <-h.client.mInstallUpdate.ClickedCh:
+			h.handleInstallUpdateClick()
 		case <-h.client.mNetworks.ClickedCh:
 			h.handleNetworksClick()
 		case <-h.client.mNotifications.ClickedCh:
@@ -173,6 +176,42 @@ func (h *eventHandler) handleUpdateClick() {
 	if err := openURL(version.DownloadUrl()); err != nil {
 		log.Errorf("failed to open download URL: %v", err)
 	}
+}
+
+// handleInstallUpdateClick asks the privileged daemon to run the
+// rollout-gated self-update cycle (#5, C1). Long-running
+// (download+verify+install): runs off the menu loop with the item
+// disabled. No UI-side deadline — the daemon bounds the cycle
+// (CycleTimeout); a short UI timeout would kill a legit download.
+func (h *eventHandler) handleInstallUpdateClick() {
+	h.client.mInstallUpdate.Disable()
+	go func() {
+		defer h.client.mInstallUpdate.Enable()
+
+		conn, err := h.client.getSrvClient(defaultFailTimeout)
+		if err != nil {
+			log.Errorf("self-update: cannot reach daemon: %v", err)
+			h.client.app.SendNotification(fyne.NewNotification("Update", "Cannot reach the openZro daemon"))
+			return
+		}
+		h.client.app.SendNotification(fyne.NewNotification("Update", "Downloading and verifying the update…"))
+
+		resp, err := conn.Update(h.client.ctx, &proto.UpdateRequest{})
+		if err != nil {
+			log.Errorf("self-update failed: %v", err)
+			h.client.app.SendNotification(fyne.NewNotification("Update failed", err.Error()))
+			return
+		}
+		switch {
+		case resp.GetInstalled():
+			h.client.app.SendNotification(fyne.NewNotification("Update installed",
+				fmt.Sprintf("openZro %s installed — the service will restart.", resp.GetVersion())))
+		case resp.GetSkipped():
+			h.client.app.SendNotification(fyne.NewNotification("No update applied", resp.GetReason()))
+		default:
+			h.client.app.SendNotification(fyne.NewNotification("Update", resp.GetReason()))
+		}
+	}()
 }
 
 func (h *eventHandler) handleNetworksClick() {

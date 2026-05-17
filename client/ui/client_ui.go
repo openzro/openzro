@@ -233,6 +233,7 @@ type serviceClient struct {
 	mVersionUI         *systray.MenuItem
 	mVersionDaemon     *systray.MenuItem
 	mUpdate            *systray.MenuItem
+	mInstallUpdate     *systray.MenuItem
 	mQuit              *systray.MenuItem
 	mNetworks          *systray.MenuItem
 	mAllowSSH          *systray.MenuItem
@@ -729,6 +730,7 @@ func (s *serviceClient) updateStatus() error {
 		// updated must reset the mUpdate visibility state
 		if s.daemonVersion != status.DaemonVersion {
 			s.mUpdate.Hide()
+			s.mInstallUpdate.Hide()
 			s.daemonVersion = status.DaemonVersion
 
 			s.isUpdateIconActive = s.update.SetDaemonVersion(status.DaemonVersion)
@@ -859,6 +861,12 @@ func (s *serviceClient) onTrayReady() {
 
 	s.mUpdate = s.mAbout.AddSubMenuItem("Download latest version", latestVersionMenuDescr)
 	s.mUpdate.Hide()
+
+	// #5: ask the privileged daemon to download+verify+install the
+	// update (rollout-gated). Distinct from "Download latest version"
+	// which just opens the release page in a browser.
+	s.mInstallUpdate = s.mAbout.AddSubMenuItem("Install update now", "Download, verify and install the update via the daemon")
+	s.mInstallUpdate.Hide()
 
 	systray.AddSeparator()
 	s.mQuit = systray.AddMenuItem("Quit", quitMenuDescr)
@@ -1088,6 +1096,7 @@ func (s *serviceClient) onUpdateAvailable() {
 	defer s.updateIndicationLock.Unlock()
 
 	s.mUpdate.Show()
+	s.mInstallUpdate.Show()
 	s.isUpdateIconActive = true
 
 	if s.connected {
