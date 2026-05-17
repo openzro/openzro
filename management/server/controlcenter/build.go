@@ -37,6 +37,7 @@ func buildPeerFocus(ctx context.Context, acc *types.Account, focus Focus, valida
 
 	reachable, fwRules := acc.GetPeerConnectionResources(ctx, focusPeer, validatedPeers)
 	b.addPeerReach(acc, focusPeer.ID, reachable, fwRules)
+	b.addPostureBlocked(ctx, acc, focusPeer.ID, validatedPeers)
 
 	b.finalize()
 	return g, nil
