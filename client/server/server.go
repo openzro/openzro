@@ -161,6 +161,11 @@ func (s *Server) Start() error {
 	s.statusRecorder.UpdateRosenpass(config.RosenpassEnabled, config.RosenpassPermissive)
 	s.statusRecorder.UpdateLazyConnection(config.LazyConnectionEnabled)
 
+	// Background client self-update (#5). Launched once, process-
+	// lifetime, regardless of auto-connect; macOS-only in phase 1
+	// (the watcher self-disarms on other platforms).
+	go s.startSelfUpdateWatcher(s.rootCtx)
+
 	if s.sessionWatcher == nil {
 		s.sessionWatcher = internal.NewSessionWatcher(s.rootCtx, s.statusRecorder)
 		s.sessionWatcher.SetOnExpireListener(s.onSessionExpire)
