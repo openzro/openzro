@@ -672,6 +672,39 @@ jobs:
             "dist/openzro_${{ steps.ver.outputs.version }}_darwin_universal.pkg" \
             --repo "${{ github.repository }}" --clobber
 
+      - name: Publish update-manifest.json (openZro #5 R4b)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.ver.outputs.tag }}"
+          VERSION="${{ steps.ver.outputs.version }}"
+          PKG="dist/openzro_${VERSION}_darwin_universal.pkg"
+          # sha256 of the FINAL notarized+stapled pkg. Stapling rewrites
+          # the pkg, so this MUST run after stapler/upload — never hash
+          # a pre-staple artifact (openZro #5 R4b spec, corner case).
+          SHA="$(shasum -a 256 "$PKG" | awk '{print $1}')"
+          URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/openzro_${VERSION}_darwin_universal.pkg"
+          # Schema = version/selfupdate.Manifest (pinned by the Go test
+          # TestManifest_ReleasePipelineShape). One universal pkg, so
+          # both arch keys point at it — selfupdate.ArtifactFor resolves
+          # darwin/<arch> and both map to the universal artifact.
+          # staged_rollout=100 + min_version="" per the signed-off R4
+          # spec: the management-driven path skips staged_rollout (Q2
+          # Authoritative); only the future critical-only fallback (R6)
+          # reads it. jq guarantees valid JSON (no heredoc pitfalls).
+          jq -n \
+            --arg v "$VERSION" --arg u "$URL" --arg s "$SHA" \
+            '{version:$v, min_version:"", staged_rollout:100,
+              artifacts:{"darwin/arm64":{url:$u,sha256:$s},
+                         "darwin/amd64":{url:$u,sha256:$s}}}' \
+            > update-manifest.json
+          # Resolver (ResolveManifestTemplateURL) expects exactly this
+          # asset at the v{version} tag:
+          #   https://github.com/<repo>/releases/download/v{version}/update-manifest.json
+          gh release upload "${TAG}" update-manifest.json \
+            --repo "${{ github.repository }}" --clobber
+
   release_dex:
     name: Build + push themed Dex container image
     runs-on: ubuntu-22.04
