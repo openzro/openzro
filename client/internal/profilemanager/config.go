@@ -76,6 +76,10 @@ type ConfigInput struct {
 	DNSLabels domain.List
 
 	LazyConnectionEnabled *bool
+
+	// Non-nil means "change requested" (codebase convention). #5.
+	AutoInstallUpdates  *bool
+	UpdatePinnedVersion *string
 }
 
 // Config Configuration type
@@ -142,6 +146,17 @@ type Config struct {
 	ClientCertKeyPair *tls.Certificate `json:"-"`
 
 	LazyConnectionEnabled bool
+
+	// AutoInstallUpdates, when true, lets the privileged daemon apply a
+	// downloaded+verified client update automatically (openZro #5). It
+	// is OFF by default — the zero value is the default-off behaviour,
+	// and an old config.json without the field reads as false, so the
+	// rollout gate only ever auto-installs after an explicit opt-in.
+	AutoInstallUpdates bool
+
+	// UpdatePinnedVersion, when non-empty, pins this client to exactly
+	// that release — the rollout gate refuses anything else (#5).
+	UpdatePinnedVersion string
 }
 
 var ConfigDirOverride string
@@ -457,6 +472,26 @@ func (config *Config) apply(input ConfigInput) (updated bool, err error) {
 		disabled := true
 		config.DisableNotifications = &disabled
 		log.Infof("setting notifications to disabled by default")
+		updated = true
+	}
+
+	if input.AutoInstallUpdates != nil && *input.AutoInstallUpdates != config.AutoInstallUpdates {
+		if *input.AutoInstallUpdates {
+			log.Infof("enabling automatic update install")
+		} else {
+			log.Infof("disabling automatic update install")
+		}
+		config.AutoInstallUpdates = *input.AutoInstallUpdates
+		updated = true
+	}
+
+	if input.UpdatePinnedVersion != nil && *input.UpdatePinnedVersion != config.UpdatePinnedVersion {
+		if *input.UpdatePinnedVersion == "" {
+			log.Infof("clearing update pin")
+		} else {
+			log.Infof("pinning updates to %s", *input.UpdatePinnedVersion)
+		}
+		config.UpdatePinnedVersion = *input.UpdatePinnedVersion
 		updated = true
 	}
 
