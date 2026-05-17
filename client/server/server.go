@@ -68,6 +68,11 @@ type Server struct {
 	lastProbe         time.Time
 	persistNetworkMap bool
 	isSessionActive   atomic.Bool
+	// connectActive is true while the client is meant to be connected
+	// (set on every connect launch via connectWithRetryRuns, cleared
+	// by Down()). The R6 critical-fallback worker requires it so a
+	// deliberately-stopped client is never silently auto-updated.
+	connectActive atomic.Bool
 
 	// updateDirective holds the latest management-conveyed client
 	// self-update decision (openZro #5). The engine dedupes by
@@ -260,6 +265,14 @@ func (s *Server) setDefaultConfigIfNotExists(ctx context.Context) error {
 func (s *Server) connectWithRetryRuns(ctx context.Context, config *profilemanager.Config, statusRecorder *peer.Status,
 	runningChan chan struct{},
 ) {
+	// The client is now meant to be connected (covers Start /
+	// Up / reconnect — every connect launch funnels through here).
+	// Down() clears it. The R6 fallback worker reads this so a
+	// manually-stopped client is never silently auto-updated
+	// (#5 R6 review #2): managementState.Connected alone cannot tell
+	// "network down" from "user pressed Down".
+	s.connectActive.Store(true)
+
 	backOff := getConnectWithBackoff(ctx)
 	retryStarted := false
 
@@ -873,6 +886,9 @@ func (s *Server) Down(ctx context.Context, _ *proto.DownRequest) (*proto.DownRes
 		return nil, fmt.Errorf("service is not up")
 	}
 	s.actCancel()
+	// User-initiated stop: the R6 fallback must not treat this as
+	// "unmanaged + should be managed" (#5 R6 review #2).
+	s.connectActive.Store(false)
 
 	err := s.connectClient.Stop()
 	if err != nil {

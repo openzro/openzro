@@ -709,3 +709,38 @@ func TestBuildCriticalFallbackConfig(t *testing.T) {
 		}
 	})
 }
+
+// TestFallbackSupersededReason pins the #5 R6 review-#1 invariant:
+// the long RunOnce window must abort the critical fallback if the
+// authoritative path takes over before the privileged install.
+func TestFallbackSupersededReason(t *testing.T) {
+	dirActive := updateDirective{seen: true, targetVersion: "1.2.3"}
+	dirCleared := updateDirective{seen: true, targetVersion: ""}
+	none := updateDirective{}
+
+	// Superseded cases — must wrap errFallbackSuperseded.
+	for _, c := range []struct {
+		name          string
+		connectActive bool
+		mgmtConnected bool
+		d             updateDirective
+	}{
+		{"client stopped", false, false, none},
+		{"client stopped beats mgmt-down", false, false, none},
+		{"management reconnected", true, true, none},
+		{"operator directive arrived", true, false, dirActive},
+	} {
+		err := fallbackSupersededReason(c.connectActive, c.mgmtConnected, c.d)
+		if err == nil || !errors.Is(err, errFallbackSuperseded) {
+			t.Fatalf("%s: expected errFallbackSuperseded, got %v", c.name, err)
+		}
+	}
+
+	// Still eligible — must be nil.
+	if err := fallbackSupersededReason(true, false, none); err != nil {
+		t.Fatalf("unmanaged + no directive must remain eligible, got %v", err)
+	}
+	if err := fallbackSupersededReason(true, false, dirCleared); err != nil {
+		t.Fatalf("a CLEARED directive does not own updates — fallback stays eligible, got %v", err)
+	}
+}
