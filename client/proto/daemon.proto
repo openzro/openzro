@@ -193,6 +193,25 @@ message StatusResponse{
   FullStatus fullStatus = 2;
   // Openzro daemon version
   string daemonVersion = 3;
+  // updateState is the management-driven client self-update decision
+  // surfaced to the UI (openZro #5). The daemon is the single source
+  // of truth — the UI no longer polls GitHub for availability.
+  UpdateState updateState = 4;
+}
+
+// UpdateState is the daemon's view of the management-conveyed client
+// self-update directive (openZro #5). Empty when the operator set no
+// target, or when the daemon has not yet re-received a Sync directive
+// after a restart (state is keyed off the live Sync stream, never
+// persisted — this is the Codex post-restart-staleness fix). available
+// is the daemon's verdict that an install is currently warranted; R3a
+// fills target/force, R3c refines available with the full
+// rollout-gated preflight.
+message UpdateState {
+  string targetVersion = 1;
+  bool force = 2;
+  bool available = 3;
+  string lastDecision = 4;
 }
 
 message DownRequest {}

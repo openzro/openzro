@@ -867,7 +867,11 @@ func (s *Server) Status(
 		s.isSessionActive.Store(false)
 	}
 
-	statusResponse := proto.StatusResponse{Status: string(status), DaemonVersion: version.OpenzroVersion()}
+	statusResponse := proto.StatusResponse{
+		Status:        string(status),
+		DaemonVersion: version.OpenzroVersion(),
+		UpdateState:   s.buildUpdateState(),
+	}
 
 	s.statusRecorder.UpdateManagementAddress(s.config.ManagementURL.String())
 	s.statusRecorder.UpdateRosenpass(s.config.RosenpassEnabled, s.config.RosenpassPermissive)

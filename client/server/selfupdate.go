@@ -120,3 +120,43 @@ func (s *Server) onUpdateDirective(targetVersion string, force bool) {
 	log.Infof("client self-update: management directive target=%s force=%t "+
 		"(recorded; preflight/install land in R3c/R3d)", targetVersion, force)
 }
+
+// buildUpdateState renders the latest recorded directive into the
+// proto surface the UI reads (openZro #5). Returns nil when no
+// directive has been seen this daemon lifetime — after a daemon
+// restart the state is empty until the next Sync re-delivers it
+// (state is keyed off the live Sync stream, never persisted; this is
+// the Codex post-restart-staleness fix). available is a deliberately
+// minimal target!=running check for R3b; R3c replaces it with the
+// full rollout-gated preflight (manifest resolve + staged bucket).
+func (s *Server) buildUpdateState() *proto.UpdateState {
+	s.updateDirectiveMu.Lock()
+	d := s.updateDirective
+	s.updateDirectiveMu.Unlock()
+
+	if !d.seen {
+		return nil
+	}
+
+	running := version.OpenzroVersion()
+	available := d.targetVersion != "" && d.targetVersion != running
+
+	var decision string
+	switch {
+	case d.targetVersion == "":
+		decision = "no directive (operator cleared the target)"
+	case !available:
+		decision = "up to date (running the directed version)"
+	case d.force:
+		decision = "update available — operator forced (silent install)"
+	default:
+		decision = "update available — operator offered (user opt-in)"
+	}
+
+	return &proto.UpdateState{
+		TargetVersion: d.targetVersion,
+		Force:         d.force,
+		Available:     available,
+		LastDecision:  decision,
+	}
+}
