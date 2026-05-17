@@ -418,6 +418,16 @@ func (am *DefaultAccountManager) UpdateAccountSettings(ctx context.Context, acco
 			updateAccountPeers = true
 		}
 
+		// review-Q2 #1: a client-update directive change must reach
+		// already-connected peers via the same UpdateAccountPeers ->
+		// toSyncResponse -> buildUpdateConfig fanout. Without this a
+		// connected peer keeps a stale (or revoked) directive until
+		// reconnect — the dangerous case being clear/exclude, where
+		// the local scheduler could still act on the old directive.
+		if clientUpdateSettingsChanged(oldSettings, newSettings) {
+			updateAccountPeers = true
+		}
+
 		if oldSettings.GroupsPropagationEnabled != newSettings.GroupsPropagationEnabled && newSettings.GroupsPropagationEnabled {
 			groupsUpdated, groupChangesAffectPeers, err = propagateUserGroupMemberships(ctx, transaction, accountID)
 			if err != nil {
@@ -445,6 +455,7 @@ func (am *DefaultAccountManager) UpdateAccountSettings(ctx context.Context, acco
 	am.handleRoutingPeerDNSResolutionSettings(ctx, oldSettings, newSettings, userID, accountID)
 	am.handleLazyConnectionSettings(ctx, oldSettings, newSettings, userID, accountID)
 	am.handleAdmissionSettings(ctx, oldSettings, newSettings, userID, accountID)
+	am.handleClientUpdateSettings(ctx, oldSettings, newSettings, userID, accountID)
 	am.handlePeerLoginExpirationSettings(ctx, oldSettings, newSettings, userID, accountID)
 	am.handleGroupsPropagationSettings(ctx, oldSettings, newSettings, userID, accountID)
 	if err = am.handleInactivityExpirationSettings(ctx, oldSettings, newSettings, userID, accountID); err != nil {
@@ -531,6 +542,51 @@ func (am *DefaultAccountManager) handleAdmissionSettings(ctx context.Context, ol
 			"exempt_group_ids": newSettings.AdmissionExemptGroups,
 		})
 	}
+}
+
+// handleClientUpdateSettings audits any change to the desktop client
+// self-update directive (openZro #5 Q2). Directing remote code at a
+// fleet subset is a security-relevant operator action: a single event
+// records who set which target/force and how the subset was scoped,
+// so "who pushed version X to whom" is answerable from the audit log.
+// clientUpdateSettingsChanged reports whether ANY field of the client
+// self-update directive (target/force/targeting) differs between two
+// settings snapshots. Drives BOTH the audit event AND the connected-
+// peer fanout (review-Q2 #1): the server is the authoritative source
+// of the CURRENT per-peer decision, so a directive change — including
+// a clear or an exclude — must reach already-connected peers now, not
+// only at their next reconnect.
+func clientUpdateSettingsChanged(oldSettings, newSettings *types.Settings) bool {
+	return oldSettings.ClientUpdateTargetVersion != newSettings.ClientUpdateTargetVersion ||
+		oldSettings.ClientUpdateForce != newSettings.ClientUpdateForce ||
+		!stringSlicesEqual(oldSettings.ClientUpdateTargetGroups, newSettings.ClientUpdateTargetGroups) ||
+		!stringSlicesEqual(oldSettings.ClientUpdateTargetPeers, newSettings.ClientUpdateTargetPeers) ||
+		!stringSlicesEqual(oldSettings.ClientUpdateExcludeGroups, newSettings.ClientUpdateExcludeGroups) ||
+		!intPtrEqual(oldSettings.ClientUpdateRolloutPercent, newSettings.ClientUpdateRolloutPercent)
+}
+
+func (am *DefaultAccountManager) handleClientUpdateSettings(ctx context.Context, oldSettings, newSettings *types.Settings, userID, accountID string) {
+	if !clientUpdateSettingsChanged(oldSettings, newSettings) {
+		return
+	}
+	meta := map[string]any{
+		"target_version": newSettings.ClientUpdateTargetVersion,
+		"force":          newSettings.ClientUpdateForce,
+		"target_groups":  newSettings.ClientUpdateTargetGroups,
+		"target_peers":   newSettings.ClientUpdateTargetPeers,
+		"exclude_groups": newSettings.ClientUpdateExcludeGroups,
+	}
+	if newSettings.ClientUpdateRolloutPercent != nil {
+		meta["rollout_percent"] = *newSettings.ClientUpdateRolloutPercent
+	}
+	am.StoreEvent(ctx, userID, accountID, accountID, activity.ClientUpdateDirectiveUpdated, meta)
+}
+
+func intPtrEqual(a, b *int) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }
 
 func stringSlicesEqual(a, b []string) bool {

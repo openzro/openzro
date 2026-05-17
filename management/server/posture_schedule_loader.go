@@ -46,37 +46,40 @@ func (l *scheduleLoader) LoadActiveSchedules(ctx context.Context, accountID stri
 
 // AccountsWithActiveSchedules returns the IDs of every account that
 // currently owns at least one posture-check record containing a
-// ScheduleCheck. Filtering happens in Go rather than via a SQL
-// `WHERE checks LIKE '%ScheduleCheck%'` because the checks column is
-// GORM-JSON-serialised — substring matching is brittle, and per-row
-// inspection is cheap at expected fleet sizes (typically < 1k
-// posture-check records cluster-wide).
+// ScheduleCheck.
+//
+// One query (GetAllPostureChecks) instead of the previous N+1
+// (GetAllAccounts followed by a GetAccountPostureChecks per account).
+// At thousands of accounts the old shape meant thousands of
+// sequential round-trips on every scheduler discovery pass; this is
+// a single round-trip plus an in-Go filter.
+//
+// Filtering stays in Go rather than a SQL `WHERE checks LIKE
+// '%ScheduleCheck%'` because the checks column is GORM-JSON-
+// serialised — substring matching is brittle and not portable across
+// the SQLite/Postgres/MySQL dialects the store supports. The
+// cluster-wide posture-check row count is small, so deserialise +
+// scan in memory is the right trade.
 func (l *scheduleLoader) AccountsWithActiveSchedules(ctx context.Context) ([]string, error) {
-	accounts := l.store.GetAllAccounts(ctx)
+	checks, err := l.store.GetAllPostureChecks(ctx, store.LockingStrengthShare)
+	if err != nil {
+		return nil, err
+	}
+
 	out := make([]string, 0)
-	seen := make(map[string]struct{}, len(accounts))
-	for _, acc := range accounts {
-		if acc == nil {
+	seen := make(map[string]struct{})
+	for _, c := range checks {
+		if c == nil || c.Checks.ScheduleCheck == nil {
 			continue
 		}
-		checks, err := l.store.GetAccountPostureChecks(ctx, store.LockingStrengthShare, acc.Id)
-		if err != nil {
-			// A single account's load failure shouldn't poison the
-			// whole startup — log at the call site (cmd/management),
-			// keep going.
+		if c.AccountID == "" {
 			continue
 		}
-		for _, c := range checks {
-			if c == nil || c.Checks.ScheduleCheck == nil {
-				continue
-			}
-			if _, dup := seen[acc.Id]; dup {
-				break
-			}
-			seen[acc.Id] = struct{}{}
-			out = append(out, acc.Id)
-			break
+		if _, dup := seen[c.AccountID]; dup {
+			continue
 		}
+		seen[c.AccountID] = struct{}{}
+		out = append(out, c.AccountID)
 	}
 	return out, nil
 }

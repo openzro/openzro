@@ -358,6 +358,24 @@ type AccountSettings struct {
 	// AdmissionPostureChecks Posture check IDs evaluated as the admission gate when admission_enforcement_enabled is true. ALL listed checks must pass for the peer to be admitted.
 	AdmissionPostureChecks *[]string `json:"admission_posture_checks,omitempty"`
 
+	// ClientUpdateExcludeGroups Subset targeting (openZro #5 Q2): member peers NEVER receive the directive, even if listed in client_update_target_peers. Motivating case mirrors admission_exempt_groups — routing/gateway/server peers that must never silently self-update.
+	ClientUpdateExcludeGroups *[]string `json:"client_update_exclude_groups,omitempty"`
+
+	// ClientUpdateForce When true the targeted clients install the update silently in the background; when false the update is offered for a manual install.
+	ClientUpdateForce *bool `json:"client_update_force,omitempty"`
+
+	// ClientUpdateRolloutPercent Subset targeting (openZro #5 Q2): server-side staged rollout ring, 0..100. Omitted means no ring (everyone in scope); an explicit 0 means nobody (fail-closed). Bucketing is a stable, cluster-deterministic hash of the peer key.
+	ClientUpdateRolloutPercent *int `json:"client_update_rollout_percent,omitempty"`
+
+	// ClientUpdateTargetGroups Subset targeting (openZro #5 Q2): member peers of ANY of these groups are in scope for the update directive, subject to the rollout ring. Empty means no group constraint.
+	ClientUpdateTargetGroups *[]string `json:"client_update_target_groups,omitempty"`
+
+	// ClientUpdateTargetPeers Subset targeting (openZro #5 Q2): explicit peer IDs always in scope (canary / break-glass). These pierce the rollout ring but NOT client_update_exclude_groups.
+	ClientUpdateTargetPeers *[]string `json:"client_update_target_peers,omitempty"`
+
+	// ClientUpdateTargetVersion Desktop client release the operator wants the targeted fleet on (openZro
+	ClientUpdateTargetVersion *string `json:"client_update_target_version,omitempty"`
+
 	// DnsDomain Allows to define a custom dns domain for the account
 	DnsDomain *string               `json:"dns_domain,omitempty"`
 	Extra     *AccountExtraSettings `json:"extra,omitempty"`

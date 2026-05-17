@@ -7,12 +7,6 @@ import { cn } from "@utils/helpers";
 import { X } from "lucide-react";
 import * as React from "react";
 
-// Legacy header height — used to compute the scroll-region height for
-// long-content modals. The legacy Header is gone but the modal still
-// reserves the same chunk of viewport at the top to keep the visual
-// rhythm consistent on screens where the v2 topbar lives.
-const headerHeight = 75;
-
 const Modal = DialogPrimitive.Root;
 
 const ModalTrigger = (props: DialogTriggerProps) => {
@@ -133,47 +127,54 @@ const SidebarModalContent = React.forwardRef<
     ref,
   ) => {
     return (
+      // Mirror the exact Portal > Overlay > Content nesting the
+      // centred ModalContent uses — that nesting is what keeps a
+      // Radix Select/Popover inside the dialog interactive. The
+      // overlay overrides neutralise its centred-modal grid
+      // (top placement + md:py-16) so the sheet can sit flush to
+      // the right edge at full viewport height.
       <ModalPortal>
-        <div
-          className={cn(
-            "fixed top-0 left-0 bottom-0 right-0 grid z-50  data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-          )}
-        >
+        <ModalOverlay className="justify-items-end overflow-hidden p-0 md:p-0">
           <DialogPrimitive.Content
             ref={ref}
             className={cn(
-              "ml-auto mt-auto relative bottom-0 z-[52] grid w-full py-6 duration-200",
-              "border border-oz2-border bg-oz2-surface shadow-oz2-md",
-              "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:slide-out-to-left-1 data-[state=open]:slide-in-from-left-1 md:w-full",
-              "border-t-0 border-r-0 border-b-0",
+              // Right-edge drawer. The height MUST be deterministic
+              // (h-[100dvh], not h-full): the overlay grid row is
+              // auto-sized, so a percentage height resolves against
+              // an indefinite parent and the flex body can't compute
+              // its scroll box — the form would grow past the
+              // viewport and shove the footer off-screen. A fixed
+              // 100dvh + overflow-hidden gives the flex column a real
+              // height so flex-1 + min-h-0 on the body scrolls.
+              // py-6 matches the centred modal's vertical rhythm.
+              "relative z-[52] flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden py-6 focus:outline-0",
+              "border-l border-oz2-border bg-oz2-surface shadow-oz2-md duration-200",
+              "data-[state=open]:animate-in data-[state=closed]:animate-out",
+              "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+              "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
               className,
               maxWidthClass,
             )}
             {...props}
-            style={{
-              height: `calc(100vh - ${headerHeight + 100 - 2}px)`,
-            }}
             onClick={(e) => e.stopPropagation()}
           >
-            <>
-              <VisuallyHidden.Root>
-                <DialogPrimitive.Title>
-                  {accessibilityTitle}
-                </DialogPrimitive.Title>
-              </VisuallyHidden.Root>
-              {children}
-              {showClose && (
-                <DialogPrimitive.Close
-                  data-cy={"modal-close"}
-                  className="absolute right-4 z-10 top-4 rounded-sm opacity-70 ring-offset-white transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-neutral-950 focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-neutral-100 data-[state=open]:text-neutral-500 dark:ring-offset-neutral-950 dark:focus:ring-neutral-300 dark:data-[state=open]:bg-neutral-800 dark:data-[state=open]:text-neutral-400"
-                >
-                  <X className="h-4 w-4" />
-                  <span className="sr-only">Close</span>
-                </DialogPrimitive.Close>
-              )}
-            </>
+            <VisuallyHidden.Root>
+              <DialogPrimitive.Title>
+                {accessibilityTitle}
+              </DialogPrimitive.Title>
+            </VisuallyHidden.Root>
+            {children}
+            {showClose && (
+              <DialogPrimitive.Close
+                data-cy={"modal-close"}
+                className="absolute right-4 top-4 z-10 grid h-7 w-7 place-items-center rounded-[8px] text-oz2-text-faint transition-colors hover:bg-oz2-hover hover:text-oz2-text focus:outline-none focus-visible:ring-2 focus-visible:ring-oz2-acc/30 disabled:pointer-events-none"
+              >
+                <X className="h-4 w-4" />
+                <span className="sr-only">Close</span>
+              </DialogPrimitive.Close>
+            )}
           </DialogPrimitive.Content>
-        </div>
+        </ModalOverlay>
       </ModalPortal>
     );
   },

@@ -7,10 +7,29 @@ import (
 	"fmt"
 	"time"
 
+	goversion "github.com/hashicorp/go-version"
 	"gorm.io/gorm"
 
 	flowExports "github.com/openzro/openzro/management/server/flow_exports"
 )
+
+// validateSentinelOneCompliance rejects nonsensical operator input
+// at save time so a bad config can never reach the eval hot path
+// (where a misparse would fail-closed and silently block peers).
+func validateSentinelOneCompliance(c SentinelOneCompliance) error {
+	if c.MaxActiveThreats != nil && *c.MaxActiveThreats < 0 {
+		return errors.New("mdm: sentinelone max_active_threats must be >= 0")
+	}
+	if c.SyncWindowMinutes < 0 {
+		return errors.New("mdm: sentinelone sync_window_minutes must be >= 0")
+	}
+	if c.MinAgentVersion != "" {
+		if _, err := goversion.NewVersion(c.MinAgentVersion); err != nil {
+			return fmt.Errorf("mdm: sentinelone min_agent_version %q is not a valid version", c.MinAgentVersion)
+		}
+	}
+	return nil
+}
 
 // ErrNotFound is returned when no row matches the lookup. Callers
 // translate it to HTTP 404 at the API layer.
@@ -42,19 +61,42 @@ func NewStore(db *gorm.DB, key string) (*Store, error) {
 // SaveInput is the public-facing payload for Save/Update. Type
 // determines which of the per-vendor Config fields is consulted.
 type SaveInput struct {
-	ID          uint64
-	Name        string
-	Type        ProviderType
-	Enabled     bool
+	ID      uint64
+	Name    string
+	Type    ProviderType
+	Enabled bool
+
+	// RefreshIntervalMinutes is forwarded onto the row verbatim.
+	// 0 = "use default" — Save() rewrites it to
+	// defaultRefreshIntervalMinutes before insert so the column
+	// never holds zero in steady state. Bounded 1-60 by Validate.
+	RefreshIntervalMinutes uint16
+
 	Intune      *IntuneConfig
 	SentinelOne *SentinelOneConfig
 	Huntress    *HuntressConfig
 	CrowdStrike *CrowdStrikeConfig
 }
 
+// Bounds for SaveInput.RefreshIntervalMinutes. Validate enforces
+// these; the dashboard form mirrors them as input min/max.
+const (
+	minRefreshIntervalMinutes = 1
+	maxRefreshIntervalMinutes = 60
+)
+
 func (in *SaveInput) Validate() error {
 	if in.Name == "" {
 		return errors.New("mdm: name is required")
+	}
+	if in.RefreshIntervalMinutes != 0 &&
+		(in.RefreshIntervalMinutes < minRefreshIntervalMinutes ||
+			in.RefreshIntervalMinutes > maxRefreshIntervalMinutes) {
+		return fmt.Errorf(
+			"mdm: refresh_interval_minutes must be between %d and %d (got %d)",
+			minRefreshIntervalMinutes, maxRefreshIntervalMinutes,
+			in.RefreshIntervalMinutes,
+		)
 	}
 	switch in.Type {
 	case TypeIntune:
@@ -67,6 +109,9 @@ func (in *SaveInput) Validate() error {
 	case TypeSentinelOne:
 		if in.SentinelOne == nil || in.SentinelOne.ManagementURL == "" {
 			return errors.New("mdm: sentinelone management_url is required")
+		}
+		if err := validateSentinelOneCompliance(in.SentinelOne.Compliance); err != nil {
+			return err
 		}
 	case TypeHuntress:
 		if in.Huntress == nil {
@@ -202,14 +247,24 @@ func (s *Store) Save(ctx context.Context, in SaveInput) (*MDMProvider, error) {
 	if err != nil {
 		return nil, err
 	}
+	refreshMinutes := in.RefreshIntervalMinutes
+	if refreshMinutes == 0 {
+		// Collapse 0 (operator didn't fill the form, or upgrader hasn't
+		// re-saved a pre-knob row) to the default so the column is
+		// never persisted as zero. The resolver in
+		// MDMProvider.ResolvedRefreshInterval also tolerates zero, but
+		// keeping the DB clean makes the form roundtrip readable.
+		refreshMinutes = defaultRefreshIntervalMinutes
+	}
 	row := MDMProvider{
-		ID:           in.ID,
-		Name:         in.Name,
-		Type:         in.Type,
-		Enabled:      in.Enabled,
-		PublicConfig: publicBlob,
-		ConfigCipher: cipherBytes,
-		UpdatedAt:    time.Now().UTC(),
+		ID:                     in.ID,
+		Name:                   in.Name,
+		Type:                   in.Type,
+		Enabled:                in.Enabled,
+		RefreshIntervalMinutes: refreshMinutes,
+		PublicConfig:           publicBlob,
+		ConfigCipher:           cipherBytes,
+		UpdatedAt:              time.Now().UTC(),
 	}
 	if in.ID == 0 {
 		row.CreatedAt = row.UpdatedAt

@@ -65,10 +65,20 @@ type PostureEvaluation struct {
 	// logs say the same thing.
 	Reason string `gorm:"type:text"`
 
-	// EvaluatedAt is the eval clock in UTC. Indexed DESC alongside
-	// the (account_id, peer_id) prefix so "last N evaluations for
-	// this peer" is a single index range scan.
-	EvaluatedAt time.Time `gorm:"index:idx_posture_eval_account_peer_time,priority:3,sort:desc;not null"`
+	// EvaluatedAt is the eval clock in UTC. Two indexes touch this
+	// column:
+	//
+	//   * idx_posture_eval_account_peer_time — compound with
+	//     (account_id, peer_id) so the dashboard's per-peer
+	//     timeline query is a single range scan.
+	//   * idx_posture_eval_evaluated_at — single-column, used by
+	//     the retention worker's `DELETE WHERE evaluated_at < ?`.
+	//     Without this index the DELETE falls back to a table
+	//     scan, which is fine at hundreds of rows but devastating
+	//     at the multi-million-row volume a busy cluster produces
+	//     between purges. Both indexes pay the same write
+	//     amplification cost on insert; cheap insurance.
+	EvaluatedAt time.Time `gorm:"index:idx_posture_eval_account_peer_time,priority:3,sort:desc;index:idx_posture_eval_evaluated_at;not null"`
 }
 
 // TableName pins the GORM table name so the auto-migration emits the

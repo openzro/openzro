@@ -93,3 +93,55 @@ func TestCachedProvider_DoesNotCacheErrors(t *testing.T) {
 	assert.Equal(t, 2, inner.calls,
 		"errors must NOT be cached — vendor outage shouldn't pin a fail state for the whole TTL")
 }
+
+func TestManager_SubscriptionSurvivesRequestCtxCancellation(t *testing.T) {
+	// Regression: Manager.Refresh used to derive subscriber ctx from
+	// the caller's request ctx, so every admin save killed the
+	// cross-replica subscription the instant the HTTP handler
+	// returned. Manager must bind subscriptions to its own
+	// process-lifetime baseCtx instead.
+	store := newTestStore(t)
+	row, err := store.Save(context.Background(), SaveInput{
+		Name: "p1", Type: TypeIntune, Enabled: true,
+		Intune: &IntuneConfig{TenantID: "t", ClientID: "c", ClientSecret: "s"},
+	})
+	require.NoError(t, err)
+
+	coord := newFakeBrokerCoord()
+
+	// Build the Manager with a SHORT-LIVED ctx — the HTTP handler
+	// would normally pass r.Context() which dies on response.
+	bootCtx, cancelBoot := context.WithCancel(context.Background())
+	m, err := NewManager(bootCtx, store, coord)
+	require.NoError(t, err)
+	defer m.Close()
+
+	// Simulate the request returning by cancelling that ctx.
+	cancelBoot()
+
+	// Now publish to the provider's topic. If the subscription is
+	// still alive (bound to baseCtx, not the cancelled bootCtx), the
+	// CachedProvider's cache fills.
+	m.mu.RLock()
+	cached := m.providers[row.ID]
+	m.mu.RUnlock()
+	require.NotNil(t, cached, "provider must be present in Manager after Refresh")
+
+	publishStatus(context.Background(), coord, row.ID,
+		DeviceLookup{Hostname: "alice"},
+		DeviceStatus{Found: true, Compliant: true, Reason: "from-peer"},
+	)
+
+	deadline := time.After(1 * time.Second)
+	for {
+		if _, ok := cached.cache.get(encodeCacheKey(DeviceLookup{Hostname: "alice"})); ok {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatal("subscription died with the request ctx — cache never filled from broker")
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+}

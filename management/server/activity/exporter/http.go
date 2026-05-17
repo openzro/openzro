@@ -12,6 +12,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/openzro/openzro/management/server/activity"
+	"github.com/openzro/openzro/safedial"
 )
 
 // HTTPWebhookConfig configures an HTTPWebhook exporter.
@@ -72,7 +73,7 @@ func NewHTTPWebhook(cfg HTTPWebhookConfig) (*HTTPWebhook, error) {
 	}
 	client := cfg.HTTPClient
 	if client == nil {
-		client = &http.Client{Timeout: timeout}
+		client = safedial.Client(timeout)
 	}
 	return &HTTPWebhook{
 		url:            cfg.URL,

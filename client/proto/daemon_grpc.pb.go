@@ -61,6 +61,13 @@ type DaemonServiceClient interface {
 	RemoveProfile(ctx context.Context, in *RemoveProfileRequest, opts ...grpc.CallOption) (*RemoveProfileResponse, error)
 	ListProfiles(ctx context.Context, in *ListProfilesRequest, opts ...grpc.CallOption) (*ListProfilesResponse, error)
 	GetActiveProfile(ctx context.Context, in *GetActiveProfileRequest, opts ...grpc.CallOption) (*GetActiveProfileResponse, error)
+	// Update runs one rollout-gated client self-update cycle in the
+	// privileged daemon for the CURRENT management directive (openZro
+	// #5, management-driven). The UI calls this for the manual "Install
+	// now" action (an explicit opt-in). There is no client-side
+	// auto/pin config; the operator drives the fleet from Management
+	// and a force=true directive is what installs silently.
+	Update(ctx context.Context, in *UpdateRequest, opts ...grpc.CallOption) (*UpdateResponse, error)
 }
 
 type daemonServiceClient struct {
@@ -328,6 +335,15 @@ func (c *daemonServiceClient) GetActiveProfile(ctx context.Context, in *GetActiv
 	return out, nil
 }
 
+func (c *daemonServiceClient) Update(ctx context.Context, in *UpdateRequest, opts ...grpc.CallOption) (*UpdateResponse, error) {
+	out := new(UpdateResponse)
+	err := c.cc.Invoke(ctx, "/daemon.DaemonService/Update", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DaemonServiceServer is the server API for DaemonService service.
 // All implementations must embed UnimplementedDaemonServiceServer
 // for forward compatibility
@@ -375,6 +391,13 @@ type DaemonServiceServer interface {
 	RemoveProfile(context.Context, *RemoveProfileRequest) (*RemoveProfileResponse, error)
 	ListProfiles(context.Context, *ListProfilesRequest) (*ListProfilesResponse, error)
 	GetActiveProfile(context.Context, *GetActiveProfileRequest) (*GetActiveProfileResponse, error)
+	// Update runs one rollout-gated client self-update cycle in the
+	// privileged daemon for the CURRENT management directive (openZro
+	// #5, management-driven). The UI calls this for the manual "Install
+	// now" action (an explicit opt-in). There is no client-side
+	// auto/pin config; the operator drives the fleet from Management
+	// and a force=true directive is what installs silently.
+	Update(context.Context, *UpdateRequest) (*UpdateResponse, error)
 	mustEmbedUnimplementedDaemonServiceServer()
 }
 
@@ -459,6 +482,9 @@ func (UnimplementedDaemonServiceServer) ListProfiles(context.Context, *ListProfi
 }
 func (UnimplementedDaemonServiceServer) GetActiveProfile(context.Context, *GetActiveProfileRequest) (*GetActiveProfileResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetActiveProfile not implemented")
+}
+func (UnimplementedDaemonServiceServer) Update(context.Context, *UpdateRequest) (*UpdateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Update not implemented")
 }
 func (UnimplementedDaemonServiceServer) mustEmbedUnimplementedDaemonServiceServer() {}
 
@@ -944,6 +970,24 @@ func _DaemonService_GetActiveProfile_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DaemonService_Update_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).Update(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/daemon.DaemonService/Update",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).Update(ctx, req.(*UpdateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DaemonService_ServiceDesc is the grpc.ServiceDesc for DaemonService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1050,6 +1094,10 @@ var DaemonService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetActiveProfile",
 			Handler:    _DaemonService_GetActiveProfile_Handler,
+		},
+		{
+			MethodName: "Update",
+			Handler:    _DaemonService_Update_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

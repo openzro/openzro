@@ -160,6 +160,38 @@ components:
           items:
             type: string
             example: "group-id"
+        client_update_target_version:
+          description: Desktop client release the operator wants the targeted fleet on (openZro #5). Empty means no directive (clients do nothing). The decision is conveyed over Sync; the client downloads and verifies the signed package itself.
+          type: string
+          example: "0.40.0"
+        client_update_force:
+          description: When true the targeted clients install the update silently in the background; when false the update is offered for a manual install.
+          type: boolean
+          example: false
+        client_update_target_groups:
+          description: "Subset targeting (openZro #5 Q2): member peers of ANY of these groups are in scope for the update directive, subject to the rollout ring. Empty means no group constraint."
+          type: array
+          items:
+            type: string
+            example: "group-id"
+        client_update_target_peers:
+          description: "Subset targeting (openZro #5 Q2): explicit peer IDs always in scope (canary / break-glass). These pierce the rollout ring but NOT client_update_exclude_groups."
+          type: array
+          items:
+            type: string
+            example: "peer-id"
+        client_update_exclude_groups:
+          description: "Subset targeting (openZro #5 Q2): member peers NEVER receive the directive, even if listed in client_update_target_peers. Motivating case mirrors admission_exempt_groups — routing/gateway/server peers that must never silently self-update."
+          type: array
+          items:
+            type: string
+            example: "group-id"
+        client_update_rollout_percent:
+          description: "Subset targeting (openZro #5 Q2): server-side staged rollout ring, 0..100. Omitted means no ring (everyone in scope); an explicit 0 means nobody (fail-closed). Bucketing is a stable, cluster-deterministic hash of the peer key."
+          type: integer
+          minimum: 0
+          maximum: 100
+          example: 25
       required:
         - peer_login_expiration_enabled
         - peer_login_expiration

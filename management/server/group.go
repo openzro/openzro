@@ -225,6 +225,7 @@ func (am *DefaultAccountManager) DeleteGroups(ctx context.Context, accountID, us
 	var allErrors error
 	var groupIDsToDelete []string
 	var deletedGroups []*types.Group
+	var updateAccountPeers bool
 
 	err = am.Store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
 		for _, groupID := range groupIDs {
@@ -243,6 +244,19 @@ func (am *DefaultAccountManager) DeleteGroups(ctx context.Context, accountID, us
 			deletedGroups = append(deletedGroups, group)
 		}
 
+		// review-Q2 #2 (remaining): unlike GroupAddPeer/GroupDeletePeer,
+		// DeleteGroups did NOT pass through areGroupChangesAffectPeers,
+		// so deleting a group referenced ONLY by client-update targeting
+		// left connected peers on a stale/over-broad directive until
+		// reconnect. Deleting a target group should revoke the directive
+		// for its members; deleting an exclude group changes the
+		// effective subset — both must fan out now. Evaluated while the
+		// groups still exist (their references are what matter).
+		updateAccountPeers, err = areGroupChangesAffectPeers(ctx, transaction, accountID, groupIDsToDelete)
+		if err != nil {
+			return err
+		}
+
 		if err = transaction.IncrementNetworkSerial(ctx, store.LockingStrengthUpdate, accountID); err != nil {
 			return err
 		}
@@ -255,6 +269,10 @@ func (am *DefaultAccountManager) DeleteGroups(ctx context.Context, accountID, us
 
 	for _, group := range deletedGroups {
 		am.StoreEvent(ctx, userID, group.ID, accountID, activity.GroupDeleted, group.EventMeta())
+	}
+
+	if updateAccountPeers {
+		am.UpdateAccountPeers(ctx, accountID)
 	}
 
 	return allErrors
@@ -632,6 +650,26 @@ func isGroupLinkedToNetworkRouter(ctx context.Context, transaction store.Store, 
 	return false, nil
 }
 
+// isGroupLinkedToClientUpdate reports whether a group participates in
+// the client self-update directive's server-side targeting (openZro
+// #5 Q2). Gated on an ACTIVE directive: with no target version
+// buildUpdateConfig returns nil for every peer regardless of
+// membership, so a group change cannot alter any delivered directive
+// and need not wake peers (keeps the unused-feature path cheap,
+// matching clientUpdateNeedsGroups). Pure — settings is already in
+// scope at the call site. NOTE: this drives the peer FANOUT only; it
+// is deliberately NOT added to the delete-prevention linked-setting
+// chain (a group referenced only by client-update can still be
+// deleted), consistent with admission_exempt_groups and the
+// owner-accepted dangling-exclude follow-up.
+func isGroupLinkedToClientUpdate(settings *types.Settings, groupID string) bool {
+	if settings == nil || settings.ClientUpdateTargetVersion == "" {
+		return false
+	}
+	return slices.Contains(settings.ClientUpdateTargetGroups, groupID) ||
+		slices.Contains(settings.ClientUpdateExcludeGroups, groupID)
+}
+
 // areGroupChangesAffectPeers checks if any changes to the specified groups will affect peers.
 func areGroupChangesAffectPeers(ctx context.Context, transaction store.Store, accountID string, groupIDs []string) (bool, error) {
 	if len(groupIDs) == 0 {
@@ -643,8 +681,22 @@ func areGroupChangesAffectPeers(ctx context.Context, transaction store.Store, ac
 		return false, err
 	}
 
+	// review-Q2 #2: a group referenced ONLY by the client-update
+	// directive must still wake peers when membership changes (join a
+	// target/exclude group, or the group is deleted). This chokepoint
+	// is shared by GroupAddPeer / GroupDeletePeer / DeleteGroups, so
+	// fixing it here covers all of them and the indirect membership
+	// paths (user-group propagation) that reuse this helper.
+	settings, err := transaction.GetAccountSettings(ctx, store.LockingStrengthShare, accountID)
+	if err != nil {
+		return false, err
+	}
+
 	for _, groupID := range groupIDs {
 		if slices.Contains(dnsSettings.DisabledManagementGroups, groupID) {
+			return true, nil
+		}
+		if isGroupLinkedToClientUpdate(settings, groupID) {
 			return true, nil
 		}
 		if linked, _ := isGroupLinkedToDns(ctx, transaction, accountID, groupID); linked {

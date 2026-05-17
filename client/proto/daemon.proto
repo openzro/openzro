@@ -79,6 +79,14 @@ service DaemonService {
   rpc ListProfiles(ListProfilesRequest) returns (ListProfilesResponse) {}
 
   rpc GetActiveProfile(GetActiveProfileRequest) returns (GetActiveProfileResponse) {}
+
+  // Update runs one rollout-gated client self-update cycle in the
+  // privileged daemon for the CURRENT management directive (openZro
+  // #5, management-driven). The UI calls this for the manual "Install
+  // now" action (an explicit opt-in). There is no client-side
+  // auto/pin config; the operator drives the fleet from Management
+  // and a force=true directive is what installs silently.
+  rpc Update(UpdateRequest) returns (UpdateResponse) {}
 }
 
 
@@ -187,6 +195,25 @@ message StatusResponse{
   FullStatus fullStatus = 2;
   // Openzro daemon version
   string daemonVersion = 3;
+  // updateState is the management-driven client self-update decision
+  // surfaced to the UI (openZro #5). The daemon is the single source
+  // of truth — the UI no longer polls GitHub for availability.
+  UpdateState updateState = 4;
+}
+
+// UpdateState is the daemon's view of the management-conveyed client
+// self-update directive (openZro #5). Empty when the operator set no
+// target, or when the daemon has not yet re-received a Sync directive
+// after a restart (state is keyed off the live Sync stream, never
+// persisted — this is the Codex post-restart-staleness fix). available
+// is the daemon's verdict that an install is currently warranted; R3a
+// fills target/force, R3c refines available with the full
+// rollout-gated preflight.
+message UpdateState {
+  string targetVersion = 1;
+  bool force = 2;
+  bool available = 3;
+  string lastDecision = 4;
 }
 
 message DownRequest {}
@@ -614,4 +641,22 @@ message GetActiveProfileRequest {}
 message GetActiveProfileResponse {
   string profileName = 1;
   string username = 2;
+}
+
+// UpdateRequest is intentionally empty: the daemon decides everything
+// from its own config/version/identity and the static manifest. The
+// management never supplies the update (see #5).
+message UpdateRequest {}
+
+message UpdateResponse {
+  // installed: a newer release was downloaded, verified and applied.
+  bool installed = 1;
+  // skipped: not eligible (already current, opt-out, pinned, not in
+  // staged rollout, …) — reason carries the detail. Not an error;
+  // genuine failures come back as a gRPC status error instead.
+  bool skipped = 2;
+  string version = 3;
+  string reason = 4;
+  // critical: the client was below the manifest min_version floor.
+  bool critical = 5;
 }

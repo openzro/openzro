@@ -199,6 +199,23 @@ message OpenzroConfig {
   RelayConfig relay = 4;
 
   FlowConfig flow = 5;
+
+  // operator-set desktop client self-update directive (openZro #5,
+  // management-driven model). Conveyed to every peer over the existing
+  // Sync stream; the peer obeys, then runs its own
+  // download+verify+install pipeline (management never supplies the
+  // binary). Clean-room: modelled from public NetBird behaviour
+  // (v0.61 client auto-update), no upstream AGPL management consulted.
+  UpdateConfig update = 6;
+}
+
+// UpdateConfig is the per-account client-update directive an operator
+// sets in the dashboard. Empty target_version => no directive. force
+// => install silently in the background; otherwise the client
+// surfaces a prompt.
+message UpdateConfig {
+  string target_version = 1;
+  bool force = 2;
 }
 
 // HostConfig describes connection properties of some server (e.g. STUN, Signal, Management)

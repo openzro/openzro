@@ -194,6 +194,20 @@ type Engine struct {
 	latestNetworkMap  *mgmProto.NetworkMap
 	connSemaphore     *semaphoregroup.SemaphoreGroup
 	flowManager       nftypes.FlowManager
+
+	// onUpdateDirective is the management-driven client self-update
+	// seam (openZro #5). The Management Service conveys the operator's
+	// fleet decision (target version + force/silent) on the existing
+	// Sync stream; handleSync forwards it here. The callback MUST be
+	// cheap and non-blocking — it is invoked while syncMsgMux is held
+	// (the actual preflight/install run on the daemon's own
+	// goroutines). nil for embedders/tests that do not wire it.
+	// lastUpdate* dedupe by (target,force) so an unchanged directive
+	// riding every Sync does not re-fire the handler or spam logs.
+	onUpdateDirective   func(targetVersion string, force bool)
+	lastUpdateTarget    string
+	lastUpdateForce     bool
+	updateDirectiveSeen bool
 }
 
 // Peer is an instance of the Connection Peer
@@ -685,6 +699,8 @@ func (e *Engine) handleSync(update *mgmProto.SyncResponse) error {
 			return fmt.Errorf("handle the flow configuration: %w", err)
 		}
 
+		e.handleUpdateDirective(wCfg.GetUpdate())
+
 		// todo update signal
 	}
 
@@ -746,6 +762,30 @@ func (e *Engine) handleFlowUpdate(config *mgmProto.FlowConfig) error {
 		return err
 	}
 	return e.flowManager.Update(flowConfig)
+}
+
+// handleUpdateDirective forwards the management-driven client
+// self-update decision (openZro #5) to the registered handler,
+// deduped by (target,force) so an unchanged directive riding every
+// Sync is a no-op. A nil cfg (Management sent no UpdateConfig) is
+// normalised to the empty directive — that itself is a state the
+// handler must see exactly once (operator cleared the target). Called
+// with syncMsgMux held; the handler is contractually cheap.
+func (e *Engine) handleUpdateDirective(cfg *mgmProto.UpdateConfig) {
+	target := cfg.GetTargetVersion()
+	force := cfg.GetForce()
+
+	if e.updateDirectiveSeen && target == e.lastUpdateTarget && force == e.lastUpdateForce {
+		return
+	}
+	e.lastUpdateTarget = target
+	e.lastUpdateForce = force
+	e.updateDirectiveSeen = true
+
+	if e.onUpdateDirective == nil {
+		return
+	}
+	e.onUpdateDirective(target, force)
 }
 
 func toFlowLoggerConfig(config *mgmProto.FlowConfig) (*nftypes.FlowConfig, error) {
@@ -1797,6 +1837,21 @@ func (e *Engine) SetNetworkMapPersistence(enabled bool) {
 	if !enabled {
 		e.latestNetworkMap = nil
 	}
+}
+
+// SetUpdateDirectiveHandler registers (or clears, with nil) the
+// management-driven client self-update callback (openZro #5). Locks
+// syncMsgMux exactly like SetNetworkMapPersistence so it cannot race
+// handleSync. Resetting the dedupe state means the next Sync re-fires
+// the current directive into a freshly-registered handler — required
+// after a reconnect so the daemon is not left blind to a directive
+// that was conveyed before its handler was wired.
+func (e *Engine) SetUpdateDirectiveHandler(h func(targetVersion string, force bool)) {
+	e.syncMsgMux.Lock()
+	defer e.syncMsgMux.Unlock()
+
+	e.onUpdateDirective = h
+	e.updateDirectiveSeen = false
 }
 
 // GetLatestNetworkMap returns the stored network map if persistence is enabled

@@ -9,6 +9,7 @@ import React, { useState } from "react";
 import { useSWRConfig } from "swr";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { Account } from "@/interfaces/Account";
+import ClientUpdateSettingsCard from "@/modules/settings/ClientUpdateSettingsCard";
 import OzSettingsCard from "@/modules/settings/v2/OzSettingsCard";
 import OzSettingsToggle from "@/modules/settings/v2/OzSettingsToggle";
 
@@ -65,6 +66,8 @@ export default function ClientSettingsTab({ account }: Readonly<Props>) {
           flow to the next time a client reconnects to management.
         </p>
       </header>
+
+      <ClientUpdateSettingsCard account={account} />
 
       <OzSettingsCard
         title={

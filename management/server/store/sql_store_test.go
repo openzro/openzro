@@ -1715,6 +1715,79 @@ func TestSqlStore_SavePostureChecks(t *testing.T) {
 	require.Equal(t, savePostureChecks, postureChecks)
 }
 
+func TestSqlStore_GetAllPostureChecks(t *testing.T) {
+	store, cleanup, err := NewTestStoreFromSQL(context.Background(), "../testdata/extended-store.sql", t.TempDir())
+	t.Cleanup(cleanup)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	accountA := "bf1c8084-ba50-4ce7-9439-34653001fc3b"
+	accountB := "edafee4e-63fb-11ec-90d6-0242ac120003"
+
+	// Snapshot whatever the fixture already carries so the assertions
+	// are robust to pre-seeded posture checks.
+	before, err := store.GetAllPostureChecks(ctx, LockingStrengthShare)
+	require.NoError(t, err)
+	beforeIDs := make(map[string]struct{}, len(before))
+	for _, c := range before {
+		beforeIDs[c.ID] = struct{}{}
+	}
+
+	seed := []*posture.Checks{
+		{
+			ID:        "pc-acctA-schedule",
+			AccountID: accountA,
+			Checks: posture.ChecksDefinition{
+				ScheduleCheck: &posture.ScheduleCheck{
+					Window:   posture.TimeWindow{StartTime: "09:00", EndTime: "18:00"},
+					Timezone: "America/New_York",
+				},
+			},
+		},
+		{
+			ID:        "pc-acctA-nbversion",
+			AccountID: accountA,
+			Checks: posture.ChecksDefinition{
+				NBVersionCheck: &posture.NBVersionCheck{MinVersion: "0.31.0"},
+			},
+		},
+		{
+			ID:        "pc-acctB-schedule",
+			AccountID: accountB,
+			Checks: posture.ChecksDefinition{
+				ScheduleCheck: &posture.ScheduleCheck{
+					Window:   posture.TimeWindow{StartTime: "00:00", EndTime: "08:00"},
+					Timezone: "Europe/Berlin",
+				},
+			},
+		},
+	}
+	for _, c := range seed {
+		require.NoError(t, store.SavePostureChecks(ctx, LockingStrengthUpdate, c))
+	}
+
+	all, err := store.GetAllPostureChecks(ctx, LockingStrengthShare)
+	require.NoError(t, err)
+
+	// Every seeded record must come back in the single cross-account
+	// query — including records from two different accounts.
+	got := make(map[string]*posture.Checks, len(all))
+	for _, c := range all {
+		got[c.ID] = c
+	}
+	for _, c := range seed {
+		require.Contains(t, got, c.ID, "GetAllPostureChecks dropped %s", c.ID)
+	}
+	assert.Equal(t, accountA, got["pc-acctA-schedule"].AccountID)
+	assert.Equal(t, accountB, got["pc-acctB-schedule"].AccountID)
+	assert.NotNil(t, got["pc-acctA-schedule"].Checks.ScheduleCheck)
+	assert.Nil(t, got["pc-acctA-nbversion"].Checks.ScheduleCheck)
+
+	// And the result is strictly additive over the fixture baseline —
+	// no rows were lost.
+	assert.GreaterOrEqual(t, len(all), len(beforeIDs)+len(seed))
+}
+
 func TestSqlStore_DeletePostureChecks(t *testing.T) {
 	store, cleanup, err := NewTestStoreFromSQL(context.Background(), "../testdata/extended-store.sql", t.TempDir())
 	t.Cleanup(cleanup)

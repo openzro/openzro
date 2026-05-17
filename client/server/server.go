@@ -69,6 +69,49 @@ type Server struct {
 	persistNetworkMap bool
 	isSessionActive   atomic.Bool
 
+	// updateDirective holds the latest management-conveyed client
+	// self-update decision (openZro #5). The engine dedupes by
+	// (target,force) and only calls onUpdateDirective on change, so
+	// this is the authoritative latest directive for the daemon. R3a
+	// records + logs it; preflight (R3c) and install (R3d) build on
+	// this. Own mutex — the Sync path must not contend on s.mutex
+	// (the config lock). updatePreflight is the async verdict for the
+	// recorded directive; it shares updateDirectiveMu because
+	// buildUpdateState reads both atomically.
+	updateDirectiveMu sync.Mutex
+	updateDirective   updateDirective
+	updatePreflight   updatePreflight
+
+	// preflight scheduler (#5 R3c + review-#2). One long-lived
+	// goroutine does the network IO off the Sync hot path. It
+	// re-checks the active directive on a steady interval and retries
+	// transient fetch failures with backoff, so a momentary outage
+	// (DNS not up at boot, a 5xx, infra blip during a rollout) is not
+	// a permanent "unavailable" until reconnect/restart. preflightKick
+	// wakes it immediately on a directive change.
+	preflightMu      sync.Mutex
+	preflightRunning bool // the scheduler goroutine is alive
+	preflightKick    chan struct{}
+
+	// auto-install state (#5 review-#1). A force=true directive whose
+	// preflight is positive is installed silently through the same
+	// rollout-gated secure pipeline as the manual RPC. One attempt
+	// per target (inFlight guards concurrency; target guards repeat —
+	// a success restarts the service, a failure waits for a new
+	// directive rather than hammering a root install). Own mutex so
+	// buildUpdateState can read it without contending the Sync path.
+	autoInstallMu sync.Mutex
+	autoInstall   autoInstallState
+
+	// installGate is the SHARED single-flight over the privileged
+	// install cycle (#5 review-4). Both entry points — the manual
+	// Update RPC and the forced auto-install — must pass it, so two
+	// `installer -pkg -target /` runs (possibly for different
+	// versions) can never overlap. Non-blocking: a loser gets a clear
+	// "already in progress" instead of queueing.
+	installGateMu sync.Mutex
+	installActive bool
+
 	profileManager   profilemanager.ServiceManager
 	profilesDisabled bool
 }
@@ -235,6 +278,7 @@ func (s *Server) connectWithRetryRuns(ctx context.Context, config *profilemanage
 		log.Tracef("running client connection")
 		s.connectClient = internal.NewConnectClient(ctx, config, statusRecorder)
 		s.connectClient.SetNetworkMapPersistence(s.persistNetworkMap)
+		s.connectClient.SetUpdateDirectiveHandler(s.onUpdateDirective)
 
 		err := s.connectClient.Run(runningChan)
 		if err != nil {
@@ -856,7 +900,11 @@ func (s *Server) Status(
 		s.isSessionActive.Store(false)
 	}
 
-	statusResponse := proto.StatusResponse{Status: string(status), DaemonVersion: version.OpenzroVersion()}
+	statusResponse := proto.StatusResponse{
+		Status:        string(status),
+		DaemonVersion: version.OpenzroVersion(),
+		UpdateState:   s.buildUpdateState(),
+	}
 
 	s.statusRecorder.UpdateManagementAddress(s.config.ManagementURL.String())
 	s.statusRecorder.UpdateRosenpass(s.config.RosenpassEnabled, s.config.RosenpassPermissive)

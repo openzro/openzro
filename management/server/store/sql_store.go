@@ -1938,6 +1938,27 @@ func (s *SqlStore) GetAccountPostureChecks(ctx context.Context, lockStrength Loc
 	return postureChecks, nil
 }
 
+// GetAllPostureChecks returns every posture-check record across all
+// accounts in one query. The posture scheduler's discovery path uses
+// this instead of looping GetAccountPostureChecks per account (N+1).
+// The result set is small cluster-wide; callers filter in Go for the
+// subset they care about (e.g. records carrying a ScheduleCheck).
+func (s *SqlStore) GetAllPostureChecks(ctx context.Context, lockStrength LockingStrength) ([]*posture.Checks, error) {
+	tx := s.db
+	if lockStrength != LockingStrengthNone {
+		tx = tx.Clauses(clause.Locking{Strength: string(lockStrength)})
+	}
+
+	var postureChecks []*posture.Checks
+	result := tx.Find(&postureChecks)
+	if result.Error != nil {
+		log.WithContext(ctx).Errorf("failed to get all posture checks from store: %s", result.Error)
+		return nil, status.Errorf(status.Internal, "failed to get all posture checks from store")
+	}
+
+	return postureChecks, nil
+}
+
 // GetPostureChecksByID retrieves posture checks by their ID and account ID.
 func (s *SqlStore) GetPostureChecksByID(ctx context.Context, lockStrength LockingStrength, accountID, postureChecksID string) (*posture.Checks, error) {
 	tx := s.db

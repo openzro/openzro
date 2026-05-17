@@ -1410,10 +1410,14 @@ func (am *DefaultAccountManager) UpdateAccountPeers(ctx context.Context, account
 			// is cheap, but skipping the loop entirely on the unscoped
 			// default keeps the hot broadcast path tight.
 			var peerGroupIDs []string
-			if extraSetting != nil && extraSetting.FlowEnabled && len(extraSetting.FlowEventsGroups) > 0 {
+			if (extraSetting != nil && extraSetting.FlowEnabled && len(extraSetting.FlowEventsGroups) > 0) ||
+				clientUpdateNeedsGroups(account.Settings) {
 				peerGroupIDs = account.GetPeerGroupsList(p.ID)
 			}
-			update := toSyncResponse(ctx, nil, p, nil, nil, remotePeerNetworkMap, dnsDomain, postureChecks, dnsCache, account.Settings, extraSetting, peerGroupIDs)
+			// peerGroupsKnown=true: GetPeerGroupsList reads the in-memory
+			// account snapshot — it is total and cannot fail, so absence
+			// means the peer is genuinely in no groups (#5 Q2).
+			update := toSyncResponse(ctx, nil, p, nil, nil, remotePeerNetworkMap, dnsDomain, postureChecks, dnsCache, account.Settings, extraSetting, peerGroupIDs, true)
 			am.metrics.UpdateChannelMetrics().CountToSyncResponseDuration(time.Since(start))
 
 			am.peersUpdateManager.SendUpdate(ctx, p.ID, &UpdateMessage{Update: update, NetworkMap: remotePeerNetworkMap})
@@ -1524,10 +1528,12 @@ func (am *DefaultAccountManager) UpdateAccountPeer(ctx context.Context, accountI
 	}
 
 	var peerGroupIDs []string
-	if extraSettings != nil && extraSettings.FlowEnabled && len(extraSettings.FlowEventsGroups) > 0 {
+	if (extraSettings != nil && extraSettings.FlowEnabled && len(extraSettings.FlowEventsGroups) > 0) ||
+		clientUpdateNeedsGroups(account.Settings) {
 		peerGroupIDs = account.GetPeerGroupsList(peer.ID)
 	}
-	update := toSyncResponse(ctx, nil, peer, nil, nil, remotePeerNetworkMap, dnsDomain, postureChecks, dnsCache, account.Settings, extraSettings, peerGroupIDs)
+	// peerGroupsKnown=true: in-memory snapshot is total (see above).
+	update := toSyncResponse(ctx, nil, peer, nil, nil, remotePeerNetworkMap, dnsDomain, postureChecks, dnsCache, account.Settings, extraSettings, peerGroupIDs, true)
 	am.peersUpdateManager.SendUpdate(ctx, peer.ID, &UpdateMessage{Update: update, NetworkMap: remotePeerNetworkMap})
 }
 

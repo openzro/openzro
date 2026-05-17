@@ -1,12 +1,12 @@
 "use client";
 
+import FancyToggleSwitch from "@components/FancyToggleSwitch";
 import {
   Modal,
   ModalClose,
-  ModalContent,
   ModalFooter,
+  SidebarModalContent,
 } from "@components/modal/Modal";
-import FancyToggleSwitch from "@components/FancyToggleSwitch";
 import ModalHeader from "@components/modal/ModalHeader";
 import { notify } from "@components/Notification";
 import { useApiCall } from "@utils/api";
@@ -44,6 +44,7 @@ export default function MDMProviderModal({
   const isEdit = !!existing;
   const [name, setName] = useState("");
   const [type, setType] = useState<MDMProviderType>("intune");
+  const [refreshInterval, setRefreshInterval] = useState<number>(5);
   const [saving, setSaving] = useState(false);
 
   // Intune fields
@@ -55,6 +56,15 @@ export default function MDMProviderModal({
   // SentinelOne fields
   const [s1URL, setS1URL] = useState("");
   const [s1Token, setS1Token] = useState("");
+  // SentinelOne compliance gates (all optional; empty/false = don't
+  // enforce — the always-on baseline still blocks
+  // decommissioned/infected/inactive server-side).
+  const [s1DiskEncryption, setS1DiskEncryption] = useState(false);
+  const [s1Firewall, setS1Firewall] = useState(false);
+  const [s1NetworkConnected, setS1NetworkConnected] = useState(false);
+  const [s1MinVersion, setS1MinVersion] = useState("");
+  const [s1MaxThreats, setS1MaxThreats] = useState(""); // "" = no threshold
+  const [s1SyncWindow, setS1SyncWindow] = useState(""); // minutes; "" = no recency req
 
   // Huntress fields
   const [huntressKey, setHuntressKey] = useState("");
@@ -76,6 +86,7 @@ export default function MDMProviderModal({
     if (existing) {
       setName(existing.name);
       setType(existing.type);
+      setRefreshInterval(existing.refresh_interval_minutes || 5);
       const cfg = existing.config as any;
       switch (existing.type) {
         case "intune":
@@ -84,10 +95,24 @@ export default function MDMProviderModal({
           setIntuneSecret("");
           setIntuneStrict(!!cfg?.strict_compliance);
           break;
-        case "sentinelone":
+        case "sentinelone": {
           setS1URL(cfg?.management_url ?? "");
           setS1Token("");
+          const sc = cfg?.compliance ?? {};
+          setS1DiskEncryption(!!sc.require_disk_encryption);
+          setS1Firewall(!!sc.require_firewall);
+          setS1NetworkConnected(!!sc.require_network_connected);
+          setS1MinVersion(sc.min_agent_version ?? "");
+          setS1MaxThreats(
+            sc.max_active_threats === undefined
+              ? ""
+              : String(sc.max_active_threats),
+          );
+          setS1SyncWindow(
+            sc.sync_window_minutes ? String(sc.sync_window_minutes) : "",
+          );
           break;
+        }
         case "huntress":
           setHuntressKey("");
           setHuntressSecret("");
@@ -101,12 +126,19 @@ export default function MDMProviderModal({
     } else {
       setName("");
       setType("intune");
+      setRefreshInterval(5);
       setIntuneTenant("");
       setIntuneClient("");
       setIntuneSecret("");
       setIntuneStrict(false);
       setS1URL("");
       setS1Token("");
+      setS1DiskEncryption(false);
+      setS1Firewall(false);
+      setS1NetworkConnected(false);
+      setS1MinVersion("");
+      setS1MaxThreats("");
+      setS1SyncWindow("");
       setHuntressKey("");
       setHuntressSecret("");
       setCSCloud("us-1");
@@ -116,7 +148,12 @@ export default function MDMProviderModal({
   }, [open, existing]);
 
   const buildInput = (): MDMProviderInput => {
-    const base: MDMProviderInput = { name, type, enabled: true };
+    const base: MDMProviderInput = {
+      name,
+      type,
+      enabled: true,
+      refresh_interval_minutes: refreshInterval,
+    };
     if (type === "intune") {
       base.intune = {
         tenant_id: intuneTenant,
@@ -125,9 +162,26 @@ export default function MDMProviderModal({
         strict_compliance: intuneStrict,
       };
     } else if (type === "sentinelone") {
+      // Only include keys the operator actually set so the wire
+      // payload stays a faithful "enforce exactly these" statement
+      // and the server's omitempty / zero-value defaults apply.
+      const compliance: NonNullable<
+        NonNullable<MDMProviderInput["sentinelone"]>["compliance"]
+      > = {};
+      if (s1DiskEncryption) compliance.require_disk_encryption = true;
+      if (s1Firewall) compliance.require_firewall = true;
+      if (s1NetworkConnected) compliance.require_network_connected = true;
+      if (s1MinVersion.trim())
+        compliance.min_agent_version = s1MinVersion.trim();
+      if (s1MaxThreats.trim() !== "")
+        compliance.max_active_threats = parseInt(s1MaxThreats, 10);
+      if (s1SyncWindow.trim() !== "")
+        compliance.sync_window_minutes = parseInt(s1SyncWindow, 10);
       base.sentinelone = {
         management_url: s1URL,
         api_token: s1Token || undefined,
+        compliance:
+          Object.keys(compliance).length > 0 ? compliance : undefined,
       };
     } else if (type === "huntress") {
       base.huntress = {
@@ -146,6 +200,13 @@ export default function MDMProviderModal({
 
   const validate = (): string | null => {
     if (!name.trim()) return "Name is required";
+    if (
+      !Number.isInteger(refreshInterval) ||
+      refreshInterval < 1 ||
+      refreshInterval > 60
+    ) {
+      return "Refresh interval must be a whole number between 1 and 60 minutes";
+    }
     if (type === "intune") {
       if (!intuneTenant || !intuneClient) {
         return "Intune tenant and client IDs are required";
@@ -154,6 +215,18 @@ export default function MDMProviderModal({
     } else if (type === "sentinelone") {
       if (!s1URL) return "Management URL is required";
       if (!isEdit && !s1Token) return "API token is required";
+      if (s1MaxThreats.trim() !== "") {
+        const n = Number(s1MaxThreats);
+        if (!Number.isInteger(n) || n < 0)
+          return "Max active threats must be a whole number ≥ 0";
+      }
+      if (s1SyncWindow.trim() !== "") {
+        const n = Number(s1SyncWindow);
+        if (!Number.isInteger(n) || n < 1)
+          return "Sync window must be a whole number of minutes ≥ 1";
+      }
+      if (s1MinVersion.trim() && !/^\d+(\.\d+){0,3}/.test(s1MinVersion.trim()))
+        return "Minimum agent version must look like 23.4 or 23.4.1.234";
     } else if (type === "huntress") {
       if (!isEdit && (!huntressKey || !huntressSecret)) {
         return "API key and secret are required";
@@ -193,19 +266,26 @@ export default function MDMProviderModal({
 
   return (
     <Modal open={open} onOpenChange={setOpen}>
-      <ModalContent maxWidthClass="max-w-2xl">
-        <ModalHeader
-          icon={<ShieldCheckIcon size={20} />}
-          title={isEdit ? "Edit MDM/EDR provider" : "Add MDM/EDR provider"}
-          description={
-            isEdit
-              ? "Update credentials. Leave secret fields blank to keep the current value."
-              : "Connect Microsoft Intune, SentinelOne, Huntress, or CrowdStrike Falcon to require devices in good security standing."
-          }
-          truncate
-        />
+      <SidebarModalContent maxWidthClass="max-w-xl">
+        {/* SidebarModalContent is itself a flex-col full-height
+            panel, so header/body/footer are direct children: header
+            and footer pin (shrink-0), only the body scrolls
+            (flex-1 + min-h-0) — a long provider form never pushes
+            the actions off-screen the way the centred modal did. */}
+        <div className="shrink-0">
+          <ModalHeader
+            icon={<ShieldCheckIcon size={20} />}
+            title={isEdit ? "Edit MDM/EDR provider" : "Add MDM/EDR provider"}
+            description={
+              isEdit
+                ? "Update credentials. Leave secret fields blank to keep the current value."
+                : "Connect Microsoft Intune, SentinelOne, Huntress, or CrowdStrike Falcon to require devices in good security standing."
+            }
+            truncate
+          />
+        </div>
 
-        <div className="px-8 pt-3 pb-6 grid gap-4">
+        <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-8 pt-3 pb-6">
           <div>
             <OzLabel htmlFor="mdm-name">Name</OzLabel>
             <OzInput
@@ -235,6 +315,29 @@ export default function MDMProviderModal({
                 </OzSelectItem>
               </OzSelectContent>
             </OzSelect>
+          </div>
+
+          <div>
+            <OzLabel htmlFor="mdm-refresh-interval">
+              Refresh interval (minutes)
+            </OzLabel>
+            <OzInput
+              id="mdm-refresh-interval"
+              type="number"
+              min={1}
+              max={60}
+              step={1}
+              value={refreshInterval}
+              onChange={(e) =>
+                setRefreshInterval(parseInt(e.target.value || "0", 10))
+              }
+            />
+            <p className="mt-1.5 text-[11.5px] leading-[1.5] text-oz2-text-muted">
+              How often openZro re-checks each device with the vendor and
+              refreshes its cached compliance status. Lower = fresher
+              posture, more API calls; higher = fewer calls, slightly
+              staler data. Default is 5 minutes; allowed range 1–60.
+            </p>
           </div>
 
           {type === "intune" && (
@@ -308,6 +411,77 @@ export default function MDMProviderModal({
                   value={s1Token}
                   onChange={(e) => setS1Token(e.target.value)}
                   placeholder={isEdit ? "(unchanged)" : ""}
+                />
+              </div>
+
+              <div className="mt-1 border-t border-oz2-border-soft pt-4">
+                <p className="text-[12px] leading-[1.5] text-oz2-text-muted">
+                  Compliance conditions. Decommissioned, infected, and
+                  inactive agents are always blocked. The conditions below
+                  are optional — enable only the ones you want enforced.
+                </p>
+              </div>
+              <FancyToggleSwitch
+                value={s1DiskEncryption}
+                onChange={setS1DiskEncryption}
+                label={"Require disk encryption"}
+                helpText={
+                  "Block devices whose SentinelOne agent does not report disk encryption enabled."
+                }
+              />
+              <FancyToggleSwitch
+                value={s1Firewall}
+                onChange={setS1Firewall}
+                label={"Require host firewall"}
+                helpText={
+                  "Block devices whose host firewall is not enabled per SentinelOne."
+                }
+              />
+              <FancyToggleSwitch
+                value={s1NetworkConnected}
+                onChange={setS1NetworkConnected}
+                label={"Require console connectivity"}
+                helpText={
+                  "Block agents not currently connected to the SentinelOne console — their posture data is stale even if the agent is locally active."
+                }
+              />
+              <div>
+                <OzLabel htmlFor="mdm-s1-maxthreats">
+                  Max active threats (optional)
+                </OzLabel>
+                <OzInput
+                  id="mdm-s1-maxthreats"
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={s1MaxThreats}
+                  onChange={(e) => setS1MaxThreats(e.target.value)}
+                  placeholder="e.g. 0 — leave blank to not enforce a threshold"
+                />
+              </div>
+              <div>
+                <OzLabel htmlFor="mdm-s1-minver">
+                  Minimum agent version (optional)
+                </OzLabel>
+                <OzInput
+                  id="mdm-s1-minver"
+                  value={s1MinVersion}
+                  onChange={(e) => setS1MinVersion(e.target.value)}
+                  placeholder="e.g. 23.4.1.234 — blank = no version floor"
+                />
+              </div>
+              <div>
+                <OzLabel htmlFor="mdm-s1-syncwindow">
+                  Sync window in minutes (optional)
+                </OzLabel>
+                <OzInput
+                  id="mdm-s1-syncwindow"
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={s1SyncWindow}
+                  onChange={(e) => setS1SyncWindow(e.target.value)}
+                  placeholder="e.g. 1440 (24h) — blank = no recency requirement"
                 />
               </div>
             </>
@@ -402,15 +576,17 @@ export default function MDMProviderModal({
           )}
         </div>
 
-        <ModalFooter className="items-center gap-3">
-          <ModalClose asChild>
-            <OzButton variant="default">Cancel</OzButton>
-          </ModalClose>
-          <OzButton variant="primary" onClick={onSave} disabled={saving}>
-            {saving ? "Saving..." : isEdit ? "Save changes" : "Create"}
-          </OzButton>
-        </ModalFooter>
-      </ModalContent>
+        <div className="shrink-0">
+          <ModalFooter className="items-center gap-3">
+            <ModalClose asChild>
+              <OzButton variant="default">Cancel</OzButton>
+            </ModalClose>
+            <OzButton variant="primary" onClick={onSave} disabled={saving}>
+              {saving ? "Saving..." : isEdit ? "Save changes" : "Create"}
+            </OzButton>
+          </ModalFooter>
+        </div>
+      </SidebarModalContent>
     </Modal>
   );
 }

@@ -3,7 +3,6 @@ package posture
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math/rand"
 	"sync"
 	"time"
@@ -27,10 +26,43 @@ import (
 // distributed lock primitive in the first place.
 const scheduleChangedTopicPrefix = "posture-schedule-changed:"
 
+// scheduleAccountsChangedTopic is the single global pub/sub topic the
+// discovery loop subscribes to. Any replica that mutates a posture
+// check carrying a ScheduleCheck publishes here (in addition to the
+// per-account invalidation topic above). It is the fast path for the
+// auto-discovery gap: an account that had ZERO schedule checks at
+// scheduler boot has no per-account loop and therefore nobody
+// listening on its scheduleChangedTopicPrefix topic — only the
+// global discovery loop can notice it gained one and spawn the loop.
+//
+// Best-effort like every other coordinator topic: a dropped event
+// just defers the new account's pickup to the next periodic
+// reconcile tick, never loses it.
+const scheduleAccountsChangedTopic = "posture-schedule-accounts-changed"
+
 // schedulerLockKeyPrefix scopes the cluster lock to the schedule loop
 // so it cannot collide with locks used elsewhere (account-update
 // buffer, peer-update fan-out, etc.).
 const schedulerLockKeyPrefix = "posture-scheduler:"
+
+// reconcileInterval is the safety-net cadence for the discovery loop.
+// The global pub/sub topic is the fast path (sub-second pickup of a
+// newly schedule-bearing account); this periodic reconcile is the
+// backstop that heals a missed best-effort event or an account that
+// gained a schedule on a replica whose publish failed. A few minutes
+// is well within the latency an operator expects when first attaching
+// a schedule, and the reconcile query is a single GetAllPostureChecks
+// (see the N+1 fix) so running it on a timer is cheap.
+const reconcileInterval = 3 * time.Minute
+
+// reconcileDebounceInterval is how long the discovery loop waits
+// after the first global-topic event before reconciling, absorbing
+// any further events that land in the window into the same single
+// reconcile. Short enough that a newly schedule-bearing account is
+// still picked up within a couple seconds; long enough that a
+// bulk policy edit doesn't fan one full posture_checks scan per
+// mutation across every replica.
+const reconcileDebounceInterval = 2 * time.Second
 
 // AccountUpdater is the subset of the account-manager surface the
 // Scheduler depends on. Defining it here keeps the scheduler package
@@ -99,6 +131,23 @@ type Scheduler struct {
 	// acquisition. Jittered to spread herd reacquisition across
 	// replicas after a leader crash.
 	backoff time.Duration
+
+	// reconcileEvery is the discovery loop's safety-net cadence.
+	// Injectable so tests can collapse the 3-minute production
+	// default into milliseconds; defaults to reconcileInterval in
+	// NewScheduler.
+	reconcileEvery time.Duration
+
+	// reconcileDebounce coalesces a burst of global-topic events
+	// into a single reconcile. PublishScheduleChange fires the
+	// global topic on EVERY posture-check mutation cluster-wide, and
+	// each reconcile is a full GetAllPostureChecks scan on every
+	// subscribed replica — without debounce, an operator bulk-editing
+	// policies would fan a storm of full scans across the fleet. A
+	// few seconds is invisible latency for "an account just gained a
+	// schedule" while absorbing edit bursts into one scan. Injectable
+	// for tests; defaults to reconcileDebounceInterval.
+	reconcileDebounce time.Duration
 }
 
 // NewScheduler wires the dependencies. Callers must call Run on the
@@ -112,45 +161,129 @@ func NewScheduler(coord cluster.Coordinator, updater AccountUpdater, loader Sche
 		panic("posture.NewScheduler: nil dependency")
 	}
 	return &Scheduler{
-		coord:           coord,
-		updater:         updater,
-		loader:          loader,
-		now:             time.Now,
-		afterFn:         time.After,
-		minTickInterval: 100 * time.Millisecond,
-		backoff:         time.Second,
+		coord:             coord,
+		updater:           updater,
+		loader:            loader,
+		now:               time.Now,
+		afterFn:           time.After,
+		minTickInterval:   100 * time.Millisecond,
+		backoff:           time.Second,
+		reconcileEvery:    reconcileInterval,
+		reconcileDebounce: reconcileDebounceInterval,
 	}
 }
 
-// Run blocks until ctx is cancelled. At startup it discovers every
-// account with active ScheduleChecks and spawns a per-account
-// goroutine. New accounts that gain a ScheduleCheck after Run started
-// are not auto-discovered in this v1 — operators restart the management
-// to pick them up, which is the same cadence as adding any new
-// component to a long-running service.
+// Run blocks until ctx is cancelled. It maintains a per-account
+// scheduler loop for every account that has an active ScheduleCheck,
+// discovering new accounts WITHOUT a management restart via:
+//
+//   - an initial reconcile at startup,
+//   - a global pub/sub subscription (fast path: an account that just
+//     gained its first schedule check is picked up sub-second), and
+//   - a periodic reconcile tick (safety net for missed best-effort
+//     events).
+//
+// Reconcile is add-only: it spawns loops for newly-seen accounts but
+// does NOT tear down loops for accounts that dropped off the list.
+// That is deliberate — tickWhileLeader already parks gracefully on
+// the per-account invalidation channel when an account has no active
+// checks, so a stale loop is a cheap parked goroutine, not lost work.
+// Tearing down on a transient/empty discovery result would risk
+// killing a live account's scheduler on a flaky read; the asymmetry
+// keeps the blast radius minimal.
+//
+// All reconcile calls happen on this single goroutine, so the
+// `running` map needs no mutex.
 func (s *Scheduler) Run(ctx context.Context) error {
-	accounts, err := s.loader.AccountsWithActiveSchedules(ctx)
-	if err != nil {
-		return fmt.Errorf("posture scheduler: initial account list: %w", err)
-	}
-	if len(accounts) == 0 {
-		log.WithContext(ctx).Infof("posture scheduler: no accounts with active schedule checks; blocking until ctx cancel")
-		<-ctx.Done()
-		return ctx.Err()
-	}
-	log.WithContext(ctx).Infof("posture scheduler: starting per-account loops for %d account(s)", len(accounts))
-
 	var wg sync.WaitGroup
-	for _, accountID := range accounts {
-		wg.Add(1)
-		id := accountID
-		go func() {
-			defer wg.Done()
-			s.runForAccount(ctx, id)
-		}()
+	running := make(map[string]struct{})
+
+	reconcile := func() {
+		accounts, err := s.loader.AccountsWithActiveSchedules(ctx)
+		if err != nil {
+			log.WithContext(ctx).Warnf("posture scheduler: reconcile account list failed: %v", err)
+			return
+		}
+		spawned := 0
+		for _, accountID := range accounts {
+			if _, ok := running[accountID]; ok {
+				continue
+			}
+			running[accountID] = struct{}{}
+			spawned++
+			wg.Add(1)
+			id := accountID
+			go func() {
+				defer wg.Done()
+				s.runForAccount(ctx, id)
+			}()
+		}
+		if spawned > 0 {
+			log.WithContext(ctx).Infof("posture scheduler: started %d new per-account loop(s) (%d total)", spawned, len(running))
+		}
 	}
-	wg.Wait()
-	return ctx.Err()
+
+	// Fast path: any replica mutating a schedule-bearing posture check
+	// publishes to the global topic. Subscribe BEFORE the first
+	// reconcile so a change racing startup isn't missed.
+	changed, err := s.coord.Subscribe(ctx, scheduleAccountsChangedTopic)
+	if err != nil {
+		// Non-fatal: the periodic reconcile still discovers new
+		// accounts, just with up-to-reconcileInterval latency instead
+		// of sub-second. Degrade rather than refuse to start.
+		log.WithContext(ctx).Warnf("posture scheduler: subscribe to %s failed: %v — falling back to periodic reconcile only", scheduleAccountsChangedTopic, err)
+		changed = nil
+	}
+
+	reconcile()
+
+	ticker := time.NewTicker(s.reconcileEvery)
+	defer ticker.Stop()
+
+	// debounce coalesces a burst of global-topic events into one
+	// reconcile. PublishScheduleChange fires the global topic on
+	// every posture-check mutation cluster-wide and each reconcile is
+	// a full GetAllPostureChecks scan on every subscribed replica —
+	// reconciling per-event would fan a scan storm across the fleet
+	// during a bulk policy edit. The timer is armed by the first
+	// event and only re-armed after it fires, so any number of events
+	// inside the window collapse into a single reconcile. A nil
+	// channel blocks its select case forever (standard Go idiom) —
+	// that is the "no debounce pending" state.
+	var debounceTimer *time.Timer
+	var debounceCh <-chan time.Time
+
+	for {
+		select {
+		case <-ctx.Done():
+			if debounceTimer != nil {
+				debounceTimer.Stop()
+			}
+			// Children derive from ctx and unwind on their own; wait
+			// so Run only returns once they have actually stopped.
+			wg.Wait()
+			return ctx.Err()
+		case <-ticker.C:
+			reconcile()
+		case _, ok := <-changed:
+			if !ok {
+				// Subscription channel closed (broker outage / Close).
+				// Drop to periodic-only; do not spin on a closed chan.
+				changed = nil
+				continue
+			}
+			if debounceTimer == nil {
+				debounceTimer = time.NewTimer(s.reconcileDebounce)
+				debounceCh = debounceTimer.C
+			}
+			// else: a debounce is already pending — this event folds
+			// into the reconcile it will trigger.
+		case <-debounceCh:
+			debounceTimer = nil
+			debounceCh = nil
+			reconcile()
+		}
+	}
 }
 
 // runForAccount is the outer loop that re-acquires the cluster lock
@@ -159,10 +292,35 @@ func (s *Scheduler) Run(ctx context.Context) error {
 // replica is the elected leader for the account.
 func (s *Scheduler) runForAccount(ctx context.Context, accountID string) {
 	lockKey := schedulerLockKeyPrefix + accountID
-	invalidations, err := s.coord.Subscribe(ctx, scheduleChangedTopicPrefix+accountID)
-	if err != nil {
-		log.WithContext(ctx).Errorf("posture scheduler: subscribe failed for %s: %v", accountID, err)
-		return
+
+	// Subscribe with retry. A transient broker failure here used to
+	// `return`, killing the goroutine permanently — and because the
+	// discovery reconcile is add-only (it records the account as
+	// "running" and never respawns), that left the account with NO
+	// scheduler until a management restart. That is exactly the bug
+	// class auto-discovery set out to eliminate, just triggered by a
+	// broker hiccup instead of a post-boot account. So we now retry
+	// with backoff and only ever exit on ctx cancellation, preserving
+	// the add-only invariant: a live `running` entry always maps to a
+	// goroutine that is either working or retrying, never dead.
+	var invalidations <-chan cluster.Event
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		ch, err := s.coord.Subscribe(ctx, scheduleChangedTopicPrefix+accountID)
+		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return
+			}
+			log.WithContext(ctx).Warnf("posture scheduler: subscribe for %s failed: %v — retrying", accountID, err)
+			if !s.sleepBackoff(ctx) {
+				return
+			}
+			continue
+		}
+		invalidations = ch
+		break
 	}
 
 	for {
@@ -305,11 +463,29 @@ func (s *Scheduler) sleepBackoff(ctx context.Context) bool {
 // an operator creates / edits / deletes a posture check with a
 // ScheduleCheck. The publish is best-effort: failures are logged but
 // do not block the save itself.
+//
+// Two topics, both required:
+//
+//   - the per-account invalidation topic, consumed by an already-
+//     running per-account loop so it recomputes its next boundary
+//     immediately instead of waiting out a stale timer;
+//   - the global accounts-changed topic, consumed by the discovery
+//     loop so an account that had NO loop (its first schedule check)
+//     gets one spawned sub-second instead of waiting for the periodic
+//     reconcile.
+//
+// The first nudge is a no-op for a brand-new account (nobody is
+// subscribed to its per-account topic yet); the second is a no-op for
+// an account that already has a loop (reconcile is add-only and skips
+// it). Publishing both covers both transitions with one call.
 func PublishScheduleChange(ctx context.Context, coord cluster.Coordinator, accountID string) {
 	if coord == nil || accountID == "" {
 		return
 	}
 	if err := coord.Publish(ctx, scheduleChangedTopicPrefix+accountID, nil); err != nil {
 		log.WithContext(ctx).Warnf("posture scheduler: publish invalidation for %s: %v", accountID, err)
+	}
+	if err := coord.Publish(ctx, scheduleAccountsChangedTopic, nil); err != nil {
+		log.WithContext(ctx).Warnf("posture scheduler: publish accounts-changed for %s: %v", accountID, err)
 	}
 }

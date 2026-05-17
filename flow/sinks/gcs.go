@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"google.golang.org/api/option"
 
 	"github.com/openzro/openzro/flow/store"
+	"github.com/openzro/openzro/safedial"
 )
 
 // GCSConfig configures the native Google Cloud Storage sink.
@@ -81,6 +83,13 @@ type GCSConfig struct {
 	// service; set to `http://localhost:4443` (or wherever) for
 	// fake-gcs-server in CI / dev.
 	Endpoint string
+
+	// HTTPClient lets tests inject a stub. Empty means default. When a
+	// custom Endpoint is set and this is nil, NewGCS installs the
+	// SSRF-guarded client (loopback + cloud-metadata blocked) — the
+	// custom endpoint is the only SSRF surface, since the default GCS
+	// endpoint is a fixed public Google domain.
+	HTTPClient *http.Client
 }
 
 // GCS archives flow events to a Google Cloud Storage bucket. Format
@@ -126,11 +135,21 @@ func NewGCS(ctx context.Context, cfg GCSConfig) (*GCS, error) {
 		opts = append(opts, option.WithCredentialsFile(cfg.CredentialsFile))
 	}
 	if cfg.Endpoint != "" {
+		httpClient := cfg.HTTPClient
+		if httpClient == nil {
+			// timeout 0: the storage SDK owns its own per-operation
+			// deadlines and retries; only the dial-time guard (loopback
+			// + cloud metadata) is wanted here. This branch already runs
+			// without Google auth, so there is no OAuth2 transport for
+			// WithHTTPClient to clobber.
+			httpClient = safedial.Client(0)
+		}
 		opts = append(opts,
 			option.WithEndpoint(cfg.Endpoint),
 			// fake-gcs-server typically does not enforce auth.
 			// Tests pass through this branch and need a no-op auth.
 			option.WithoutAuthentication(),
+			option.WithHTTPClient(httpClient),
 		)
 	}
 

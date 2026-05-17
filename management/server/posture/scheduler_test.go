@@ -190,3 +190,123 @@ func TestNextBoundary_BoundaryAlwaysInFuture(t *testing.T) {
 	assert.True(t, b.After(now), "boundary must be strictly after now")
 	assert.Equal(t, "2026-05-13 18:00", b.Format(layout))
 }
+
+// TestNextBoundary_DST pins the boundary math across Daylight Saving
+// transitions. Brazil dropped DST in 2019 but tenants in US/EU
+// timezones still observe it, and a wrong boundary means a peer's
+// network access flips at the wrong wall-clock time — a real,
+// security-relevant correctness bug.
+//
+// Reference transitions for America/New_York in 2026:
+//   - spring-forward: Sun 2026-03-08, 02:00 EST → 03:00 EDT.
+//     Local wall-clock [02:00, 03:00) does NOT exist that day.
+//   - fall-back:       Sun 2026-11-01, 02:00 EDT → 01:00 EST.
+//     Local wall-clock [01:00, 02:00) occurs TWICE that day.
+//
+// Two assertion classes:
+//   - boundaries OUTSIDE the gap/ambiguous hour (09:00, 18:00, 00:00)
+//     must land at EXACTLY that wall-clock time on the expected
+//     calendar day — a 09:00 window opens at 09:00 local even on a
+//     DST day, never 08:00 or 10:00 (the bug class we guard against).
+//   - boundaries INSIDE the gap / repeated hour are normalised by
+//     Go's time.Date deterministically; we don't pin the exact
+//     instant (that's tzdata's contract, not ours) but we DO pin the
+//     safety contract: ok==true, strictly After(from), same calendar
+//     day, loop terminates (no past boundary, no infinite scan).
+func TestNextBoundary_DST(t *testing.T) {
+	t.Parallel()
+
+	const layout = "2006-01-02 15:04"
+	const tz = "America/New_York"
+	nyc, err := time.LoadLocation(tz)
+	require.NoError(t, err)
+
+	daily := func(start, end string) ScheduleCheck {
+		return ScheduleCheck{
+			Window:   TimeWindow{StartTime: start, EndTime: end},
+			Timezone: tz,
+			Action:   CheckActionAllow,
+		}
+	}
+
+	t.Run("spring-forward: 09:00 open lands exactly at 09:00 local", func(t *testing.T) {
+		// Evening before the transition; next boundary is the 09:00
+		// open on the transition day itself.
+		now := mustTime(t, layout, "2026-03-07 20:00", tz)
+		b, ok := NextBoundary(now, []ScheduleCheck{daily("09:00", "18:00")})
+		require.True(t, ok)
+		assert.True(t, b.After(now))
+		got := b.In(nyc).Format(layout)
+		assert.Equal(t, "2026-03-08 09:00", got,
+			"09:00 is well clear of the 02:00-03:00 gap; must open at exactly 09:00 local")
+	})
+
+	t.Run("spring-forward: in-window mid-day, next boundary is 18:00 close", func(t *testing.T) {
+		now := mustTime(t, layout, "2026-03-08 12:00", tz)
+		b, ok := NextBoundary(now, []ScheduleCheck{daily("09:00", "18:00")})
+		require.True(t, ok)
+		assert.Equal(t, "2026-03-08 18:00", b.In(nyc).Format(layout))
+	})
+
+	t.Run("spring-forward: window START inside the non-existent hour", func(t *testing.T) {
+		// 02:30 does not exist on 2026-03-08. time.Date normalises it
+		// (rolls into EDT). Contract: a sane, strictly-future boundary
+		// on the right day — never a past instant, never a skipped
+		// day that would starve the scheduler.
+		now := mustTime(t, layout, "2026-03-08 00:30", tz)
+		b, ok := NextBoundary(now, []ScheduleCheck{daily("02:30", "10:00")})
+		require.True(t, ok)
+		assert.True(t, b.After(now), "boundary must be strictly in the future")
+		assert.Equal(t, "2026-03-08", b.In(nyc).Format("2006-01-02"),
+			"boundary must stay on the transition day, not skip it")
+	})
+
+	t.Run("fall-back: 09:00 open lands exactly at 09:00 local", func(t *testing.T) {
+		now := mustTime(t, layout, "2026-10-31 20:00", tz)
+		b, ok := NextBoundary(now, []ScheduleCheck{daily("09:00", "18:00")})
+		require.True(t, ok)
+		assert.True(t, b.After(now))
+		assert.Equal(t, "2026-11-01 09:00", b.In(nyc).Format(layout),
+			"09:00 is clear of the 01:00-02:00 repeated hour; exact local time")
+	})
+
+	t.Run("fall-back: midnight-to-02:00 window, 02:00 close is unambiguous", func(t *testing.T) {
+		// 02:00 occurs once on fall-back day (the repeat is 01:00-02:00).
+		// Just before midnight → next boundary is the 00:00 open.
+		now := mustTime(t, layout, "2026-10-31 23:30", tz)
+		b, ok := NextBoundary(now, []ScheduleCheck{daily("00:00", "02:00")})
+		require.True(t, ok)
+		assert.True(t, b.After(now))
+		assert.Equal(t, "2026-11-01 00:00", b.In(nyc).Format(layout))
+	})
+
+	t.Run("fall-back: window END inside the repeated hour", func(t *testing.T) {
+		// 01:30 occurs twice on 2026-11-01. time.Date picks one offset
+		// deterministically. Contract: strictly-future, same day, ok.
+		now := mustTime(t, layout, "2026-11-01 00:15", tz)
+		b, ok := NextBoundary(now, []ScheduleCheck{daily("00:00", "01:30")})
+		require.True(t, ok)
+		assert.True(t, b.After(now), "boundary must be strictly in the future")
+		assert.Equal(t, "2026-11-01", b.In(nyc).Format("2006-01-02"))
+	})
+
+	t.Run("transition day never yields a past or zero boundary", func(t *testing.T) {
+		// Sweep both transition days at several `from` instants and a
+		// window that brackets the special hour. The invariant under
+		// test is purely the loop-safety contract NextBoundary must
+		// uphold regardless of DST: a found boundary is always
+		// strictly in the future.
+		windows := []ScheduleCheck{daily("01:00", "03:00"), daily("02:00", "04:00")}
+		fromTimes := []string{
+			"2026-03-08 00:00", "2026-03-08 01:30", "2026-03-08 03:30",
+			"2026-11-01 00:00", "2026-11-01 01:30", "2026-11-01 02:30",
+		}
+		for _, ft := range fromTimes {
+			now := mustTime(t, layout, ft, tz)
+			b, ok := NextBoundary(now, windows)
+			require.True(t, ok, "from=%s should yield a boundary", ft)
+			assert.True(t, b.After(now),
+				"from=%s: boundary %s must be strictly after now", ft, b)
+		}
+	})
+}

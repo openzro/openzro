@@ -233,6 +233,7 @@ type serviceClient struct {
 	mVersionUI         *systray.MenuItem
 	mVersionDaemon     *systray.MenuItem
 	mUpdate            *systray.MenuItem
+	mInstallUpdate     *systray.MenuItem
 	mQuit              *systray.MenuItem
 	mNetworks          *systray.MenuItem
 	mAllowSSH          *systray.MenuItem
@@ -279,7 +280,6 @@ type serviceClient struct {
 	blockLANAccess      bool
 
 	connected            bool
-	update               *version.Update
 	daemonVersion        string
 	updateIndicationLock sync.Mutex
 	isUpdateIconActive   bool
@@ -328,7 +328,6 @@ func newServiceClient(args *newServiceClientArgs) *serviceClient {
 
 		showAdvancedSettings: args.showSettings,
 		showNetworks:         args.showNetworks,
-		update:               version.NewUpdate("nb/client-ui"),
 	}
 
 	s.eventHandler = newEventHandler(s)
@@ -699,7 +698,11 @@ func (s *serviceClient) updateStatus() error {
 			s.onSessionExpire()
 		}
 
-		var systrayIconState bool
+		// openZro #5: the daemon (driven by the management Sync
+		// directive) is the single source of truth for update
+		// availability. Apply it before the connected-state switch so
+		// the icon branch below reads a fresh isUpdateIconActive.
+		s.applyUpdateStateLocked(status.GetUpdateState())
 
 		switch {
 		case status.Status == string(internal.StatusConnected):
@@ -717,28 +720,20 @@ func (s *serviceClient) updateStatus() error {
 			s.mDown.Enable()
 			s.mNetworks.Enable()
 			go s.updateExitNodes()
-			systrayIconState = true
 		case status.Status == string(internal.StatusConnecting):
 			s.setConnectingStatus()
 		case status.Status != string(internal.StatusConnected) && s.mUp.Disabled():
 			s.setDisconnectedStatus()
-			systrayIconState = false
 		}
 
-		// the updater struct notify by the upgrades available only, but if meanwhile the daemon has successfully
-		// updated must reset the mUpdate visibility state
+		// Daemon version changed (e.g. after a self-update restart):
+		// refresh only the "Daemon: x.y.z" menu line. Update
+		// availability and the tray icon are owned by
+		// applyUpdateStateLocked / the connected-state switch above
+		// (openZro #5 — the daemon, not a UI-side GitHub poll, is the
+		// source of truth).
 		if s.daemonVersion != status.DaemonVersion {
-			s.mUpdate.Hide()
 			s.daemonVersion = status.DaemonVersion
-
-			s.isUpdateIconActive = s.update.SetDaemonVersion(status.DaemonVersion)
-			if !s.isUpdateIconActive {
-				if systrayIconState {
-					systray.SetTemplateIcon(iconConnectedMacOS, s.icConnected)
-				} else {
-					systray.SetTemplateIcon(iconDisconnectedMacOS, s.icDisconnected)
-				}
-			}
 
 			daemonVersionTitle := normalizedVersion(s.daemonVersion)
 			s.mVersionDaemon.SetTitle(fmt.Sprintf("Daemon: %s", daemonVersionTitle))
@@ -860,13 +855,18 @@ func (s *serviceClient) onTrayReady() {
 	s.mUpdate = s.mAbout.AddSubMenuItem("Download latest version", latestVersionMenuDescr)
 	s.mUpdate.Hide()
 
+	// #5: ask the privileged daemon to download+verify+install the
+	// update (rollout-gated). Distinct from "Download latest version"
+	// which just opens the release page in a browser.
+	s.mInstallUpdate = s.mAbout.AddSubMenuItem("Install update now", "Download, verify and install the update via the daemon")
+	s.mInstallUpdate.Hide()
+
 	systray.AddSeparator()
 	s.mQuit = systray.AddMenuItem("Quit", quitMenuDescr)
 
 	// update exit node menu in case service is already connected
 	go s.updateExitNodes()
 
-	s.update.SetOnUpdateListener(s.onUpdateAvailable)
 	go func() {
 		s.getSrvConfig()
 		time.Sleep(100 * time.Millisecond) // To prevent race condition caused by systray not being fully initialized and ignoring setIcon
@@ -1083,17 +1083,32 @@ func protoConfigToConfig(cfg *proto.GetConfigResponse) *profilemanager.Config {
 	return &config
 }
 
-func (s *serviceClient) onUpdateAvailable() {
-	s.updateIndicationLock.Lock()
-	defer s.updateIndicationLock.Unlock()
+// applyUpdateStateLocked reflects the daemon's management-driven
+// self-update verdict (openZro #5) into the tray menu. The caller
+// holds updateIndicationLock and runs the connected/disconnected
+// icon switch right after, which already branches on
+// isUpdateIconActive — so this only flips the flag and the menu
+// items, no icon call here (avoids a double-set fighting the switch).
+// us may be nil (no directive / post-restart): the getters are
+// nil-safe and yield the not-available, menus-hidden state.
+//
+// The manual "Install update now" item is shown ONLY for a NON-force
+// directive (review-#1): when the operator forced the update the
+// daemon installs it silently, so a manual CTA would be misleading.
+func (s *serviceClient) applyUpdateStateLocked(us *proto.UpdateState) {
+	available := us.GetAvailable()
+	s.isUpdateIconActive = available
 
-	s.mUpdate.Show()
-	s.isUpdateIconActive = true
-
-	if s.connected {
-		systray.SetTemplateIcon(iconUpdateConnectedMacOS, s.icUpdateConnected)
+	if available {
+		s.mUpdate.Show()
 	} else {
-		systray.SetTemplateIcon(iconUpdateDisconnectedMacOS, s.icUpdateDisconnected)
+		s.mUpdate.Hide()
+	}
+
+	if available && !us.GetForce() {
+		s.mInstallUpdate.Show()
+	} else {
+		s.mInstallUpdate.Hide()
 	}
 }
 
