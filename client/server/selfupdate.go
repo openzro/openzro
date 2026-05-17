@@ -105,6 +105,16 @@ func (s *Server) buildSelfUpdateConfig(target string, manual, force bool) (selfu
 		ExpectedTeamID:     selfupdate.BuildTeamID(),
 		AutoInstallEnabled: manual || force,
 		ClientID:           s.clientUpdateBucketID(),
+		// Authoritative: this is the management-directive path by
+		// construction (the 30m poll was removed in R3a; the only
+		// caller is a server-conveyed directive). The server already
+		// evaluated the operator's subset/ring for this peer (Q2), so
+		// the client must NOT re-roll the manifest staged_rollout —
+		// that would double-gate and defeat operator control. The
+		// future critical-only static fallback (R6) is a DIFFERENT
+		// code path and will build its Config with Authoritative=false
+		// so it still honours staged_rollout.
+		Authoritative: true,
 		// PinnedVersion intentionally empty: in the management-driven
 		// model the directive target IS the pin and ExpectedVersion
 		// enforces it. There is no client-side pin/auto toggle.

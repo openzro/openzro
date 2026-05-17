@@ -26,6 +26,18 @@ type GateInput struct {
 	// hash). It buckets the client for staged rollout so the same
 	// client is consistently in or out of a partial release.
 	ClientID string
+	// Authoritative marks the decision as already made by the
+	// management server (openZro #5 Q2). When true the client SKIPS
+	// the manifest staged_rollout entirely — the operator's
+	// server-side subset/ring already decided this peer is in, so a
+	// second client-side dice roll would only double-gate and defeat
+	// operator control. Everything else (version-greater, pin,
+	// auto-install opt-in, min_version/critical) and the downstream
+	// ExpectedVersion/I2 + signature/Team-ID checks still apply. It is
+	// set ONLY on the management-directive path; the critical-only
+	// static-manifest fallback (R6) leaves it false so that path
+	// still honours staged_rollout.
+	Authoritative bool
 }
 
 // Decision is the gate result. Reason is always populated for logs.
@@ -76,11 +88,15 @@ func Evaluate(in GateInput) Decision {
 		return Decision{Critical: critical, Reason: "auto-install disabled — surfacing for manual update only"}
 	}
 
-	// Staged rollout is the last gate, and critical updates skip it: a
-	// security floor breach should not be slow-rolled. Everything here
-	// is fail-CLOSED (Codex-1): absent declaration, 0%, or no stable
-	// client id all mean "do not update", never "update everyone".
-	if !critical {
+	// Staged rollout is the last gate. Critical updates skip it (a
+	// security floor breach must not be slow-rolled), and an
+	// authoritative management directive skips it too (Q2: the server
+	// already evaluated the operator's subset/ring for this peer — a
+	// second client-side roll would only double-gate). Everything
+	// here is fail-CLOSED (Codex-1): absent declaration, 0%, or no
+	// stable client id all mean "do not update", never "update
+	// everyone".
+	if !critical && !in.Authoritative {
 		if in.Manifest.StagedRollout == nil {
 			return Decision{Reason: "manifest declares no staged_rollout — refusing"}
 		}
@@ -101,8 +117,11 @@ func Evaluate(in GateInput) Decision {
 	}
 
 	reason := fmt.Sprintf("eligible for %s", in.Manifest.Version)
-	if critical {
+	switch {
+	case critical:
 		reason = fmt.Sprintf("CRITICAL: below min_version %s — updating to %s", in.Manifest.MinVersion, in.Manifest.Version)
+	case in.Authoritative:
+		reason = fmt.Sprintf("eligible for %s (management-directed)", in.Manifest.Version)
 	}
 	return Decision{Eligible: true, Critical: critical, Reason: reason}
 }

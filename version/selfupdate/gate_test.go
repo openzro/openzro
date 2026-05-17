@@ -139,3 +139,79 @@ func TestEvaluate_StagedRollout(t *testing.T) {
 		t.Fatalf("critical must bypass staged rollout: eligible=%v critical=%v", d.Eligible, d.Critical)
 	}
 }
+
+// TestEvaluate_Authoritative pins openZro #5 Q2: a management-
+// authoritative directive skips the manifest staged_rollout (the
+// server already evaluated the operator's subset/ring) but must NOT
+// bypass any other safety.
+func TestEvaluate_Authoritative(t *testing.T) {
+	// An id the 10% ring would normally exclude.
+	excluded := ""
+	for i := 0; i < 1000; i++ {
+		id := "peer-" + string(rune('a'+i%26)) + string(rune('0'+i/26))
+		if bucketOf(id) >= 10 {
+			excluded = id
+			break
+		}
+	}
+	if excluded == "" {
+		t.Fatal("could not synthesize an out-of-ring client id")
+	}
+
+	t.Run("bypasses staged-rollout bucket exclusion", func(t *testing.T) {
+		base := GateInput{Current: "1.0.0", Manifest: mf("1.1.0", "", 10),
+			AutoInstallEnabled: true, ClientID: excluded}
+		if Evaluate(base).Eligible {
+			t.Fatal("control: out-of-ring client must be excluded without authoritative")
+		}
+		base.Authoritative = true
+		d := Evaluate(base)
+		if !d.Eligible {
+			t.Fatalf("authoritative must bypass the bucket, got %q", d.Reason)
+		}
+		if !contains(d.Reason, "management-directed") {
+			t.Fatalf("reason should mark it management-directed, got %q", d.Reason)
+		}
+	})
+
+	t.Run("bypasses nil and 0% staged_rollout refusal", func(t *testing.T) {
+		nilSR := &Manifest{Version: "1.1.0", Artifacts: map[string]Artifact{"darwin/arm64": {URL: "u", SHA256: "s"}}}
+		if d := Evaluate(GateInput{Current: "1.0.0", Manifest: nilSR, AutoInstallEnabled: true,
+			Authoritative: true}); !d.Eligible {
+			t.Fatalf("authoritative must not be refused for nil staged_rollout, got %q", d.Reason)
+		}
+		if d := Evaluate(GateInput{Current: "1.0.0", Manifest: mf("1.1.0", "", 0), AutoInstallEnabled: true,
+			ClientID: "c1", Authoritative: true}); !d.Eligible {
+			t.Fatalf("authoritative must bypass 0%% rollout, got %q", d.Reason)
+		}
+	})
+
+	t.Run("does NOT bypass version, auto-install opt-in, or min_version logic", func(t *testing.T) {
+		// already at/above — still a no-op even when authoritative.
+		if d := Evaluate(GateInput{Current: "1.1.0", Manifest: mf("1.1.0", "", 100),
+			AutoInstallEnabled: true, Authoritative: true}); d.Eligible {
+			t.Fatalf("authoritative must not force a downgrade/no-op install: %q", d.Reason)
+		}
+		// auto-install opt-out still surfaces-only (force/manual gate is
+		// independent of the rollout gate).
+		if d := Evaluate(GateInput{Current: "1.0.0", Manifest: mf("1.1.0", "", 100),
+			AutoInstallEnabled: false, Authoritative: true}); d.Eligible {
+			t.Fatalf("authoritative must not override the auto-install opt-in: %q", d.Reason)
+		}
+		// critical still detected/labelled.
+		d := Evaluate(GateInput{Current: "1.0.0", Manifest: mf("1.1.0", "1.0.5", 0),
+			AutoInstallEnabled: true, ClientID: "c1", Authoritative: true})
+		if !d.Eligible || !d.Critical {
+			t.Fatalf("authoritative+critical must stay eligible+critical, got %+v", d)
+		}
+	})
+}
+
+func contains(s, sub string) bool {
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
+}

@@ -41,6 +41,14 @@ type Config struct {
 	// Empty disables the check (legacy single-manifest / R6 fallback).
 	ExpectedVersion string
 
+	// Authoritative marks this cycle as a management-directed install
+	// (openZro #5 Q2): the server already evaluated the operator's
+	// subset/ring for this peer, so Evaluate skips the manifest
+	// staged_rollout. Set true on the directive path; left false on
+	// the critical-only static-manifest fallback (R6) so that path
+	// still honours staged_rollout. See GateInput.Authoritative.
+	Authoritative bool
+
 	// CycleTimeout bounds one full cycle (fetch+download+verify+
 	// install). Without it a hung installer wedges self-update forever
 	// behind single-flight. Default 15m.
@@ -138,6 +146,7 @@ func (u *Updater) RunOnce(ctx context.Context) (Result, error) {
 		AutoInstallEnabled: c.AutoInstallEnabled,
 		PinnedVersion:      c.PinnedVersion,
 		ClientID:           c.ClientID,
+		Authoritative:      c.Authoritative,
 	})
 	if !d.Eligible {
 		log.Infof("selfupdate: skipping — %s", d.Reason)
