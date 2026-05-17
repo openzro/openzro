@@ -42,6 +42,18 @@ type Settings struct {
 	// DNSDomain is the custom domain for that account
 	DNSDomain string
 
+	// ClientUpdateTargetVersion is the desktop client release the
+	// operator wants the fleet on (openZro #5, management-driven). Empty
+	// => no directive (clients do nothing). Management conveys only this
+	// decision over Sync; the client still downloads+verifies the
+	// signed package itself.
+	ClientUpdateTargetVersion string
+
+	// ClientUpdateForce, when true, installs silently in the background
+	// without prompting the user; otherwise the client surfaces a
+	// prompt.
+	ClientUpdateForce bool
+
 	// Extra is a dictionary of Account settings
 	Extra *ExtraSettings `gorm:"embedded;embeddedPrefix:extra_"`
 
@@ -96,6 +108,9 @@ func (s *Settings) Copy() *Settings {
 		AdmissionEnforcementEnabled:     s.AdmissionEnforcementEnabled,
 		AdmissionPostureChecks:          append([]string(nil), s.AdmissionPostureChecks...),
 		AdmissionExemptGroups:           append([]string(nil), s.AdmissionExemptGroups...),
+
+		ClientUpdateTargetVersion: s.ClientUpdateTargetVersion,
+		ClientUpdateForce:         s.ClientUpdateForce,
 	}
 	if s.Extra != nil {
 		settings.Extra = s.Extra.Copy()

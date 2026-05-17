@@ -599,6 +599,9 @@ func (s *GRPCServer) prepareLoginResponse(ctx context.Context, peer *nbpeer.Peer
 		PeerConfig:    toPeerConfig(peer, netMap.Network, s.accountManager.GetDNSDomain(settings), settings),
 		Checks:        toProtocolChecks(ctx, postureChecks),
 	}
+	if loginResp.OpenzroConfig != nil {
+		loginResp.OpenzroConfig.Update = buildUpdateConfig(settings) // #5 self-update directive
+	}
 
 	return loginResp, nil
 }
@@ -710,6 +713,21 @@ func toOpenzroConfig(config *types.Config, turnCredentials *Token, relayToken *T
 	}
 
 	return nbConfig
+}
+
+// buildUpdateConfig maps the operator-set account Settings into the
+// per-peer client self-update directive (openZro #5). nil when no
+// target is set (the client then does nothing). Clean-room: modelled
+// from public NetBird v0.61 behaviour only; no upstream AGPL
+// management consulted.
+func buildUpdateConfig(settings *types.Settings) *proto.UpdateConfig {
+	if settings == nil || settings.ClientUpdateTargetVersion == "" {
+		return nil
+	}
+	return &proto.UpdateConfig{
+		TargetVersion: settings.ClientUpdateTargetVersion,
+		Force:         settings.ClientUpdateForce,
+	}
 }
 
 // defaultFlowReportInterval is how often peers flush their queued flow
@@ -905,6 +923,12 @@ func toSyncResponse(ctx context.Context, config *types.Config, peer *nbpeer.Peer
 		applyFlowGroupFilter(extendedConfig.Flow, peerGroups)
 	}
 	response.OpenzroConfig = extendedConfig
+	// #5: set the self-update directive on the FINAL config (post
+	// ExtendOpenzroConfig), so it survives whatever the integrations
+	// stub does, and is conveyed on every Sync.
+	if response.OpenzroConfig != nil {
+		response.OpenzroConfig.Update = buildUpdateConfig(settings)
+	}
 
 	response.NetworkMap.PeerConfig = response.PeerConfig
 
