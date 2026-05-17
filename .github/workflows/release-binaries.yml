@@ -743,6 +743,53 @@ jobs:
           gh release upload "${TAG}" update-manifest.json \
             --repo "${{ github.repository }}" --clobber
 
+      - name: Publish static rolling update-manifest.json (openZro #5 R6)
+        # R6 last-resort fallback: an UNMANAGED client below the
+        # security floor self-heals from this single ROLLING manifest
+        # (selfupdate.defaultManifestURL =
+        # …/releases/download/update/update-manifest.json). min_version
+        # is EMPTY by default — Critical never fires, the fallback
+        # sleeps — until a security cut sets the repo variable
+        # OPENZRO_FALLBACK_MIN_VERSION. Same signed-artifact gate as
+        # the per-version manifest (an unsigned build must not
+        # advertise an update its client necessarily rejects).
+        if: ${{ env.APPLE_TEAM_ID != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.ver.outputs.tag }}"
+          VERSION="${{ steps.ver.outputs.version }}"
+          MIN_VERSION="${{ vars.OPENZRO_FALLBACK_MIN_VERSION }}"
+          PKG="dist/openzro_${VERSION}_darwin_universal.pkg"
+          SHA="$(shasum -a 256 "$PKG" | awk '{print $1}')"
+          # The pkg asset lives on THIS version's release tag; the
+          # rolling manifest points back at that same signed+notarized
+          # binary (trust root unchanged — Team-ID pin + verify still
+          # apply at install).
+          URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/openzro_${VERSION}_darwin_universal.pkg"
+          # Same schema as the per-version manifest; min_version is the
+          # only difference (operator-controlled security floor).
+          jq -n \
+            --arg v "$VERSION" --arg mv "$MIN_VERSION" --arg u "$URL" --arg s "$SHA" \
+            '{version:$v, min_version:$mv, staged_rollout:100,
+              artifacts:{"darwin/arm64":{url:$u,sha256:$s},
+                         "darwin/amd64":{url:$u,sha256:$s}}}' \
+            > update-manifest.json
+          # A single rolling release tagged `update` (prerelease so it
+          # never displays as "Latest"). Created once; every release
+          # re-clobbers the asset. The tag's commit is irrelevant —
+          # GitHub serves the asset by release tag, and the manifest
+          # only points at per-version pkg assets.
+          gh release create update \
+            --repo "${{ github.repository }}" \
+            --prerelease \
+            --title "openZro client self-update (rolling)" \
+            --notes "Rolling pointer for the R6 critical-only self-update fallback. Do not delete." \
+            --target "${{ github.sha }}" 2>/dev/null || true
+          gh release upload update update-manifest.json \
+            --repo "${{ github.repository }}" --clobber
+
   release_dex:
     name: Build + push themed Dex container image
     runs-on: ubuntu-22.04
