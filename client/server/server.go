@@ -68,6 +68,11 @@ type Server struct {
 	lastProbe         time.Time
 	persistNetworkMap bool
 	isSessionActive   atomic.Bool
+	// connectActive is true while the client is meant to be connected
+	// (set on every connect launch via connectWithRetryRuns, cleared
+	// by Down()). The R6 critical-fallback worker requires it so a
+	// deliberately-stopped client is never silently auto-updated.
+	connectActive atomic.Bool
 
 	// updateDirective holds the latest management-conveyed client
 	// self-update decision (openZro #5). The engine dedupes by
@@ -111,6 +116,13 @@ type Server struct {
 	// "already in progress" instead of queueing.
 	installGateMu sync.Mutex
 	installActive bool
+
+	// criticalFallbackOnce starts the R6 last-resort worker exactly
+	// once per daemon lifetime: when management is unreachable for a
+	// sustained period AND no directive is recorded AND the client is
+	// below the static manifest's security floor, self-heal silently
+	// (critical-only). Reuses the shared install gate.
+	criticalFallbackOnce sync.Once
 
 	profileManager   profilemanager.ServiceManager
 	profilesDisabled bool
@@ -248,6 +260,24 @@ func (s *Server) setDefaultConfigIfNotExists(ctx context.Context) error {
 func (s *Server) connectWithRetryRuns(ctx context.Context, config *profilemanager.Config, statusRecorder *peer.Status,
 	runningChan chan struct{},
 ) {
+	// The client is now meant to be connected (covers Start /
+	// Up / reconnect — every connect launch funnels through here).
+	// Down() clears it. The R6 fallback worker reads this so a
+	// manually-stopped client is never silently auto-updated
+	// (#5 R6 review #2): managementState.Connected alone cannot tell
+	// "network down" from "user pressed Down".
+	s.connectActive.Store(true)
+
+	// R6: start the last-resort critical self-heal worker here — the
+	// SAME single funnel as connectActive, so it covers Start AND a
+	// manual Up after a DisableAutoConnect boot AND reconnects, with
+	// no path missed (#5 R6 review #3). sync.Once => idempotent; a
+	// client that never connects (DisableAutoConnect + no Up) never
+	// reaches here, so a deliberately-disconnected client still gets
+	// no fallback. A later Down() is handled by the connectActive
+	// guard, not by stopping the worker.
+	s.startCriticalFallbackOnce()
+
 	backOff := getConnectWithBackoff(ctx)
 	retryStarted := false
 
@@ -861,6 +891,9 @@ func (s *Server) Down(ctx context.Context, _ *proto.DownRequest) (*proto.DownRes
 		return nil, fmt.Errorf("service is not up")
 	}
 	s.actCancel()
+	// User-initiated stop: the R6 fallback must not treat this as
+	// "unmanaged + should be managed" (#5 R6 review #2).
+	s.connectActive.Store(false)
 
 	err := s.connectClient.Stop()
 	if err != nil {

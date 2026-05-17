@@ -49,6 +49,19 @@ type Config struct {
 	// still honours staged_rollout. See GateInput.Authoritative.
 	Authoritative bool
 
+	// CriticalOnly restricts this cycle to a SECURITY-FLOOR breach:
+	// RunOnce proceeds to download/verify/install only when the gate
+	// returns Critical (Current < Manifest.MinVersion); a normal
+	// eligible-but-not-critical update is reported Skipped instead of
+	// installed. It is the openZro #5 R6 last-resort posture: when
+	// management is unreachable AND the client is below the static
+	// manifest's min_version, self-heal silently — but NEVER
+	// slow-roll a routine update behind the operator's back while
+	// unmanaged. Independent of Authoritative (the fallback path is
+	// non-authoritative so staged_rollout still applies, though
+	// Critical bypasses it anyway).
+	CriticalOnly bool
+
 	// BeforeInstall, when set, is called AFTER Verify succeeds and
 	// IMMEDIATELY before Installer.Install — i.e. glued to the
 	// privileged install/restart, not merely before the whole cycle
@@ -163,6 +176,15 @@ func (u *Updater) RunOnce(ctx context.Context) (Result, error) {
 	if !d.Eligible {
 		log.Infof("selfupdate: skipping — %s", d.Reason)
 		return Result{Skipped: true, Version: m.Version, Reason: d.Reason, Critical: d.Critical}, nil
+	}
+
+	// R6 last-resort posture: an unmanaged client self-heals ONLY a
+	// security-floor breach, never a routine update. An eligible but
+	// non-critical update is a normal Skip here, not an install.
+	if c.CriticalOnly && !d.Critical {
+		reason := "critical-only fallback: " + m.Version + " is eligible but not critical — not self-installing while unmanaged"
+		log.Infof("selfupdate: skipping — %s", reason)
+		return Result{Skipped: true, Version: m.Version, Reason: reason, Critical: false}, nil
 	}
 
 	art, ok := m.ArtifactFor(c.GOOS, c.GOARCH)

@@ -232,7 +232,7 @@ type serviceClient struct {
 	mGitHub            *systray.MenuItem
 	mVersionUI         *systray.MenuItem
 	mVersionDaemon     *systray.MenuItem
-	mUpdate            *systray.MenuItem
+	mUpdateStatus      *systray.MenuItem
 	mInstallUpdate     *systray.MenuItem
 	mQuit              *systray.MenuItem
 	mNetworks          *systray.MenuItem
@@ -852,12 +852,19 @@ func (s *serviceClient) onTrayReady() {
 	s.mVersionDaemon.Disable()
 	s.mVersionDaemon.Hide()
 
-	s.mUpdate = s.mAbout.AddSubMenuItem("Download latest version", latestVersionMenuDescr)
-	s.mUpdate.Hide()
+	// #5 R5: a non-actionable status line. Visible whenever there is
+	// an active management directive (available, forced/silent, or
+	// "checking…") so the user sees WHAT version and WHY even when no
+	// manual CTA is offered. Replaces the retired poll-era "Download
+	// latest version" browser link — in the management-driven model a
+	// manual browser download would bypass the gated/verified pipeline.
+	s.mUpdateStatus = s.mAbout.AddSubMenuItem("", "")
+	s.mUpdateStatus.Disable()
+	s.mUpdateStatus.Hide()
 
 	// #5: ask the privileged daemon to download+verify+install the
-	// update (rollout-gated). Distinct from "Download latest version"
-	// which just opens the release page in a browser.
+	// update (rollout-gated). Only shown for a non-force directive
+	// (forced installs are silent); label carries the target version.
 	s.mInstallUpdate = s.mAbout.AddSubMenuItem("Install update now", "Download, verify and install the update via the daemon")
 	s.mInstallUpdate.Hide()
 
@@ -1095,17 +1102,33 @@ func protoConfigToConfig(cfg *proto.GetConfigResponse) *profilemanager.Config {
 // The manual "Install update now" item is shown ONLY for a NON-force
 // directive (review-#1): when the operator forced the update the
 // daemon installs it silently, so a manual CTA would be misleading.
+// #5 R5: the status line + the CTA label surface the target version
+// and the daemon's decision reason.
 func (s *serviceClient) applyUpdateStateLocked(us *proto.UpdateState) {
 	available := us.GetAvailable()
 	s.isUpdateIconActive = available
+	target := us.GetTargetVersion()
+	decision := us.GetLastDecision()
 
-	if available {
-		s.mUpdate.Show()
+	if target != "" {
+		s.mUpdateStatus.SetTitle("Update: " + target)
+		if decision != "" {
+			s.mUpdateStatus.SetTooltip(decision)
+		}
+		s.mUpdateStatus.Show()
 	} else {
-		s.mUpdate.Hide()
+		s.mUpdateStatus.Hide()
 	}
 
 	if available && !us.GetForce() {
+		label := "Install update now"
+		if target != "" {
+			label = "Install openZro " + target
+		}
+		s.mInstallUpdate.SetTitle(label)
+		if decision != "" {
+			s.mInstallUpdate.SetTooltip(decision)
+		}
 		s.mInstallUpdate.Show()
 	} else {
 		s.mInstallUpdate.Hide()

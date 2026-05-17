@@ -13,6 +13,5 @@ const (
 	debugBundleMenuDescr       = "Create and open debug information bundle"
 	exitNodeMenuDescr          = "Select exit node for routing traffic"
 	networksMenuDescr          = "Open the networks management window"
-	latestVersionMenuDescr     = "Download latest version"
 	quitMenuDescr              = "Quit the client app"
 )

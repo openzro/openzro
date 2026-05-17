@@ -642,3 +642,105 @@ func TestSharedInstallGate(t *testing.T) {
 		}
 	})
 }
+
+// TestCriticalFallbackEligible pins the R6 attempt policy (extracted
+// pure so it is unit-testable without driving the worker goroutine).
+func TestCriticalFallbackEligible(t *testing.T) {
+	now := time.Now()
+	beyond := now.Add(-criticalFallbackGrace - time.Minute) // down long enough
+	recent := now.Add(-time.Minute)                         // down, but not long enough
+	noDir := updateDirective{}
+	dir := updateDirective{seen: true, targetVersion: "1.2.3"}
+
+	if criticalFallbackEligible(time.Time{}, time.Time{}, now, noDir) {
+		t.Fatal("zero downSince must not be eligible")
+	}
+	if criticalFallbackEligible(recent, time.Time{}, now, noDir) {
+		t.Fatal("down < grace must not be eligible")
+	}
+	if !criticalFallbackEligible(beyond, time.Time{}, now, noDir) {
+		t.Fatal("down >= grace, no directive, no prior attempt must be eligible")
+	}
+	if criticalFallbackEligible(beyond, time.Time{}, now, dir) {
+		t.Fatal("a recorded directive must defer to the directive path")
+	}
+	if criticalFallbackEligible(beyond, now.Add(-time.Minute), now, noDir) {
+		t.Fatal("a recent attempt must be rate-limited")
+	}
+	if !criticalFallbackEligible(beyond, now.Add(-criticalFallbackMinInterval-time.Minute), now, noDir) {
+		t.Fatal("an old enough prior attempt must re-enable")
+	}
+}
+
+// TestBuildCriticalFallbackConfig pins the R6 fallback Config: silent
+// (AutoInstallEnabled), non-authoritative, critical-only, no directed
+// target; env override honoured; explicit-empty disables.
+func TestBuildCriticalFallbackConfig(t *testing.T) {
+	s := &Server{}
+
+	t.Run("default (env unset) — silent critical-only static cycle", func(t *testing.T) {
+		cfg, err := s.buildCriticalFallbackConfig()
+		if err != nil {
+			t.Fatalf("default must be configured, got %v", err)
+		}
+		if !cfg.CriticalOnly || cfg.Authoritative || !cfg.AutoInstallEnabled {
+			t.Fatalf("posture wrong: %+v", cfg)
+		}
+		if cfg.ExpectedVersion != "" {
+			t.Fatalf("fallback must not bind a directed version, got %q", cfg.ExpectedVersion)
+		}
+		if !strings.Contains(cfg.ManifestURL, "update-manifest.json") {
+			t.Fatalf("unexpected static manifest url %q", cfg.ManifestURL)
+		}
+	})
+
+	t.Run("env override honoured", func(t *testing.T) {
+		t.Setenv("OPENZRO_UPDATE_MANIFEST_URL", "https://mirror.example/u.json")
+		cfg, err := s.buildCriticalFallbackConfig()
+		if err != nil || cfg.ManifestURL != "https://mirror.example/u.json" {
+			t.Fatalf("env override not applied: %q %v", cfg.ManifestURL, err)
+		}
+	})
+
+	t.Run("explicit-empty disables the fallback", func(t *testing.T) {
+		t.Setenv("OPENZRO_UPDATE_MANIFEST_URL", "  ")
+		if _, err := s.buildCriticalFallbackConfig(); err == nil {
+			t.Fatal("explicit-empty must disable (error)")
+		}
+	})
+}
+
+// TestFallbackSupersededReason pins the #5 R6 review-#1 invariant:
+// the long RunOnce window must abort the critical fallback if the
+// authoritative path takes over before the privileged install.
+func TestFallbackSupersededReason(t *testing.T) {
+	dirActive := updateDirective{seen: true, targetVersion: "1.2.3"}
+	dirCleared := updateDirective{seen: true, targetVersion: ""}
+	none := updateDirective{}
+
+	// Superseded cases — must wrap errFallbackSuperseded.
+	for _, c := range []struct {
+		name          string
+		connectActive bool
+		mgmtConnected bool
+		d             updateDirective
+	}{
+		{"client stopped", false, false, none},
+		{"client stopped beats mgmt-down", false, false, none},
+		{"management reconnected", true, true, none},
+		{"operator directive arrived", true, false, dirActive},
+	} {
+		err := fallbackSupersededReason(c.connectActive, c.mgmtConnected, c.d)
+		if err == nil || !errors.Is(err, errFallbackSuperseded) {
+			t.Fatalf("%s: expected errFallbackSuperseded, got %v", c.name, err)
+		}
+	}
+
+	// Still eligible — must be nil.
+	if err := fallbackSupersededReason(true, false, none); err != nil {
+		t.Fatalf("unmanaged + no directive must remain eligible, got %v", err)
+	}
+	if err := fallbackSupersededReason(true, false, dirCleared); err != nil {
+		t.Fatalf("a CLEARED directive does not own updates — fallback stays eligible, got %v", err)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"math/rand"
 	"net"
 	"net/http"
@@ -769,4 +770,213 @@ func (s *Server) buildUpdateState() *proto.UpdateState {
 		Available:     available,
 		LastDecision:  decision,
 	}
+}
+
+// ---- R6: critical-only static-manifest fallback ----
+//
+// Last resort for an UNMANAGED client: when management has been
+// unreachable for a sustained period AND no operator directive is
+// recorded AND the client is below the static manifest's security
+// floor (min_version), self-heal SILENTLY — but never slow-roll a
+// routine update behind the operator's back (CriticalOnly). Reuses
+// the shared install gate so it can never collide with the directive
+// or manual install paths; a recorded directive always wins (the
+// directive scheduler owns updates even while mgmt is down).
+const (
+	// Observe connectivity often; the grace + min-interval gate the
+	// ACTUAL attempt so a short mgmt blip never triggers a self-heal.
+	criticalFallbackTick        = 10 * time.Minute
+	criticalFallbackGrace       = time.Hour
+	criticalFallbackMinInterval = time.Hour
+)
+
+// errFallbackSuperseded aborts an in-flight critical-fallback cycle
+// when the authoritative path takes over mid-flight (RunOnce's
+// fetch+download+verify can take minutes). Returned from the
+// fallback's BeforeInstall so the engine aborts BEFORE Install;
+// recognised in attemptCriticalFallback as an expected outcome, not
+// a failure (#5 R6 review #1).
+var errFallbackSuperseded = errors.New("critical fallback superseded — authoritative path took over")
+
+// fallbackSupersededReason is the pure pre-install re-validation
+// (extracted so the #5 R6 review-#1 invariant is unit-testable
+// without a macOS install). nil => still eligible to self-heal;
+// non-nil (wraps errFallbackSuperseded) => the authoritative path
+// took over (client stopped / mgmt reconnected / operator directive)
+// and the cycle must abort before Install.
+func fallbackSupersededReason(connectActive, mgmtConnected bool, d updateDirective) error {
+	switch {
+	case !connectActive:
+		return fmt.Errorf("%w (client stopped)", errFallbackSuperseded)
+	case mgmtConnected:
+		return fmt.Errorf("%w (management reconnected)", errFallbackSuperseded)
+	case d.seen && d.targetVersion != "":
+		return fmt.Errorf("%w (operator directive arrived)", errFallbackSuperseded)
+	default:
+		return nil
+	}
+}
+
+func (s *Server) startCriticalFallbackOnce() {
+	s.criticalFallbackOnce.Do(func() { go s.runCriticalFallbackWorker() })
+}
+
+// criticalFallbackEligible is the pure attempt decision (extracted so
+// the timing policy is unit-testable without driving the goroutine).
+// Caller has already established management is currently DOWN.
+func criticalFallbackEligible(downSince, lastAttempt, now time.Time, d updateDirective) bool {
+	if downSince.IsZero() || now.Sub(downSince) < criticalFallbackGrace {
+		return false // not down long enough
+	}
+	if d.seen && d.targetVersion != "" {
+		return false // a directive is recorded — the directive path owns it
+	}
+	if !lastAttempt.IsZero() && now.Sub(lastAttempt) < criticalFallbackMinInterval {
+		return false // rate-limit re-attempts
+	}
+	return true
+}
+
+func (s *Server) runCriticalFallbackWorker() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("client self-update: critical fallback worker recovered from panic: %v", r)
+		}
+	}()
+
+	base := s.rootCtx
+	if base == nil {
+		base = context.Background()
+	}
+	ticker := time.NewTicker(criticalFallbackTick)
+	defer ticker.Stop()
+
+	var downSince, lastAttempt time.Time
+	for {
+		select {
+		case <-base.Done():
+			return
+		case <-ticker.C:
+		}
+
+		// A deliberately-stopped client (manual Down, or never Up) is
+		// NOT "unmanaged + should be managed" — never self-heal it
+		// (#5 R6 review #2). Reset the clock so a later Up starts
+		// fresh.
+		if !s.connectActive.Load() {
+			downSince, lastAttempt = time.Time{}, time.Time{}
+			continue
+		}
+		if s.statusRecorder.GetManagementState().Connected {
+			downSince, lastAttempt = time.Time{}, time.Time{}
+			continue
+		}
+		now := time.Now()
+		if downSince.IsZero() {
+			downSince = now
+		}
+
+		s.updateDirectiveMu.Lock()
+		d := s.updateDirective
+		s.updateDirectiveMu.Unlock()
+
+		if !criticalFallbackEligible(downSince, lastAttempt, now, d) {
+			continue
+		}
+		lastAttempt = now
+		s.attemptCriticalFallback(base)
+	}
+}
+
+// buildCriticalFallbackConfig assembles the non-authoritative,
+// critical-only static-manifest cycle. No operator-directed target
+// (ExpectedVersion=""), so the static manifest's own version is the
+// target; verify + Team-ID pin are unchanged. AutoInstallEnabled is
+// true because this fires only when the client is vulnerable AND
+// unmanaged AND a tray prompt cannot be relied on — the
+// owner-signed-off silent self-heal posture. An explicitly empty
+// OPENZRO_UPDATE_MANIFEST_URL disables the fallback (escape hatch).
+func (s *Server) buildCriticalFallbackConfig() (selfupdate.Config, error) {
+	url := selfupdate.ResolveManifestURL()
+	if url == "" {
+		return selfupdate.Config{}, errors.New("static fallback disabled (OPENZRO_UPDATE_MANIFEST_URL set empty)")
+	}
+	return selfupdate.Config{
+		CurrentVersion:     version.OpenzroVersion(),
+		ManifestURL:        url,
+		ExpectedVersion:    "",
+		UserAgent:          "openzro-daemon/" + version.OpenzroVersion(),
+		ExpectedTeamID:     selfupdate.BuildTeamID(),
+		AutoInstallEnabled: true,
+		Authoritative:      false,
+		CriticalOnly:       true,
+		ClientID:           s.clientUpdateBucketID(),
+	}, nil
+}
+
+func (s *Server) attemptCriticalFallback(base context.Context) {
+	// Shared single-flight: if a directive/manual install is running,
+	// back off — the fallback is the lowest-priority path.
+	if !s.acquireInstallGate() {
+		return
+	}
+	defer s.releaseInstallGate()
+
+	cfg, err := s.buildCriticalFallbackConfig()
+	if err != nil {
+		log.Infof("client self-update: critical fallback not configured: %v", err)
+		return
+	}
+	cfg.BeforeInstall = func(context.Context) error {
+		// Re-validate IMMEDIATELY before the privileged install: the
+		// RunOnce fetch/download/verify can take minutes, during
+		// which management may reconnect, an operator directive may
+		// arrive, or the user may Down() the client. Any of those
+		// means the authoritative path now owns updates (or the
+		// client must not self-update at all) — abort instead of
+		// installing the rolling static target. The engine aborts
+		// the cycle on a BeforeInstall error before Install
+		// (#5 R6 review #1).
+		s.updateDirectiveMu.Lock()
+		d := s.updateDirective
+		s.updateDirectiveMu.Unlock()
+		if err := fallbackSupersededReason(
+			s.connectActive.Load(),
+			s.statusRecorder.GetManagementState().Connected,
+			d,
+		); err != nil {
+			return err
+		}
+		// Same pre-restart state flush as the directive path (#5128):
+		// best-effort, never aborts a security self-heal.
+		if s.connectClient != nil {
+			if perr := s.connectClient.PersistState(); perr != nil {
+				log.Warnf("client self-update: critical-fallback pre-install flush failed (continuing): %v", perr)
+			}
+		}
+		return nil
+	}
+
+	u, err := selfupdate.New(cfg)
+	if err == selfupdate.ErrUnsupportedPlatform {
+		return // macOS-only in phase 1
+	}
+	if err != nil {
+		log.Errorf("client self-update: critical fallback init: %v", err)
+		return
+	}
+	res, err := u.RunOnce(base)
+	if err != nil {
+		if errors.Is(err, errFallbackSuperseded) {
+			log.Infof("client self-update: critical fallback aborted — %v", err)
+			return
+		}
+		log.Errorf("client self-update: critical fallback: %v", err)
+		return
+	}
+	if res.Installed {
+		log.Infof("client self-update: critical fallback installed %s — service will restart", res.Version)
+		return
+	}
+	log.Infof("client self-update: critical fallback: %s", res.Reason)
 }

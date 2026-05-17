@@ -241,3 +241,29 @@ func TestManifest_ReleasePipelineShape(t *testing.T) {
 		}
 	}
 }
+
+// TestManifest_StaticFallbackShape pins the R6 rolling static
+// manifest the pipeline emits (same schema as the per-version one,
+// but with an operator-set min_version). A client below that floor
+// must read it as Critical so the unmanaged fallback self-heals.
+func TestManifest_StaticFallbackShape(t *testing.T) {
+	const u = "https://github.com/openzro/openzro/releases/download/v2.0.0/openzro_2.0.0_darwin_universal.pkg"
+	const sh = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+	body := `{"version":"2.0.0","min_version":"1.9.0","staged_rollout":100,
+	  "artifacts":{"darwin/arm64":{"url":"` + u + `","sha256":"` + sh + `"},
+	               "darwin/amd64":{"url":"` + u + `","sha256":"` + sh + `"}}}`
+	m, err := ParseManifest([]byte(body))
+	if err != nil {
+		t.Fatalf("static fallback manifest must parse, got %v", err)
+	}
+	// An old client (below min_version) — non-authoritative path.
+	d := Evaluate(GateInput{Current: "1.5.0", Manifest: m, AutoInstallEnabled: true, ClientID: "c"})
+	if !d.Eligible || !d.Critical {
+		t.Fatalf("a client below min_version must be Eligible+Critical, got %+v", d)
+	}
+	// A current client (>= min_version, already at version) — nothing.
+	d = Evaluate(GateInput{Current: "2.0.0", Manifest: m, AutoInstallEnabled: true, ClientID: "c"})
+	if d.Eligible {
+		t.Fatalf("a current client must not be eligible, got %+v", d)
+	}
+}
