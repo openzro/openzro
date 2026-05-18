@@ -9,11 +9,15 @@ import type {
   NodeKind,
 } from "@/interfaces/ControlCenter";
 
-export const STAGE_W = 1500;
-export const STAGE_H = 760;
-const PAD_Y = 48;
-const COL_X0 = 48;
-const COL_GAP = 352;
+// Columns span the MEASURED canvas (the view is full-bleed now), not
+// a fixed stage: x is derived from the live container width so the
+// graph uses 100% of the available area. HEADER_BAND/FOOTER_BAND are
+// the chrome the canvas overlays at top (column labels) and bottom
+// (legend + status).
+export const HEADER_BAND = 40;
+export const FOOTER_BAND = 44;
+const PAD_X = 28;
+const PAD_Y = 18;
 
 export type ColumnId =
   | "focus"
@@ -103,13 +107,17 @@ function columnOf(
 }
 
 // distributeY returns the vertical CENTRE of each of `count` items,
-// evenly spread and block-centred in the stage.
-function distributeY(count: number): number[] {
+// fully contained in the band between the header and footer chrome so
+// cards never clip. Compresses to fit when a column is dense.
+function distributeY(count: number, height: number, cardH: number): number[] {
   if (count <= 0) return [];
-  if (count === 1) return [STAGE_H / 2];
-  const usable = STAGE_H - PAD_Y * 2;
-  const step = usable / (count - 1);
-  return Array.from({ length: count }, (_, i) => PAD_Y + step * i);
+  const top = HEADER_BAND + PAD_Y + cardH / 2;
+  const bottom = height - FOOTER_BAND - PAD_Y - cardH / 2;
+  const mid = (top + bottom) / 2;
+  if (count === 1) return [mid];
+  if (bottom <= top) return Array.from({ length: count }, () => mid);
+  const step = (bottom - top) / (count - 1);
+  return Array.from({ length: count }, (_, i) => top + step * i);
 }
 
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
@@ -120,9 +128,34 @@ function structural(permitSource: string, policyId?: string): boolean {
   return !policyId && permitSource === "";
 }
 
-export function layoutGraph(graph: ControlCenterGraph): LaidOutGraph {
+// columnSlots spreads the focus's columns evenly across the live
+// width: each column gets an equal slot, card centred in it.
+function columnSlots(
+  order: ColumnId[],
+  width: number,
+): Record<ColumnId, { x: number; centerX: number; width: number }> {
+  const usable = Math.max(width - PAD_X * 2, order.length * 200);
+  const slotW = usable / order.length;
+  const out = {} as Record<
+    ColumnId,
+    { x: number; centerX: number; width: number }
+  >;
+  order.forEach((col, slot) => {
+    const centerX = PAD_X + slotW * (slot + 0.5);
+    const cardW = Math.min(CARD_W[col], slotW - 32);
+    out[col] = { x: centerX - cardW / 2, centerX, width: cardW };
+  });
+  return out;
+}
+
+export function layoutGraph(
+  graph: ControlCenterGraph,
+  width: number,
+  height: number,
+): LaidOutGraph {
   const focus = graph.focus.type;
   const order = COLUMN_ORDER[focus] ?? COLUMN_ORDER.peer;
+  const slots = columnSlots(order, width);
 
   const byColumn = new Map<ColumnId, typeof graph.nodes>();
   for (const n of graph.nodes) {
@@ -133,18 +166,22 @@ export function layoutGraph(graph: ControlCenterGraph): LaidOutGraph {
   }
 
   const nodes: LaidOutNode[] = [];
-  order.forEach((col, slot) => {
+  order.forEach((col) => {
     const bucket = (byColumn.get(col) ?? [])
       .slice()
       .sort((a, b) => cmp(a.label || a.id, b.label || b.id));
-    const xLeft = COL_X0 + slot * COL_GAP;
-    const ys = distributeY(bucket.length);
+    const slotInfo = slots[col];
+    const tallest = bucket.reduce(
+      (m, n) => Math.max(m, CARD_H[n.kind] ?? 50),
+      40,
+    );
+    const ys = distributeY(bucket.length, height, tallest);
     bucket.forEach((n, i) => {
       const h = CARD_H[n.kind] ?? 50;
       nodes.push({
         id: n.id,
-        position: { x: xLeft, y: ys[i] - h / 2 },
-        width: CARD_W[col],
+        position: { x: slotInfo.x, y: ys[i] - h / 2 },
+        width: slotInfo.width,
         height: h,
         data: {
           kind: n.kind,
@@ -189,13 +226,7 @@ export function layoutGraph(graph: ControlCenterGraph): LaidOutGraph {
     };
   });
 
-  return {
-    nodes,
-    edges,
-    adjacency,
-    width: STAGE_W,
-    height: STAGE_H,
-  };
+  return { nodes, edges, adjacency, width, height };
 }
 
 const COLUMN_LABEL: Record<ColumnId, string> = {
@@ -214,20 +245,24 @@ export interface ColumnHeader {
   width: number;
 }
 
-export function columnHeaders(graph: ControlCenterGraph): ColumnHeader[] {
+export function columnHeaders(
+  graph: ControlCenterGraph,
+  width: number,
+): ColumnHeader[] {
   const focus = graph.focus.type;
   const order = COLUMN_ORDER[focus] ?? COLUMN_ORDER.peer;
+  const slots = columnSlots(order, width);
   const counts = new Map<ColumnId, number>();
   for (const n of graph.nodes) {
     const col = columnOf(n, order);
     counts.set(col, (counts.get(col) ?? 0) + 1);
   }
-  return order.map((col, slot) => ({
+  return order.map((col) => ({
     id: col,
     label: COLUMN_LABEL[col],
     count: counts.get(col) ?? 0,
-    x: COL_X0 + slot * COL_GAP,
-    width: CARD_W[col],
+    x: slots[col].x,
+    width: slots[col].width,
   }));
 }
 

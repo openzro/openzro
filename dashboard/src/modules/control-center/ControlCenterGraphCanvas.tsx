@@ -3,7 +3,7 @@
 import "@xyflow/react/dist/style.css";
 import { type Edge, type Node, ReactFlow } from "@xyflow/react";
 import { RefreshCw } from "lucide-react";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import type {
   ControlCenterGraph,
   FocusType,
@@ -12,40 +12,40 @@ import { CC_EDGE_TYPES } from "./ControlCenterFlowEdge";
 import {
   type ColumnHeader,
   columnHeaders,
+  FOOTER_BAND,
+  HEADER_BAND,
   layoutGraph,
   reachableFrom,
-  STAGE_H,
-  STAGE_W,
 } from "./controlCenterLayout";
 import { CC_NODE_TYPES } from "./ControlCenterNodes";
 
-// ADR-0017 2026-05-18b — the v2 columnar canvas. Replaces the v1
-// dagre reach graph: a fixed 1500×760 stage, four focus tabs,
-// Policy always the middle pivot column, edges coloured by
+// ADR-0017 2026-05-18b — the v2 columnar canvas. Full-bleed: the
+// stage spans the live container (ResizeObserver-measured), Policy
+// is always the middle pivot column, edges are coloured by
 // enforcement state (green = enforced, red = posture_blocked —
-// owner-sanctioned brand exception). The stage is pan/zoom-locked;
-// the wrapper scrolls horizontally on narrow viewports, matching the
-// hifi handoff.
-
-const HEADER_H = 56;
-const FOOTER_H = 44;
+// owner-sanctioned brand exception). Column labels sit in a top
+// band, legend + status in a bottom footer; both are overlays so
+// the graph itself uses 100% of the area.
 
 function ColumnHeaders({ cols }: { cols: ColumnHeader[] }) {
   return (
-    <div className="pointer-events-none absolute left-0 top-0 h-14 w-full">
+    <div
+      className="pointer-events-none absolute inset-x-0 top-0 z-10"
+      style={{ height: HEADER_BAND }}
+    >
       {cols.map((c) => (
         <div
           key={c.id}
-          className="absolute flex items-center gap-2"
-          style={{ left: c.x, top: 20, width: c.width }}
+          className="absolute flex items-center justify-center gap-2"
+          style={{ left: c.x, top: 12, width: c.width }}
         >
-          <span className="h-1.5 w-1.5 rounded-full bg-oz2-acc opacity-60" />
-          <span className="font-mono text-[10.5px] uppercase tracking-wide text-oz2-text-faint">
+          <span className="h-1.5 w-1.5 rounded-full bg-oz2-acc" />
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-oz2-text-2">
             {c.label}
           </span>
           <span
             className="font-mono rounded border border-oz2-border-soft bg-oz2-bg-soft
-              px-1.5 py-px text-[9.5px] text-oz2-text-muted"
+              px-1.5 py-px text-[10px] text-oz2-text-muted"
           >
             {c.count}
           </span>
@@ -85,18 +85,38 @@ export default function ControlCenterGraphCanvas({
   onFocusNode?: (view: FocusType, id: string) => void;
   onRefresh?: () => void;
 }) {
-  const laid = useMemo(() => layoutGraph(graph), [graph]);
-  const headers = useMemo(() => columnHeaders(graph), [graph]);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
   const [hovered, setHovered] = useState<string | null>(null);
 
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const r = entry.contentRect;
+      setSize({ w: Math.round(r.width), h: Math.round(r.height) });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const ready = size.w > 0 && size.h > 0;
+  const laid = useMemo(
+    () => (ready ? layoutGraph(graph, size.w, size.h) : null),
+    [graph, ready, size.w, size.h],
+  );
+  const headers = useMemo(
+    () => (ready ? columnHeaders(graph, size.w) : []),
+    [graph, ready, size.w],
+  );
   const lit = useMemo(
-    () => (hovered ? reachableFrom(hovered, laid.adjacency) : null),
-    [hovered, laid.adjacency],
+    () => (hovered && laid ? reachableFrom(hovered, laid.adjacency) : null),
+    [hovered, laid],
   );
 
   const nodes: Node[] = useMemo(
     () =>
-      laid.nodes.map((n) => ({
+      (laid?.nodes ?? []).map((n) => ({
         id: n.id,
         type: "cc",
         position: n.position,
@@ -111,114 +131,101 @@ export default function ControlCenterGraphCanvas({
           emphasis: !!lit && lit.has(n.id),
         },
       })),
-    [laid.nodes, lit],
+    [laid, lit],
   );
 
   const edges: Edge[] = useMemo(
     () =>
-      laid.edges.map((e) => {
+      (laid?.edges ?? []).map((e) => {
         const inLit = !!lit && lit.has(e.source) && lit.has(e.target);
         return {
           id: e.id,
           source: e.source,
           target: e.target,
           type: "cc",
-          data: {
-            ...e.data,
-            dimmed: !!lit && !inLit,
-            emphasis: inLit,
-          },
+          data: { ...e.data, dimmed: !!lit && !inLit, emphasis: inLit },
         };
       }),
-    [laid.edges, lit],
+    [laid, lit],
   );
 
   return (
     <div
-      className="oz-cc-scroll relative w-full overflow-auto rounded-oz2-card
-        border border-oz2-border-strong bg-oz2-bg"
-      style={{ height: "72vh" }}
+      ref={wrapRef}
+      className="oz-cc-scroll relative h-full w-full overflow-hidden
+        rounded-oz2-card border border-oz2-border-strong bg-oz2-bg"
     >
-      <div
-        className="relative"
-        style={{ width: STAGE_W, height: STAGE_H + HEADER_H + FOOTER_H }}
+      <div className="oz-cc-grid pointer-events-none absolute inset-0" />
+      <span
+        className="font-mono pointer-events-none absolute right-3 top-2.5 z-20
+          rounded-md bg-oz2-acc-soft px-2 py-0.5 text-[10px] uppercase text-oz2-acc-text"
       >
-        <div className="oz-cc-grid pointer-events-none absolute inset-0" />
-        <span
-          className="font-mono absolute right-4 top-3 z-10 rounded-md bg-oz2-acc-soft
-            px-2 py-0.5 text-[10px] uppercase text-oz2-acc-text"
-        >
-          Beta
-        </span>
-        <ColumnHeaders cols={headers} />
+        Beta
+      </span>
 
-        <div
-          className="absolute left-0"
-          style={{ top: HEADER_H, width: STAGE_W, height: STAGE_H }}
-        >
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            nodeTypes={CC_NODE_TYPES}
-            edgeTypes={CC_EDGE_TYPES}
-            fitView={false}
-            defaultViewport={{ x: 0, y: 0, zoom: 1 }}
-            nodesDraggable={false}
-            nodesConnectable={false}
-            elementsSelectable={!!onEdgeClick}
-            panOnDrag={false}
-            panOnScroll={false}
-            zoomOnScroll={false}
-            zoomOnPinch={false}
-            zoomOnDoubleClick={false}
-            preventScrolling={false}
-            proOptions={{ hideAttribution: true }}
-            onNodeMouseEnter={(_, n) => setHovered(n.id)}
-            onNodeMouseLeave={() => setHovered(null)}
-            onNodeClick={(_, node) => {
-              const d = node.data as {
-                kind?: string;
-                switchable?: boolean;
-              };
-              if (
-                onFocusNode &&
-                d.switchable &&
-                (d.kind === "peer" || d.kind === "group")
-              ) {
-                onFocusNode(d.kind as FocusType, node.id);
-              }
-            }}
-            onEdgeClick={(_, edge) => {
-              const pid = (edge.data as { policyId?: string } | undefined)
-                ?.policyId;
-              if (pid && onEdgeClick) onEdgeClick(pid);
-            }}
-          />
-        </div>
+      {ready && <ColumnHeaders cols={headers} />}
 
-        <div
-          className="sticky bottom-0 left-0 flex items-center justify-between
-            border-t border-oz2-border bg-oz2-surface/80 px-4 backdrop-blur-md"
-          style={{ height: FOOTER_H }}
-        >
-          <Legend />
-          <div className="flex items-center gap-3 text-[11px] text-oz2-text-muted">
-            <span>
-              {graph.edges.length} connection
-              {graph.edges.length === 1 ? "" : "s"}
-            </span>
-            {onRefresh && (
-              <button
-                type="button"
-                onClick={onRefresh}
-                className="flex items-center gap-1.5 rounded-md border border-oz2-border
-                  px-2 py-1 text-oz2-text-2 transition-colors hover:bg-oz2-hover"
-              >
-                <RefreshCw className="h-3 w-3" />
-                Refresh
-              </button>
-            )}
-          </div>
+      <div className="absolute inset-0">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={CC_NODE_TYPES}
+          edgeTypes={CC_EDGE_TYPES}
+          fitView={false}
+          defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable={!!onEdgeClick}
+          panOnDrag={false}
+          panOnScroll={false}
+          zoomOnScroll={false}
+          zoomOnPinch={false}
+          zoomOnDoubleClick={false}
+          preventScrolling={false}
+          proOptions={{ hideAttribution: true }}
+          onNodeMouseEnter={(_, n) => setHovered(n.id)}
+          onNodeMouseLeave={() => setHovered(null)}
+          onNodeClick={(_, node) => {
+            const d = node.data as { kind?: string; switchable?: boolean };
+            if (
+              onFocusNode &&
+              d.switchable &&
+              (d.kind === "peer" || d.kind === "group")
+            ) {
+              onFocusNode(d.kind as FocusType, node.id);
+            }
+          }}
+          onEdgeClick={(_, edge) => {
+            const pid = (edge.data as { policyId?: string } | undefined)
+              ?.policyId;
+            if (pid && onEdgeClick) onEdgeClick(pid);
+          }}
+        />
+      </div>
+
+      <div
+        className="absolute inset-x-0 bottom-0 z-10 flex items-center
+          justify-between border-t border-oz2-border bg-oz2-surface/80 px-4
+          backdrop-blur-md"
+        style={{ height: FOOTER_BAND }}
+      >
+        <Legend />
+        <div className="flex items-center gap-3 text-[11px] text-oz2-text-muted">
+          <span>
+            {graph.edges.length} connection
+            {graph.edges.length === 1 ? "" : "s"}
+          </span>
+          {onRefresh && (
+            <button
+              type="button"
+              onClick={onRefresh}
+              className="flex items-center gap-1.5 rounded-md border border-oz2-border
+                px-2 py-1 text-oz2-text-2 transition-colors hover:bg-oz2-hover"
+            >
+              <RefreshCw className="h-3 w-3" />
+              Refresh
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -13,6 +13,7 @@ import {
   OzTabsTrigger,
 } from "@components/v2/OzTabs";
 import useFetchApi from "@utils/api";
+import { Filter } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import React, { useMemo, useState } from "react";
 import {
@@ -122,20 +123,18 @@ export default function ControlCenterView() {
     syncUrl(v, id);
   };
 
+  const viewLabel = VIEWS.find((v) => v.value === view)?.label ?? "focus";
   return (
-    <div className="flex h-full flex-col gap-4 p-6">
-      <div>
-        <h1 className="text-xl font-semibold text-oz2-text">
-          Control Center
-        </h1>
-        <p className="mt-1 text-sm text-oz2-text-muted">
-          Read-only topology — who reaches what, through which policy,
-          on which ports, and what is policy-permitted but
-          posture-blocked.
-        </p>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="flex h-full min-h-0 flex-col">
+      {/* Full-width toolbar strip over the canvas (hifi handoff): the
+          breadcrumb in the shell already names the page, so the
+          in-page title is dropped to give the graph 100% of the area.
+          The focus picker is a compact filter pill, not a wide
+          input. */}
+      <div
+        className="flex flex-wrap items-center gap-3 border-b border-oz2-border
+          bg-oz2-bg-sunken px-5 py-2.5"
+      >
         <OzTabs value={view} onValueChange={onViewChange}>
           <OzTabsList>
             {VIEWS.map((v) => (
@@ -147,9 +146,13 @@ export default function ControlCenterView() {
         </OzTabs>
 
         <OzSelect value={focusId} onValueChange={onFocusChange}>
-          <OzSelectTrigger className="w-[280px]">
+          <OzSelectTrigger
+            className="!h-8 !w-auto min-w-[200px] gap-2 !rounded-full !px-3
+              text-xs text-oz2-text-2"
+          >
+            <Filter className="h-3.5 w-3.5 shrink-0 text-oz2-text-muted" />
             <OzSelectValue
-              placeholder={`Select a ${view} to inspect…`}
+              placeholder={`Filter ${viewLabel.toLowerCase()}…`}
             />
           </OzSelectTrigger>
           <OzSelectContent>
@@ -160,30 +163,60 @@ export default function ControlCenterView() {
             ))}
           </OzSelectContent>
         </OzSelect>
+
+        <p className="ml-auto hidden text-[11px] text-oz2-text-muted lg:block">
+          Read-only topology — who reaches what, through which policy,
+          on which ports.
+        </p>
       </div>
 
-      <ControlCenterBody
-        view={view}
-        focusId={focusId}
-        isLoading={isLoading}
-        graph={graph}
-        onFocusNode={onFocusNode}
-        onRefresh={() => {
-          void mutate();
-        }}
-        onPolicyOpen={(policyId) => {
-          // Round-trip (F1): tell the editor to return to THIS focus,
-          // not the access-control list, so the audit loop closes.
-          const returnTo = `/control-center?view=${view}&focus=${encodeURIComponent(
-            focusId,
-          )}`;
-          router.push(
-            `/access-control/edit?id=${policyId}&returnTo=${encodeURIComponent(
-              returnTo,
-            )}`,
-          );
-        }}
-      />
+      <div className="relative min-h-0 flex-1 p-4">
+        <ControlCenterBody
+          view={view}
+          focusId={focusId}
+          isLoading={isLoading}
+          graph={graph}
+          onFocusNode={onFocusNode}
+          onRefresh={() => {
+            void mutate();
+          }}
+          onPolicyOpen={(policyId) => {
+            // Round-trip (F1): tell the editor to return to THIS
+            // focus, not the access-control list, so the audit loop
+            // closes.
+            const returnTo = `/control-center?view=${view}&focus=${encodeURIComponent(
+              focusId,
+            )}`;
+            router.push(
+              `/access-control/edit?id=${policyId}&returnTo=${encodeURIComponent(
+                returnTo,
+              )}`,
+            );
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function Centered({
+  children,
+  tone = "muted",
+}: {
+  children: React.ReactNode;
+  tone?: "muted" | "faint" | "err";
+}) {
+  const cls =
+    tone === "err"
+      ? "text-oz2-err"
+      : tone === "faint"
+        ? "text-oz2-text-faint"
+        : "text-oz2-text-muted";
+  return (
+    <div
+      className={`flex h-full items-center justify-center px-6 text-center text-sm ${cls}`}
+    >
+      <span className="max-w-md">{children}</span>
     </div>
   );
 }
@@ -207,15 +240,13 @@ function ControlCenterBody({
 }) {
   if (focusId === "") {
     return (
-      <div className="text-sm text-oz2-text-faint">
-        Pick a focus node above to render its access graph.
-      </div>
+      <Centered tone="faint">
+        Pick a {view} from the filter to render its topology.
+      </Centered>
     );
   }
   if (isLoading) {
-    return (
-      <div className="text-sm text-oz2-text-muted">Resolving access…</div>
-    );
+    return <Centered>Resolving access…</Centered>;
   }
   // Absence of evidence is NOT evidence of absence (audit tool). The
   // backend returns a graph OBJECT (edges possibly []) for a valid
@@ -233,37 +264,44 @@ function ControlCenterBody({
     graph.focus.type !== view
   ) {
     return (
-      <div className="text-sm text-oz2-err">
-        Could not resolve the access graph for the selected {view} —
-        it may no longer exist, or the request failed. Re-select a
-        focus or retry.
-      </div>
+      <Centered tone="err">
+        Could not resolve the topology for the selected {view} — it
+        may no longer exist, or the request failed. Re-select a focus
+        or retry.
+      </Centered>
     );
   }
-  if (graph.edges.length === 0) {
+  // Defensive at the API boundary: the backend now always emits
+  // arrays, but a nil slice would marshal as JSON null — guard so
+  // .length can never throw (#39 v2 review).
+  const edges = graph.edges ?? [];
+  if (edges.length === 0) {
     return (
-      <div className="text-sm text-oz2-text-muted">
-        This {graph.focus.type} reaches nothing right now.
-      </div>
+      <Centered>
+        This {graph.focus.type} reaches nothing through any policy
+        right now.
+      </Centered>
     );
   }
 
-  // P4: the xyflow canvas is the primary view; the textual list is
-  // kept as the accessible / no-graph fallback in a <details>.
+  // The columnar canvas is the primary view; the textual list is the
+  // accessible / no-graph fallback, kept compact below it.
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <ControlCenterGraphCanvas
-        graph={graph}
-        onEdgeClick={onPolicyOpen}
-        onFocusNode={onFocusNode}
-        onRefresh={onRefresh}
-      />
-      <details className="text-sm text-oz2-text-muted">
+    <div className="flex h-full min-h-0 flex-col gap-2">
+      <div className="min-h-0 flex-1">
+        <ControlCenterGraphCanvas
+          graph={graph}
+          onEdgeClick={onPolicyOpen}
+          onFocusNode={onFocusNode}
+          onRefresh={onRefresh}
+        />
+      </div>
+      <details className="shrink-0 text-sm text-oz2-text-muted">
         <summary className="cursor-pointer select-none">
-          Reachable, as a list ({graph.edges.length})
+          Reachable, as a list ({edges.length})
         </summary>
-        <ul className="mt-2 flex flex-col gap-1 text-oz2-text">
-          {graph.edges.map((e, i) => (
+        <ul className="mt-2 flex max-h-40 flex-col gap-1 overflow-auto text-oz2-text">
+          {edges.map((e, i) => (
             <li
               key={`${e.from}-${e.to}-${e.policyId ?? e.permitSource}-${i}`}
             >
