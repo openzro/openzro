@@ -1762,6 +1762,17 @@ func TestSqlStore_GetAllPostureChecks(t *testing.T) {
 			},
 		},
 	}
+	// accountB is NOT in extended-store.sql (only accountA's row is —
+	// edafee4e… merely appears there as a column value, not as an
+	// accounts.id). posture_checks has a real FK to accounts
+	// (fk_accounts_posture_checks), so seeding accountB's check only
+	// "worked" on SQLite, which does not enforce FKs by default; on
+	// Postgres/MySQL it violated the constraint (SQLSTATE 23503) and
+	// failed CI. Create the parent account so the cross-account
+	// assertion this test exists for is exercised on every engine.
+	require.NoError(t, store.SaveAccount(ctx,
+		newAccountWithId(ctx, accountB, "posture-test-userB", "")))
+
 	for _, c := range seed {
 		require.NoError(t, store.SavePostureChecks(ctx, LockingStrengthUpdate, c))
 	}
