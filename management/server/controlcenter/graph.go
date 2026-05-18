@@ -24,13 +24,15 @@ var (
 	ErrUnsupportedFocus = errors.New("unsupported focus type")
 )
 
-// FocusType is the kind of node the graph is centred on. v1 ships peer
-// and group focus; network/user focus are an ADR-0017 v2 follow-up.
+// FocusType is the kind of node the graph is centred on. v1: peer,
+// group. v2 (ADR-0017 topology amendment): user — the user-centric
+// columnar projection User→Peers→Policies→Resources.
 type FocusType string
 
 const (
 	FocusPeer  FocusType = "peer"
 	FocusGroup FocusType = "group"
+	FocusUser  FocusType = "user"
 )
 
 // Focus identifies the node the graph is built around.
@@ -45,6 +47,7 @@ type NodeKind string
 
 const (
 	NodeFocus           NodeKind = "focus"
+	NodeUser            NodeKind = "user"
 	NodePolicy          NodeKind = "policy"
 	NodeGroup           NodeKind = "group"
 	NodePeer            NodeKind = "peer"

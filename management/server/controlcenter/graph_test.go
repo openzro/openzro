@@ -18,7 +18,9 @@ func TestEnumWireValues(t *testing.T) {
 	}{
 		{string(FocusPeer), "peer"},
 		{string(FocusGroup), "group"},
+		{string(FocusUser), "user"},
 		{string(NodeFocus), "focus"},
+		{string(NodeUser), "user"},
 		{string(NodePolicy), "policy"},
 		{string(NodeGroup), "group"},
 		{string(NodePeer), "peer"},
