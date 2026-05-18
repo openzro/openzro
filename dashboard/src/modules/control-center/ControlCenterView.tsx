@@ -126,6 +126,18 @@ export default function ControlCenterView() {
     focusId !== "",
   );
 
+  // Prefetch /policies as soon as a topology with policy nodes is
+  // shown, so the edit modal is ready *before* the first click
+  // instead of blocking on the request then (R5b deferred it to
+  // the click, which made the first edit feel broken). The four
+  // entity lists stay active-tab-only — the R5b win is kept.
+  useEffect(() => {
+    if (policiesNeeded) return;
+    if (graph?.nodes?.some((n) => n.kind === "policy")) {
+      setPoliciesNeeded(true);
+    }
+  }, [graph, policiesNeeded]);
+
   const options = useMemo(() => {
     if (view === "peer") {
       return (peers ?? [])

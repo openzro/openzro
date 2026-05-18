@@ -295,6 +295,7 @@ export default function ControlCenterGraphCanvas({
               kind?: string;
               switchable?: boolean;
               column?: string;
+              entityId?: string;
             };
             // The focus card is the picker affordance: clicking it
             // (or its chevron) opens an inline selector anchored to
@@ -312,9 +313,15 @@ export default function ControlCenterGraphCanvas({
             if (
               onFocusNode &&
               d.switchable &&
+              d.entityId &&
               (d.kind === "peer" || d.kind === "group")
             ) {
-              onFocusNode(d.kind as FocusType, node.id);
+              // d.entityId is the raw account-entity id; node.id is
+              // prefixed for groups ("group:<gid>") / resources, which
+              // the focus endpoint + picker do NOT understand —
+              // passing node.id 404'd or fell back to the default
+              // focus (#39 v2 review).
+              onFocusNode(d.kind as FocusType, d.entityId);
             }
           }}
           onEdgeClick={(_, edge) => {
