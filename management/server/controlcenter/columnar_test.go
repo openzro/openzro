@@ -91,7 +91,7 @@ func edgeOf(g *GraphDTO, from, to string) *Edge {
 }
 
 func TestPeerFocus_Columnar(t *testing.T) {
-	g, err := BuildGraph(context.Background(), acct(), Focus{Type: FocusPeer, ID: "p1"}, nil)
+	g, err := BuildGraph(context.Background(), acct(), Focus{Type: FocusPeer, ID: "p1"})
 	require.NoError(t, err)
 
 	focus := nodeByID(g, "p1")
@@ -136,7 +136,7 @@ func TestPeerFocus_PostureBlocked(t *testing.T) {
 	}}
 	a.Policies[0].SourcePostureChecks = []string{"pc1"}
 
-	g, err := BuildGraph(context.Background(), a, Focus{Type: FocusPeer, ID: "p1"}, nil)
+	g, err := BuildGraph(context.Background(), a, Focus{Type: FocusPeer, ID: "p1"})
 	require.NoError(t, err)
 
 	e := edgeOf(g, "p1", "policy:pol1")
@@ -161,7 +161,7 @@ func TestPeerFocus_ResourceViaGroupNoGroupIDs(t *testing.T) {
 	a := acct()
 	a.NetworkResources[0].GroupIDs = nil // prove we don't depend on it
 
-	g, err := BuildGraph(context.Background(), a, Focus{Type: FocusPeer, ID: "p1"}, nil)
+	g, err := BuildGraph(context.Background(), a, Focus{Type: FocusPeer, ID: "p1"})
 	require.NoError(t, err)
 
 	nr := nodeByID(g, "nr:nr1")
@@ -171,7 +171,7 @@ func TestPeerFocus_ResourceViaGroupNoGroupIDs(t *testing.T) {
 }
 
 func TestUserFocus_Columnar(t *testing.T) {
-	g, err := BuildGraph(context.Background(), acct(), Focus{Type: FocusUser, ID: "u1"}, nil)
+	g, err := BuildGraph(context.Background(), acct(), Focus{Type: FocusUser, ID: "u1"})
 	require.NoError(t, err)
 
 	u := nodeByID(g, "u1")
@@ -198,7 +198,7 @@ func TestUserFocus_Columnar(t *testing.T) {
 }
 
 func TestGroupFocus_Columnar(t *testing.T) {
-	g, err := BuildGraph(context.Background(), acct(), Focus{Type: FocusGroup, ID: "g1"}, nil)
+	g, err := BuildGraph(context.Background(), acct(), Focus{Type: FocusGroup, ID: "g1"})
 	require.NoError(t, err)
 
 	focus := nodeByID(g, "group:g1")
@@ -222,7 +222,7 @@ func TestGroupFocus_AllMembersPostureBlocked(t *testing.T) {
 	}}
 	a.Policies[0].SourcePostureChecks = []string{"pc1"}
 
-	g, err := BuildGraph(context.Background(), a, Focus{Type: FocusGroup, ID: "g1"}, nil)
+	g, err := BuildGraph(context.Background(), a, Focus{Type: FocusGroup, ID: "g1"})
 	require.NoError(t, err)
 
 	e := edgeOf(g, "group:g1", "policy:pol1")
@@ -239,7 +239,7 @@ func TestGroupState_Strict(t *testing.T) {
 		a.Groups["g1"] = &types.Group{ID: "g1", Name: "engineers"} // 0 peers
 
 		g, err := BuildGraph(context.Background(), a,
-			Focus{Type: FocusGroup, ID: "g1"}, nil)
+			Focus{Type: FocusGroup, ID: "g1"})
 		require.NoError(t, err)
 		require.NotNil(t, nodeByID(g, "group:g1")) // focus card stays
 		require.Nil(t, edgeOf(g, "group:g1", "policy:pol1"))
@@ -261,7 +261,7 @@ func TestGroupState_Strict(t *testing.T) {
 		a.Policies[0].SourcePostureChecks = []string{"pc1"}
 
 		g, err := BuildGraph(context.Background(), a,
-			Focus{Type: FocusGroup, ID: "g1"}, nil)
+			Focus{Type: FocusGroup, ID: "g1"})
 		require.NoError(t, err)
 		e := edgeOf(g, "group:g1", "policy:pol1")
 		require.NotNil(t, e)
@@ -285,7 +285,7 @@ func TestGroupState_Strict(t *testing.T) {
 		a.Policies[0].SourcePostureChecks = []string{"pc1"}
 
 		g, err := BuildGraph(context.Background(), a,
-			Focus{Type: FocusGroup, ID: "g1"}, nil)
+			Focus{Type: FocusGroup, ID: "g1"})
 		require.NoError(t, err)
 		e := edgeOf(g, "group:g1", "policy:pol1")
 		require.NotNil(t, e)
@@ -298,7 +298,7 @@ func TestGroupState_Strict(t *testing.T) {
 }
 
 func TestNetworkFocus_InverseFanIn(t *testing.T) {
-	g, err := BuildGraph(context.Background(), acct(), Focus{Type: FocusNetwork, ID: "nr1"}, nil)
+	g, err := BuildGraph(context.Background(), acct(), Focus{Type: FocusNetwork, ID: "nr1"})
 	require.NoError(t, err)
 
 	focus := nodeByID(g, "nr:nr1")
@@ -330,7 +330,7 @@ func TestNetworkFocus_PolicyViaResourceGroup(t *testing.T) {
 	a.NetworkResources[0].GroupIDs = nil // prove we don't depend on it
 	a.Policies[0].Rules[0].DestinationResource = types.Resource{}
 
-	g, err := BuildGraph(context.Background(), a, Focus{Type: FocusNetwork, ID: "nr1"}, nil)
+	g, err := BuildGraph(context.Background(), a, Focus{Type: FocusNetwork, ID: "nr1"})
 	require.NoError(t, err)
 
 	require.NotNil(t, nodeByID(g, "nr:nr1"))
@@ -344,25 +344,25 @@ func TestNetworkFocus_PolicyViaResourceGroup(t *testing.T) {
 
 func TestBuildGraph_Errors(t *testing.T) {
 	a := acct()
-	_, err := BuildGraph(context.Background(), a, Focus{Type: FocusPeer, ID: "ghost"}, nil)
+	_, err := BuildGraph(context.Background(), a, Focus{Type: FocusPeer, ID: "ghost"})
 	require.ErrorIs(t, err, ErrFocusNotFound)
 
-	_, err = BuildGraph(context.Background(), a, Focus{Type: FocusUser, ID: "ghost"}, nil)
+	_, err = BuildGraph(context.Background(), a, Focus{Type: FocusUser, ID: "ghost"})
 	require.ErrorIs(t, err, ErrFocusNotFound)
 
-	_, err = BuildGraph(context.Background(), a, Focus{Type: FocusNetwork, ID: "ghost"}, nil)
+	_, err = BuildGraph(context.Background(), a, Focus{Type: FocusNetwork, ID: "ghost"})
 	require.ErrorIs(t, err, ErrFocusNotFound)
 
-	_, err = BuildGraph(context.Background(), a, Focus{Type: "bogus", ID: "x"}, nil)
+	_, err = BuildGraph(context.Background(), a, Focus{Type: "bogus", ID: "x"})
 	require.ErrorIs(t, err, ErrUnsupportedFocus)
 }
 
 func TestBuildGraph_Deterministic(t *testing.T) {
 	a := acct()
-	first, err := BuildGraph(context.Background(), a, Focus{Type: FocusPeer, ID: "p1"}, nil)
+	first, err := BuildGraph(context.Background(), a, Focus{Type: FocusPeer, ID: "p1"})
 	require.NoError(t, err)
 	for i := 0; i < 20; i++ {
-		next, err := BuildGraph(context.Background(), a, Focus{Type: FocusPeer, ID: "p1"}, nil)
+		next, err := BuildGraph(context.Background(), a, Focus{Type: FocusPeer, ID: "p1"})
 		require.NoError(t, err)
 		require.Equal(t, first, next)
 	}
@@ -375,7 +375,7 @@ func TestEmptyGraphMarshalsAsArrays(t *testing.T) {
 	a := acct()
 	a.Policies = nil // peer p1 now matches no policy
 
-	g, err := BuildGraph(context.Background(), a, Focus{Type: FocusPeer, ID: "p1"}, nil)
+	g, err := BuildGraph(context.Background(), a, Focus{Type: FocusPeer, ID: "p1"})
 	require.NoError(t, err)
 	require.NotNil(t, g.Edges)
 	require.Len(t, g.Edges, 0)
@@ -391,13 +391,13 @@ func TestEmptyGraphMarshalsAsArrays(t *testing.T) {
 func TestDisabledPolicyAndRuleSkipped(t *testing.T) {
 	a := acct()
 	a.Policies[0].Enabled = false
-	g, err := BuildGraph(context.Background(), a, Focus{Type: FocusPeer, ID: "p1"}, nil)
+	g, err := BuildGraph(context.Background(), a, Focus{Type: FocusPeer, ID: "p1"})
 	require.NoError(t, err)
 	require.Nil(t, nodeByID(g, "policy:pol1"))
 
 	a.Policies[0].Enabled = true
 	a.Policies[0].Rules[0].Enabled = false
-	g, err = BuildGraph(context.Background(), a, Focus{Type: FocusPeer, ID: "p1"}, nil)
+	g, err = BuildGraph(context.Background(), a, Focus{Type: FocusPeer, ID: "p1"})
 	require.NoError(t, err)
 	require.Nil(t, nodeByID(g, "policy:pol1"))
 }

@@ -1,14 +1,19 @@
-// Package controlcenter builds the read-only access-graph DTO that
-// answers, for a focus node, what it reaches right now, through which
-// policy (or route default-permit), on which protocols/ports, and what
-// is policy-permitted but posture-blocked.
+// Package controlcenter builds the read-only access-graph DTO for the
+// v2 topology view: for a focus node it answers, through which
+// policy (posture-aware), on which protocols/ports, can a source
+// reach a resource — and what is policy-permitted but
+// posture-blocked. It is a POLICY-TOPOLOGY projection, not a live
+// effective-reach walk: each edge's State is the engine-truth posture
+// distinction (enforced vs posture_blocked), but the graph does NOT
+// gate on live peer validation the way the retired v1 reach graph
+// did (ADR-0017 2026-05-18b / 2026-05-18c).
 //
 // Clean-room (BSD-3 tree, openZro): every type and the adapter logic
-// here are designed against openZro's own enforcement engine
-// (Account.GetPeerConnectionResources / GetRoutesToSync /
-// GetPeerRoutesFirewallRules) and the decisions recorded in
-// docs/adr/0017-control-center-access-graph.md. No upstream NetBird
-// management/ code was consulted or ported.
+// here are designed against openZro's own policy model
+// (Account.Policies / Groups / NetworkResources /
+// GetPoliciesForNetworkResource / types.EvaluateAdmission) and the
+// decisions recorded in docs/adr/0017-control-center-access-graph.md.
+// No upstream NetBird management/ code was consulted or ported.
 package controlcenter
 
 import "errors"
