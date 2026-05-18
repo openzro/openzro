@@ -1,7 +1,7 @@
 "use client";
 
 import { Handle, type NodeProps,Position } from "@xyflow/react";
-import { ChevronDown, Server, Shield, Users } from "lucide-react";
+import { ChevronsUpDown, Server, Shield, Users } from "lucide-react";
 import React from "react";
 import { OSLogo } from "@/modules/peers/PeerOSCell";
 import type { CCFlowNodeData } from "./controlCenterLayout";
@@ -84,7 +84,7 @@ function FocusCard({ d }: { d: RenderData }) {
           </div>
         )}
       </div>
-      <ChevronDown className="ml-2 h-4 w-4 shrink-0 text-oz2-text-faint" />
+      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-oz2-text-faint" />
     </div>
   );
 }

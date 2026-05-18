@@ -2,7 +2,7 @@
 
 import "@xyflow/react/dist/style.css";
 import { type Edge, type Node, ReactFlow } from "@xyflow/react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Search } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type {
   ControlCenterGraph,
@@ -74,22 +74,121 @@ function Legend() {
   );
 }
 
+// FocusPicker is the inline selector anchored to the focus card
+// (NetBird pattern, owner-confirmed 2026-05-18): a search field over
+// a scrollable list. It opens against the card — NOT the header — so
+// the affordance is where the click is.
+function FocusPicker({
+  x,
+  y,
+  cardH,
+  width,
+  stageH,
+  options,
+  currentId,
+  onPick,
+  onClose,
+}: {
+  x: number;
+  y: number;
+  cardH: number;
+  width: number;
+  stageH: number;
+  options: { id: string; label: string }[];
+  currentId: string;
+  onPick: (id: string) => void;
+  onClose: () => void;
+}) {
+  const [q, setQ] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => inputRef.current?.focus(), []);
+
+  const filtered = q
+    ? options.filter((o) =>
+        o.label.toLowerCase().includes(q.toLowerCase()),
+      )
+    : options;
+
+  // Anchor below the card; flip above when the lower half wouldn't
+  // fit a usable list.
+  const openUp = y + cardH > stageH * 0.55;
+  const pos = openUp
+    ? { left: x, bottom: stageH - y + 6 }
+    : { left: x, top: y + cardH + 6 };
+
+  return (
+    <>
+      <div
+        className="absolute inset-0 z-30"
+        onClick={onClose}
+        aria-hidden
+      />
+      <div
+        className="oz-cc-scroll absolute z-40 flex max-h-[300px] flex-col
+          overflow-hidden rounded-oz2-input border border-oz2-border
+          bg-oz2-surface shadow-oz2-lg"
+        style={{ ...pos, width: Math.max(width, 240) }}
+      >
+        <div className="flex items-center gap-2 border-b border-oz2-border-soft px-3 py-2">
+          <Search className="h-3.5 w-3.5 shrink-0 text-oz2-text-faint" />
+          <input
+            ref={inputRef}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search…"
+            className="w-full bg-transparent text-xs text-oz2-text
+              placeholder:text-oz2-text-faint focus:outline-none"
+          />
+        </div>
+        <ul className="oz-cc-scroll min-h-0 flex-1 overflow-auto py-1">
+          {filtered.length === 0 && (
+            <li className="px-3 py-2 text-xs text-oz2-text-faint">
+              No matches
+            </li>
+          )}
+          {filtered.map((o) => (
+            <li key={o.id}>
+              <button
+                type="button"
+                onClick={() => onPick(o.id)}
+                className={`flex w-full items-center truncate px-3 py-1.5
+                  text-left text-xs transition-colors hover:bg-oz2-hover ${
+                    o.id === currentId
+                      ? "bg-oz2-acc-soft text-oz2-acc-text"
+                      : "text-oz2-text-2"
+                  }`}
+              >
+                {o.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </>
+  );
+}
+
 export default function ControlCenterGraphCanvas({
   graph,
   onEdgeClick,
   onFocusNode,
   onRefresh,
-  onOpenPicker,
+  focusOptions,
+  focusId,
+  onPickFocus,
 }: {
   graph: ControlCenterGraph;
   onEdgeClick?: (policyId: string) => void;
   onFocusNode?: (view: FocusType, id: string) => void;
   onRefresh?: () => void;
-  onOpenPicker?: () => void;
+  focusOptions: { id: string; label: string }[];
+  focusId: string;
+  onPickFocus: (id: string) => void;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [hovered, setHovered] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -117,6 +216,10 @@ export default function ControlCenterGraphCanvas({
         ? reachableFrom(hovered, laid.adjOut, laid.adjIn)
         : null,
     [hovered, laid],
+  );
+  const focusNode = useMemo(
+    () => laid?.nodes.find((n) => n.data.column === "focus") ?? null,
+    [laid],
   );
 
   const nodes: Node[] = useMemo(
@@ -197,10 +300,16 @@ export default function ControlCenterGraphCanvas({
               column?: string;
             };
             // The focus card is the picker affordance: clicking it
-            // (or its chevron) opens the focus selector to swap the
-            // inspected entity — same as NetBird's focus dropdown.
+            // (or its chevron) opens an inline selector anchored to
+            // the card to swap the inspected entity.
             if (d.kind === "focus" || d.column === "focus") {
-              onOpenPicker?.();
+              setPickerOpen((v) => !v);
+              return;
+            }
+            // A policy card opens that policy in the editor (same
+            // round-trip as clicking a policy-backed edge).
+            if (d.kind === "policy" && onEdgeClick) {
+              onEdgeClick(node.id.replace(/^policy:/, ""));
               return;
             }
             if (
@@ -218,6 +327,23 @@ export default function ControlCenterGraphCanvas({
           }}
         />
       </div>
+
+      {pickerOpen && focusNode && (
+        <FocusPicker
+          x={focusNode.position.x}
+          y={focusNode.position.y}
+          cardH={focusNode.height}
+          width={focusNode.width}
+          stageH={size.h}
+          options={focusOptions}
+          currentId={focusId}
+          onPick={(id) => {
+            setPickerOpen(false);
+            onPickFocus(id);
+          }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
 
       <div
         className="absolute inset-x-0 bottom-0 z-10 flex items-center

@@ -1,21 +1,14 @@
 "use client";
 
-import {
-  OzSelect,
-  OzSelectContent,
-  OzSelectItem,
-  OzSelectTrigger,
-  OzSelectValue,
-} from "@components/v2/OzSelect";
+import { Modal } from "@components/modal/Modal";
 import {
   OzTabs,
   OzTabsList,
   OzTabsTrigger,
 } from "@components/v2/OzTabs";
 import useFetchApi from "@utils/api";
-import { Filter } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ControlCenterGraph,
   FocusType,
@@ -23,7 +16,9 @@ import {
 import { Group } from "@/interfaces/Group";
 import { NetworkResource } from "@/interfaces/Network";
 import { Peer } from "@/interfaces/Peer";
+import { Policy } from "@/interfaces/Policy";
 import { User } from "@/interfaces/User";
+import { AccessControlModalContent } from "@/modules/access-control/AccessControlModal";
 import ControlCenterGraphCanvas from "@/modules/control-center/ControlCenterGraphCanvas";
 
 // Control Center data layer (ADR-0017 2026-05-18b — v2 topology).
@@ -55,8 +50,6 @@ export default function ControlCenterView() {
     isFocusType(sp.get("view")) ? (sp.get("view") as FocusType) : "peer",
   );
   const [focusId, setFocusId] = useState<string>(sp.get("focus") ?? "");
-  // Controlled so the focus card in the canvas can open this picker.
-  const [pickerOpen, setPickerOpen] = useState(false);
 
   const syncUrl = (v: FocusType, f: string) => {
     const q = new URLSearchParams({ view: v });
@@ -70,6 +63,18 @@ export default function ControlCenterView() {
   const { data: resources } = useFetchApi<NetworkResource[]>(
     "/networks/resources",
     true,
+  );
+  const { data: policies, mutate: mutatePolicies } = useFetchApi<
+    Policy[]
+  >("/policies", true);
+
+  // Policy edit happens in a modal ON the Control Center, not by
+  // navigating to /access-control — the operator must not lose the
+  // topology context (owner-decided 2026-05-18).
+  const [editPolicyId, setEditPolicyId] = useState<string | null>(null);
+  const editPolicy = useMemo(
+    () => (policies ?? []).find((p) => p.id === editPolicyId) ?? null,
+    [policies, editPolicyId],
   );
 
   const {
@@ -125,6 +130,21 @@ export default function ControlCenterView() {
     syncUrl(v, id);
   };
 
+  // NetBird-style: a tab always renders something. When no valid
+  // focus is selected (tab just opened, or a stale URL id that
+  // doesn't belong to this view), auto-pick the first entity; the
+  // user then switches via the picker on the focus card.
+  useEffect(() => {
+    if (options.length === 0) return;
+    if (focusId && options.some((o) => o.id === focusId)) return;
+    const first = options[0].id;
+    setFocusId(first);
+    syncUrl(view, first);
+    // syncUrl is a stable router.replace wrapper; re-running on its
+    // identity would loop. Intentionally keyed on the data only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [options, focusId, view]);
+
   const viewLabel = VIEWS.find((v) => v.value === view)?.label ?? "focus";
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -147,33 +167,10 @@ export default function ControlCenterView() {
           </OzTabsList>
         </OzTabs>
 
-        <OzSelect
-          value={focusId}
-          onValueChange={onFocusChange}
-          open={pickerOpen}
-          onOpenChange={setPickerOpen}
-        >
-          <OzSelectTrigger
-            className="!h-8 !w-auto min-w-[200px] gap-2 !rounded-full !px-3
-              text-xs text-oz2-text-2"
-          >
-            <Filter className="h-3.5 w-3.5 shrink-0 text-oz2-text-muted" />
-            <OzSelectValue
-              placeholder={`Filter ${viewLabel.toLowerCase()}…`}
-            />
-          </OzSelectTrigger>
-          <OzSelectContent>
-            {options.map((o) => (
-              <OzSelectItem key={o.id} value={o.id}>
-                {o.label}
-              </OzSelectItem>
-            ))}
-          </OzSelectContent>
-        </OzSelect>
-
         <p className="ml-auto hidden text-[11px] text-oz2-text-muted lg:block">
           Read-only topology — who reaches what, through which policy,
-          on which ports.
+          on which ports. Click the focus card to switch{" "}
+          {viewLabel.toLowerCase()}.
         </p>
       </div>
 
@@ -184,25 +181,32 @@ export default function ControlCenterView() {
           isLoading={isLoading}
           graph={graph}
           onFocusNode={onFocusNode}
-          onOpenPicker={() => setPickerOpen(true)}
+          focusOptions={options}
+          onPickFocus={onFocusChange}
           onRefresh={() => {
             void mutate();
           }}
-          onPolicyOpen={(policyId) => {
-            // Round-trip (F1): tell the editor to return to THIS
-            // focus, not the access-control list, so the audit loop
-            // closes.
-            const returnTo = `/control-center?view=${view}&focus=${encodeURIComponent(
-              focusId,
-            )}`;
-            router.push(
-              `/access-control/edit?id=${policyId}&returnTo=${encodeURIComponent(
-                returnTo,
-              )}`,
-            );
-          }}
+          onPolicyOpen={(policyId) => setEditPolicyId(policyId)}
         />
       </div>
+
+      <Modal
+        open={!!editPolicy}
+        onOpenChange={(s) => {
+          if (!s) setEditPolicyId(null);
+        }}
+      >
+        {editPolicy && (
+          <AccessControlModalContent
+            key={editPolicy.id}
+            policy={editPolicy}
+            onSuccess={async () => {
+              setEditPolicyId(null);
+              await Promise.all([mutate(), mutatePolicies()]);
+            }}
+          />
+        )}
+      </Modal>
     </div>
   );
 }
@@ -237,7 +241,8 @@ function ControlCenterBody({
   onFocusNode,
   onPolicyOpen,
   onRefresh,
-  onOpenPicker,
+  focusOptions,
+  onPickFocus,
 }: {
   view: FocusType;
   focusId: string;
@@ -246,12 +251,13 @@ function ControlCenterBody({
   onFocusNode: (v: FocusType, id: string) => void;
   onPolicyOpen: (policyId: string) => void;
   onRefresh: () => void;
-  onOpenPicker: () => void;
+  focusOptions: { id: string; label: string }[];
+  onPickFocus: (id: string) => void;
 }) {
   if (focusId === "") {
     return (
       <Centered tone="faint">
-        Pick a {view} from the filter to render its topology.
+        No {view} available to inspect.
       </Centered>
     );
   }
@@ -281,19 +287,11 @@ function ControlCenterBody({
       </Centered>
     );
   }
-  // Defensive at the API boundary: the backend now always emits
-  // arrays, but a nil slice would marshal as JSON null — guard so
-  // .length can never throw (#39 v2 review).
-  const edges = graph.edges ?? [];
-  if (edges.length === 0) {
-    return (
-      <Centered>
-        This {graph.focus.type} reaches nothing through any policy
-        right now.
-      </Centered>
-    );
-  }
-
+  // Even with zero edges we still render the canvas: the focus card
+  // (and its picker) must stay on screen so the operator can switch
+  // to another entity instead of being dropped onto a dead-end text
+  // message (#39 v2 review). The empty state is conveyed by the
+  // footer ("0 connections") and the empty columns.
   return (
     <div className="h-full min-h-0">
       <ControlCenterGraphCanvas
@@ -301,7 +299,9 @@ function ControlCenterBody({
         onEdgeClick={onPolicyOpen}
         onFocusNode={onFocusNode}
         onRefresh={onRefresh}
-        onOpenPicker={onOpenPicker}
+        focusOptions={focusOptions}
+        focusId={focusId}
+        onPickFocus={onPickFocus}
       />
     </div>
   );
