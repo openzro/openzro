@@ -35,7 +35,7 @@ func buildPeerFocus(ctx context.Context, acc *types.Account, focus Focus, valida
 
 	g := &GraphDTO{Focus: focus}
 	b := newGraphBuilder(g)
-	b.addNode(focusPeer.ID, NodeFocus, peerLabel(focusPeer))
+	b.addPeerNode(focusPeer, NodeFocus)
 
 	// Mirror the dataplane: GetPeerNetworkMap early-returns an empty
 	// map when the focus is not validated (account.go:262). An
@@ -75,6 +75,22 @@ func (b *graphBuilder) addNode(id string, kind NodeKind, label string) {
 	b.nodes[id] = Node{ID: id, Kind: kind, Label: label}
 }
 
+// addPeerNode is addNode for a peer (focus or reachable): it also
+// carries the peer IP in meta so the dashboard can show it as the
+// node's secondary line (route/network_resource already expose their
+// CIDR via the label). meta is the existing freeform node field — an
+// additive, non-breaking contract use.
+func (b *graphBuilder) addPeerNode(p *nbpeer.Peer, kind NodeKind) {
+	if _, ok := b.nodes[p.ID]; ok {
+		return
+	}
+	n := Node{ID: p.ID, Kind: kind, Label: peerLabel(p)}
+	if ip := p.IP.String(); ip != "" && ip != "<nil>" {
+		n.Meta = map[string]string{"ip": ip}
+	}
+	b.nodes[p.ID] = n
+}
+
 // addPeerReach turns the enforcement output (reachable peers + the
 // firewall rules that permit them) into peer nodes + enforced edges.
 func (b *graphBuilder) addPeerReach(acc *types.Account, fromID string, reachable []*nbpeer.Peer, fwRules []*types.FirewallRule) {
@@ -85,7 +101,7 @@ func (b *graphBuilder) addPeerReach(acc *types.Account, fromID string, reachable
 		if p == nil {
 			continue
 		}
-		b.addNode(p.ID, NodePeer, peerLabel(p))
+		b.addPeerNode(p, NodePeer)
 		ipToPeer[p.IP.String()] = p
 	}
 

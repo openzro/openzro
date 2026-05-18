@@ -71,7 +71,7 @@ func TestBuildGraph_PostureBlocked_FocusNonCompliant(t *testing.T) {
 	require.Equal(t, "min-nb", e.Meta["postureCheck"])
 	require.Equal(t, "pc1", e.Meta["postureCheckId"])
 	// pB must still be a node so the blocked edge has both endpoints.
-	require.Contains(t, g.Nodes, Node{ID: "pB", Kind: NodePeer, Label: "bob"})
+	require.Contains(t, g.Nodes, Node{ID: "pB", Kind: NodePeer, Label: "bob", Meta: map[string]string{"ip": "10.0.0.2"}})
 }
 
 func TestBuildGraph_PostureCompliant_EnforcedNotBlocked(t *testing.T) {
@@ -127,5 +127,5 @@ func TestBuildGraph_UnvalidatedFocus_EmptyReach(t *testing.T) {
 	g, err := BuildGraph(context.Background(), acc, Focus{Type: FocusPeer, ID: "pA"}, validated)
 	require.NoError(t, err)
 	require.Empty(t, g.Edges, "unvalidated focus reaches nothing")
-	require.Equal(t, []Node{{ID: "pA", Kind: NodeFocus, Label: "alice"}}, g.Nodes)
+	require.Equal(t, []Node{{ID: "pA", Kind: NodeFocus, Label: "alice", Meta: map[string]string{"ip": "10.0.0.1"}}}, g.Nodes)
 }
