@@ -33,6 +33,7 @@ func TestEnumWireValues(t *testing.T) {
 		{string(PermitPolicy), "policy"},
 		{string(PermitRouteDefault), "route_default_permit"},
 		{string(PermitRouterLocal), "router_local"},
+		{string(PermitIdentity), "identity"},
 		{string(DirectionIn), "in"},
 		{string(DirectionOut), "out"},
 		{string(DirectionBidirectional), "bidirectional"},

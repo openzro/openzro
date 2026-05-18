@@ -91,6 +91,12 @@ const (
 	// labelled as infrastructure-local reach (#50-r2 semantic note,
 	// owner-decided 2026-05-17).
 	PermitRouterLocal PermitSource = "router_local"
+	// PermitIdentity — a structural identity/ownership edge, NOT a
+	// policy permit: the v2 User→Peer edge ("these are the user's
+	// machines"). It carries no PolicyID. Formalised so the wire
+	// contract enumerates it instead of an empty-string sentinel the
+	// frontend matched by accident (#39 v2 review, finding 3).
+	PermitIdentity PermitSource = "identity"
 )
 
 // EdgeDirection is the traffic direction the permitting rule grants.

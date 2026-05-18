@@ -54,6 +54,14 @@ func TestWireContract_GraphDTO(t *testing.T) {
 			Protocol: "all", Direction: DirectionOut, State: EdgeEnforced,
 		}))
 
+	// Edge: a structural identity edge (v2 User→Peer) carries
+	// permitSource "identity" and NO policy chip / ports.
+	require.Equal(t, []string{"direction", "from", "permitSource", "protocol", "state", "to"},
+		keysOf(t, Edge{
+			From: "u1", To: "p1", PermitSource: PermitIdentity,
+			Direction: DirectionOut, State: EdgeEnforced,
+		}))
+
 	// Edge: a fully-populated policy edge carries the full field set.
 	require.Equal(t,
 		[]string{"direction", "from", "meta", "permitSource", "policyId", "policyName", "ports", "protocol", "sourceRanges", "state", "to"},
