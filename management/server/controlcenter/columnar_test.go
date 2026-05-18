@@ -232,6 +232,71 @@ func TestGroupFocus_AllMembersPostureBlocked(t *testing.T) {
 	require.Equal(t, "min-version", e.Meta["postureCheck"])
 }
 
+// Strict group aggregate semantics (#39 v2 review, finding 2).
+func TestGroupState_Strict(t *testing.T) {
+	t.Run("empty group emits no enforced edge", func(t *testing.T) {
+		a := acct()
+		a.Groups["g1"] = &types.Group{ID: "g1", Name: "engineers"} // 0 peers
+
+		g, err := BuildGraph(context.Background(), a,
+			Focus{Type: FocusGroup, ID: "g1"}, nil)
+		require.NoError(t, err)
+		require.NotNil(t, nodeByID(g, "group:g1")) // focus card stays
+		require.Nil(t, edgeOf(g, "group:g1", "policy:pol1"))
+		require.Len(t, g.Edges, 0)
+	})
+
+	t.Run("stale member is not a posture pass", func(t *testing.T) {
+		a := acct()
+		// g1 = one real peer (p1, fails posture) + one stale id.
+		a.Groups["g1"] = &types.Group{
+			ID: "g1", Name: "engineers", Peers: []string{"p1", "ghost"},
+		}
+		a.PostureChecks = []*posture.Checks{{
+			ID: "pc1", Name: "min-version",
+			Checks: posture.ChecksDefinition{
+				NBVersionCheck: &posture.NBVersionCheck{MinVersion: "99.0.0"},
+			},
+		}}
+		a.Policies[0].SourcePostureChecks = []string{"pc1"}
+
+		g, err := BuildGraph(context.Background(), a,
+			Focus{Type: FocusGroup, ID: "g1"}, nil)
+		require.NoError(t, err)
+		e := edgeOf(g, "group:g1", "policy:pol1")
+		require.NotNil(t, e)
+		// ghost excluded from n; p1 the only real member, denied.
+		require.Equal(t, EdgePostureBlocked, e.State)
+		require.Equal(t, "0 of 1 members", e.Meta["reachedBy"])
+	})
+
+	t.Run("partial pass is enforced but reports k of n", func(t *testing.T) {
+		a := acct()
+		a.Peers["p3"] = peerOf("p3", "carol", "100.64.0.3", "u3", "9.9.9")
+		a.Groups["g1"] = &types.Group{
+			ID: "g1", Name: "engineers", Peers: []string{"p1", "p3"},
+		}
+		a.PostureChecks = []*posture.Checks{{
+			ID: "pc1", Name: "min-version",
+			Checks: posture.ChecksDefinition{
+				NBVersionCheck: &posture.NBVersionCheck{MinVersion: "1.0.0"},
+			},
+		}}
+		a.Policies[0].SourcePostureChecks = []string{"pc1"}
+
+		g, err := BuildGraph(context.Background(), a,
+			Focus{Type: FocusGroup, ID: "g1"}, nil)
+		require.NoError(t, err)
+		e := edgeOf(g, "group:g1", "policy:pol1")
+		require.NotNil(t, e)
+		// p1 = 0.30.0 fails >=1.0.0; p3 = 9.9.9 passes. Partial reach
+		// must stay enforced (union) but report "1 of 2", never look
+		// like full reach.
+		require.Equal(t, EdgeEnforced, e.State)
+		require.Equal(t, "1 of 2 members", e.Meta["reachedBy"])
+	})
+}
+
 func TestNetworkFocus_InverseFanIn(t *testing.T) {
 	g, err := BuildGraph(context.Background(), acct(), Focus{Type: FocusNetwork, ID: "nr1"}, nil)
 	require.NoError(t, err)

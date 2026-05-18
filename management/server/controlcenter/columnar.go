@@ -184,9 +184,13 @@ func (b *colBuilder) finalize() *GraphDTO {
 	return b.g
 }
 
-// stateFn answers, for one policy, the source→policy edge state and
-// the meta to stamp (posture-denial fields and/or "k of n members").
-type stateFn func(pol *types.Policy) (EdgeState, map[string]string)
+// stateFn answers, for one policy, the source→policy edge state, the
+// meta to stamp (posture-denial fields and/or "k of n members"), and
+// whether the edge should be emitted at all. emit is false for a
+// source group with zero real members: an empty group is configured
+// but reaches nothing, so a green "0 of 0" edge would lie to the
+// auditor (#39 v2 review, finding 2).
+type stateFn func(pol *types.Policy) (state EdgeState, meta map[string]string, emit bool)
 
 // projectSource is the shared peer/user/group fan-out: for every
 // enabled policy/rule whose Sources match the anchor (srcMatch), emit
@@ -201,8 +205,11 @@ func (b *colBuilder) projectSource(acc *types.Account, anchorID string, srcMatch
 			if r == nil || !r.Enabled || !srcMatch(r) {
 				continue
 			}
+			state, meta, emit := st(pol)
+			if !emit {
+				continue // empty source group — nothing to audit as permitted
+			}
 			b.policyNode(pol, r)
-			state, meta := st(pol)
 			b.edge(&Edge{
 				From: anchorID, To: "policy:" + pol.ID,
 				PermitSource: PermitPolicy,
@@ -342,16 +349,17 @@ func buildNetworkFocus(ctx context.Context, acc *types.Account, focus Focus) (*G
 				Protocol: string(r.Protocol), Ports: rulePorts(r),
 				Direction: ruleDir(r), State: EdgeEnforced,
 			})
-			st := b.groupState(ctx, acc, nil)
 			for _, sgid := range r.Sources {
 				sg := acc.Groups[sgid]
 				if sg == nil {
 					continue
 				}
+				state, meta, emit := b.groupState(ctx, acc, sg.Peers)(pol)
+				if !emit {
+					continue // empty source group — no permitted reach
+				}
 				b.node("group:"+sgid, NodeGroup, sg.Name, colGroups,
 					map[string]string{"sub": fmt.Sprintf("%d peer(s)", len(sg.Peers))})
-				st = b.groupState(ctx, acc, sg.Peers)
-				state, meta := st(pol)
 				b.edge(&Edge{
 					From: "group:" + sgid, To: "policy:" + pol.ID,
 					PermitSource: PermitPolicy, PolicyID: pol.ID, PolicyName: pol.Name,
