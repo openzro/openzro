@@ -59,7 +59,16 @@ func buildGroupFocus(ctx context.Context, acc *types.Account, focus Focus, valid
 		}
 
 		for _, e := range tmp.Edges {
-			key := e.To + "|" + e.PolicyID + "|" + e.Protocol + "|" + string(e.State)
+			// Posture-blocked edges are split by the failing-check
+			// signature so members blocked by DIFFERENT checks do not
+			// collapse into one edge with an arbitrary first member's
+			// reason (Finding 4 — per-member posture must survive
+			// aggregation).
+			denialSig := ""
+			if e.State == EdgePostureBlocked {
+				denialSig = e.Meta["postureCheckId"] + "/" + e.Meta["postureCheckType"]
+			}
+			key := e.To + "|" + e.PolicyID + "|" + e.Protocol + "|" + string(e.State) + "|" + denialSig
 			a := aggs[key]
 			if a == nil {
 				ne := e
