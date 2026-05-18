@@ -137,7 +137,10 @@ func parseFlags() *cliFlags {
 
 	defaultDaemonAddr := "unix:///var/run/openzro.sock"
 	if runtime.GOOS == "windows" {
-		defaultDaemonAddr = "tcp://127.0.0.1:41731"
+		// 41831, NOT NetBird's 41731 — must match the daemon default
+		// in client/cmd/root.go so the UI dials the openZro daemon
+		// (and both can coexist with a NetBird install on Windows).
+		defaultDaemonAddr = "tcp://127.0.0.1:41831"
 	}
 	flag.StringVar(&flags.daemonAddr, "daemon-addr", defaultDaemonAddr, "Daemon service address to serve CLI requests [unix|tcp]://[path|host:port]")
 	flag.BoolVar(&flags.showSettings, "settings", false, "run settings window")
