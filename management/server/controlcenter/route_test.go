@@ -50,18 +50,28 @@ func routeAccount() *types.Account {
 			{
 				ID: "polPeer", Name: "clients-to-router", Enabled: true,
 				Rules: []*types.PolicyRule{{
-					ID: "rp", Enabled: true, Action: types.PolicyTrafficActionAccept,
+					ID: "rp", PolicyID: "polPeer", Enabled: true, Action: types.PolicyTrafficActionAccept,
 					Sources: []string{"gClients"}, Destinations: []string{"gRouter"},
 					Protocol: types.PolicyRuleProtocolALL,
 				}},
 			},
 			{
+				// Same policy + protocol, TWO rules (ports 80 and 443):
+				// the real firewall emits two RouteFirewallRules; both
+				// ports must survive into one merged edge (Finding 2).
 				ID: "P2", Name: "route2-access", Enabled: true,
-				Rules: []*types.PolicyRule{{
-					ID: "r2rule", Enabled: true, Action: types.PolicyTrafficActionAccept,
-					Sources: []string{"gClients"}, Destinations: []string{"gACL2"},
-					Protocol: types.PolicyRuleProtocolALL,
-				}},
+				Rules: []*types.PolicyRule{
+					{
+						ID: "r2a", PolicyID: "P2", Enabled: true, Action: types.PolicyTrafficActionAccept,
+						Sources: []string{"gClients"}, Destinations: []string{"gACL2"},
+						Protocol: types.PolicyRuleProtocolTCP, Ports: []string{"80"},
+					},
+					{
+						ID: "r2b", PolicyID: "P2", Enabled: true, Action: types.PolicyTrafficActionAccept,
+						Sources: []string{"gClients"}, Destinations: []string{"gACL2"},
+						Protocol: types.PolicyRuleProtocolTCP, Ports: []string{"443"},
+					},
+				},
 			},
 		},
 	}
@@ -92,12 +102,18 @@ func TestBuildGraph_RouteReach_CompositionAndDefaultPermit(t *testing.T) {
 	require.Equal(t, DirectionOut, e1.Direction)
 	require.Contains(t, g.Nodes, Node{ID: "route:r1", Kind: NodeRoute, Label: "10.10.0.0/24"})
 
-	// r2: permitted via policy P2.
+	// r2: permitted via policy P2, built from the REAL route firewall
+	// rules — both ports (80 and 443) must survive into one edge, and
+	// the effective SourceRanges must be populated (Finding 2).
 	e2 := edgeTo(g, "route:r2")
 	require.NotNil(t, e2, "policy-permitted route must be reachable")
 	require.Equal(t, PermitPolicy, e2.PermitSource)
 	require.Equal(t, "P2", e2.PolicyID)
+	require.Equal(t, "route2-access", e2.PolicyName)
 	require.Equal(t, EdgeEnforced, e2.State)
+	require.ElementsMatch(t, []string{"80", "443"}, e2.Ports,
+		"both rules' ports must merge, not be dropped by dedup")
+	require.NotEmpty(t, e2.SourceRanges, "effective SourceRanges must come from the firewall rule")
 
 	// r3: distributed to pA but NO permitting policy => NOT reachable.
 	require.Nil(t, edgeTo(g, "route:r3"), "synced-but-unpermitted route must NOT be an edge")
