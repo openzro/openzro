@@ -66,7 +66,16 @@ func buildGroupFocus(ctx context.Context, acc *types.Account, focus Focus, valid
 			if kind == NodeFocus {
 				kind = NodePeer
 			}
-			toNodes[nd.ID] = Node{ID: nd.ID, Kind: kind, Label: nd.Label}
+			// Preserve nd.Meta: the per-member temp graph already
+			// computed peer meta.ip via addPeerNode; rebuilding the
+			// aggregated node without it would strip the IP from every
+			// target under a group focus (#54 review).
+			toNodes[nd.ID] = Node{
+				ID:    nd.ID,
+				Kind:  kind,
+				Label: nd.Label,
+				Meta:  nd.Meta,
+			}
 		}
 
 		for _, e := range tmp.Edges {
