@@ -103,8 +103,10 @@ export default function AccessControlTableV2({ policies, isLoading }: Props) {
   const [search, setSearch] = useState("");
   const [enabledFilter, setEnabledFilter] = useState<EnabledFilter>("all");
   const [refreshing, setRefreshing] = useState(false);
+  // Default to A→Z by name (ascending). desc:true opened the list
+  // reversed, which reads as "wrong order" to the operator.
   const [sorting, setSorting] = useState<SortingState>([
-    { id: "name", desc: true },
+    { id: "name", desc: false },
   ]);
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
