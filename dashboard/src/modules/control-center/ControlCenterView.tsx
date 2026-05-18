@@ -284,47 +284,14 @@ function ControlCenterBody({
     );
   }
 
-  // The columnar canvas is the primary view; the textual list is the
-  // accessible / no-graph fallback, kept compact below it.
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2">
-      <div className="min-h-0 flex-1">
-        <ControlCenterGraphCanvas
-          graph={graph}
-          onEdgeClick={onPolicyOpen}
-          onFocusNode={onFocusNode}
-          onRefresh={onRefresh}
-        />
-      </div>
-      <details className="shrink-0 text-sm text-oz2-text-muted">
-        <summary className="cursor-pointer select-none">
-          Reachable, as a list ({edges.length})
-        </summary>
-        <ul className="mt-2 flex max-h-40 flex-col gap-1 overflow-auto text-oz2-text">
-          {edges.map((e, i) => (
-            <li
-              key={`${e.from}-${e.to}-${e.policyId ?? e.permitSource}-${i}`}
-            >
-              → <span className="font-medium">{e.to}</span>{" "}
-              <span className="text-oz2-text-muted">
-                ({e.state},{" "}
-                {e.permitSource === "policy" && e.policyId ? (
-                  <button
-                    type="button"
-                    onClick={() => onPolicyOpen(e.policyId as string)}
-                    className="text-oz2-acc underline underline-offset-2"
-                  >
-                    {e.policyName || "policy"}
-                  </button>
-                ) : (
-                  e.permitSource
-                )}
-                {e.protocol ? `, ${e.protocol}` : ""})
-              </span>
-            </li>
-          ))}
-        </ul>
-      </details>
+    <div className="h-full min-h-0">
+      <ControlCenterGraphCanvas
+        graph={graph}
+        onEdgeClick={onPolicyOpen}
+        onFocusNode={onFocusNode}
+        onRefresh={onRefresh}
+      />
     </div>
   );
 }
