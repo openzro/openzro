@@ -66,14 +66,39 @@ const TILE =
   "flex shrink-0 items-center justify-center rounded-md " +
   "border border-oz2-border-soft bg-oz2-bg-soft text-oz2-text-2";
 
+// The focus card is the picker affordance for EVERY tab (peer, user,
+// group, network) — it always carries the ChevronsUpDown switcher.
+// Only the leading visual adapts to the entity: user → initials
+// avatar, peer → OS glyph, group → Users tile, network → Server tile.
+function FocusLead({ d }: { d: RenderData }) {
+  if (d.meta.email) {
+    return (
+      <div className={`${AVATAR} mr-3 h-[34px] w-[34px] text-sm`}>
+        {initials(d.label)}
+      </div>
+    );
+  }
+  if (d.meta.ip) {
+    return (
+      <div className={`${TILE} mr-3 h-[34px] w-[34px]`}>
+        <OSLogo os={d.meta.os || "linux"} />
+      </div>
+    );
+  }
+  const Icon = d.meta.resourceKind === "net" ? Server : Users;
+  return (
+    <div className={`${TILE} mr-3 h-[34px] w-[34px]`}>
+      <Icon className="h-4 w-4" />
+    </div>
+  );
+}
+
 function FocusCard({ d }: { d: RenderData }) {
   const sub = d.meta.email || d.meta.ip || d.meta.sub || "";
   return (
     <div className={`${shellClass(d)} px-3.5 py-3`}>
       <Handles />
-      <div className={`${AVATAR} mr-3 h-[34px] w-[34px] text-sm`}>
-        {initials(d.label)}
-      </div>
+      <FocusLead d={d} />
       <div className="min-w-0 flex-1">
         <div className="truncate text-[13.5px] font-semibold text-oz2-text">
           {d.label}
@@ -164,13 +189,10 @@ export function CCNode({ data }: NodeProps) {
   // xyflow types node data as Record<string, unknown>; this is the
   // third-party boundary (CLAUDE.md sanctioned `as` exception).
   const d = data as unknown as RenderData;
-  if (d.kind === "focus") {
-    // network focus = the resource sitting on the right; render it as
-    // a resource card so the inverse fan-in reads correctly.
-    if (d.column === "focus" && (d.meta.resourceKind || d.meta.sub) && !d.meta.email)
-      return <ResourceCard d={d} />;
-    return <FocusCard d={d} />;
-  }
+  // Every focus tab uses FocusCard so the picker chevron is always
+  // present (group/network previously fell through to ResourceCard
+  // and lost the selector — #39 v2 review).
+  if (d.kind === "focus") return <FocusCard d={d} />;
   if (d.kind === "policy") return <PolicyCard d={d} />;
   if (d.kind === "peer" || d.kind === "user") return <PeerCard d={d} />;
   return <ResourceCard d={d} />;
