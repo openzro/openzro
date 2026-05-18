@@ -52,7 +52,7 @@ func (b *graphBuilder) addPostureBlocked(ctx context.Context, acc *types.Account
 			if _, ok := src[focusID]; ok {
 				if d := admissionDenial(ctx, acc, focusID, pol.SourcePostureChecks, postureMap); d != nil {
 					for other := range dst {
-						b.addBlockedEdge(acc, focusID, other, focusID, outDir, pol, r, validatedPeers, d)
+						b.addBlockedEdge(acc, focusID, other, outDir, pol, r, validatedPeers, d)
 					}
 				}
 			}
@@ -65,7 +65,7 @@ func (b *graphBuilder) addPostureBlocked(ctx context.Context, acc *types.Account
 						continue
 					}
 					if d := admissionDenial(ctx, acc, other, pol.SourcePostureChecks, postureMap); d != nil {
-						b.addBlockedEdge(acc, focusID, other, other, inDir, pol, r, validatedPeers, d)
+						b.addBlockedEdge(acc, focusID, other, inDir, pol, r, validatedPeers, d)
 					}
 				}
 			}
@@ -78,11 +78,20 @@ func (b *graphBuilder) addPostureBlocked(ctx context.Context, acc *types.Account
 // gated the same way the engine gates: the non-compliant endpoint must
 // still be a validated mesh peer (a non-validated peer is "not in the
 // mesh", not "posture-blocked"). Never downgrades an enforced edge.
-func (b *graphBuilder) addBlockedEdge(acc *types.Account, focusID, otherID, blockedPeerID string, dir EdgeDirection, pol *types.Policy, r *types.PolicyRule, validatedPeers map[string]struct{}, d *types.AdmissionDenial) {
+func (b *graphBuilder) addBlockedEdge(acc *types.Account, focusID, otherID string, dir EdgeDirection, pol *types.Policy, r *types.PolicyRule, validatedPeers map[string]struct{}, d *types.AdmissionDenial) {
 	if focusID == otherID {
 		return
 	}
-	if _, ok := validatedPeers[blockedPeerID]; !ok {
+	// The engine gates BOTH endpoints on validation
+	// (getAllPeersFromGroups + the GetPeerNetworkMap entry check). If
+	// either endpoint is unvalidated the pair is unreachable
+	// regardless of posture, so posture is NOT the sole remaining
+	// blocker and a posture_blocked edge here would be a lie
+	// (Finding 3).
+	if _, ok := validatedPeers[focusID]; !ok {
+		return
+	}
+	if _, ok := validatedPeers[otherID]; !ok {
 		return
 	}
 	if acc.GetPeer(focusID) == nil || acc.GetPeer(otherID) == nil {

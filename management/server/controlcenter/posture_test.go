@@ -100,3 +100,19 @@ func TestBuildGraph_PostureBlocked_FocusIsDestination(t *testing.T) {
 	require.Equal(t, EdgePostureBlocked, e.State)
 	require.Equal(t, DirectionIn, e.Direction)
 }
+
+// Finding 3: if the OTHER endpoint is not validated, the pair is
+// unreachable regardless of posture — posture is not the sole
+// remaining blocker, so no posture_blocked edge may be emitted.
+func TestBuildGraph_PostureBlocked_OtherEndpointUnvalidated(t *testing.T) {
+	acc := postureAccount("1.0.0") // pA (source) fails posture
+	// focus pB (destination) is NOT validated; only pA is.
+	validated := map[string]struct{}{"pA": {}}
+
+	g, err := BuildGraph(context.Background(), acc, Focus{Type: FocusPeer, ID: "pB"}, validated)
+	require.NoError(t, err)
+	for _, e := range g.Edges {
+		require.NotEqual(t, EdgePostureBlocked, e.State,
+			"no posture_blocked when the other endpoint is unvalidated")
+	}
+}
