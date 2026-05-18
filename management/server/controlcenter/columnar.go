@@ -28,6 +28,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
 	resourceTypes "github.com/openzro/openzro/management/server/networks/resources/types"
 	nbpeer "github.com/openzro/openzro/management/server/peer"
@@ -81,6 +82,27 @@ type colBuilder struct {
 	// silently dropped resources a policy really reaches (#39 v2
 	// review, finding 1).
 	resByGroup map[string][]*resourceTypes.NetworkResource
+	// resByID is the request-scoped resource lookup (replaces the old
+	// per-call linear scan of acc.NetworkResources — #39 v2 review R5
+	// finding 3).
+	resByID map[string]*resourceTypes.NetworkResource
+	// polByGroup is sourceGroupID → the (policy,rule) pairs whose
+	// Sources include that group, built ONCE per graph. Turns
+	// projectSource from O(all policies × rules) per anchor into
+	// O(anchor groups × matching rules) (R5 finding 1).
+	polByGroup map[string][]polRule
+	// gatherCache memoises the deduped (policy,rule) set for a source
+	// group-set signature so user focus does not re-walk the index
+	// for peers that share the same group membership (R5 finding 4).
+	// The posture STATE stays per-peer (peerState) — irreducible and
+	// correct; only the structural match set is shared.
+	gatherCache map[string][]polRule
+}
+
+// polRule is one (policy, rule) pair in the source-group index.
+type polRule struct {
+	pol *types.Policy
+	r   *types.PolicyRule
 }
 
 func newColBuilder(acc *types.Account, focus Focus) *colBuilder {
@@ -101,13 +123,61 @@ func newColBuilder(acc *types.Account, focus Focus) *colBuilder {
 			}
 		}
 	}
-	return &colBuilder{
-		g:          &GraphDTO{Focus: focus},
-		nodes:      map[string]Node{},
-		edgeAgg:    map[string]*Edge{},
-		posture:    postureChecksMap(acc),
-		resByGroup: resByGroup,
+	// Source-group → (policy,rule) index, built once in deterministic
+	// account/rule order. finalize() re-sorts nodes/edges, so the
+	// emission order this index produces never affects the DTO — the
+	// contract/enum tests still pin the wire shape.
+	polByGroup := map[string][]polRule{}
+	for _, pol := range acc.Policies {
+		if pol == nil || !pol.Enabled {
+			continue
+		}
+		for _, r := range pol.Rules {
+			if r == nil || !r.Enabled {
+				continue
+			}
+			for _, gid := range r.Sources {
+				polByGroup[gid] = append(polByGroup[gid], polRule{pol: pol, r: r})
+			}
+		}
 	}
+
+	return &colBuilder{
+		g:           &GraphDTO{Focus: focus},
+		nodes:       map[string]Node{},
+		edgeAgg:     map[string]*Edge{},
+		posture:     postureChecksMap(acc),
+		resByGroup:  resByGroup,
+		resByID:     byID,
+		polByGroup:  polByGroup,
+		gatherCache: map[string][]polRule{},
+	}
+}
+
+// gatherPolRules returns the deduped (policy,rule) pairs whose
+// Sources include any of srcGroups, memoised by the sorted group-set
+// signature so user focus shares the walk across peers with the same
+// group membership (R5 finding 4).
+func (b *colBuilder) gatherPolRules(srcGroups []string) []polRule {
+	sorted := append([]string(nil), srcGroups...)
+	sort.Strings(sorted)
+	sig := strings.Join(sorted, "\x00")
+	if cached, ok := b.gatherCache[sig]; ok {
+		return cached
+	}
+	var out []polRule
+	seen := map[*types.PolicyRule]struct{}{}
+	for _, gid := range sorted {
+		for _, pr := range b.polByGroup[gid] {
+			if _, dup := seen[pr.r]; dup {
+				continue
+			}
+			seen[pr.r] = struct{}{}
+			out = append(out, pr)
+		}
+	}
+	b.gatherCache[sig] = out
+	return out
 }
 
 // node is a first-write-wins insert (a node reachable via two rules is
@@ -193,32 +263,40 @@ func (b *colBuilder) finalize() *GraphDTO {
 type stateFn func(pol *types.Policy) (state EdgeState, meta map[string]string, emit bool)
 
 // projectSource is the shared peer/user/group fan-out: for every
-// enabled policy/rule whose Sources match the anchor (srcMatch), emit
+// enabled policy/rule whose Sources include one of srcGroups, emit
 // the policy node, the anchor→policy edge (state from st), and the
-// resource column with policy→resource edges.
-func (b *colBuilder) projectSource(acc *types.Account, anchorID string, srcMatch func(r *types.PolicyRule) bool, st stateFn) {
-	for _, pol := range acc.Policies {
-		if pol == nil || !pol.Enabled {
-			continue
+// resource column with policy→resource edges. It uses the
+// pre-built source-group index instead of scanning every policy, and
+// memoises st per policy within this anchor (st depends only on
+// (anchor, policy), never the rule — so it is safe to compute once
+// per policy even when several of its rules match) (R5 findings
+// 1, 2, 4).
+func (b *colBuilder) projectSource(acc *types.Account, anchorID string, srcGroups []string, st stateFn) {
+	type stRes struct {
+		state EdgeState
+		meta  map[string]string
+		emit  bool
+	}
+	stMemo := map[string]stRes{}
+	for _, pr := range b.gatherPolRules(srcGroups) {
+		pol, r := pr.pol, pr.r
+		s, ok := stMemo[pol.ID]
+		if !ok {
+			s.state, s.meta, s.emit = st(pol)
+			stMemo[pol.ID] = s
 		}
-		for _, r := range pol.Rules {
-			if r == nil || !r.Enabled || !srcMatch(r) {
-				continue
-			}
-			state, meta, emit := st(pol)
-			if !emit {
-				continue // empty source group — nothing to audit as permitted
-			}
-			b.policyNode(pol, r)
-			b.edge(&Edge{
-				From: anchorID, To: "policy:" + pol.ID,
-				PermitSource: PermitPolicy,
-				PolicyID:     pol.ID, PolicyName: pol.Name,
-				Protocol: string(r.Protocol), Ports: rulePorts(r),
-				Direction: ruleDir(r), State: state, Meta: meta,
-			})
-			b.fanResources(acc, pol, r)
+		if !s.emit {
+			continue // empty source group — nothing to audit as permitted
 		}
+		b.policyNode(pol, r)
+		b.edge(&Edge{
+			From: anchorID, To: "policy:" + pol.ID,
+			PermitSource: PermitPolicy,
+			PolicyID:     pol.ID, PolicyName: pol.Name,
+			Protocol: string(r.Protocol), Ports: rulePorts(r),
+			Direction: ruleDir(r), State: s.state, Meta: s.meta,
+		})
+		b.fanResources(acc, pol, r)
 	}
 }
 
@@ -249,7 +327,7 @@ func (b *colBuilder) fanResources(acc *types.Account, pol *types.Policy, r *type
 		}
 	}
 	if r.DestinationResource.ID != "" {
-		if res := resourceByID(acc, r.DestinationResource.ID); res != nil {
+		if res := b.resByID[r.DestinationResource.ID]; res != nil {
 			add("nr:"+res.ID, NodeNetworkResource, resourceLabel(res), resourceSub(res), "net")
 		}
 	}
@@ -262,9 +340,7 @@ func buildPeerFocus(ctx context.Context, acc *types.Account, focus Focus) (*Grap
 	}
 	b := newColBuilder(acc, focus)
 	b.node(p.ID, NodeFocus, peerLabel(p), colFocus, peerMeta(p))
-	pg := acc.GetPeerGroups(p.ID)
-	b.projectSource(acc, p.ID,
-		func(r *types.PolicyRule) bool { return intersectsSet(r.Sources, pg) },
+	b.projectSource(acc, p.ID, acc.GetPeerGroupsList(p.ID),
 		b.peerState(ctx, acc, p.ID))
 	return b.finalize(), nil
 }
@@ -292,9 +368,7 @@ func buildUserFocus(ctx context.Context, acc *types.Account, focus Focus) (*Grap
 			PermitSource: PermitIdentity,
 			Direction:    DirectionOut, State: EdgeEnforced,
 		})
-		pg := acc.GetPeerGroups(p.ID)
-		b.projectSource(acc, p.ID,
-			func(r *types.PolicyRule) bool { return intersectsSet(r.Sources, pg) },
+		b.projectSource(acc, p.ID, acc.GetPeerGroupsList(p.ID),
 			b.peerState(ctx, acc, p.ID))
 	}
 	return b.finalize(), nil
@@ -309,8 +383,7 @@ func buildGroupFocus(ctx context.Context, acc *types.Account, focus Focus) (*Gra
 	anchor := "group:" + focus.ID
 	b.node(anchor, NodeFocus, g.Name, colFocus,
 		map[string]string{"sub": fmt.Sprintf("%d peer(s)", len(g.Peers))})
-	b.projectSource(acc, anchor,
-		func(r *types.PolicyRule) bool { return contains(r.Sources, focus.ID) },
+	b.projectSource(acc, anchor, []string{focus.ID},
 		b.groupState(ctx, acc, g.Peers))
 	return b.finalize(), nil
 }
