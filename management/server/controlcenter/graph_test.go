@@ -28,6 +28,7 @@ func TestEnumWireValues(t *testing.T) {
 		{string(EdgePostureBlocked), "posture_blocked"},
 		{string(PermitPolicy), "policy"},
 		{string(PermitRouteDefault), "route_default_permit"},
+		{string(PermitRouterLocal), "router_local"},
 		{string(DirectionIn), "in"},
 		{string(DirectionOut), "out"},
 		{string(DirectionBidirectional), "bidirectional"},

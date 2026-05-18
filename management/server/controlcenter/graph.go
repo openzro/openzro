@@ -72,6 +72,13 @@ type PermitSource string
 const (
 	PermitPolicy       PermitSource = "policy"
 	PermitRouteDefault PermitSource = "route_default_permit"
+	// PermitRouterLocal — the focus IS the router serving this route,
+	// so it reaches the routed network as its own gateway. This is
+	// NOT route_default_permit (the route may carry
+	// AccessControlGroups that gate OTHER clients); it is honestly
+	// labelled as infrastructure-local reach (#50-r2 semantic note,
+	// owner-decided 2026-05-17).
+	PermitRouterLocal PermitSource = "router_local"
 )
 
 // EdgeDirection is the traffic direction the permitting rule grants.

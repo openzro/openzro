@@ -127,3 +127,20 @@ func nodeIDs(g *GraphDTO) []string {
 	}
 	return ids
 }
+
+// #50-r2 semantic note: when the focus IS the router serving a route
+// (even one with AccessControlGroups), the edge is router_local —
+// honest infrastructure-local reach, NOT route_default_permit.
+func TestBuildGraph_SelfRouter_RouterLocalPermitSource(t *testing.T) {
+	acc := routeAccount() // pR serves r1 (no ACG) and r2 (ACG gACL2)
+	validated := map[string]struct{}{"pA": {}, "pR": {}}
+
+	g, err := BuildGraph(context.Background(), acc, Focus{Type: FocusPeer, ID: "pR"}, validated)
+	require.NoError(t, err)
+
+	e2 := edgeTo(g, "route:r2") // r2 has AccessControlGroups
+	require.NotNil(t, e2, "the router reaches the network it serves")
+	require.Equal(t, PermitRouterLocal, e2.PermitSource,
+		"self-router reach must be router_local, not route_default_permit")
+	require.Empty(t, e2.PolicyID)
+}

@@ -109,7 +109,7 @@ func (b *graphBuilder) addRouteReach(ctx context.Context, acc *types.Account, fo
 		if r.Peer == focusPeer.Key {
 			b.addNode(nodeID, NodeRoute, routeLabel(r))
 			b.addRouteEdge(focusID, nodeID, &Edge{
-				PermitSource: PermitRouteDefault,
+				PermitSource: PermitRouterLocal,
 				Protocol:     string(types.PolicyRuleProtocolALL),
 				Direction:    DirectionOut,
 				State:        EdgeEnforced,
