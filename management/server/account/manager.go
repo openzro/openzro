@@ -11,6 +11,7 @@ import (
 	"github.com/openzro/openzro/management/server/activity"
 	nbcache "github.com/openzro/openzro/management/server/cache"
 	nbcontext "github.com/openzro/openzro/management/server/context"
+	"github.com/openzro/openzro/management/server/controlcenter"
 	"github.com/openzro/openzro/management/server/idp"
 	nbpeer "github.com/openzro/openzro/management/server/peer"
 	"github.com/openzro/openzro/management/server/posture"
@@ -73,6 +74,7 @@ type Manager interface {
 	DeletePeer(ctx context.Context, accountID, peerID, userID string) error
 	UpdatePeer(ctx context.Context, accountID, userID string, peer *nbpeer.Peer) (*nbpeer.Peer, error)
 	GetNetworkMap(ctx context.Context, peerID string) (*types.NetworkMap, error)
+	GetAccessGraph(ctx context.Context, accountID, view, focusID string) (*controlcenter.GraphDTO, error)
 	GetPeerNetwork(ctx context.Context, peerID string) (*types.Network, error)
 	AddPeer(ctx context.Context, setupKey, userID string, peer *nbpeer.Peer) (*nbpeer.Peer, *types.NetworkMap, []*posture.Checks, error)
 	CreatePAT(ctx context.Context, accountID string, initiatorUserID string, targetUserID string, tokenName string, expiresIn int) (*types.PersonalAccessTokenGenerated, error)
