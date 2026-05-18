@@ -1,4 +1,4 @@
-# ADR-0017 — Time-based posture check (`ScheduleCheck`)
+# ADR-0019 — Time-based posture check (`ScheduleCheck`)
 
 **Status:** Accepted (2026-05-13). Phase 1 — predicate + plumbing —
 shipped in `2bae7363`. Phase 2 (cluster-coordinated scheduler) and
