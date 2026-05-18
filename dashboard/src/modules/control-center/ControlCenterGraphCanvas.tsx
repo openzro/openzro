@@ -310,6 +310,21 @@ export default function ControlCenterGraphCanvas({
               onEdgeClick(node.id.replace(/^policy:/, ""));
               return;
             }
+            // A network-resource leaf re-focuses the Networks tab on
+            // that resource ("who else can reach this?") — symmetric
+            // with the peer/group re-focus. d.entityId is the raw
+            // resource id (the "nr:" node-id prefix is already
+            // stripped in the layout); /control-center/network/<id>
+            // and the picker both key on that raw id.
+            if (
+              onFocusNode &&
+              d.kind === "network_resource" &&
+              d.column !== "focus" &&
+              d.entityId
+            ) {
+              onFocusNode("network", d.entityId);
+              return;
+            }
             if (
               onFocusNode &&
               d.switchable &&
