@@ -150,15 +150,35 @@ func (b *graphBuilder) finalize() {
 		b.g.Edges = append(b.g.Edges, *e)
 	}
 	sort.Slice(b.g.Edges, func(i, j int) bool {
-		a, c := b.g.Edges[i], b.g.Edges[j]
-		if a.From != c.From {
-			return a.From < c.From
-		}
-		if a.To != c.To {
-			return a.To < c.To
-		}
-		return a.PolicyID < c.PolicyID
+		return edgeLess(b.g.Edges[i], b.g.Edges[j])
 	})
+}
+
+// edgeLess is a TOTAL order over edges so the DTO is deterministic.
+// Sorting only by from/to/policyID left ties (different protocol /
+// state / posture-denial cause) in map-iteration order, causing wire
+// jitter (#50-r2 F4). The posture-denial signature is the final
+// tie-breaker so distinct posture_blocked causes order stably.
+func edgeLess(a, b Edge) bool {
+	switch {
+	case a.From != b.From:
+		return a.From < b.From
+	case a.To != b.To:
+		return a.To < b.To
+	case a.PolicyID != b.PolicyID:
+		return a.PolicyID < b.PolicyID
+	case a.PermitSource != b.PermitSource:
+		return a.PermitSource < b.PermitSource
+	case a.Protocol != b.Protocol:
+		return a.Protocol < b.Protocol
+	case a.State != b.State:
+		return a.State < b.State
+	}
+	return denialSig(a) < denialSig(b)
+}
+
+func denialSig(e Edge) string {
+	return e.Meta["postureCheckId"] + "/" + e.Meta["postureCheckType"]
 }
 
 func indexRuleToPolicy(acc *types.Account) map[string]*types.Policy {

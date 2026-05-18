@@ -2,6 +2,7 @@ package controlcenter
 
 import (
 	"context"
+	"encoding/json"
 	"net"
 	"testing"
 
@@ -192,4 +193,23 @@ func TestBuildGraph_GroupFocus_UnvalidatedMemberCountsInDenominator(t *testing.T
 	require.True(t, ok)
 	require.Equal(t, "2 of 3 members", e.Meta["reachedBy"],
 		"unvalidated member excluded from k, still in n")
+}
+
+// #50-r2 F4: the DTO must be byte-stable across builds even when
+// multiple posture causes produce edges that tie on to/policy/state.
+func TestBuildGraph_GroupFocus_DeterministicOrdering(t *testing.T) {
+	validated := map[string]struct{}{"pA": {}, "pB": {}, "pC": {}, "pX": {}}
+	var first string
+	for i := 0; i < 12; i++ {
+		acc := twoCheckGroupAccount()
+		g, err := BuildGraph(context.Background(), acc, Focus{Type: FocusGroup, ID: "team"}, validated)
+		require.NoError(t, err)
+		j, err := json.Marshal(g)
+		require.NoError(t, err)
+		if i == 0 {
+			first = string(j)
+			continue
+		}
+		require.Equal(t, first, string(j), "DTO must be deterministic across builds")
+	}
 }

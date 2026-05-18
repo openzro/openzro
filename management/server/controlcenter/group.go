@@ -113,14 +113,7 @@ func buildGroupFocus(ctx context.Context, acc *types.Account, focus Focus, valid
 		g.Edges = append(g.Edges, e)
 	}
 	sort.Slice(g.Edges, func(i, j int) bool {
-		x, y := g.Edges[i], g.Edges[j]
-		if x.To != y.To {
-			return x.To < y.To
-		}
-		if x.PolicyID != y.PolicyID {
-			return x.PolicyID < y.PolicyID
-		}
-		return x.State < y.State
+		return edgeLess(g.Edges[i], g.Edges[j])
 	})
 	return g, nil
 }
