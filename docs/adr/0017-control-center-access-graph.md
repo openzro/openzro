@@ -143,7 +143,7 @@ GraphDTO {
   nodes: [{ id, kind: focus|policy|group|peer|route|network_resource, label, meta }]
   edges: [{
     from, to,
-    permitSource: policy | route_default_permit, // D1.1: not every route edge has a policy
+    permitSource: policy | route_default_permit | router_local, // D1.1; see amendment 2026-05-17
     policyId?, policyName?,          // present iff permitSource == policy (chip identity)
     protocol, ports, sourceRanges?,  // non-lossy: ranges preserved, not flattened
     direction,                       // in|out|bidirectional
@@ -365,3 +365,18 @@ value and de-risks the resolver contract for the v2 widening.
 - Dashboard fork posture: [ADR-0016 §Context](./0016-dashboard-redesign-v2.md).
 - Upstream reference (library choice only, not ported): `netbirdio/dashboard` `package.json` + `src/modules/control-center/*`.
 - Drift precedent: `resolved_addresses` scope-creep revert (frontend-vs-enforced divergence).
+
+## Amendments
+
+- **2026-05-17 — `permitSource` gains `router_local` (Phase 1, owner-decided).**
+  The minimum DTO envelope originally listed `permitSource: policy |
+  route_default_permit`. Phase-1 review surfaced that when the focus
+  *is* the router serving a route, labelling that reach
+  `route_default_permit` is wrong if the route carries
+  `AccessControlGroups` (those gate other clients, not the router).
+  A third value, **`router_local`**, was added: honest
+  infrastructure-local reach, no policy chip. This is part of the
+  wire contract — the Phase 2 dashboard must handle all three
+  `permitSource` values. Pinned by the C8 contract test and the
+  enum wire-value test. Not a reversal of D1.1; a faithful refinement
+  of it.
