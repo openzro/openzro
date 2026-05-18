@@ -6,22 +6,32 @@
 // contract_test.go and this file is its TS counterpart. Keep the two
 // in lockstep (see ADR-0017 + project memory).
 
-export type FocusType = "peer" | "group";
+// v2 topology: one view, four focus tabs (ADR-0017 2026-05-18b).
+// Policy is always the middle pivot column.
+export type FocusType = "peer" | "user" | "group" | "network";
 
 export type NodeKind =
   | "focus"
   | "policy"
   | "group"
   | "peer"
+  | "user"
   | "route"
-  | "network_resource";
+  | "network_resource"
+  | "network";
 
 export type EdgeState = "enforced" | "posture_blocked";
 
 // router_local: the focus IS the router serving the route (gateway
 // reach), distinct from route_default_permit (ADR-0017 amendment
-// 2026-05-17). All three values must be handled.
-export type PermitSource = "policy" | "route_default_permit" | "router_local";
+// 2026-05-17). identity: a structural ownership edge (v2 User→Peer),
+// not a policy permit — no policyId (ADR-0017 2026-05-18c). All
+// values must be handled.
+export type PermitSource =
+  | "policy"
+  | "route_default_permit"
+  | "router_local"
+  | "identity";
 
 export type EdgeDirection = "in" | "out" | "bidirectional";
 
@@ -34,6 +44,10 @@ export interface ControlCenterNode {
   id: string;
   kind: NodeKind;
   label: string;
+  // v2 columnar projection stamps meta.column ∈
+  // focus|peers|policies|resources|groups so the canvas can lane the
+  // node. Also: peer→ip/os, user→email, policy→port, resource→
+  // sub/resourceKind.
   meta?: Record<string, string>;
 }
 

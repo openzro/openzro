@@ -1,182 +1,173 @@
 "use client";
 
 import "@xyflow/react/dist/style.css";
-import Dagre from "@dagrejs/dagre";
-import {
-  Background,
-  BaseEdge,
-  type Edge,
-  EdgeLabelRenderer,
-  type EdgeProps,
-  MarkerType,
-  type Node,
-  Position,
-  ReactFlow,
-} from "@xyflow/react";
-import React, { useMemo } from "react";
-import {
-  ControlCenterEdge,
+import { type Edge, type Node, ReactFlow } from "@xyflow/react";
+import { RefreshCw, Search } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import type {
   ControlCenterGraph,
-  NodeKind,
+  FocusType,
 } from "@/interfaces/ControlCenter";
+import { CC_EDGE_TYPES } from "./ControlCenterFlowEdge";
+import {
+  type ColumnHeader,
+  columnHeaders,
+  FOOTER_BAND,
+  HEADER_BAND,
+  layoutGraph,
+  reachableFrom,
+} from "./controlCenterLayout";
+import { CC_NODE_TYPES } from "./ControlCenterNodes";
 
-// ADR-0017 Phase 2, P4 — the xyflow canvas. Read-only; dagre lays the
-// graph out left→right. Posture-blocked edges are visually distinct
-// from enforced (never collapsed into "no edge"). Each edge is
-// labelled with its permit source (+ policy / protocol). Clicking a
-// policy-backed edge (P5) opens the policy editor.
+// ADR-0017 2026-05-18b — the v2 columnar canvas. Full-bleed: the
+// stage spans the live container (ResizeObserver-measured), Policy
+// is always the middle pivot column, edges are coloured by
+// enforcement state (green = enforced, red = posture_blocked —
+// owner-sanctioned brand exception). Column labels sit in a top
+// band, legend + status in a bottom footer; both are overlays so
+// the graph itself uses 100% of the area.
 
-const NODE_W = 190;
-const NODE_H = 44;
-
-const KIND_CLASS: Record<NodeKind, string> = {
-  focus: "border-oz2-acc bg-oz2-acc/10 text-oz2-text font-semibold",
-  peer: "border-oz2-border-strong bg-oz2-surface text-oz2-text",
-  group: "border-oz2-border-strong bg-oz2-surface text-oz2-text",
-  policy: "border-oz2-border-strong bg-oz2-bg-sunken text-oz2-text-muted",
-  route: "border-oz2-border-strong bg-oz2-surface text-oz2-text",
-  network_resource: "border-oz2-border-strong bg-oz2-surface text-oz2-text",
-};
-
-function edgeLabel(e: ControlCenterEdge): string {
-  const src =
-    e.permitSource === "policy"
-      ? e.policyName || "policy"
-      : e.permitSource;
-  // protocol/ports on the edge (ADR-0017 Phase 3): e.g. "tcp/22,443",
-  // "tcp", "22,443", or nothing for an all-protocol no-port rule.
-  const protoPorts = [
-    e.protocol && e.protocol !== "all" ? e.protocol : "",
-    e.ports && e.ports.length ? e.ports.join(",") : "",
-  ]
-    .filter(Boolean)
-    .join("/");
-  const proto = protoPorts ? ` · ${protoPorts}` : "";
-  const blocked = e.state === "posture_blocked" ? " · blocked" : "";
-  return `${src}${proto}${blocked}`;
+function ColumnHeaders({ cols }: { cols: ColumnHeader[] }) {
+  return (
+    <div
+      className="pointer-events-none absolute inset-x-0 top-0 z-10"
+      style={{ height: HEADER_BAND }}
+    >
+      {cols.map((c) => (
+        <div
+          key={c.id}
+          className="absolute flex items-center justify-center gap-2"
+          style={{ left: c.x, top: 12, width: c.width }}
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-oz2-acc" />
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-oz2-text-2">
+            {c.label}
+          </span>
+          <span
+            className="font-mono rounded border border-oz2-border-soft bg-oz2-bg-soft
+              px-1.5 py-px text-[10px] text-oz2-text-muted"
+          >
+            {c.count}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
-function layout(graph: ControlCenterGraph): {
-  nodes: Node[];
-  edges: Edge[];
-} {
-  const g = new Dagre.graphlib.Graph();
-  g.setGraph({ rankdir: "LR", nodesep: 24, ranksep: 90 });
-  g.setDefaultEdgeLabel(() => ({}));
-
-  for (const n of graph.nodes) {
-    g.setNode(n.id, { width: NODE_W, height: NODE_H });
-  }
-  for (const e of graph.edges) {
-    g.setEdge(e.from, e.to);
-  }
-  Dagre.layout(g);
-
-  const nodes: Node[] = graph.nodes.map((n) => {
-    const p = g.node(n.id);
-    // peer/group target nodes are valid v1 foci → clicking one
-    // re-centres the graph on it (Phase 3). Cue it with a pointer.
-    const switchable = n.kind === "peer" || n.kind === "group";
-    return {
-      id: n.id,
-      position: { x: (p?.x ?? 0) - NODE_W / 2, y: (p?.y ?? 0) - NODE_H / 2 },
-      data: { label: n.label || n.id, kind: n.kind },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
-      className: `rounded-oz2-input border px-3 py-2 text-xs ${
-        KIND_CLASS[n.kind] ?? KIND_CLASS.peer
-      }${switchable ? " cursor-pointer" : ""}`,
-      width: NODE_W,
-      height: NODE_H,
-    };
-  });
-
-  // Phase 1 deliberately preserves distinct relations with the same
-  // from/to (router_local vs route_default_permit, multi-cause
-  // posture_blocked, multi-policy). Number each within its (from,to)
-  // group so the custom edge fans them onto separate tracks instead
-  // of overlapping (#51 F3).
-  const parCount: Record<string, number> = {};
-  for (const e of graph.edges) {
-    const k = `${e.from}\u0000${e.to}`;
-    parCount[k] = (parCount[k] ?? 0) + 1;
-  }
-  const parSeen: Record<string, number> = {};
-
-  const edges: Edge[] = graph.edges.map((e, i) => {
-    const blocked = e.state === "posture_blocked";
-    const k = `${e.from}\u0000${e.to}`;
-    const parIndex = parSeen[k] ?? 0;
-    parSeen[k] = parIndex + 1;
-    return {
-      id: `e${i}-${e.from}-${e.to}`,
-      source: e.from,
-      target: e.to,
-      type: "parallel",
-      style: blocked
-        ? { stroke: "var(--ozv2-err)", strokeDasharray: "5 4" }
-        : { stroke: "var(--ozv2-acc)" },
-      markerEnd: { type: MarkerType.ArrowClosed },
-      data: {
-        policyId: e.policyId ?? "",
-        label: edgeLabel(e),
-        blocked,
-        parIndex,
-        parTotal: parCount[k],
-      },
-    };
-  });
-
-  return { nodes, edges };
+function Legend() {
+  const Item = ({ cls, label }: { cls: string; label: string }) => (
+    <span className="flex items-center gap-1.5">
+      <span className={`h-0.5 w-5 rounded-full ${cls}`} />
+      <span>{label}</span>
+    </span>
+  );
+  return (
+    <div className="flex items-center gap-4 text-[11px] text-oz2-text-muted">
+      {/* "Policy-permitted", not "Enforced": v2 is a policy
+          topology, green means the policy grants it and posture
+          doesn't block — not a live reachability claim (ADR-0017
+          2026-05-18c). */}
+      <Item cls="bg-oz2-ok" label="Policy-permitted" />
+      <Item cls="bg-oz2-err" label="Posture-blocked" />
+      <span className="flex items-center gap-1.5">
+        <span className="h-0.5 w-5 rounded-full border-t border-dashed border-oz2-text-faint" />
+        <span>Policy flow</span>
+      </span>
+    </div>
+  );
 }
 
-// ParallelEdge fans edges that share a (source,target) onto separate
-// curved tracks (perpendicular offset by parallel index, centred on
-// zero) with the label on the same offset, so the parallel relations
-// the backend preserves are not visually collapsed (#51 F3).
-const PAR_GAP = 26;
+// FocusPicker is the inline selector anchored to the focus card
+// (NetBird pattern, owner-confirmed 2026-05-18): a search field over
+// a scrollable list. It opens against the card — NOT the header — so
+// the affordance is where the click is.
+function FocusPicker({
+  x,
+  y,
+  cardH,
+  width,
+  stageH,
+  options,
+  currentId,
+  onPick,
+  onClose,
+}: {
+  x: number;
+  y: number;
+  cardH: number;
+  width: number;
+  stageH: number;
+  options: { id: string; label: string }[];
+  currentId: string;
+  onPick: (id: string) => void;
+  onClose: () => void;
+}) {
+  const [q, setQ] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => inputRef.current?.focus(), []);
 
-function ParallelEdge({
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  markerEnd,
-  style,
-  data,
-}: EdgeProps) {
-  const d = (data ?? {}) as {
-    label?: string;
-    blocked?: boolean;
-    parIndex?: number;
-    parTotal?: number;
-  };
-  const idx = d.parIndex ?? 0;
-  const total = d.parTotal ?? 1;
-  const offset = (idx - (total - 1) / 2) * PAR_GAP;
+  const filtered = q
+    ? options.filter((o) =>
+        o.label.toLowerCase().includes(q.toLowerCase()),
+      )
+    : options;
 
-  const dx = targetX - sourceX;
-  const dy = targetY - sourceY;
-  const len = Math.hypot(dx, dy) || 1;
-  const nx = -dy / len;
-  const ny = dx / len;
-  const mx = (sourceX + targetX) / 2 + nx * offset;
-  const my = (sourceY + targetY) / 2 + ny * offset;
-  const path = `M ${sourceX},${sourceY} Q ${mx},${my} ${targetX},${targetY}`;
+  // Anchor below the card; flip above when the lower half wouldn't
+  // fit a usable list.
+  const openUp = y + cardH > stageH * 0.55;
+  const pos = openUp
+    ? { left: x, bottom: stageH - y + 6 }
+    : { left: x, top: y + cardH + 6 };
 
   return (
     <>
-      <BaseEdge path={path} markerEnd={markerEnd} style={style} />
-      <EdgeLabelRenderer>
-        <div
-          className={`pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded bg-oz2-surface px-1.5 py-0.5 text-[10px] ${
-            d.blocked ? "text-oz2-err" : "text-oz2-text-muted"
-          }`}
-          style={{ transform: `translate(-50%,-50%) translate(${mx}px,${my}px)` }}
-        >
-          {d.label}
+      <div
+        className="absolute inset-0 z-30"
+        onClick={onClose}
+        aria-hidden
+      />
+      <div
+        className="oz-cc-scroll absolute z-40 flex max-h-[300px] flex-col
+          overflow-hidden rounded-oz2-input border border-oz2-border
+          bg-oz2-surface shadow-oz2-lg"
+        style={{ ...pos, width: Math.max(width, 240) }}
+      >
+        <div className="flex items-center gap-2 border-b border-oz2-border-soft px-3 py-2">
+          <Search className="h-3.5 w-3.5 shrink-0 text-oz2-text-faint" />
+          <input
+            ref={inputRef}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search…"
+            className="w-full bg-transparent text-xs text-oz2-text
+              placeholder:text-oz2-text-faint focus:outline-none"
+          />
         </div>
-      </EdgeLabelRenderer>
+        <ul className="oz-cc-scroll min-h-0 flex-1 overflow-auto py-1">
+          {filtered.length === 0 && (
+            <li className="px-3 py-2 text-xs text-oz2-text-faint">
+              No matches
+            </li>
+          )}
+          {filtered.map((o) => (
+            <li key={o.id}>
+              <button
+                type="button"
+                onClick={() => onPick(o.id)}
+                className={`flex w-full items-center truncate px-3 py-1.5
+                  text-left text-xs transition-colors hover:bg-oz2-hover ${
+                    o.id === currentId
+                      ? "bg-oz2-acc-soft text-oz2-acc-text"
+                      : "text-oz2-text-2"
+                  }`}
+              >
+                {o.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
     </>
   );
 }
@@ -185,41 +176,197 @@ export default function ControlCenterGraphCanvas({
   graph,
   onEdgeClick,
   onFocusNode,
+  onRefresh,
+  focusOptions,
+  focusId,
+  onPickFocus,
 }: {
   graph: ControlCenterGraph;
   onEdgeClick?: (policyId: string) => void;
-  onFocusNode?: (view: "peer" | "group", id: string) => void;
+  onFocusNode?: (view: FocusType, id: string) => void;
+  onRefresh?: () => void;
+  focusOptions: { id: string; label: string }[];
+  focusId: string;
+  onPickFocus: (id: string) => void;
 }) {
-  const { nodes, edges } = useMemo(() => layout(graph), [graph]);
-  const edgeTypes = useMemo(() => ({ parallel: ParallelEdge }), []);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const r = entry.contentRect;
+      setSize({ w: Math.round(r.width), h: Math.round(r.height) });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const ready = size.w > 0 && size.h > 0;
+  const laid = useMemo(
+    () => (ready ? layoutGraph(graph, size.w, size.h) : null),
+    [graph, ready, size.w, size.h],
+  );
+  const headers = useMemo(
+    () => (ready ? columnHeaders(graph, size.w) : []),
+    [graph, ready, size.w],
+  );
+  const lit = useMemo(
+    () =>
+      hovered && laid
+        ? reachableFrom(hovered, laid.adjOut, laid.adjIn)
+        : null,
+    [hovered, laid],
+  );
+  const focusNode = useMemo(
+    () => laid?.nodes.find((n) => n.data.column === "focus") ?? null,
+    [laid],
+  );
+
+  const nodes: Node[] = useMemo(
+    () =>
+      (laid?.nodes ?? []).map((n) => ({
+        id: n.id,
+        type: "cc",
+        position: n.position,
+        draggable: false,
+        selectable: !!n.data.switchable,
+        focusable: true,
+        ariaLabel: `${n.data.kind}: ${n.data.label}`,
+        style: { width: n.width, height: n.height },
+        data: {
+          ...n.data,
+          dimmed: !!lit && !lit.has(n.id),
+          emphasis: !!lit && lit.has(n.id),
+        },
+      })),
+    [laid, lit],
+  );
+
+  const edges: Edge[] = useMemo(
+    () =>
+      (laid?.edges ?? []).map((e) => {
+        const inLit = !!lit && lit.has(e.source) && lit.has(e.target);
+        return {
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          type: "cc",
+          data: { ...e.data, dimmed: !!lit && !inLit, emphasis: inLit },
+        };
+      }),
+    [laid, lit],
+  );
 
   return (
-    <div className="h-[68vh] w-full overflow-hidden rounded-oz2-card border border-oz2-border-strong">
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        edgeTypes={edgeTypes}
-        fitView
-        nodesDraggable={false}
-        nodesConnectable={false}
-        edgesFocusable={!!onEdgeClick}
-        proOptions={{ hideAttribution: true }}
-        onNodeClick={(_, node) => {
-          const kind = (node.data as { kind?: string } | undefined)?.kind;
-          // Only peer/group nodes are valid v1 foci; clicking the
-          // current focus or a route/resource/policy node is a no-op.
-          if (onFocusNode && (kind === "peer" || kind === "group")) {
-            onFocusNode(kind, node.id);
-          }
-        }}
-        onEdgeClick={(_, edge) => {
-          const pid = (edge.data as { policyId?: string } | undefined)
-            ?.policyId;
-          if (pid && onEdgeClick) onEdgeClick(pid);
-        }}
+    // No own border/bg: the parent card shell (ControlCenterView)
+    // owns the frame and the top tab bar; this just fills the region
+    // below it.
+    <div ref={wrapRef} className="relative h-full w-full overflow-hidden">
+      <div className="oz-cc-grid pointer-events-none absolute inset-0" />
+
+      {ready && <ColumnHeaders cols={headers} />}
+
+      <div className="absolute inset-0">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={CC_NODE_TYPES}
+          edgeTypes={CC_EDGE_TYPES}
+          fitView={false}
+          defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable={!!onEdgeClick}
+          panOnDrag={false}
+          panOnScroll={false}
+          zoomOnScroll={false}
+          zoomOnPinch={false}
+          zoomOnDoubleClick={false}
+          preventScrolling={false}
+          proOptions={{ hideAttribution: true }}
+          onNodeMouseEnter={(_, n) => setHovered(n.id)}
+          onNodeMouseLeave={() => setHovered(null)}
+          onNodeClick={(_, node) => {
+            const d = node.data as {
+              kind?: string;
+              switchable?: boolean;
+              column?: string;
+            };
+            // The focus card is the picker affordance: clicking it
+            // (or its chevron) opens an inline selector anchored to
+            // the card to swap the inspected entity.
+            if (d.kind === "focus" || d.column === "focus") {
+              setPickerOpen((v) => !v);
+              return;
+            }
+            // A policy card opens that policy in the editor (same
+            // round-trip as clicking a policy-backed edge).
+            if (d.kind === "policy" && onEdgeClick) {
+              onEdgeClick(node.id.replace(/^policy:/, ""));
+              return;
+            }
+            if (
+              onFocusNode &&
+              d.switchable &&
+              (d.kind === "peer" || d.kind === "group")
+            ) {
+              onFocusNode(d.kind as FocusType, node.id);
+            }
+          }}
+          onEdgeClick={(_, edge) => {
+            const pid = (edge.data as { policyId?: string } | undefined)
+              ?.policyId;
+            if (pid && onEdgeClick) onEdgeClick(pid);
+          }}
+        />
+      </div>
+
+      {pickerOpen && focusNode && (
+        <FocusPicker
+          x={focusNode.position.x}
+          y={focusNode.position.y}
+          cardH={focusNode.height}
+          width={focusNode.width}
+          stageH={size.h}
+          options={focusOptions}
+          currentId={focusId}
+          onPick={(id) => {
+            setPickerOpen(false);
+            onPickFocus(id);
+          }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
+
+      <div
+        className="absolute inset-x-0 bottom-0 z-10 flex items-center
+          justify-between border-t border-oz2-border bg-oz2-surface/80 px-4
+          backdrop-blur-md"
+        style={{ height: FOOTER_BAND }}
       >
-        <Background />
-      </ReactFlow>
+        <Legend />
+        <div className="flex items-center gap-3 text-[11px] text-oz2-text-muted">
+          <span>
+            {graph.edges.length} connection
+            {graph.edges.length === 1 ? "" : "s"}
+          </span>
+          {onRefresh && (
+            <button
+              type="button"
+              onClick={onRefresh}
+              className="flex items-center gap-1.5 rounded-md border border-oz2-border
+                px-2 py-1 text-oz2-text-2 transition-colors hover:bg-oz2-hover"
+            >
+              <RefreshCw className="h-3 w-3" />
+              Refresh
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

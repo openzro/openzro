@@ -514,3 +514,54 @@ p {
 .animate-bg-scroll-faster {
     animation: bg-scroll 1.8s linear infinite;
 }
+
+/* ─── Control Center v2 topology canvas (ADR-0017 2026-05-18b) ───
+   Scoped to .oz-cc-* so it can't leak. The dot grid + soft centre
+   glow replace xyflow's plain background and cue "infinite canvas"
+   while staying brand-aligned; the flow dash is the "live traffic"
+   signal on policy edges. */
+.oz-cc-grid {
+    background-color: var(--ozv2-bg);
+    background-image:
+        radial-gradient(
+            circle at 50% 45%,
+            color-mix(in oklab, var(--ozv2-acc) 6%, transparent),
+            transparent 60%
+        ),
+        radial-gradient(
+            color-mix(in oklab, var(--ozv2-acc) 14%, transparent) 1px,
+            transparent 1px
+        );
+    background-size: 100% 100%, 24px 24px;
+}
+
+@keyframes oz-cc-dash-flow {
+    to {
+        stroke-dashoffset: -200;
+    }
+}
+
+.oz-cc-flow {
+    animation: oz-cc-dash-flow var(--oz-cc-flow-speed, 4.5s) linear infinite;
+}
+
+.oz-cc-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+.oz-cc-scroll::-webkit-scrollbar-thumb {
+    background: var(--ozv2-border);
+    border-radius: 99px;
+}
+.oz-cc-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--ozv2-border-strong);
+}
+.oz-cc-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .oz-cc-flow {
+        animation-play-state: paused;
+    }
+}
