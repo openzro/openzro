@@ -132,3 +132,29 @@ func TestBuildGraph_NetworkResource_PostureBlocked(t *testing.T) {
 	require.Equal(t, "policyC", e.PolicyID)
 	require.Equal(t, "min-nb", e.Meta["postureCheck"])
 }
+
+// #50-r2 F2: a network resource is ONE logical target. With HA
+// routers the graph must produce a single deterministic
+// "nr:<resourceID>" node, not one per router instance.
+func TestBuildGraph_NetworkResource_HA_SingleLogicalNode(t *testing.T) {
+	acc := nrAccount(true, false)
+	// add a second HA router peer + router for the SAME resource/network.
+	acc.Peers["pR2"] = &nbpeer.Peer{ID: "pR2", IP: net.IP{10, 0, 0, 8}, Key: "kR2", Name: "router2"}
+	acc.Groups["all"].Peers = append(acc.Groups["all"].Peers, "pR2")
+	acc.NetworkRouters = append(acc.NetworkRouters, &routerTypes.NetworkRouter{
+		ID: "rt2", NetworkID: "net1", AccountID: "acc1", Peer: "pR2", Enabled: true, Metric: 100,
+	})
+	validated := map[string]struct{}{"pA": {}, "pR": {}, "pR2": {}}
+
+	g, err := BuildGraph(context.Background(), acc, Focus{Type: FocusPeer, ID: "pA"}, validated)
+	require.NoError(t, err)
+
+	var nrNodes []Node
+	for _, n := range g.Nodes {
+		if n.Kind == NodeNetworkResource {
+			nrNodes = append(nrNodes, n)
+		}
+	}
+	require.Len(t, nrNodes, 1, "HA routers must collapse to one logical resource node")
+	require.Equal(t, "nr:res1", nrNodes[0].ID)
+}

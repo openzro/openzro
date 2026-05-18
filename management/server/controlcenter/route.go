@@ -116,6 +116,25 @@ func (b *graphBuilder) addRouteReach(ctx context.Context, acc *types.Account, fo
 	// RouteID and remember a route per resource ID (so a stable
 	// node id/label exists even when the focus is dropped from
 	// distribution by posture — same shape as the peer D1.2 pass).
+	// A network resource is ONE logical target. Its node id is the
+	// resource id (not the per-router route id "<resID>:<peerID>"),
+	// and the label comes from the resource itself — so HA routers
+	// collapse to a single deterministic node (#50-r2 F2).
+	nrLabelByRes := map[string]string{}
+	for _, res := range acc.NetworkResources {
+		if res == nil {
+			continue
+		}
+		switch {
+		case res.Name != "":
+			nrLabelByRes[res.ID] = res.Name
+		case res.Address != "":
+			nrLabelByRes[res.ID] = res.Address
+		default:
+			nrLabelByRes[res.ID] = res.Prefix.String()
+		}
+	}
+
 	nrRuleIdx := map[route.ID][]*types.RouteFirewallRule{}
 	nrRouteByResource := map[string]*route.Route{}
 	for _, p := range acc.Peers {
@@ -144,12 +163,13 @@ func (b *graphBuilder) addRouteReach(ctx context.Context, acc *types.Account, fo
 		if r == nil {
 			continue
 		}
-		nodeID := "nr:" + string(r.ID)
+		resID := string(r.GetResourceID())
+		nodeID := "nr:" + resID
 		for _, fr := range nrRuleIdx[r.ID] {
 			if !ipInAnyRange(focusPeer.IP, fr.SourceRanges) {
 				continue
 			}
-			permittedRes[string(r.GetResourceID())] = struct{}{}
+			permittedRes[resID] = struct{}{}
 			e := &Edge{
 				Protocol:     fr.Protocol,
 				Ports:        routeFirewallPorts(fr),
@@ -166,7 +186,7 @@ func (b *graphBuilder) addRouteReach(ctx context.Context, acc *types.Account, fo
 					e.PolicyName = pol.Name
 				}
 			}
-			b.addNode(nodeID, NodeNetworkResource, routeLabel(r))
+			b.addNode(nodeID, NodeNetworkResource, nrLabelByRes[resID])
 			b.addRouteEdge(focusID, nodeID, e)
 		}
 	}
@@ -182,12 +202,11 @@ func (b *graphBuilder) addRouteReach(ctx context.Context, acc *types.Account, fo
 		if _, ok := permittedRes[res.ID]; ok {
 			continue
 		}
-		rr := nrRouteByResource[res.ID]
-		if rr == nil {
-			continue
+		if nrRouteByResource[res.ID] == nil {
+			continue // no router actually serves it — unreachable, posture aside
 		}
 		b.addPolicyPostureBlocked(ctx, acc, focusID,
-			resourcePolicies[res.ID], "nr:"+string(rr.ID), NodeNetworkResource, routeLabel(rr))
+			resourcePolicies[res.ID], "nr:"+res.ID, NodeNetworkResource, nrLabelByRes[res.ID])
 	}
 }
 
