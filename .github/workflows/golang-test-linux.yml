@@ -354,6 +354,31 @@ jobs:
       - name: check git status
         run: git --no-pager diff --exit-code
 
+      # Authenticated Docker Hub pulls so testcontainers (postgres/
+      # mysql) don't hit the anonymous rate limit — "Failed to get
+      # image auth … mysql:8.0" was the pre-existing Management red.
+      # Adapted from netbirdio/netbird's BSD-licensed
+      # golang-test-linux.yml (test_management job). The Test step
+      # runs `go test -exec sudo …`, so root's docker config needs
+      # the login too. Gated on the secret being present, so fork
+      # PRs / forks without it skip cleanly (fall back to anon pulls)
+      # instead of failing.
+      - name: Login to Docker Hub
+        if: ${{ env.DOCKERHUB_USERNAME != '' }}
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Docker login for root user
+        if: ${{ env.DOCKERHUB_USERNAME != '' }}
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: echo "$DOCKERHUB_TOKEN" | sudo docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+
       - name: Test
         run: |
           CGO_ENABLED=1 GOARCH=${{ matrix.arch }} \
@@ -403,6 +428,31 @@ jobs:
 
       - name: check git status
         run: git --no-pager diff --exit-code
+
+      # Authenticated Docker Hub pulls so testcontainers (postgres/
+      # mysql) don't hit the anonymous rate limit — "Failed to get
+      # image auth … mysql:8.0" was the pre-existing Management red.
+      # Adapted from netbirdio/netbird's BSD-licensed
+      # golang-test-linux.yml (test_management job). The Test step
+      # runs `go test -exec sudo …`, so root's docker config needs
+      # the login too. Gated on the secret being present, so fork
+      # PRs / forks without it skip cleanly (fall back to anon pulls)
+      # instead of failing.
+      - name: Login to Docker Hub
+        if: ${{ env.DOCKERHUB_USERNAME != '' }}
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Docker login for root user
+        if: ${{ env.DOCKERHUB_USERNAME != '' }}
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: echo "$DOCKERHUB_TOKEN" | sudo docker login --username "$DOCKERHUB_USERNAME" --password-stdin
 
       - name: Test
         run: |
@@ -481,6 +531,31 @@ jobs:
       - name: check git status
         run: git --no-pager diff --exit-code
 
+      # Authenticated Docker Hub pulls so testcontainers (postgres/
+      # mysql) don't hit the anonymous rate limit — "Failed to get
+      # image auth … mysql:8.0" was the pre-existing Management red.
+      # Adapted from netbirdio/netbird's BSD-licensed
+      # golang-test-linux.yml (test_management job). The Test step
+      # runs `go test -exec sudo …`, so root's docker config needs
+      # the login too. Gated on the secret being present, so fork
+      # PRs / forks without it skip cleanly (fall back to anon pulls)
+      # instead of failing.
+      - name: Login to Docker Hub
+        if: ${{ env.DOCKERHUB_USERNAME != '' }}
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Docker login for root user
+        if: ${{ env.DOCKERHUB_USERNAME != '' }}
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: echo "$DOCKERHUB_TOKEN" | sudo docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+
       - name: Test
         run: |
           CGO_ENABLED=1 GOARCH=${{ matrix.arch }} \
@@ -533,6 +608,31 @@ jobs:
 
       - name: check git status
         run: git --no-pager diff --exit-code
+
+      # Authenticated Docker Hub pulls so testcontainers (postgres/
+      # mysql) don't hit the anonymous rate limit — "Failed to get
+      # image auth … mysql:8.0" was the pre-existing Management red.
+      # Adapted from netbirdio/netbird's BSD-licensed
+      # golang-test-linux.yml (test_management job). The Test step
+      # runs `go test -exec sudo …`, so root's docker config needs
+      # the login too. Gated on the secret being present, so fork
+      # PRs / forks without it skip cleanly (fall back to anon pulls)
+      # instead of failing.
+      - name: Login to Docker Hub
+        if: ${{ env.DOCKERHUB_USERNAME != '' }}
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Docker login for root user
+        if: ${{ env.DOCKERHUB_USERNAME != '' }}
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: echo "$DOCKERHUB_TOKEN" | sudo docker login --username "$DOCKERHUB_USERNAME" --password-stdin
 
       - name: Test
         run: |
