@@ -6,12 +6,14 @@ import (
 	"github.com/openzro/openzro/management/server/controlcenter"
 )
 
-// GetAccessGraph builds the read-only Control Center access graph for a
-// focus node (ADR-0017 Phase 1). It loads the account and assembles
-// the validated-peers set from the store the same way the network-map
-// path does, then delegates to the controlcenter adapter — it makes no
-// access decisions of its own. RBAC (admin-only) is enforced at the
-// HTTP boundary, consistent with the flow-exports handler.
+// GetAccessGraph builds the read-only Control Center v2 topology for a
+// focus node. It loads the account and delegates to the controlcenter
+// adapter — it makes no access decisions of its own. v2 is a
+// policy-topology projection (ADR-0017 2026-05-18c), so it does NOT
+// compute a validated-peers set: posture is evaluated inside the
+// projection; live peer validation is intentionally not a gate.
+// RBAC (admin-only) is enforced at the HTTP boundary, consistent with
+// the flow-exports handler.
 //
 // Clean-room (BSD-3): wiring designed against openZro's own manager
 // helpers and ADR-0017; no upstream NetBird management/ code consulted
@@ -22,13 +24,8 @@ func (am *DefaultAccountManager) GetAccessGraph(ctx context.Context, accountID, 
 		return nil, err
 	}
 
-	validatedPeers, err := am.GetValidatedPeers(ctx, accountID)
-	if err != nil {
-		return nil, err
-	}
-
 	return controlcenter.BuildGraph(ctx, account, controlcenter.Focus{
 		Type: controlcenter.FocusType(view),
 		ID:   focusID,
-	}, validatedPeers)
+	})
 }

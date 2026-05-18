@@ -1,14 +1,19 @@
-// Package controlcenter builds the read-only access-graph DTO that
-// answers, for a focus node, what it reaches right now, through which
-// policy (or route default-permit), on which protocols/ports, and what
-// is policy-permitted but posture-blocked.
+// Package controlcenter builds the read-only access-graph DTO for the
+// v2 topology view: for a focus node it answers, through which
+// policy (posture-aware), on which protocols/ports, can a source
+// reach a resource — and what is policy-permitted but
+// posture-blocked. It is a POLICY-TOPOLOGY projection, not a live
+// effective-reach walk: each edge's State is the engine-truth posture
+// distinction (enforced vs posture_blocked), but the graph does NOT
+// gate on live peer validation the way the retired v1 reach graph
+// did (ADR-0017 2026-05-18b / 2026-05-18c).
 //
 // Clean-room (BSD-3 tree, openZro): every type and the adapter logic
-// here are designed against openZro's own enforcement engine
-// (Account.GetPeerConnectionResources / GetRoutesToSync /
-// GetPeerRoutesFirewallRules) and the decisions recorded in
-// docs/adr/0017-control-center-access-graph.md. No upstream NetBird
-// management/ code was consulted or ported.
+// here are designed against openZro's own policy model
+// (Account.Policies / Groups / NetworkResources /
+// GetPoliciesForNetworkResource / types.EvaluateAdmission) and the
+// decisions recorded in docs/adr/0017-control-center-access-graph.md.
+// No upstream NetBird management/ code was consulted or ported.
 package controlcenter
 
 import "errors"
@@ -20,17 +25,21 @@ var (
 	// ErrFocusNotFound — the requested focus peer/group does not
 	// exist in the account (→ 404).
 	ErrFocusNotFound = errors.New("focus not found")
-	// ErrUnsupportedFocus — the view is not peer/group (→ 400).
+	// ErrUnsupportedFocus — the view is not peer/user/group/network
+	// (→ 400).
 	ErrUnsupportedFocus = errors.New("unsupported focus type")
 )
 
-// FocusType is the kind of node the graph is centred on. v1 ships peer
-// and group focus; network/user focus are an ADR-0017 v2 follow-up.
+// FocusType is the focus tab of the v2 topology view. Policy is always
+// the middle pivot column; only User adds a Peers column; Network is
+// the inverse fan-in (ADR-0017 2026-05-18b).
 type FocusType string
 
 const (
-	FocusPeer  FocusType = "peer"
-	FocusGroup FocusType = "group"
+	FocusPeer    FocusType = "peer"
+	FocusUser    FocusType = "user"
+	FocusGroup   FocusType = "group"
+	FocusNetwork FocusType = "network"
 )
 
 // Focus identifies the node the graph is built around.
@@ -40,7 +49,13 @@ type Focus struct {
 }
 
 // NodeKind tags a graph node. focus is the centred node; the rest are
-// what it relates to.
+// the columns it fans out into. The v2 topology projection emits
+// columns of these kinds left→right (ADR-0017 2026-05-18b):
+//
+//	peer  : focus(peer)  → policy → {group|network_resource|route}
+//	user  : focus(user)  → peer   → policy → {group|network_resource|route}
+//	group : focus(group) → policy → {group|network_resource|route}
+//	network: group       → policy → focus(network_resource)  (inverse fan-in)
 type NodeKind string
 
 const (
@@ -48,8 +63,10 @@ const (
 	NodePolicy          NodeKind = "policy"
 	NodeGroup           NodeKind = "group"
 	NodePeer            NodeKind = "peer"
+	NodeUser            NodeKind = "user"
 	NodeRoute           NodeKind = "route"
 	NodeNetworkResource NodeKind = "network_resource"
+	NodeNetwork         NodeKind = "network"
 )
 
 // EdgeState distinguishes enforced reach from reach a policy permits
@@ -79,6 +96,12 @@ const (
 	// labelled as infrastructure-local reach (#50-r2 semantic note,
 	// owner-decided 2026-05-17).
 	PermitRouterLocal PermitSource = "router_local"
+	// PermitIdentity — a structural identity/ownership edge, NOT a
+	// policy permit: the v2 User→Peer edge ("these are the user's
+	// machines"). It carries no PolicyID. Formalised so the wire
+	// contract enumerates it instead of an empty-string sentinel the
+	// frontend matched by accident (#39 v2 review, finding 3).
+	PermitIdentity PermitSource = "identity"
 )
 
 // EdgeDirection is the traffic direction the permitting rule grants.

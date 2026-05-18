@@ -1,7 +1,7 @@
 // Package control_center exposes the admin-only, read-only Control
 // Center access-graph API (openZro #39, ADR-0017 Phase 1):
 //
-//	GET /api/control-center/{view}/{id}   view ∈ {peer, group}
+//	GET /api/control-center/{view}/{id}   view ∈ {peer, user, group, network}
 //
 // The graph is derived server-side from the enforcement engine
 // (never re-derived client-side). The endpoint is gated to full
@@ -68,8 +68,13 @@ func (h *Handler) getGraph(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	view := vars["view"]
-	if view != string(controlcenter.FocusPeer) && view != string(controlcenter.FocusGroup) {
-		util.WriteErrorResponse("unsupported view: must be 'peer' or 'group'", http.StatusBadRequest, w)
+	switch controlcenter.FocusType(view) {
+	case controlcenter.FocusPeer, controlcenter.FocusUser,
+		controlcenter.FocusGroup, controlcenter.FocusNetwork:
+	default:
+		util.WriteErrorResponse(
+			"unsupported view: must be 'peer', 'user', 'group' or 'network'",
+			http.StatusBadRequest, w)
 		return
 	}
 
