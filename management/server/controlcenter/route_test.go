@@ -144,3 +144,32 @@ func TestBuildGraph_SelfRouter_RouterLocalPermitSource(t *testing.T) {
 		"self-router reach must be router_local, not route_default_permit")
 	require.Empty(t, e2.PolicyID)
 }
+
+// #50-r3: a group holding a router AND a client over the same
+// default-permit route must NOT collapse — router_local and
+// route_default_permit are distinct reach causes and each keeps its
+// own "k of n".
+func TestBuildGraph_GroupFocus_RouterLocalVsDefaultNotCollapsed(t *testing.T) {
+	acc := routeAccount() // group "all" = {pA client, pR router}; pR serves r1 (no ACG)
+	validated := map[string]struct{}{"pA": {}, "pR": {}}
+
+	g, err := BuildGraph(context.Background(), acc, Focus{Type: FocusGroup, ID: "all"}, validated)
+	require.NoError(t, err)
+
+	var r1 []Edge
+	for _, e := range g.Edges {
+		if e.To == "route:r1" {
+			r1 = append(r1, e)
+		}
+	}
+	require.Len(t, r1, 2, "router_local and route_default_permit must stay separate")
+
+	bySrc := map[PermitSource]Edge{}
+	for _, e := range r1 {
+		bySrc[e.PermitSource] = e
+	}
+	require.Contains(t, bySrc, PermitRouterLocal)
+	require.Contains(t, bySrc, PermitRouteDefault)
+	require.Equal(t, "1 of 2 members", bySrc[PermitRouterLocal].Meta["reachedBy"])
+	require.Equal(t, "1 of 2 members", bySrc[PermitRouteDefault].Meta["reachedBy"])
+}

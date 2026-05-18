@@ -79,7 +79,14 @@ func buildGroupFocus(ctx context.Context, acc *types.Account, focus Focus, valid
 			if e.State == EdgePostureBlocked {
 				denialSig = e.Meta["postureCheckId"] + "/" + e.Meta["postureCheckType"]
 			}
-			key := e.To + "|" + e.PolicyID + "|" + e.Protocol + "|" + string(e.State) + "|" + denialSig
+			// PermitSource is part of the key: router_local and
+			// route_default_permit both have an empty PolicyID, so a
+			// group holding a router AND a client over the same
+			// default-permit route would otherwise collapse into one
+			// edge and lose the router_local/route_default distinction
+			// (#50-r3).
+			key := e.To + "|" + string(e.PermitSource) + "|" + e.PolicyID + "|" +
+				e.Protocol + "|" + string(e.State) + "|" + denialSig
 			a := aggs[key]
 			if a == nil {
 				ne := e
