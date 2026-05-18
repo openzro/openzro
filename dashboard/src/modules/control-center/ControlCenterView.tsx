@@ -13,7 +13,7 @@ import {
   OzTabsTrigger,
 } from "@components/v2/OzTabs";
 import useFetchApi from "@utils/api";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import React, { useMemo, useState } from "react";
 import {
   ControlCenterGraph,
@@ -31,8 +31,22 @@ import ControlCenterGraphCanvas from "@/modules/control-center/ControlCenterGrap
 
 export default function ControlCenterView() {
   const router = useRouter();
-  const [view, setView] = useState<FocusType>("peer");
-  const [focusId, setFocusId] = useState<string>("");
+  const sp = useSearchParams();
+
+  // Focus lives in the URL so the editor round-trip (F1) can return
+  // to the SAME focus: navigating to the policy editor and back
+  // remounts this view, which re-initialises from these params and
+  // re-fetches the graph.
+  const [view, setView] = useState<FocusType>(
+    sp.get("view") === "group" ? "group" : "peer",
+  );
+  const [focusId, setFocusId] = useState<string>(sp.get("focus") ?? "");
+
+  const syncUrl = (v: FocusType, f: string) => {
+    const q = new URLSearchParams({ view: v });
+    if (f) q.set("focus", f);
+    router.replace(`/control-center?${q.toString()}`);
+  };
 
   const { data: peers } = useFetchApi<Peer[]>("/peers", true);
   const { data: groups } = useFetchApi<Group[]>("/groups", true);
@@ -56,8 +70,15 @@ export default function ControlCenterView() {
   }, [view, peers, groups]);
 
   const onViewChange = (v: string) => {
-    setView(v as FocusType);
+    const fv = v as FocusType;
+    setView(fv);
     setFocusId(""); // a peer id is not a valid group focus and vice-versa
+    syncUrl(fv, "");
+  };
+
+  const onFocusChange = (f: string) => {
+    setFocusId(f);
+    syncUrl(view, f);
   };
 
   return (
@@ -80,7 +101,7 @@ export default function ControlCenterView() {
           </OzTabsList>
         </OzTabs>
 
-        <OzSelect value={focusId} onValueChange={setFocusId}>
+        <OzSelect value={focusId} onValueChange={onFocusChange}>
           <OzSelectTrigger className="w-[280px]">
             <OzSelectValue
               placeholder={`Select a ${view} to inspect…`}
@@ -100,9 +121,18 @@ export default function ControlCenterView() {
         focusId={focusId}
         isLoading={isLoading}
         graph={graph}
-        onPolicyOpen={(policyId) =>
-          router.push(`/access-control/edit?id=${policyId}`)
-        }
+        onPolicyOpen={(policyId) => {
+          // Round-trip (F1): tell the editor to return to THIS focus,
+          // not the access-control list, so the audit loop closes.
+          const returnTo = `/control-center?view=${view}&focus=${encodeURIComponent(
+            focusId,
+          )}`;
+          router.push(
+            `/access-control/edit?id=${policyId}&returnTo=${encodeURIComponent(
+              returnTo,
+            )}`,
+          );
+        }}
       />
     </div>
   );
