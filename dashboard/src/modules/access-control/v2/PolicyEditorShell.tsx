@@ -2,7 +2,7 @@
 
 import InlineLink from "@components/InlineLink";
 import { ChevronLeftIcon, ExternalLinkIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
 import { useRef, useState } from "react";
 import OzButton from "@/components/v2/OzButton";
@@ -44,11 +44,26 @@ export default function PolicyEditorShell({
   postureCheckTemplates,
 }: Readonly<Props>) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { permission } = usePermissions();
   const editorRef = useRef<PolicyEditorHandle>(null);
   const [saving, setSaving] = useState(false);
 
-  const goBack = () => router.push("/access-control");
+  // Honour an explicit returnTo so the Control Center → edit → back
+  // round-trip lands on the SAME focus (#51 F1). Tightly validated to
+  // an internal /control-center path to preclude an open redirect;
+  // any other caller (no returnTo) keeps the /access-control default.
+  const safeReturnTo = (): string => {
+    const raw = searchParams.get("returnTo");
+    if (!raw) return "/access-control";
+    const decoded = decodeURIComponent(raw);
+    if (decoded.startsWith("/control-center") && !decoded.startsWith("//")) {
+      return decoded;
+    }
+    return "/access-control";
+  };
+
+  const goBack = () => router.push(safeReturnTo());
 
   const handleSuccess = () => {
     setSaving(false);

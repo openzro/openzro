@@ -426,6 +426,14 @@ const NAV_ICONS = {
       <path d="m9 12 2 2 4-4" />
     </>,
   ),
+  accessGraph: navIcon(
+    <>
+      <circle cx={5} cy={6} r={2} />
+      <circle cx={19} cy={6} r={2} />
+      <circle cx={12} cy={18} r={2} />
+      <path d="M6.5 7.3 10.6 16M17.5 7.3 13.4 16M7 6h10" />
+    </>,
+  ),
   key: navIcon(
     <>
       <circle cx={8} cy={15} r={4} />
@@ -540,6 +548,13 @@ function buildSidebarSections(
           icon: NAV_ICONS.shield,
           active: matches("/access-control"),
           onClick: () => go("/access-control"),
+        },
+        {
+          id: "control-center",
+          label: "Control Center",
+          icon: NAV_ICONS.accessGraph,
+          active: matches("/control-center"),
+          onClick: () => go("/control-center"),
         },
         {
           id: "posture-checks",
