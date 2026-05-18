@@ -54,8 +54,8 @@ func TestBuildGraph_PeerToPeer_Enforced(t *testing.T) {
 	require.Equal(t, Focus{Type: FocusPeer, ID: "pA"}, g.Focus)
 
 	// focus node + the one reachable peer node.
-	require.Contains(t, g.Nodes, Node{ID: "pA", Kind: NodeFocus, Label: "alice"})
-	require.Contains(t, g.Nodes, Node{ID: "pB", Kind: NodePeer, Label: "bob"})
+	require.Contains(t, g.Nodes, Node{ID: "pA", Kind: NodeFocus, Label: "alice", Meta: map[string]string{"ip": "10.0.0.1"}})
+	require.Contains(t, g.Nodes, Node{ID: "pB", Kind: NodePeer, Label: "bob", Meta: map[string]string{"ip": "10.0.0.2"}})
 
 	require.Len(t, g.Edges, 1)
 	e := g.Edges[0]
@@ -78,11 +78,29 @@ func TestBuildGraph_NoPolicy_NoEdge(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, g.Edges)
 	// only the focus node; no reachable peer => no peer node.
-	require.Equal(t, []Node{{ID: "pA", Kind: NodeFocus, Label: "alice"}}, g.Nodes)
+	require.Equal(t, []Node{{ID: "pA", Kind: NodeFocus, Label: "alice", Meta: map[string]string{"ip": "10.0.0.1"}}}, g.Nodes)
 }
 
 func TestBuildGraph_UnknownFocusPeer(t *testing.T) {
 	acc := twoPeerAccount(true, true)
 	_, err := BuildGraph(context.Background(), acc, Focus{Type: FocusPeer, ID: "ghost"}, nil)
 	require.Error(t, err)
+}
+
+// Visual pass: peer nodes (focus + reachable) carry their IP in
+// meta.ip so the dashboard can render it as the node's secondary
+// line. route/network_resource expose CIDR via the label instead.
+func TestBuildGraph_PeerNodesCarryMetaIP(t *testing.T) {
+	acc := twoPeerAccount(true, true)
+	validated := map[string]struct{}{"pA": {}, "pB": {}}
+
+	g, err := BuildGraph(context.Background(), acc, Focus{Type: FocusPeer, ID: "pA"}, validated)
+	require.NoError(t, err)
+
+	byID := map[string]Node{}
+	for _, n := range g.Nodes {
+		byID[n.ID] = n
+	}
+	require.Equal(t, "10.0.0.1", byID["pA"].Meta["ip"], "focus peer node carries its IP")
+	require.Equal(t, "10.0.0.2", byID["pB"].Meta["ip"], "reachable peer node carries its IP")
 }

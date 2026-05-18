@@ -79,6 +79,18 @@ func TestBuildGraph_GroupFocus_UnionAllCompliant(t *testing.T) {
 	require.True(t, ok, "all 3 members reach pX")
 	require.Equal(t, "group:team", e.From)
 	require.Equal(t, "3 of 3 members", e.Meta["reachedBy"])
+
+	// #54 review: the group-focus aggregation must preserve the
+	// per-member node meta, so target peer nodes keep their IP.
+	var pX *Node
+	for i := range g.Nodes {
+		if g.Nodes[i].ID == "pX" {
+			pX = &g.Nodes[i]
+		}
+	}
+	require.NotNil(t, pX)
+	require.Equal(t, "10.0.0.9", pX.Meta["ip"],
+		"group focus must not strip peer meta.ip")
 }
 
 func TestBuildGraph_GroupFocus_PostureSplitsUnion(t *testing.T) {
