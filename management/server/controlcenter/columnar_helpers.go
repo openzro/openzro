@@ -232,15 +232,6 @@ func resourceSub(res *resourceTypes.NetworkResource) string {
 	return string(res.Type)
 }
 
-func intersectsSet(a []string, set types.LookupMap) bool {
-	for _, v := range a {
-		if _, ok := set[v]; ok {
-			return true
-		}
-	}
-	return false
-}
-
 func contains(s []string, v string) bool {
 	for _, x := range s {
 		if x == v {
