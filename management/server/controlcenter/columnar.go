@@ -294,8 +294,15 @@ func buildNetworkFocus(ctx context.Context, acc *types.Account, focus Focus) (*G
 	b.node(focusID, NodeFocus, resourceLabel(res), colFocus,
 		map[string]string{"sub": resourceSub(res), "resourceKind": "net"})
 
-	resGroups := sliceSet(res.GroupIDs)
-	for _, pol := range acc.Policies {
+	// Use openZro's OWN resolver for which policies apply to a network
+	// resource (same logic the dataplane uses) and resolve the
+	// resource's groups the way the engine does — from
+	// acc.Groups[].Resources, NOT res.GroupIDs (that field is
+	// gorm:"-" and is empty on the account loaded for the graph, so
+	// the old hand-rolled match found nothing and the network focus
+	// looked like "nobody reaches it") (#39 v2 review).
+	resGroups := networkResourceGroupSet(acc, res.ID)
+	for _, pol := range acc.GetPoliciesForNetworkResource(res.ID) {
 		if pol == nil || !pol.Enabled {
 			continue
 		}
@@ -330,6 +337,27 @@ func buildNetworkFocus(ctx context.Context, acc *types.Account, focus Focus) (*G
 		}
 	}
 	return b.finalize(), nil
+}
+
+// networkResourceGroupSet is the IDs of the groups that contain the
+// network resource, resolved the way openZro's own
+// getNetworkResourceGroups does — by scanning Group.Resources — so it
+// works on the graph-loaded account where NetworkResource.GroupIDs
+// (gorm:"-") is not populated.
+func networkResourceGroupSet(acc *types.Account, resID string) map[string]struct{} {
+	out := map[string]struct{}{}
+	for gid, g := range acc.Groups {
+		if g == nil {
+			continue
+		}
+		for _, r := range g.Resources {
+			if r.ID == resID {
+				out[gid] = struct{}{}
+				break
+			}
+		}
+	}
+	return out
 }
 
 func ruleTargetsResource(r *types.PolicyRule, res *resourceTypes.NetworkResource, resGroups map[string]struct{}) bool {

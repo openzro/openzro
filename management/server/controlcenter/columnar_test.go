@@ -43,7 +43,13 @@ func acct() *types.Account {
 		},
 		Groups: map[string]*types.Group{
 			"g1": {ID: "g1", Name: "engineers", Peers: []string{"p1"}},
-			"g2": {ID: "g2", Name: "servers", Peers: []string{"p2"}},
+			// nr1 is linked to g2 the way openZro models it — via
+			// Group.Resources — so GetPoliciesForNetworkResource can
+			// resolve it (res.GroupIDs is gorm:"-" / empty here).
+			"g2": {
+				ID: "g2", Name: "servers", Peers: []string{"p2"},
+				Resources: []types.Resource{{ID: "nr1", Type: "host"}},
+			},
 		},
 		Policies: []*types.Policy{
 			{
@@ -229,6 +235,28 @@ func TestNetworkFocus_InverseFanIn(t *testing.T) {
 	pf := edgeOf(g, "policy:pol1", "nr:nr1")
 	require.NotNil(t, pf)
 	require.Equal(t, EdgeEnforced, pf.State)
+}
+
+// Regression (#39 v2 review): a policy that targets the resource
+// only via its GROUP — and an account where NetworkResource.GroupIDs
+// is empty (its real gorm:"-" state) — must still show
+// group → policy → resource with the source group's peer count. The
+// old hand-rolled match keyed off res.GroupIDs and showed nothing.
+func TestNetworkFocus_PolicyViaResourceGroup(t *testing.T) {
+	a := acct()
+	a.NetworkResources[0].GroupIDs = nil // prove we don't depend on it
+	a.Policies[0].Rules[0].DestinationResource = types.Resource{}
+
+	g, err := BuildGraph(context.Background(), a, Focus{Type: FocusNetwork, ID: "nr1"}, nil)
+	require.NoError(t, err)
+
+	require.NotNil(t, nodeByID(g, "nr:nr1"))
+	src := nodeByID(g, "group:g1")
+	require.NotNil(t, src)
+	require.Equal(t, colGroups, src.Meta["column"])
+	require.Equal(t, "1 peer(s)", src.Meta["sub"])
+	require.NotNil(t, edgeOf(g, "group:g1", "policy:pol1"))
+	require.NotNil(t, edgeOf(g, "policy:pol1", "nr:nr1"))
 }
 
 func TestBuildGraph_Errors(t *testing.T) {
