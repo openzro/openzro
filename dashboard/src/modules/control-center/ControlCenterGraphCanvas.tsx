@@ -64,7 +64,11 @@ function Legend() {
   );
   return (
     <div className="flex items-center gap-4 text-[11px] text-oz2-text-muted">
-      <Item cls="bg-oz2-ok" label="Enforced" />
+      {/* "Policy-permitted", not "Enforced": v2 is a policy
+          topology, green means the policy grants it and posture
+          doesn't block — not a live reachability claim (ADR-0017
+          2026-05-18c). */}
+      <Item cls="bg-oz2-ok" label="Policy-permitted" />
       <Item cls="bg-oz2-err" label="Posture-blocked" />
       <span className="flex items-center gap-1.5">
         <span className="h-0.5 w-5 rounded-full border-t border-dashed border-oz2-text-faint" />
