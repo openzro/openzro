@@ -113,7 +113,12 @@ func init() {
 
 	defaultDaemonAddr := "unix:///var/run/openzro.sock"
 	if runtime.GOOS == "windows" {
-		defaultDaemonAddr = "tcp://127.0.0.1:41731"
+		// 41831, NOT NetBird's 41731: on Windows the daemon↔CLI gRPC
+		// binds a fixed loopback TCP port (no unix socket), so reusing
+		// NetBird's port means the openZro service can't start while a
+		// NetBird service is also installed. A distinct port lets both
+		// coexist. Keep in sync with client/ui/client_ui.go.
+		defaultDaemonAddr = "tcp://127.0.0.1:41831"
 	}
 
 	rootCmd.PersistentFlags().StringVar(&daemonAddr, "daemon-addr", defaultDaemonAddr, "Daemon service address to serve CLI requests [unix|tcp]://[path|host:port]")
