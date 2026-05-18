@@ -15,7 +15,7 @@ import (
 // peerState is the ADR-0017 D1.2 posture distinction for a single
 // source peer: enforced when the policy has no source posture checks
 // or the peer passes them; posture_blocked (with the failing check
-// named in meta) when a check denies it. It re-uses the engine's own
+// named in meta) when a check denies it. It reuses the engine's own
 // evaluator (types.EvaluateAdmission) — it makes no access decision,
 // it labels the one the engine already encodes.
 func (b *colBuilder) peerState(ctx context.Context, acc *types.Account, peerID string) stateFn {
