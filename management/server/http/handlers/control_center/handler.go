@@ -68,8 +68,10 @@ func (h *Handler) getGraph(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	view := vars["view"]
-	if view != string(controlcenter.FocusPeer) && view != string(controlcenter.FocusGroup) {
-		util.WriteErrorResponse("unsupported view: must be 'peer' or 'group'", http.StatusBadRequest, w)
+	if view != string(controlcenter.FocusPeer) &&
+		view != string(controlcenter.FocusGroup) &&
+		view != string(controlcenter.FocusUser) {
+		util.WriteErrorResponse("unsupported view: must be 'peer', 'group' or 'user'", http.StatusBadRequest, w)
 		return
 	}
 
