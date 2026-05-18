@@ -46,13 +46,13 @@ const (
 )
 
 // BuildGraph derives the v2 columnar topology for a focus node from
-// openZro's own policy model. The validatedPeers arg is retained for
-// the manager seam (access_graph.go) but unused: v2 is a policy
-// projection, not a live-dataplane reach walk (ADR-0017 2026-05-18b).
+// openZro's own policy model. v2 is a policy-topology projection, not
+// a live-dataplane reach walk, so it deliberately does NOT take a
+// validated-peers set (ADR-0017 2026-05-18b / 2026-05-18c).
 //
 // Clean-room (BSD-3): ADR-0017; no upstream NetBird management/ code
 // consulted or ported.
-func BuildGraph(ctx context.Context, acc *types.Account, focus Focus, _ map[string]struct{}) (*GraphDTO, error) {
+func BuildGraph(ctx context.Context, acc *types.Account, focus Focus) (*GraphDTO, error) {
 	switch focus.Type {
 	case FocusPeer:
 		return buildPeerFocus(ctx, acc, focus)
