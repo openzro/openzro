@@ -67,6 +67,10 @@ export interface CCFlowEdgeData {
   blocked: boolean;
   structural: boolean;
   label: string;
+  // group/network source→policy aggregate: "k of n members". Shown
+  // always (not only on hover) so partial reach is never mistaken
+  // for full (#39 v2 review, finding 2).
+  reachedBy: string;
 }
 
 export interface LaidOutNode {
@@ -240,6 +244,7 @@ export function layoutGraph(
         blocked,
         structural: isStructural,
         label: protoPorts,
+        reachedBy: e.meta?.reachedBy ?? "",
       },
     };
   });

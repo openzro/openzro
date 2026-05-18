@@ -65,19 +65,33 @@ export function CCFlowEdge({
           transition: "opacity .25s, stroke-width .25s",
         }}
       />
-      {d.emphasis && d.label && (
-        <EdgeLabelRenderer>
-          <div
-            className="font-mono pointer-events-none absolute rounded bg-oz2-surface
-              px-1.5 py-0.5 text-[10px] text-oz2-text-muted shadow-oz2-sm"
-            style={{
-              transform: `translate(-50%,-50%) translate(${mx}px,${my}px)`,
-            }}
-          >
-            {d.label}
-          </div>
-        </EdgeLabelRenderer>
-      )}
+      {(() => {
+        // reachedBy ("k of n members") is ALWAYS shown so partial
+        // reach is never mistaken for full; proto/ports enriches it
+        // only on hover. One badge, no overlap.
+        const parts = [
+          d.reachedBy,
+          d.emphasis && d.label ? d.label : "",
+        ].filter(Boolean);
+        if (parts.length === 0) return null;
+        return (
+          <EdgeLabelRenderer>
+            <div
+              className={`font-mono pointer-events-none absolute rounded
+                bg-oz2-surface px-1.5 py-0.5 text-[10px] shadow-oz2-sm ${
+                  d.blocked ? "text-oz2-err" : "text-oz2-text-muted"
+                }`}
+              style={{
+                transform: `translate(-50%,-50%) translate(${mx}px,${my}px)`,
+                opacity: d.dimmed ? 0.07 : 1,
+                transition: "opacity .25s",
+              }}
+            >
+              {parts.join(" · ")}
+            </div>
+          </EdgeLabelRenderer>
+        );
+      })()}
     </>
   );
 }
