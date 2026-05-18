@@ -152,6 +152,24 @@ func TestPeerFocus_PostureBlocked(t *testing.T) {
 	require.Equal(t, EdgeEnforced, edgeOf(g, "policy:pol1", "group:g2").State)
 }
 
+// Regression (#39 v2 review, finding 1): a network resource linked
+// to a destination group via Group.Resources must appear in the
+// resources column of a SOURCE focus (peer/user/group) even when
+// NetworkResource.GroupIDs is empty — its real gorm:"-" state. The
+// old fanResources keyed off res.GroupIDs and dropped it.
+func TestPeerFocus_ResourceViaGroupNoGroupIDs(t *testing.T) {
+	a := acct()
+	a.NetworkResources[0].GroupIDs = nil // prove we don't depend on it
+
+	g, err := BuildGraph(context.Background(), a, Focus{Type: FocusPeer, ID: "p1"}, nil)
+	require.NoError(t, err)
+
+	nr := nodeByID(g, "nr:nr1")
+	require.NotNil(t, nr, "resource linked via Group.Resources must show")
+	require.Equal(t, colResources, nr.Meta["column"])
+	require.NotNil(t, edgeOf(g, "policy:pol1", "nr:nr1"))
+}
+
 func TestUserFocus_Columnar(t *testing.T) {
 	g, err := BuildGraph(context.Background(), acct(), Focus{Type: FocusUser, ID: "u1"}, nil)
 	require.NoError(t, err)

@@ -213,16 +213,6 @@ func resourceSub(res *resourceTypes.NetworkResource) string {
 	return string(res.Type)
 }
 
-func intersects(a, b []string) bool {
-	set := sliceSet(a)
-	for _, v := range b {
-		if _, ok := set[v]; ok {
-			return true
-		}
-	}
-	return false
-}
-
 func intersectsSet(a []string, set types.LookupMap) bool {
 	for _, v := range a {
 		if _, ok := set[v]; ok {
@@ -230,14 +220,6 @@ func intersectsSet(a []string, set types.LookupMap) bool {
 		}
 	}
 	return false
-}
-
-func sliceSet(s []string) map[string]struct{} {
-	out := make(map[string]struct{}, len(s))
-	for _, v := range s {
-		out[v] = struct{}{}
-	}
-	return out
 }
 
 func contains(s []string, v string) bool {

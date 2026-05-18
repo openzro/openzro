@@ -74,14 +74,39 @@ type colBuilder struct {
 	nodes   map[string]Node
 	edgeAgg map[string]*Edge
 	posture map[string]*posture.Checks
+	// resByGroup is groupID → the network resources that group
+	// contains, resolved the engine way (Group.Resources) and built
+	// ONCE per graph. NetworkResource.GroupIDs is gorm:"-" and empty
+	// on the graph-loaded account, so a source view that keyed off it
+	// silently dropped resources a policy really reaches (#39 v2
+	// review, finding 1).
+	resByGroup map[string][]*resourceTypes.NetworkResource
 }
 
 func newColBuilder(acc *types.Account, focus Focus) *colBuilder {
+	byID := map[string]*resourceTypes.NetworkResource{}
+	for _, res := range acc.NetworkResources {
+		if res != nil && res.Enabled {
+			byID[res.ID] = res
+		}
+	}
+	resByGroup := map[string][]*resourceTypes.NetworkResource{}
+	for gid, g := range acc.Groups {
+		if g == nil {
+			continue
+		}
+		for _, r := range g.Resources {
+			if res := byID[r.ID]; res != nil {
+				resByGroup[gid] = append(resByGroup[gid], res)
+			}
+		}
+	}
 	return &colBuilder{
-		g:       &GraphDTO{Focus: focus},
-		nodes:   map[string]Node{},
-		edgeAgg: map[string]*Edge{},
-		posture: postureChecksMap(acc),
+		g:          &GraphDTO{Focus: focus},
+		nodes:      map[string]Node{},
+		edgeAgg:    map[string]*Edge{},
+		posture:    postureChecksMap(acc),
+		resByGroup: resByGroup,
 	}
 }
 
@@ -210,14 +235,14 @@ func (b *colBuilder) fanResources(acc *types.Account, pol *types.Policy, r *type
 		if g := acc.Groups[gid]; g != nil {
 			add("group:"+gid, NodeGroup, g.Name, fmt.Sprintf("%d peer(s)", len(g.Peers)), "peer")
 		}
-	}
-	if r.DestinationResource.ID != "" {
-		if res := resourceByID(acc, r.DestinationResource.ID); res != nil {
+		// network resources the destination group CONTAINS (engine
+		// truth via Group.Resources, pre-indexed) — not res.GroupIDs.
+		for _, res := range b.resByGroup[gid] {
 			add("nr:"+res.ID, NodeNetworkResource, resourceLabel(res), resourceSub(res), "net")
 		}
 	}
-	for _, res := range acc.NetworkResources {
-		if res != nil && res.Enabled && intersects(res.GroupIDs, r.Destinations) {
+	if r.DestinationResource.ID != "" {
+		if res := resourceByID(acc, r.DestinationResource.ID); res != nil {
 			add("nr:"+res.ID, NodeNetworkResource, resourceLabel(res), resourceSub(res), "net")
 		}
 	}
