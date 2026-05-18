@@ -289,6 +289,9 @@ function breadcrumbForPath(path: string | null): OzBreadcrumbSegment[] {
   if (path === "/access-control" || path.startsWith("/access-control/")) {
     return [{ label: "Security" }, { label: "Access Control" }];
   }
+  if (path === "/control-center" || path.startsWith("/control-center")) {
+    return [{ label: "Security" }, { label: "Control Center" }];
+  }
   if (path === "/posture-checks" || path.startsWith("/posture-checks/")) {
     return [{ label: "Security" }, { label: "Posture Checks" }];
   }

@@ -79,11 +79,13 @@ export default function ControlCenterGraphCanvas({
   onEdgeClick,
   onFocusNode,
   onRefresh,
+  onOpenPicker,
 }: {
   graph: ControlCenterGraph;
   onEdgeClick?: (policyId: string) => void;
   onFocusNode?: (view: FocusType, id: string) => void;
   onRefresh?: () => void;
+  onOpenPicker?: () => void;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -110,7 +112,10 @@ export default function ControlCenterGraphCanvas({
     [graph, ready, size.w],
   );
   const lit = useMemo(
-    () => (hovered && laid ? reachableFrom(hovered, laid.adjacency) : null),
+    () =>
+      hovered && laid
+        ? reachableFrom(hovered, laid.adjOut, laid.adjIn)
+        : null,
     [hovered, laid],
   );
 
@@ -186,7 +191,18 @@ export default function ControlCenterGraphCanvas({
           onNodeMouseEnter={(_, n) => setHovered(n.id)}
           onNodeMouseLeave={() => setHovered(null)}
           onNodeClick={(_, node) => {
-            const d = node.data as { kind?: string; switchable?: boolean };
+            const d = node.data as {
+              kind?: string;
+              switchable?: boolean;
+              column?: string;
+            };
+            // The focus card is the picker affordance: clicking it
+            // (or its chevron) opens the focus selector to swap the
+            // inspected entity — same as NetBird's focus dropdown.
+            if (d.kind === "focus" || d.column === "focus") {
+              onOpenPicker?.();
+              return;
+            }
             if (
               onFocusNode &&
               d.switchable &&

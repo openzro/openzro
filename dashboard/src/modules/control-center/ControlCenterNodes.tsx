@@ -33,7 +33,10 @@ function shellClass(d: RenderData): string {
     : "border-oz2-border hover:border-oz2-acc hover:ring-[3px] " +
       "hover:ring-oz2-acc-soft hover:-translate-y-px hover:shadow-oz2-md";
   const dim = d.dimmed ? "opacity-25" : "opacity-100";
-  const click = d.switchable ? "cursor-pointer" : "";
+  // focus card is the picker affordance, peer/group target nodes are
+  // re-focus affordances → both read as clickable.
+  const click =
+    d.switchable || d.column === "focus" ? "cursor-pointer" : "";
   return `${SHELL_BASE} ${tone} ${dim} ${click}`;
 }
 

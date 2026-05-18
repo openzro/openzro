@@ -87,9 +87,14 @@ export interface LaidOutEdge {
 export interface LaidOutGraph {
   nodes: LaidOutNode[];
   edges: LaidOutEdge[];
-  // undirected adjacency for hover-isolation (two-hop transitive
-  // reachability is derived from this in the canvas).
-  adjacency: Record<string, string[]>;
+  // DIRECTED adjacency for hover-isolation. Hovering a node lights
+  // only the nodes on a path THROUGH it: its ancestors (followed via
+  // adjIn, left-ward) and its descendants (via adjOut, right-ward).
+  // A plain undirected closure would, on a dense graph, light the
+  // whole component — hovering a resource must reveal only the peers
+  // / policies / flows that reach THAT resource.
+  adjOut: Record<string, string[]>;
+  adjIn: Record<string, string[]>;
   width: number;
   height: number;
 }
@@ -106,9 +111,13 @@ function columnOf(
   return "resources";
 }
 
-// distributeY returns the vertical CENTRE of each of `count` items,
-// fully contained in the band between the header and footer chrome so
-// cards never clip. Compresses to fit when a column is dense.
+const ROW_GAP = 16;
+
+// distributeY returns the vertical CENTRE of each of `count` items.
+// Items sit at a fixed pitch (card height + gap) so a sparse column
+// reads as a tight, vertically-centred stack — not two cards pinned
+// to the top and bottom edges. Only when the natural stack is taller
+// than the band does it compress to fit (dense columns still fill).
 function distributeY(count: number, height: number, cardH: number): number[] {
   if (count <= 0) return [];
   const top = HEADER_BAND + PAD_Y + cardH / 2;
@@ -116,7 +125,15 @@ function distributeY(count: number, height: number, cardH: number): number[] {
   const mid = (top + bottom) / 2;
   if (count === 1) return [mid];
   if (bottom <= top) return Array.from({ length: count }, () => mid);
-  const step = (bottom - top) / (count - 1);
+
+  const pitch = cardH + ROW_GAP;
+  const naturalSpan = (count - 1) * pitch;
+  const available = bottom - top;
+  if (naturalSpan <= available) {
+    const start = mid - naturalSpan / 2;
+    return Array.from({ length: count }, (_, i) => start + i * pitch);
+  }
+  const step = available / (count - 1);
   return Array.from({ length: count }, (_, i) => top + step * i);
 }
 
@@ -197,10 +214,11 @@ export function layoutGraph(
     });
   });
 
-  const adjacency: Record<string, string[]> = {};
-  const link = (a: string, b: string) => {
-    (adjacency[a] ??= []).push(b);
-    (adjacency[b] ??= []).push(a);
+  const adjOut: Record<string, string[]> = {};
+  const adjIn: Record<string, string[]> = {};
+  const link = (from: string, to: string) => {
+    (adjOut[from] ??= []).push(to);
+    (adjIn[to] ??= []).push(from);
   };
 
   const edges: LaidOutEdge[] = graph.edges.map((e, i) => {
@@ -226,7 +244,7 @@ export function layoutGraph(
     };
   });
 
-  return { nodes, edges, adjacency, width, height };
+  return { nodes, edges, adjOut, adjIn, width, height };
 }
 
 const COLUMN_LABEL: Record<ColumnId, string> = {
@@ -266,19 +284,12 @@ export function columnHeaders(
   }));
 }
 
-// reachableFrom does the two-hop-and-beyond transitive walk the hifi
-// spec asks for: hovering a node reveals its full reachability tree
-// (both directions, since the column graph is a DAG and an auditor
-// wants "what touches this" as well as "what this touches").
-export function reachableFrom(
-  start: string,
-  adjacency: Record<string, string[]>,
-): Set<string> {
+function cone(start: string, adj: Record<string, string[]>): Set<string> {
   const seen = new Set<string>([start]);
   const queue = [start];
   while (queue.length) {
     const cur = queue.shift() as string;
-    for (const next of adjacency[cur] ?? []) {
+    for (const next of adj[cur] ?? []) {
       if (!seen.has(next)) {
         seen.add(next);
         queue.push(next);
@@ -286,4 +297,20 @@ export function reachableFrom(
     }
   }
   return seen;
+}
+
+// reachableFrom lights only the nodes on a path THROUGH `start`: its
+// ancestor cone (walked left-ward via adjIn) ∪ its descendant cone
+// (right-ward via adjOut). On the resource end this is exactly "the
+// peers, policies and flows that permit access to THIS resource" —
+// it does NOT bleed into sibling branches the way an undirected
+// closure would on a dense mesh (#39 v2 review — hover isolation).
+export function reachableFrom(
+  start: string,
+  adjOut: Record<string, string[]>,
+  adjIn: Record<string, string[]>,
+): Set<string> {
+  const lit = cone(start, adjIn);
+  for (const id of cone(start, adjOut)) lit.add(id);
+  return lit;
 }

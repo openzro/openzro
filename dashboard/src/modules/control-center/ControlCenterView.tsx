@@ -55,6 +55,8 @@ export default function ControlCenterView() {
     isFocusType(sp.get("view")) ? (sp.get("view") as FocusType) : "peer",
   );
   const [focusId, setFocusId] = useState<string>(sp.get("focus") ?? "");
+  // Controlled so the focus card in the canvas can open this picker.
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const syncUrl = (v: FocusType, f: string) => {
     const q = new URLSearchParams({ view: v });
@@ -145,7 +147,12 @@ export default function ControlCenterView() {
           </OzTabsList>
         </OzTabs>
 
-        <OzSelect value={focusId} onValueChange={onFocusChange}>
+        <OzSelect
+          value={focusId}
+          onValueChange={onFocusChange}
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+        >
           <OzSelectTrigger
             className="!h-8 !w-auto min-w-[200px] gap-2 !rounded-full !px-3
               text-xs text-oz2-text-2"
@@ -177,6 +184,7 @@ export default function ControlCenterView() {
           isLoading={isLoading}
           graph={graph}
           onFocusNode={onFocusNode}
+          onOpenPicker={() => setPickerOpen(true)}
           onRefresh={() => {
             void mutate();
           }}
@@ -229,6 +237,7 @@ function ControlCenterBody({
   onFocusNode,
   onPolicyOpen,
   onRefresh,
+  onOpenPicker,
 }: {
   view: FocusType;
   focusId: string;
@@ -237,6 +246,7 @@ function ControlCenterBody({
   onFocusNode: (v: FocusType, id: string) => void;
   onPolicyOpen: (policyId: string) => void;
   onRefresh: () => void;
+  onOpenPicker: () => void;
 }) {
   if (focusId === "") {
     return (
@@ -291,6 +301,7 @@ function ControlCenterBody({
         onEdgeClick={onPolicyOpen}
         onFocusNode={onFocusNode}
         onRefresh={onRefresh}
+        onOpenPicker={onOpenPicker}
       />
     </div>
   );
