@@ -131,10 +131,23 @@ function ControlCenterBody({
       <div className="text-sm text-oz2-text-muted">Resolving access…</div>
     );
   }
-  if (!graph || graph.edges.length === 0) {
+  // Absence of evidence is NOT evidence of absence (audit tool). The
+  // backend returns a graph OBJECT (edges possibly []) for a valid
+  // focus; `graph` undefined after load means the request failed or
+  // the focus no longer exists (404/500/network) — that must NOT be
+  // shown as "reaches nothing". Split the two explicitly.
+  if (!graph) {
+    return (
+      <div className="text-sm text-oz2-err">
+        Could not resolve the access graph — the focus may no longer
+        exist, or the request failed. Re-select a focus or retry.
+      </div>
+    );
+  }
+  if (graph.edges.length === 0) {
     return (
       <div className="text-sm text-oz2-text-muted">
-        This {graph?.focus.type ?? "node"} reaches nothing right now.
+        This {graph.focus.type} reaches nothing right now.
       </div>
     );
   }
