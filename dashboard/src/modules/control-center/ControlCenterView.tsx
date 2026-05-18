@@ -118,6 +118,7 @@ export default function ControlCenterView() {
       </div>
 
       <ControlCenterBody
+        view={view}
         focusId={focusId}
         isLoading={isLoading}
         graph={graph}
@@ -139,11 +140,13 @@ export default function ControlCenterView() {
 }
 
 function ControlCenterBody({
+  view,
   focusId,
   isLoading,
   graph,
   onPolicyOpen,
 }: {
+  view: FocusType;
   focusId: string;
   isLoading: boolean;
   graph?: ControlCenterGraph;
@@ -163,14 +166,24 @@ function ControlCenterBody({
   }
   // Absence of evidence is NOT evidence of absence (audit tool). The
   // backend returns a graph OBJECT (edges possibly []) for a valid
-  // focus; `graph` undefined after load means the request failed or
-  // the focus no longer exists (404/500/network) — that must NOT be
-  // shown as "reaches nothing". Split the two explicitly.
-  if (!graph) {
+  // focus; `graph` undefined after load means the request failed /
+  // the focus is gone. AND because the shared useFetchApi sets
+  // keepPreviousData:true, a failed fetch for focus B can leave
+  // `graph` holding focus A's data — showing one focus's access under
+  // another's selector is worse than an error. So accept the graph
+  // ONLY when its own focus identity matches the current selection;
+  // anything else is treated as unresolved, never as data or "nothing"
+  // (#51-r2 F1).
+  if (
+    !graph ||
+    graph.focus.id !== focusId ||
+    graph.focus.type !== view
+  ) {
     return (
       <div className="text-sm text-oz2-err">
-        Could not resolve the access graph — the focus may no longer
-        exist, or the request failed. Re-select a focus or retry.
+        Could not resolve the access graph for the selected {view} —
+        it may no longer exist, or the request failed. Re-select a
+        focus or retry.
       </div>
     );
   }
