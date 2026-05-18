@@ -20,17 +20,21 @@ var (
 	// ErrFocusNotFound — the requested focus peer/group does not
 	// exist in the account (→ 404).
 	ErrFocusNotFound = errors.New("focus not found")
-	// ErrUnsupportedFocus — the view is not peer/group (→ 400).
+	// ErrUnsupportedFocus — the view is not peer/user/group/network
+	// (→ 400).
 	ErrUnsupportedFocus = errors.New("unsupported focus type")
 )
 
-// FocusType is the kind of node the graph is centred on. v1 ships peer
-// and group focus; network/user focus are an ADR-0017 v2 follow-up.
+// FocusType is the focus tab of the v2 topology view. Policy is always
+// the middle pivot column; only User adds a Peers column; Network is
+// the inverse fan-in (ADR-0017 2026-05-18b).
 type FocusType string
 
 const (
-	FocusPeer  FocusType = "peer"
-	FocusGroup FocusType = "group"
+	FocusPeer    FocusType = "peer"
+	FocusUser    FocusType = "user"
+	FocusGroup   FocusType = "group"
+	FocusNetwork FocusType = "network"
 )
 
 // Focus identifies the node the graph is built around.
@@ -40,7 +44,13 @@ type Focus struct {
 }
 
 // NodeKind tags a graph node. focus is the centred node; the rest are
-// what it relates to.
+// the columns it fans out into. The v2 topology projection emits
+// columns of these kinds left→right (ADR-0017 2026-05-18b):
+//
+//	peer  : focus(peer)  → policy → {group|network_resource|route}
+//	user  : focus(user)  → peer   → policy → {group|network_resource|route}
+//	group : focus(group) → policy → {group|network_resource|route}
+//	network: group       → policy → focus(network_resource)  (inverse fan-in)
 type NodeKind string
 
 const (
@@ -48,8 +58,10 @@ const (
 	NodePolicy          NodeKind = "policy"
 	NodeGroup           NodeKind = "group"
 	NodePeer            NodeKind = "peer"
+	NodeUser            NodeKind = "user"
 	NodeRoute           NodeKind = "route"
 	NodeNetworkResource NodeKind = "network_resource"
+	NodeNetwork         NodeKind = "network"
 )
 
 // EdgeState distinguishes enforced reach from reach a policy permits

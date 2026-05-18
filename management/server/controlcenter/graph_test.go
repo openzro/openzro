@@ -17,13 +17,17 @@ func TestEnumWireValues(t *testing.T) {
 		want string
 	}{
 		{string(FocusPeer), "peer"},
+		{string(FocusUser), "user"},
 		{string(FocusGroup), "group"},
+		{string(FocusNetwork), "network"},
 		{string(NodeFocus), "focus"},
 		{string(NodePolicy), "policy"},
 		{string(NodeGroup), "group"},
 		{string(NodePeer), "peer"},
+		{string(NodeUser), "user"},
 		{string(NodeRoute), "route"},
 		{string(NodeNetworkResource), "network_resource"},
+		{string(NodeNetwork), "network"},
 		{string(EdgeEnforced), "enforced"},
 		{string(EdgePostureBlocked), "posture_blocked"},
 		{string(PermitPolicy), "policy"},
