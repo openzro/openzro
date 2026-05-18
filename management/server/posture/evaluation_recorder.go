@@ -29,7 +29,7 @@ import (
 // in steady state).
 //
 // The same Recorder instance is wired into the account manager once
-// at startup and re-used across every Sync/policy-eval cycle.
+// at startup and reused across every Sync/policy-eval cycle.
 type BufferedRecorder struct {
 	store EvalStore
 	// coord is the optional cluster coordinator. When set, the
