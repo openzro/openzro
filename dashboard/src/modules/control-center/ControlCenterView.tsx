@@ -69,21 +69,47 @@ export default function ControlCenterView() {
     router.replace(`/control-center?${q.toString()}`);
   };
 
-  const { data: peers } = useFetchApi<Peer[]>("/peers", true);
-  const { data: groups } = useFetchApi<Group[]>("/groups", true);
-  const { data: users } = useFetchApi<User[]>("/users", true);
+  // R5b: fetch ONLY the active tab's option source — the other three
+  // lists are dead weight on initial load. SWR keepPreviousData keeps
+  // a previously-visited tab instant on return. (4th arg = allowFetch.)
+  const { data: peers } = useFetchApi<Peer[]>(
+    "/peers",
+    true,
+    true,
+    view === "peer",
+  );
+  const { data: groups } = useFetchApi<Group[]>(
+    "/groups",
+    true,
+    true,
+    view === "group",
+  );
+  const { data: users } = useFetchApi<User[]>(
+    "/users",
+    true,
+    true,
+    view === "user",
+  );
   const { data: resources } = useFetchApi<NetworkResource[]>(
     "/networks/resources",
     true,
+    true,
+    view === "network",
   );
-  const { data: policies, mutate: mutatePolicies } = useFetchApi<
-    Policy[]
-  >("/policies", true);
 
   // Policy edit happens in a modal ON the Control Center, not by
   // navigating to /access-control — the operator must not lose the
-  // topology context (owner-decided 2026-05-18).
+  // topology context (owner-decided 2026-05-18). The policy list is
+  // only needed for that modal, so it is fetched lazily on the first
+  // policy-open, not on initial screen load (R5b).
   const [editPolicyId, setEditPolicyId] = useState<string | null>(null);
+  const [policiesNeeded, setPoliciesNeeded] = useState(false);
+  const { data: policies, mutate: mutatePolicies } = useFetchApi<Policy[]>(
+    "/policies",
+    true,
+    true,
+    policiesNeeded,
+  );
   const editPolicy = useMemo(
     () => (policies ?? []).find((p) => p.id === editPolicyId) ?? null,
     [policies, editPolicyId],
@@ -206,7 +232,10 @@ export default function ControlCenterView() {
             onRefresh={() => {
               void mutate();
             }}
-            onPolicyOpen={(policyId) => setEditPolicyId(policyId)}
+            onPolicyOpen={(policyId) => {
+              setPoliciesNeeded(true); // lazily pull /policies now
+              setEditPolicyId(policyId);
+            }}
           />
         </div>
       </div>
