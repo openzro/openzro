@@ -81,6 +81,15 @@ export default function ControlCenterView() {
     syncUrl(view, f);
   };
 
+  // Click-to-switch-focus (Phase 3): clicking a peer/group node in the
+  // graph re-centres on it (URL synced → graph refetches on the new
+  // focus, same path as the selector).
+  const onFocusNode = (v: FocusType, id: string) => {
+    setView(v);
+    setFocusId(id);
+    syncUrl(v, id);
+  };
+
   return (
     <div className="flex h-full flex-col gap-4 p-6">
       <div>
@@ -122,6 +131,7 @@ export default function ControlCenterView() {
         focusId={focusId}
         isLoading={isLoading}
         graph={graph}
+        onFocusNode={onFocusNode}
         onPolicyOpen={(policyId) => {
           // Round-trip (F1): tell the editor to return to THIS focus,
           // not the access-control list, so the audit loop closes.
@@ -144,12 +154,14 @@ function ControlCenterBody({
   focusId,
   isLoading,
   graph,
+  onFocusNode,
   onPolicyOpen,
 }: {
   view: FocusType;
   focusId: string;
   isLoading: boolean;
   graph?: ControlCenterGraph;
+  onFocusNode: (v: FocusType, id: string) => void;
   onPolicyOpen: (policyId: string) => void;
 }) {
   if (focusId === "") {
@@ -199,7 +211,11 @@ function ControlCenterBody({
   // kept as the accessible / no-graph fallback in a <details>.
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <ControlCenterGraphCanvas graph={graph} onEdgeClick={onPolicyOpen} />
+      <ControlCenterGraphCanvas
+        graph={graph}
+        onEdgeClick={onPolicyOpen}
+        onFocusNode={onFocusNode}
+      />
       <details className="text-sm text-oz2-text-muted">
         <summary className="cursor-pointer select-none">
           Reachable, as a list ({graph.edges.length})

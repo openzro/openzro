@@ -43,7 +43,15 @@ function edgeLabel(e: ControlCenterEdge): string {
     e.permitSource === "policy"
       ? e.policyName || "policy"
       : e.permitSource;
-  const proto = e.protocol && e.protocol !== "all" ? ` · ${e.protocol}` : "";
+  // protocol/ports on the edge (ADR-0017 Phase 3): e.g. "tcp/22,443",
+  // "tcp", "22,443", or nothing for an all-protocol no-port rule.
+  const protoPorts = [
+    e.protocol && e.protocol !== "all" ? e.protocol : "",
+    e.ports && e.ports.length ? e.ports.join(",") : "",
+  ]
+    .filter(Boolean)
+    .join("/");
+  const proto = protoPorts ? ` · ${protoPorts}` : "";
   const blocked = e.state === "posture_blocked" ? " · blocked" : "";
   return `${src}${proto}${blocked}`;
 }
@@ -66,15 +74,18 @@ function layout(graph: ControlCenterGraph): {
 
   const nodes: Node[] = graph.nodes.map((n) => {
     const p = g.node(n.id);
+    // peer/group target nodes are valid v1 foci → clicking one
+    // re-centres the graph on it (Phase 3). Cue it with a pointer.
+    const switchable = n.kind === "peer" || n.kind === "group";
     return {
       id: n.id,
       position: { x: (p?.x ?? 0) - NODE_W / 2, y: (p?.y ?? 0) - NODE_H / 2 },
-      data: { label: n.label || n.id },
+      data: { label: n.label || n.id, kind: n.kind },
       sourcePosition: Position.Right,
       targetPosition: Position.Left,
       className: `rounded-oz2-input border px-3 py-2 text-xs ${
         KIND_CLASS[n.kind] ?? KIND_CLASS.peer
-      }`,
+      }${switchable ? " cursor-pointer" : ""}`,
       width: NODE_W,
       height: NODE_H,
     };
@@ -173,9 +184,11 @@ function ParallelEdge({
 export default function ControlCenterGraphCanvas({
   graph,
   onEdgeClick,
+  onFocusNode,
 }: {
   graph: ControlCenterGraph;
   onEdgeClick?: (policyId: string) => void;
+  onFocusNode?: (view: "peer" | "group", id: string) => void;
 }) {
   const { nodes, edges } = useMemo(() => layout(graph), [graph]);
   const edgeTypes = useMemo(() => ({ parallel: ParallelEdge }), []);
@@ -191,6 +204,14 @@ export default function ControlCenterGraphCanvas({
         nodesConnectable={false}
         edgesFocusable={!!onEdgeClick}
         proOptions={{ hideAttribution: true }}
+        onNodeClick={(_, node) => {
+          const kind = (node.data as { kind?: string } | undefined)?.kind;
+          // Only peer/group nodes are valid v1 foci; clicking the
+          // current focus or a route/resource/policy node is a no-op.
+          if (onFocusNode && (kind === "peer" || kind === "group")) {
+            onFocusNode(kind, node.id);
+          }
+        }}
         onEdgeClick={(_, edge) => {
           const pid = (edge.data as { policyId?: string } | undefined)
             ?.policyId;
