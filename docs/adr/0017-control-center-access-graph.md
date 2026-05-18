@@ -447,3 +447,46 @@ value and de-risks the resolver contract for the v2 widening.
   T5 = hover-isolation + footer/legend/tabs + dot-grid chrome.
   Cypress still deferred (#52). Each phase: own PR, Codex review,
   owner-authorised merge — same cadence as v1.
+
+- **2026-05-18b — Topology v2 model CORRECTION (supersedes the
+  2026-05-18 description).** The prior entry under-specified the
+  projection — it described only `User → Peers → Policies → Resources`
+  as if that were THE model. Reviewing the NetBird Control Center
+  screens with the owner: it is **one topology view with FOUR focus
+  tabs**, **Policy is always the middle pivot column**, and the column
+  set differs per focus:
+
+  | Focus tab | Columns (left → right) |
+  |---|---|
+  | **Peer** | Peer → **Policies** → Resources/Networks (no Peers column) |
+  | **User** | User(+email) → **Peers** (the user's machines) → **Policies** → Resources (only User has the Peers column) |
+  | **Group** | Group → **Policies** → Resources |
+  | **Networks** | **INVERSE fan-in**: Groups → **Policies** → the selected network's Resources → resource detail. Answers "*who* (which groups, via which policies) can reach THIS network" |
+
+  - **v2 REPLACES v1 (owner-decided).** `buildPeerFocus` /
+    `buildGroupFocus` are reshaped to the Policy-columnar form above;
+    the v1 peer↔peer *effective-reach* graph (the
+    `GetPeerConnectionResources`-based `addPeerReach` /
+    `addPostureBlocked` / `addRouteReach` peer-graph) is **retired**,
+    and its v1 reach-graph tests are replaced by columnar tests. The
+    v1 "what does this peer effectively reach" answer is dropped in
+    favour of the policy-wiring map.
+  - **D1 unchanged.** Structure = the *configured* policy wiring;
+    each edge's `State` is the *effective* enforcement (`enforced`
+    vs `posture_blocked`) from the same posture engine — never
+    re-derived in TS. The green/red *rendering* of that State is the
+    sanctioned brand exception (still as recorded).
+  - **Re-scope.** "T1 = user-centric projection" was wrong. **T1 =
+    the full backend projection set**: `Focus{peer|user|group}` all
+    emit the Policy-columnar shape (only `user` adds the Peers
+    column) + `Focus=network` the inverse fan-in. `FocusUser`/
+    `NodeUser` enums + `buildUserFocus` (User tab) are reusable;
+    `buildPeerFocus`/`buildGroupFocus` are rewritten; a network
+    focus + `NodeNetwork` is added. T2–T5 (frontend) unchanged in
+    intent. The work-in-progress on `feat/cc-v2-t1-user-projection`
+    (T1.1 enums + `buildUserFocus`) is kept and folded into this
+    wider T1; no PR was opened for it under the wrong framing.
+
+  Same cadence: this corrective amendment is the re-gate (doc-only,
+  owner-authorised) before the backend reshape lands. #39 stays the
+  umbrella; Cypress still #52.
