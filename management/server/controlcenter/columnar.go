@@ -345,13 +345,19 @@ func buildNetworkFocus(ctx context.Context, acc *types.Account, focus Focus) (*G
 			if r == nil || !r.Enabled || !ruleTargetsResource(r, res, resGroups) {
 				continue
 			}
-			b.policyNode(pol, r)
-			b.edge(&Edge{
-				From: "policy:" + pol.ID, To: focusID,
-				PermitSource: PermitPolicy, PolicyID: pol.ID, PolicyName: pol.Name,
-				Protocol: string(r.Protocol), Ports: rulePorts(r),
-				Direction: ruleDir(r), State: EdgeEnforced,
-			})
+			// Resolve the source groups that actually EMIT (≥1 real
+			// member) BEFORE materialising the policy. If none emit,
+			// nobody can reach the resource through this rule — under
+			// strict-green that path must not be drawn at all, so we
+			// skip the policy node and the policy→resource edge too
+			// (no orphan green flow) (#39 v2 review, finding R2-net).
+			type srcEdge struct {
+				gid, name string
+				peers     int
+				state     EdgeState
+				meta      map[string]string
+			}
+			var srcs []srcEdge
 			for _, sgid := range r.Sources {
 				sg := acc.Groups[sgid]
 				if sg == nil {
@@ -359,15 +365,32 @@ func buildNetworkFocus(ctx context.Context, acc *types.Account, focus Focus) (*G
 				}
 				state, meta, emit := b.groupState(ctx, acc, sg.Peers)(pol)
 				if !emit {
-					continue // empty source group — no permitted reach
+					continue // empty / all-stale source group
 				}
-				b.node("group:"+sgid, NodeGroup, sg.Name, colGroups,
-					map[string]string{"sub": fmt.Sprintf("%d peer(s)", len(sg.Peers))})
+				srcs = append(srcs, srcEdge{
+					gid: sgid, name: sg.Name, peers: len(sg.Peers),
+					state: state, meta: meta,
+				})
+			}
+			if len(srcs) == 0 {
+				continue // no real actor → no policy path at all
+			}
+
+			b.policyNode(pol, r)
+			b.edge(&Edge{
+				From: "policy:" + pol.ID, To: focusID,
+				PermitSource: PermitPolicy, PolicyID: pol.ID, PolicyName: pol.Name,
+				Protocol: string(r.Protocol), Ports: rulePorts(r),
+				Direction: ruleDir(r), State: EdgeEnforced,
+			})
+			for _, s := range srcs {
+				b.node("group:"+s.gid, NodeGroup, s.name, colGroups,
+					map[string]string{"sub": fmt.Sprintf("%d peer(s)", s.peers)})
 				b.edge(&Edge{
-					From: "group:" + sgid, To: "policy:" + pol.ID,
+					From: "group:" + s.gid, To: "policy:" + pol.ID,
 					PermitSource: PermitPolicy, PolicyID: pol.ID, PolicyName: pol.Name,
 					Protocol: string(r.Protocol), Ports: rulePorts(r),
-					Direction: ruleDir(r), State: state, Meta: meta,
+					Direction: ruleDir(r), State: s.state, Meta: s.meta,
 				})
 			}
 		}

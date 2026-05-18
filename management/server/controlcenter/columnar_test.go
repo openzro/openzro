@@ -342,6 +342,40 @@ func TestNetworkFocus_PolicyViaResourceGroup(t *testing.T) {
 	require.NotNil(t, edgeOf(g, "policy:pol1", "nr:nr1"))
 }
 
+// Network focus must NOT draw an orphan green policy→resource flow
+// when every source group of the targeting policy is empty/stale —
+// nobody can reach the resource, so under strict-green there is no
+// policy path at all (#39 v2 review, finding R2-net).
+func TestNetworkFocus_EmptyOrAllStaleSourceGroupsEmitNoPolicyPath(t *testing.T) {
+	t.Run("empty source group", func(t *testing.T) {
+		a := acct()
+		a.Groups["g1"] = &types.Group{ID: "g1", Name: "engineers"} // 0 peers
+
+		g, err := BuildGraph(context.Background(), a,
+			Focus{Type: FocusNetwork, ID: "nr1"})
+		require.NoError(t, err)
+		require.NotNil(t, nodeByID(g, "nr:nr1")) // focus card stays
+		require.Nil(t, nodeByID(g, "policy:pol1"))
+		require.Nil(t, nodeByID(g, "group:g1"))
+		require.Nil(t, edgeOf(g, "policy:pol1", "nr:nr1"))
+		require.Len(t, g.Edges, 0)
+	})
+
+	t.Run("all-stale source group", func(t *testing.T) {
+		a := acct()
+		a.Groups["g1"] = &types.Group{
+			ID: "g1", Name: "engineers", Peers: []string{"ghost1", "ghost2"},
+		}
+
+		g, err := BuildGraph(context.Background(), a,
+			Focus{Type: FocusNetwork, ID: "nr1"})
+		require.NoError(t, err)
+		require.Nil(t, nodeByID(g, "policy:pol1"))
+		require.Nil(t, edgeOf(g, "policy:pol1", "nr:nr1"))
+		require.Len(t, g.Edges, 0)
+	})
+}
+
 func TestBuildGraph_Errors(t *testing.T) {
 	a := acct()
 	_, err := BuildGraph(context.Background(), a, Focus{Type: FocusPeer, ID: "ghost"})
