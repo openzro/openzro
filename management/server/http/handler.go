@@ -26,6 +26,7 @@ import (
 	activityExportersHandler "github.com/openzro/openzro/management/server/http/handlers/activity_exporters"
 	admissionBypassHandler "github.com/openzro/openzro/management/server/http/handlers/admission_bypass"
 	authProvidersHandler "github.com/openzro/openzro/management/server/http/handlers/auth_providers"
+	controlCenterHandler "github.com/openzro/openzro/management/server/http/handlers/control_center"
 	"github.com/openzro/openzro/management/server/http/handlers/dns"
 	"github.com/openzro/openzro/management/server/http/handlers/events"
 	flowExportsHandler "github.com/openzro/openzro/management/server/http/handlers/flow_exports"
@@ -119,6 +120,7 @@ func NewAPIHandler(
 	networks.AddEndpoints(networksManager, resourceManager, routerManager, groupsManager, accountManager, router)
 	network_events.AddEndpoints(permissionsManager, flowEventsStore, router)
 	flowExportsHandler.AddEndpoints(permissionsManager, flowExportsStore, flowExportsManager, router)
+	controlCenterHandler.AddEndpoints(accountManager, permissionsManager, router)
 	mdmProvidersHandler.AddEndpoints(permissionsManager, mdmStore, mdmManager, router)
 	activityExportersHandler.AddEndpoints(permissionsManager, activityExportersStore, activityExportersManager, router)
 	admissionBypassHandler.AddEndpoints(permissionsManager, admissionBypassStore, accountManager, admissionBypassEmitter, router)
