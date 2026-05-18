@@ -98,7 +98,7 @@ func (b *graphBuilder) addBlockedEdge(acc *types.Account, focusID, otherID strin
 		return
 	}
 	if p := acc.GetPeer(otherID); p != nil {
-		b.addNode(p.ID, NodePeer, peerLabel(p))
+		b.addPeerNode(p, NodePeer)
 	}
 
 	from, to := focusID, otherID
