@@ -19,49 +19,68 @@ import (
 // evaluator (types.EvaluateAdmission) — it makes no access decision,
 // it labels the one the engine already encodes.
 func (b *colBuilder) peerState(ctx context.Context, acc *types.Account, peerID string) stateFn {
-	return func(pol *types.Policy) (EdgeState, map[string]string) {
+	return func(pol *types.Policy) (EdgeState, map[string]string, bool) {
 		if len(pol.SourcePostureChecks) == 0 {
-			return EdgeEnforced, nil
+			return EdgeEnforced, nil, true
 		}
 		d := admissionDenial(ctx, acc, peerID, pol.SourcePostureChecks, b.posture)
 		if d == nil {
-			return EdgeEnforced, nil
+			return EdgeEnforced, nil, true
 		}
-		return EdgePostureBlocked, denialMeta(d)
+		return EdgePostureBlocked, denialMeta(d), true
 	}
 }
 
 // groupState is the union semantics for a group source (ADR-0017 D3:
 // a group's reach is the UNION of its members' — never the
-// intersection, which would hide access an auditor must see). The
-// edge is enforced if the policy has no posture checks or at least one
-// member passes; posture_blocked only if every member is denied. meta
-// always carries "k of n members" (k = members that pass posture).
-// The denial reported is the first by sorted peer ID so the wire is
-// deterministic.
+// intersection, which would hide access an auditor must see). Strict
+// audit semantics (#39 v2 review, finding 2):
+//
+//   - n counts only REAL members (acc.GetPeer != nil): a stale peer
+//     id in the group must never be counted as a posture pass.
+//   - n == 0 (empty / all-stale group) → emit=false: an empty group
+//     is configured but permits nobody; a green "0 of 0" edge would
+//     lie. The caller drops the edge entirely.
+//   - enforced iff the policy has no source posture checks OR at
+//     least one real member passes; posture_blocked iff every real
+//     member is denied (first denial by sorted peer id → stable).
+//   - meta always carries "k of n members" so partial reach (k<n)
+//     is visible, never silently shown as full.
 func (b *colBuilder) groupState(ctx context.Context, acc *types.Account, members []string) stateFn {
-	return func(pol *types.Policy) (EdgeState, map[string]string) {
-		n := len(members)
-		if len(pol.SourcePostureChecks) == 0 {
-			return EdgeEnforced, map[string]string{"reachedBy": fmt.Sprintf("%d of %d members", n, n)}
-		}
-		sorted := append([]string(nil), members...)
-		sort.Strings(sorted)
-		pass := 0
-		var first *types.AdmissionDenial
-		for _, mID := range sorted {
-			if d := admissionDenial(ctx, acc, mID, pol.SourcePostureChecks, b.posture); d == nil {
-				pass++
-			} else if first == nil {
-				first = d
+	return func(pol *types.Policy) (EdgeState, map[string]string, bool) {
+		real := make([]string, 0, len(members))
+		for _, mID := range members {
+			if acc.GetPeer(mID) != nil {
+				real = append(real, mID)
 			}
 		}
-		if pass > 0 || first == nil {
-			return EdgeEnforced, map[string]string{"reachedBy": fmt.Sprintf("%d of %d members", pass, n)}
+		n := len(real)
+		if n == 0 {
+			return EdgeEnforced, nil, false
 		}
-		m := denialMeta(first)
+		if len(pol.SourcePostureChecks) == 0 {
+			return EdgeEnforced,
+				map[string]string{"reachedBy": fmt.Sprintf("%d of %d members", n, n)},
+				true
+		}
+		sort.Strings(real)
+		pass := 0
+		var firstDenial *types.AdmissionDenial
+		for _, mID := range real {
+			if d := admissionDenial(ctx, acc, mID, pol.SourcePostureChecks, b.posture); d == nil {
+				pass++
+			} else if firstDenial == nil {
+				firstDenial = d
+			}
+		}
+		if pass > 0 {
+			return EdgeEnforced,
+				map[string]string{"reachedBy": fmt.Sprintf("%d of %d members", pass, n)},
+				true
+		}
+		m := denialMeta(firstDenial)
 		m["reachedBy"] = fmt.Sprintf("0 of %d members", n)
-		return EdgePostureBlocked, m
+		return EdgePostureBlocked, m, true
 	}
 }
 
@@ -213,16 +232,6 @@ func resourceSub(res *resourceTypes.NetworkResource) string {
 	return string(res.Type)
 }
 
-func intersects(a, b []string) bool {
-	set := sliceSet(a)
-	for _, v := range b {
-		if _, ok := set[v]; ok {
-			return true
-		}
-	}
-	return false
-}
-
 func intersectsSet(a []string, set types.LookupMap) bool {
 	for _, v := range a {
 		if _, ok := set[v]; ok {
@@ -230,14 +239,6 @@ func intersectsSet(a []string, set types.LookupMap) bool {
 		}
 	}
 	return false
-}
-
-func sliceSet(s []string) map[string]struct{} {
-	out := make(map[string]struct{}, len(s))
-	for _, v := range s {
-		out[v] = struct{}{}
-	}
-	return out
 }
 
 func contains(s []string, v string) bool {
