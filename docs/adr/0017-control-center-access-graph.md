@@ -380,3 +380,17 @@ value and de-risks the resolver contract for the v2 widening.
   `permitSource` values. Pinned by the C8 contract test and the
   enum wire-value test. Not a reversal of D1.1; a faithful refinement
   of it.
+
+- **2026-05-17 — D2 bundle-size delta measured (Phase 2, P6).** ADR
+  D2 required the `@xyflow/react` + `@dagrejs/dagre` bundle delta to
+  be measured and recorded before the dep merges. `next build` on the
+  Phase-2 branch: the deps are **code-split into the `/control-center`
+  route only** — "First Load JS shared by all" is unchanged at
+  **103 kB** (no regression to any other route). `/control-center`
+  First Load = **318 kB**, *below* `/access-control` (349 kB) and
+  `/peers` (430 kB), i.e. within the existing per-route envelope.
+  Route-specific JS = 73.3 kB (graph stack + components) vs ~17.5 kB
+  for a comparable graph-less data screen → ≈55 kB route-scoped,
+  route-only cost. Verdict: acceptable; the standing
+  no-new-charting-lib concern (shared-bundle bloat) does not
+  materialise because the libs never enter the shared baseline.

@@ -1,5 +1,6 @@
 "use client";
 
+import "@xyflow/react/dist/style.css";
 import Dagre from "@dagrejs/dagre";
 import {
   Background,
@@ -9,7 +10,6 @@ import {
   Position,
   ReactFlow,
 } from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
 import React, { useMemo } from "react";
 import {
   ControlCenterEdge,
