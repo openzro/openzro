@@ -139,10 +139,18 @@ func (b *colBuilder) edge(e *Edge) {
 }
 
 func (b *colBuilder) finalize() *GraphDTO {
+	// Always emit non-nil slices: a nil Go slice marshals as JSON
+	// `null`, and the dashboard does `graph.edges.length` directly. A
+	// focus with no matching policy (e.g. a user whose peers are in no
+	// policy source) legitimately has zero edges — that must be `[]`,
+	// never `null`, so the contract stays an array (#39 v2 review).
+	b.g.Nodes = make([]Node, 0, len(b.nodes))
 	for _, n := range b.nodes {
 		b.g.Nodes = append(b.g.Nodes, n)
 	}
 	sort.Slice(b.g.Nodes, func(i, j int) bool { return b.g.Nodes[i].ID < b.g.Nodes[j].ID })
+
+	b.g.Edges = make([]Edge, 0, len(b.edgeAgg))
 	for _, e := range b.edgeAgg {
 		sort.Strings(e.Ports)
 		b.g.Edges = append(b.g.Edges, *e)

@@ -2,8 +2,10 @@ package controlcenter
 
 import (
 	"context"
+	"encoding/json"
 	"net"
 	"net/netip"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -253,6 +255,26 @@ func TestBuildGraph_Deterministic(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, first, next)
 	}
+}
+
+// A focus with no matching policy must serialise edges/nodes as
+// JSON arrays, never `null` — the dashboard calls graph.edges.length
+// straight on the wire (#39 v2 review: null crashed the canvas).
+func TestEmptyGraphMarshalsAsArrays(t *testing.T) {
+	a := acct()
+	a.Policies = nil // peer p1 now matches no policy
+
+	g, err := BuildGraph(context.Background(), a, Focus{Type: FocusPeer, ID: "p1"}, nil)
+	require.NoError(t, err)
+	require.NotNil(t, g.Edges)
+	require.Len(t, g.Edges, 0)
+
+	b, err := json.Marshal(g)
+	require.NoError(t, err)
+	s := string(b)
+	require.Contains(t, s, `"edges":[]`)
+	require.False(t, strings.Contains(s, `"edges":null`))
+	require.False(t, strings.Contains(s, `"nodes":null`))
 }
 
 func TestDisabledPolicyAndRuleSkipped(t *testing.T) {
