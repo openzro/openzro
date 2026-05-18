@@ -14,6 +14,7 @@ import {
 } from "@components/v2/OzTabs";
 import useFetchApi from "@utils/api";
 import React, { useMemo, useState } from "react";
+import ControlCenterGraphCanvas from "@/modules/control-center/ControlCenterGraphCanvas";
 import {
   ControlCenterGraph,
   FocusType,
@@ -131,20 +132,30 @@ function ControlCenterBody({
     );
   }
 
-  // P3 textual fallback — replaced by the xyflow canvas in P4, kept as
-  // the accessible representation.
+  // P4: the xyflow canvas is the primary view; the textual list is
+  // kept as the accessible / no-graph fallback in a <details>.
   return (
-    <ul className="flex flex-col gap-1 text-sm text-oz2-text">
-      {graph.edges.map((e, i) => (
-        <li key={`${e.from}-${e.to}-${e.policyId ?? e.permitSource}-${i}`}>
-          → <span className="font-medium">{e.to}</span>{" "}
-          <span className="text-oz2-text-muted">
-            ({e.state}, {e.permitSource}
-            {e.policyName ? `: ${e.policyName}` : ""}
-            {e.protocol ? `, ${e.protocol}` : ""})
-          </span>
-        </li>
-      ))}
-    </ul>
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <ControlCenterGraphCanvas graph={graph} />
+      <details className="text-sm text-oz2-text-muted">
+        <summary className="cursor-pointer select-none">
+          Reachable, as a list ({graph.edges.length})
+        </summary>
+        <ul className="mt-2 flex flex-col gap-1 text-oz2-text">
+          {graph.edges.map((e, i) => (
+            <li
+              key={`${e.from}-${e.to}-${e.policyId ?? e.permitSource}-${i}`}
+            >
+              → <span className="font-medium">{e.to}</span>{" "}
+              <span className="text-oz2-text-muted">
+                ({e.state}, {e.permitSource}
+                {e.policyName ? `: ${e.policyName}` : ""}
+                {e.protocol ? `, ${e.protocol}` : ""})
+              </span>
+            </li>
+          ))}
+        </ul>
+      </details>
+    </div>
   );
 }
