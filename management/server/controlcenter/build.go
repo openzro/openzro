@@ -23,14 +23,14 @@ func BuildGraph(ctx context.Context, acc *types.Account, focus Focus, validatedP
 	case FocusGroup:
 		return buildGroupFocus(ctx, acc, focus, validatedPeers)
 	default:
-		return nil, fmt.Errorf("unsupported focus type %q", focus.Type)
+		return nil, fmt.Errorf("%w %q", ErrUnsupportedFocus, focus.Type)
 	}
 }
 
 func buildPeerFocus(ctx context.Context, acc *types.Account, focus Focus, validatedPeers map[string]struct{}) (*GraphDTO, error) {
 	focusPeer := acc.GetPeer(focus.ID)
 	if focusPeer == nil {
-		return nil, fmt.Errorf("focus peer %q not found", focus.ID)
+		return nil, fmt.Errorf("focus peer %q: %w", focus.ID, ErrFocusNotFound)
 	}
 
 	g := &GraphDTO{Focus: focus}

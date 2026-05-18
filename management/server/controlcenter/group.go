@@ -20,7 +20,7 @@ import (
 func buildGroupFocus(ctx context.Context, acc *types.Account, focus Focus, validatedPeers map[string]struct{}) (*GraphDTO, error) {
 	grp := acc.Groups[focus.ID]
 	if grp == nil {
-		return nil, fmt.Errorf("focus group %q not found", focus.ID)
+		return nil, fmt.Errorf("focus group %q: %w", focus.ID, ErrFocusNotFound)
 	}
 
 	g := &GraphDTO{Focus: focus}

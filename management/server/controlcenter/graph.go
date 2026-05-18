@@ -11,6 +11,19 @@
 // management/ code was consulted or ported.
 package controlcenter
 
+import "errors"
+
+// Typed errors so the HTTP layer can map precisely instead of
+// treating every non-status error as 404 (#50 Finding 5). Wrap with
+// %w and check with errors.Is.
+var (
+	// ErrFocusNotFound — the requested focus peer/group does not
+	// exist in the account (→ 404).
+	ErrFocusNotFound = errors.New("focus not found")
+	// ErrUnsupportedFocus — the view is not peer/group (→ 400).
+	ErrUnsupportedFocus = errors.New("unsupported focus type")
+)
+
 // FocusType is the kind of node the graph is centred on. v1 ships peer
 // and group focus; network/user focus are an ADR-0017 v2 follow-up.
 type FocusType string

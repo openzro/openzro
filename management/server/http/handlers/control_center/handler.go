@@ -12,6 +12,7 @@
 package control_center
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -77,12 +78,16 @@ func (h *Handler) getGraph(w http.ResponseWriter, r *http.Request) {
 	// id outside that account simply does not resolve.
 	graph, err := h.accountManager.GetAccessGraph(r.Context(), userAuth.AccountId, view, vars["id"])
 	if err != nil {
-		if _, ok := status.FromError(err); ok {
+		switch {
+		case errors.Is(err, controlcenter.ErrFocusNotFound):
+			util.WriteErrorResponse(err.Error(), http.StatusNotFound, w)
+		case errors.Is(err, controlcenter.ErrUnsupportedFocus):
+			util.WriteErrorResponse(err.Error(), http.StatusBadRequest, w)
+		default:
+			// status errors map themselves; anything else is a real
+			// failure (500), NOT silently a 404 (Finding 5).
 			util.WriteError(r.Context(), err, w)
-			return
 		}
-		// adapter error (focus not found in this account) — 404.
-		util.WriteErrorResponse(err.Error(), http.StatusNotFound, w)
 		return
 	}
 

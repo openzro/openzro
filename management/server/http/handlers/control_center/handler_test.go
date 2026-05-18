@@ -88,11 +88,23 @@ func TestControlCenter_BadView(t *testing.T) {
 
 func TestControlCenter_UnknownFocusIs404(t *testing.T) {
 	r := newFixture(t, true, func(context.Context, string, string, string) (*controlcenter.GraphDTO, error) {
-		return nil, fmt.Errorf("focus peer %q not found", "ghost")
+		return nil, fmt.Errorf("focus peer %q: %w", "ghost", controlcenter.ErrFocusNotFound)
 	})
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, withAuth(httptest.NewRequest(http.MethodGet, "/control-center/peer/ghost", nil)))
 	require.Equal(t, http.StatusNotFound, rr.Code)
+}
+
+// Finding 5: a generic (non-typed, non-status) error must NOT be
+// silently reported as 404 — that trap is now closed.
+func TestControlCenter_GenericErrorIsNot404(t *testing.T) {
+	r := newFixture(t, true, func(context.Context, string, string, string) (*controlcenter.GraphDTO, error) {
+		return nil, fmt.Errorf("database exploded")
+	})
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, withAuth(httptest.NewRequest(http.MethodGet, "/control-center/peer/p1", nil)))
+	require.NotEqual(t, http.StatusNotFound, rr.Code)
+	require.GreaterOrEqual(t, rr.Code, 500)
 }
 
 func TestControlCenter_Unauthenticated(t *testing.T) {
