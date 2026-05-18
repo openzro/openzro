@@ -258,18 +258,11 @@ export default function ControlCenterGraphCanvas({
   );
 
   return (
-    <div
-      ref={wrapRef}
-      className="oz-cc-scroll relative h-full w-full overflow-hidden
-        rounded-oz2-card border border-oz2-border-strong bg-oz2-bg"
-    >
+    // No own border/bg: the parent card shell (ControlCenterView)
+    // owns the frame and the top tab bar; this just fills the region
+    // below it.
+    <div ref={wrapRef} className="relative h-full w-full overflow-hidden">
       <div className="oz-cc-grid pointer-events-none absolute inset-0" />
-      <span
-        className="font-mono pointer-events-none absolute right-3 top-2.5 z-20
-          rounded-md bg-oz2-acc-soft px-2 py-0.5 text-[10px] uppercase text-oz2-acc-text"
-      >
-        Beta
-      </span>
 
       {ready && <ColumnHeaders cols={headers} />}
 

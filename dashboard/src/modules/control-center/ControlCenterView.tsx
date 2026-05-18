@@ -7,6 +7,12 @@ import {
   OzTabsTrigger,
 } from "@components/v2/OzTabs";
 import useFetchApi from "@utils/api";
+import {
+  Monitor,
+  Network,
+  User as UserIcon,
+  Users as UsersIcon,
+} from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -27,12 +33,18 @@ import ControlCenterGraphCanvas from "@/modules/control-center/ControlCenterGrap
 // xyflow canvas is the primary view; the textual reachable list
 // stays as the accessible / no-graph fallback.
 
-const VIEWS: { value: FocusType; label: string }[] = [
-  { value: "peer", label: "Peer" },
-  { value: "user", label: "User" },
-  { value: "group", label: "Group" },
-  { value: "network", label: "Networks" },
+const VIEWS: {
+  value: FocusType;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}[] = [
+  { value: "peer", label: "Peer", icon: Monitor },
+  { value: "user", label: "User", icon: UserIcon },
+  { value: "group", label: "Group", icon: UsersIcon },
+  { value: "network", label: "Networks", icon: Network },
 ];
+
+const TABS_H = 48;
 
 function isFocusType(v: string | null): v is FocusType {
   return v === "peer" || v === "user" || v === "group" || v === "network";
@@ -145,49 +157,58 @@ export default function ControlCenterView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [options, focusId, view]);
 
-  const viewLabel = VIEWS.find((v) => v.value === view)?.label ?? "focus";
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      {/* Full-width toolbar strip over the canvas (hifi handoff): the
-          breadcrumb in the shell already names the page, so the
-          in-page title is dropped to give the graph 100% of the area.
-          The focus picker is a compact filter pill, not a wide
-          input. */}
+    <div className="flex h-full min-h-0 flex-col p-3">
+      {/* One self-contained card: tabs pinned at the TOP (like the
+          legend/footer at the bottom), graph filling everything in
+          between — no external chrome, maximum area. The tab bar
+          lives in the persistent card shell so it stays visible
+          through loading / empty / error states too. */}
       <div
-        className="flex flex-wrap items-center gap-3 border-b border-oz2-border
-          bg-oz2-bg-sunken px-5 py-2.5"
+        className="oz-cc-scroll relative min-h-0 flex-1 overflow-hidden
+          rounded-oz2-card border border-oz2-border-strong bg-oz2-bg"
       >
-        <OzTabs value={view} onValueChange={onViewChange}>
-          <OzTabsList>
-            {VIEWS.map((v) => (
-              <OzTabsTrigger key={v.value} value={v.value}>
-                {v.label}
-              </OzTabsTrigger>
-            ))}
-          </OzTabsList>
-        </OzTabs>
+        <div
+          className="absolute inset-x-0 top-0 z-30 flex items-center gap-3
+            border-b border-oz2-border bg-oz2-surface/80 px-3 backdrop-blur-md"
+          style={{ height: TABS_H }}
+        >
+          <OzTabs value={view} onValueChange={onViewChange}>
+            <OzTabsList>
+              {VIEWS.map((v) => (
+                <OzTabsTrigger key={v.value} value={v.value}>
+                  <v.icon className="h-3.5 w-3.5" />
+                  {v.label}
+                </OzTabsTrigger>
+              ))}
+            </OzTabsList>
+          </OzTabs>
+          <span
+            className="font-mono ml-auto rounded-md bg-oz2-acc-soft px-2
+              py-0.5 text-[10px] uppercase text-oz2-acc-text"
+          >
+            Beta
+          </span>
+        </div>
 
-        <p className="ml-auto hidden text-[11px] text-oz2-text-muted lg:block">
-          Read-only topology — who reaches what, through which policy,
-          on which ports. Click the focus card to switch{" "}
-          {viewLabel.toLowerCase()}.
-        </p>
-      </div>
-
-      <div className="relative min-h-0 flex-1 p-4">
-        <ControlCenterBody
-          view={view}
-          focusId={focusId}
-          isLoading={isLoading}
-          graph={graph}
-          onFocusNode={onFocusNode}
-          focusOptions={options}
-          onPickFocus={onFocusChange}
-          onRefresh={() => {
-            void mutate();
-          }}
-          onPolicyOpen={(policyId) => setEditPolicyId(policyId)}
-        />
+        <div
+          className="absolute inset-x-0 bottom-0"
+          style={{ top: TABS_H }}
+        >
+          <ControlCenterBody
+            view={view}
+            focusId={focusId}
+            isLoading={isLoading}
+            graph={graph}
+            onFocusNode={onFocusNode}
+            focusOptions={options}
+            onPickFocus={onFocusChange}
+            onRefresh={() => {
+              void mutate();
+            }}
+            onPolicyOpen={(policyId) => setEditPolicyId(policyId)}
+          />
+        </div>
       </div>
 
       <Modal
