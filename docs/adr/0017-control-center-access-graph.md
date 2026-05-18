@@ -490,3 +490,55 @@ value and de-risks the resolver contract for the v2 widening.
   Same cadence: this corrective amendment is the re-gate (doc-only,
   owner-authorised) before the backend reshape lands. #39 stays the
   umbrella; Cypress still #52.
+
+- **2026-05-18c — Network-focus scope + policy-edit modal (owner-decided,
+  during the v2 build review).** Two model/behaviour decisions surfaced
+  while iterating on the v2 PRs (#58 backend, #59 frontend); recorded
+  here so the rationale and the known divergence survive:
+
+  1. **Network focus = a single `NetworkResource`, NOT a whole
+     `Network`.** NetBird's Networks tab focuses a *Network* (which
+     groups several resources) and fans in across all of them. openZro
+     v2 instead keys `Focus{type:network}` on **one network-resource
+     id** (`focus.id` = resource id; the picker lists individual
+     resources from `/networks/resources`). The inverse fan-in is
+     `Groups → Policies → that resource`. This is a **deliberate
+     scoping choice**, not an oversight: it keeps the wire contract
+     (`focus.id` is a single node id) and the projection uniform with
+     the other three tabs. Consequence/known gap: we do not reproduce
+     NetBird's "focus an entire Network with N resources" view.
+     Promoting the focus to a `Network` entity (an extra
+     `Network → Resources` column) is a **conscious future ADR
+     decision**, not a silent change — do not "fix" the single-resource
+     model without a new amendment. *Correctness note (not a decision):*
+     the resolver MUST use openZro's own
+     `Account.GetPoliciesForNetworkResource` and resolve the resource's
+     groups via `Group.Resources` — never `NetworkResource.GroupIDs`,
+     which is `gorm:"-"` and empty on the graph-loaded account (that
+     bug made the network focus look empty; fixed in #58).
+
+  2. **Policy edit is an in-context MODAL — supersedes the Phase-3 / F1
+     editor round-trip.** ADR-0017 Phase 3 (F1) specified that clicking
+     a policy-backed edge navigates to `/access-control/edit?id=…` with
+     a `returnTo` back to the same focus. That round-trip is **retired**:
+     clicking a policy edge OR a policy card now opens
+     `AccessControlModalContent` in a modal **on the Control Center**,
+     and on save the graph + policy list are revalidated in place. The
+     operator must never lose the topology context for an edit. The
+     `returnTo` navigation contract is dropped.
+
+  Supporting UX decisions (owner-confirmed against NetBird's product,
+  recorded for coherence, none of them contract-affecting): the focus
+  selector is an **inline picker anchored to the focus card** (search +
+  list), not a header control; **no header filter** — a tab always
+  auto-selects the first entity and the card picker switches it; a
+  focus with **zero edges still renders the focus card + picker** (never
+  a dead-end message); the 4 focus tabs and the legend/status footer
+  both live **inside the canvas card** (tabs pinned top, footer pinned
+  bottom) for maximum graph area. **This card/tab/footer layout is
+  explicitly UI-only and NOT an ADR decision** — it is noted here solely
+  to record that it was considered and deliberately left out of the
+  decision record (pixel layout is not architecture).
+
+  Same cadence: doc-only, owner-authorised, stacked on the
+  2026-05-18b re-gate branch. #39 umbrella; Cypress still #52.
