@@ -394,3 +394,56 @@ value and de-risks the resolver contract for the v2 widening.
   route-only cost. Verdict: acceptable; the standing
   no-new-charting-lib concern (shared-bundle bloat) does not
   materialise because the libs never enter the shared baseline.
+
+- **2026-05-18 — Topology v2 redesign (owner-decided; supersedes the
+  v1 generic graph).** A Claude-Design hifi handoff
+  (`design_handoff_topology/`) reframes Control Center from the v1
+  peer-centric reach graph into a **4-column access map**:
+  `User (+email) → Peers → Policies → Resources/Networks`, with
+  fan-in/fan-out cubic-Bézier edges, an animated "flow", hover
+  isolation (2-hop), tabs (Peer/User/Group/Networks), footer legend.
+  The owner judged this the target. Scope/decision deltas:
+
+  - **D1 — projection changes (not just a reskin).** The current
+    `GraphDTO` is peer-centric: focus ∈ {peer,group}; it emits
+    `focus/peer/route/network_resource` nodes and carries policy only
+    as edge metadata — there is **no User entity, no email, no Policy
+    as a column node, no User→Peer relation** (verified in
+    `controlcenter/*.go` on main). The handoff needs a NEW
+    server-side, enforcement-faithful **user-centric columnar
+    projection** (`User{peerIds}` → `Policy{peerIds,resourceIds}` →
+    `Resource`). D1's "derive from the enforcement engine, never
+    re-derive in TS" principle is UNCHANGED; the *shape* is new. This
+    is a substantial backend phase, not a frontend tweak — the single
+    biggest cost in this redesign.
+  - **D2 — xyflow KEPT, dagre DROPPED (no reversal to hand-built
+    SVG).** Verified: xyflow can render the handoff (explicit-position
+    custom nodes, custom Bézier edge type with gradient stroke +
+    `stroke-dashoffset` flow keyframe, `<Background variant=dots>`,
+    hover state). dagre's layered auto-layout actively fights a fixed
+    4-column design, so it is replaced by the handoff's deterministic
+    layout (fixed X per column-kind + `distributeY(count)`). The
+    `@xyflow/react` dependency and its ADR-sanctioned exception stand;
+    `@dagrejs/dagre` is removed once unused. #51/#53/#55 are reused,
+    not discarded (lighter than a ground-up SVG rebuild — owner-chosen
+    over the SVG option).
+  - **D3 — v1 scope extended.** Users + Networks (deferred to "v2" in
+    the original D3) are now in scope as root-column tabs alongside
+    Peer/Group.
+  - **Brand exception (sanctioned).** Edges are coloured by status —
+    **green = allowed, red = posture_blocked** — a deliberate owner
+    override of `dashboard/CLAUDE.md`'s violet-only / "no green
+    checkmarks; success-error use violet variants" rule AND of the
+    handoff's own violet-flow palette. Recorded here as a sanctioned
+    exception (same mechanism as the xyflow charting-lib exception),
+    scoped to the topology edges only. Rationale: the operator
+    anchored on NetBird's green semaphore; the audit signal
+    (reachable vs blocked) is judged worth the palette break.
+
+  This is **Control Center v2**, tracked under #39 (kept open as the
+  umbrella). Phasing: T0 = this amendment (gate); T1 = backend
+  user-centric projection + API; T2 = xyflow columnar layout (dagre
+  out); T3 = the 4 kind cards; T4 = Bézier-flow edges (green/red);
+  T5 = hover-isolation + footer/legend/tabs + dot-grid chrome.
+  Cypress still deferred (#52). Each phase: own PR, Codex review,
+  owner-authorised merge — same cadence as v1.
