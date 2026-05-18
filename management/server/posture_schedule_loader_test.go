@@ -11,6 +11,19 @@ import (
 	"github.com/openzro/openzro/management/server/store"
 )
 
+// seedAccount persists a bare parent account so SavePostureChecks
+// satisfies the posture_checks → accounts FK
+// (fk_accounts_posture_checks). These loader tests start from an
+// empty store and used raw account-id strings that were never
+// created — that only "worked" on SQLite (FKs off by default); on
+// Postgres/MySQL it violated the constraint (SQLSTATE 23503) and
+// failed CI. Same root-cause class as the store-layer fix in #66.
+func seedAccount(t testing.TB, st store.Store, id string) {
+	t.Helper()
+	require.NoError(t, st.SaveAccount(context.Background(),
+		newAccountWithId(context.Background(), id, id+"-user", "", false)))
+}
+
 // TestScheduleLoader_AccountsWithActiveSchedules covers the N+1 fix:
 // AccountsWithActiveSchedules must return exactly the set of accounts
 // owning at least one posture check with a ScheduleCheck, deduped,
@@ -24,6 +37,9 @@ func TestScheduleLoader_AccountsWithActiveSchedules(t *testing.T) {
 	accountSched1 := "acct-sched-1"
 	accountSched2 := "acct-sched-2"
 	accountNoSched := "acct-no-sched"
+	seedAccount(t, st, accountSched1)
+	seedAccount(t, st, accountSched2)
+	seedAccount(t, st, accountNoSched)
 
 	seed := []*posture.Checks{
 		{
@@ -98,6 +114,7 @@ func TestScheduleLoader_LoadActiveSchedules(t *testing.T) {
 	ctx := context.Background()
 
 	const accountID = "acct-x"
+	seedAccount(t, st, accountID)
 	require.NoError(t, st.SavePostureChecks(ctx, store.LockingStrengthUpdate, &posture.Checks{
 		ID:        "pc-sched",
 		AccountID: accountID,
