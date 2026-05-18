@@ -39,6 +39,12 @@ func buildGroupFocus(ctx context.Context, acc *types.Account, focus Focus, valid
 		if m == nil {
 			continue
 		}
+		// An unvalidated member reaches nothing in the dataplane
+		// (#50-r2 F1); it contributes zero reach but still counts in
+		// the "k of n" denominator (n = declared membership).
+		if _, ok := validatedPeers[mID]; !ok {
+			continue
+		}
 		tmp := &GraphDTO{}
 		tb := newGraphBuilder(tmp)
 		reach, fw := acc.GetPeerConnectionResources(ctx, m, validatedPeers)

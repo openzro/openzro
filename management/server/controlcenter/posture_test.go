@@ -116,3 +116,16 @@ func TestBuildGraph_PostureBlocked_OtherEndpointUnvalidated(t *testing.T) {
 			"no posture_blocked when the other endpoint is unvalidated")
 	}
 }
+
+// #50-r2 F1: an unvalidated focus reaches nothing in the dataplane
+// (GetPeerNetworkMap early-returns empty) — the graph must say the
+// same: focus node only, no fabricated edges.
+func TestBuildGraph_UnvalidatedFocus_EmptyReach(t *testing.T) {
+	acc := postureAccount("1.0.0")             // pA fails posture
+	validated := map[string]struct{}{"pB": {}} // pA (focus) NOT validated
+
+	g, err := BuildGraph(context.Background(), acc, Focus{Type: FocusPeer, ID: "pA"}, validated)
+	require.NoError(t, err)
+	require.Empty(t, g.Edges, "unvalidated focus reaches nothing")
+	require.Equal(t, []Node{{ID: "pA", Kind: NodeFocus, Label: "alice"}}, g.Nodes)
+}

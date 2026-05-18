@@ -37,6 +37,15 @@ func buildPeerFocus(ctx context.Context, acc *types.Account, focus Focus, valida
 	b := newGraphBuilder(g)
 	b.addNode(focusPeer.ID, NodeFocus, peerLabel(focusPeer))
 
+	// Mirror the dataplane: GetPeerNetworkMap early-returns an empty
+	// map when the focus is not validated (account.go:262). An
+	// unvalidated peer reaches nothing "right now" — the graph must
+	// say the same, not fabricate posture/route edges (#50-r2 F1).
+	if _, ok := validatedPeers[focusPeer.ID]; !ok {
+		b.finalize()
+		return g, nil
+	}
+
 	reachable, fwRules := acc.GetPeerConnectionResources(ctx, focusPeer, validatedPeers)
 	b.addPeerReach(acc, focusPeer.ID, reachable, fwRules)
 	b.addPostureBlocked(ctx, acc, focusPeer.ID, validatedPeers)

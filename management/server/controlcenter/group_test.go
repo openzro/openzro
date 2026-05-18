@@ -178,3 +178,18 @@ func TestBuildGraph_GroupFocus_DistinctPostureCausesDoNotCollapse(t *testing.T) 
 	}
 	require.Equal(t, 1, enforced)
 }
+
+// #50-r2 F1: an unvalidated group member contributes zero reach but
+// still counts in the "k of n" denominator.
+func TestBuildGraph_GroupFocus_UnvalidatedMemberCountsInDenominator(t *testing.T) {
+	acc := groupFocusAccount("99.0.0")                             // all compliant
+	validated := map[string]struct{}{"pA": {}, "pC": {}, "pX": {}} // pB NOT validated
+
+	g, err := BuildGraph(context.Background(), acc, Focus{Type: FocusGroup, ID: "team"}, validated)
+	require.NoError(t, err)
+	es := edgesByState(g, "pX")
+	e, ok := es[EdgeEnforced]
+	require.True(t, ok)
+	require.Equal(t, "2 of 3 members", e.Meta["reachedBy"],
+		"unvalidated member excluded from k, still in n")
+}
