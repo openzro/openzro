@@ -13,14 +13,15 @@ import {
   OzTabsTrigger,
 } from "@components/v2/OzTabs";
 import useFetchApi from "@utils/api";
+import { useRouter } from "next/navigation";
 import React, { useMemo, useState } from "react";
-import ControlCenterGraphCanvas from "@/modules/control-center/ControlCenterGraphCanvas";
 import {
   ControlCenterGraph,
   FocusType,
 } from "@/interfaces/ControlCenter";
 import { Group } from "@/interfaces/Group";
 import { Peer } from "@/interfaces/Peer";
+import ControlCenterGraphCanvas from "@/modules/control-center/ControlCenterGraphCanvas";
 
 // Control Center data layer (ADR-0017 Phase 2, P3). Owns the focus
 // view (peer|group — v1 scope; Users/inverse-Networks are v2), the
@@ -29,6 +30,7 @@ import { Peer } from "@/interfaces/Peer";
 // accessible / no-JS-graph fallback.
 
 export default function ControlCenterView() {
+  const router = useRouter();
   const [view, setView] = useState<FocusType>("peer");
   const [focusId, setFocusId] = useState<string>("");
 
@@ -98,6 +100,9 @@ export default function ControlCenterView() {
         focusId={focusId}
         isLoading={isLoading}
         graph={graph}
+        onPolicyOpen={(policyId) =>
+          router.push(`/access-control/edit?id=${policyId}`)
+        }
       />
     </div>
   );
@@ -107,10 +112,12 @@ function ControlCenterBody({
   focusId,
   isLoading,
   graph,
+  onPolicyOpen,
 }: {
   focusId: string;
   isLoading: boolean;
   graph?: ControlCenterGraph;
+  onPolicyOpen: (policyId: string) => void;
 }) {
   if (focusId === "") {
     return (
@@ -136,7 +143,7 @@ function ControlCenterBody({
   // kept as the accessible / no-graph fallback in a <details>.
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <ControlCenterGraphCanvas graph={graph} />
+      <ControlCenterGraphCanvas graph={graph} onEdgeClick={onPolicyOpen} />
       <details className="text-sm text-oz2-text-muted">
         <summary className="cursor-pointer select-none">
           Reachable, as a list ({graph.edges.length})
@@ -148,8 +155,18 @@ function ControlCenterBody({
             >
               → <span className="font-medium">{e.to}</span>{" "}
               <span className="text-oz2-text-muted">
-                ({e.state}, {e.permitSource}
-                {e.policyName ? `: ${e.policyName}` : ""}
+                ({e.state},{" "}
+                {e.permitSource === "policy" && e.policyId ? (
+                  <button
+                    type="button"
+                    onClick={() => onPolicyOpen(e.policyId as string)}
+                    className="text-oz2-acc underline underline-offset-2"
+                  >
+                    {e.policyName || "policy"}
+                  </button>
+                ) : (
+                  e.permitSource
+                )}
                 {e.protocol ? `, ${e.protocol}` : ""})
               </span>
             </li>
