@@ -143,10 +143,12 @@ function distributeY(count: number, height: number, cardH: number): number[] {
 
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
-// edgeKind: a User→Peer (or any policy-less) edge is identity
-// ownership — drawn solid, not as an animated policy flow.
+// A User→Peer edge is identity ownership — drawn solid, not as an
+// animated policy flow. Keyed on the explicit "identity"
+// permitSource (ADR-0017 2026-05-18c); the legacy empty-string
+// sentinel is still tolerated for forward/backward safety.
 function structural(permitSource: string, policyId?: string): boolean {
-  return !policyId && permitSource === "";
+  return !policyId && (permitSource === "identity" || permitSource === "");
 }
 
 // columnSlots spreads the focus's columns evenly across the live

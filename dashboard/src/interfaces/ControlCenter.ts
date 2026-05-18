@@ -24,8 +24,14 @@ export type EdgeState = "enforced" | "posture_blocked";
 
 // router_local: the focus IS the router serving the route (gateway
 // reach), distinct from route_default_permit (ADR-0017 amendment
-// 2026-05-17). All three values must be handled.
-export type PermitSource = "policy" | "route_default_permit" | "router_local";
+// 2026-05-17). identity: a structural ownership edge (v2 User→Peer),
+// not a policy permit — no policyId (ADR-0017 2026-05-18c). All
+// values must be handled.
+export type PermitSource =
+  | "policy"
+  | "route_default_permit"
+  | "router_local"
+  | "identity";
 
 export type EdgeDirection = "in" | "out" | "bidirectional";
 
