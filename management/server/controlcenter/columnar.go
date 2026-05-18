@@ -286,9 +286,12 @@ func buildUserFocus(ctx context.Context, acc *types.Account, focus Focus) (*Grap
 	sort.Slice(peers, func(i, j int) bool { return peers[i].ID < peers[j].ID })
 	for _, p := range peers {
 		b.node(p.ID, NodePeer, peerLabel(p), colPeers, peerMeta(p))
-		// User→Peer is identity ownership, not a policy permit: empty
-		// PermitSource (no policyId/name) is the honest wire shape.
-		b.edge(&Edge{From: u.Id, To: p.ID, Direction: DirectionOut, State: EdgeEnforced})
+		// User→Peer is identity ownership, not a policy permit.
+		b.edge(&Edge{
+			From: u.Id, To: p.ID,
+			PermitSource: PermitIdentity,
+			Direction:    DirectionOut, State: EdgeEnforced,
+		})
 		pg := acc.GetPeerGroups(p.ID)
 		b.projectSource(acc, p.ID,
 			func(r *types.PolicyRule) bool { return intersectsSet(r.Sources, pg) },

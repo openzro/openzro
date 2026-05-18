@@ -189,7 +189,7 @@ func TestUserFocus_Columnar(t *testing.T) {
 	up := edgeOf(g, "u1", "p1")
 	require.NotNil(t, up)
 	require.Equal(t, EdgeState(EdgeEnforced), up.State)
-	require.Equal(t, PermitSource(""), up.PermitSource)
+	require.Equal(t, PermitIdentity, up.PermitSource)
 	require.Empty(t, up.PolicyID)
 
 	// …and the peer still fans into the policy/resource columns.
