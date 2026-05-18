@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -14,6 +15,17 @@ import (
 // dir owned by us, not directly in a world-writable parent, so a
 // local user cannot TOCTOU-swap it.
 func TestDownload_StagingDirIsPrivate(t *testing.T) {
+	// Finding C3 is a POSIX 0700 guarantee enforced by os.MkdirTemp in
+	// Download(). Go does not map Unix permission bits onto Windows
+	// directories — os.Stat().Mode().Perm() always reads 0777 there
+	// regardless of how the dir was made, so this exact-mode assertion
+	// is unrepresentable on Windows (privacy there is ACL / parent-
+	// inheritance, out of scope for this Unix-mode test). Keep the
+	// guarantee tested where it lives; skip the perm assertion on
+	// Windows rather than weaken it on POSIX.
+	if runtime.GOOS == "windows" {
+		t.Skip("staging-dir 0700 privacy is a POSIX guarantee; Windows dir mode is always 0777 in Go (privacy is ACL-based) — C3 stays enforced on POSIX")
+	}
 	payload := []byte("pkg")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write(payload)
