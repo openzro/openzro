@@ -3,6 +3,7 @@
 import { RestrictedAccess } from "@components/ui/RestrictedAccess";
 import React from "react";
 import { usePermissions } from "@/contexts/PermissionsProvider";
+import ControlCenterView from "@/modules/control-center/ControlCenterView";
 
 // Control Center — read-only access-graph view (openZro #39,
 // ADR-0017 Phase 2). Chrome (OzShell + sidebar + topbar) lives in
@@ -22,15 +23,7 @@ export default function ControlCenterPage() {
 
   return (
     <RestrictedAccess hasAccess={permission.settings.update}>
-      <div className="p-6">
-        <h1 className="text-xl font-semibold text-oz2-text">
-          Control Center
-        </h1>
-        <p className="mt-2 text-sm text-oz2-text-muted">
-          Read-only access graph — what a peer or group reaches, through
-          which policy, and what is policy-permitted but posture-blocked.
-        </p>
-      </div>
+      <ControlCenterView />
     </RestrictedAccess>
   );
 }
