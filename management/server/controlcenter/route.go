@@ -7,6 +7,7 @@ import (
 	"net/netip"
 	"strings"
 
+	routerTypes "github.com/openzro/openzro/management/server/networks/routers/types"
 	nbpeer "github.com/openzro/openzro/management/server/peer"
 	"github.com/openzro/openzro/management/server/posture"
 	"github.com/openzro/openzro/management/server/types"
@@ -24,24 +25,74 @@ import (
 // Clean-room (BSD-3): reuses openZro's own GetRoutesToSync /
 // GetAllRoutePoliciesFromGroups / GetNetworkResourcesRoutesToSync;
 // no parallel policy walker, no upstream NetBird code.
-func (b *graphBuilder) addRouteReach(ctx context.Context, acc *types.Account, focusID string, reachable []*nbpeer.Peer, validatedPeers map[string]struct{}) {
-	focusPeer := acc.GetPeer(focusID)
-	if focusPeer == nil {
-		return
+// routeIndex holds the account-invariant route/network-resource
+// firewall-rule indices. They do NOT depend on the focus, so they are
+// built ONCE per BuildGraph and shared across every Group-focus member
+// instead of O(members × peers) recomputation (#50-r2 F3).
+type routeIndex struct {
+	ruleIdx          map[route.ID][]*types.RouteFirewallRule // classic, by RouteID
+	nrRuleIdx        map[route.ID][]*types.RouteFirewallRule // network-resource, by RouteID
+	nrRouteByRes     map[string]*route.Route                 // resourceID → a serving route (existence)
+	nrLabelByRes     map[string]string                       // resourceID → display label
+	resourcePolicies map[string][]*types.Policy
+	routers          map[string]map[string]*routerTypes.NetworkRouter
+}
+
+func newRouteIndex(ctx context.Context, acc *types.Account, validatedPeers map[string]struct{}) *routeIndex {
+	idx := &routeIndex{
+		ruleIdx:          map[route.ID][]*types.RouteFirewallRule{},
+		nrRuleIdx:        map[route.ID][]*types.RouteFirewallRule{},
+		nrRouteByRes:     map[string]*route.Route{},
+		nrLabelByRes:     map[string]string{},
+		resourcePolicies: acc.GetResourcePoliciesMap(),
+		routers:          acc.GetResourceRoutersMap(),
 	}
 
-	// Permission is materialised at the ROUTER, not re-derived here:
-	// index every routing peer's real RouteFirewallRules by RouteID.
-	// A rule's SourceRanges are the client IPs it actually permits
-	// (or 0.0.0.0/0 for a route default-permit, PolicyID == "").
-	ruleIdx := map[route.ID][]*types.RouteFirewallRule{}
+	for _, res := range acc.NetworkResources {
+		if res == nil {
+			continue
+		}
+		switch {
+		case res.Name != "":
+			idx.nrLabelByRes[res.ID] = res.Name
+		case res.Address != "":
+			idx.nrLabelByRes[res.ID] = res.Address
+		default:
+			idx.nrLabelByRes[res.ID] = res.Prefix.String()
+		}
+	}
+
+	// Permission is materialised at the ROUTER: index every routing
+	// peer's real Route/NetworkResource firewall rules by RouteID. A
+	// rule's SourceRanges are the client IPs it actually permits (or
+	// 0.0.0.0/0 for a route default-permit, PolicyID == "").
 	for _, p := range acc.Peers {
 		if p == nil {
 			continue
 		}
 		for _, fr := range acc.GetPeerRoutesFirewallRules(ctx, p.ID, validatedPeers) {
-			ruleIdx[fr.RouteID] = append(ruleIdx[fr.RouteID], fr)
+			idx.ruleIdx[fr.RouteID] = append(idx.ruleIdx[fr.RouteID], fr)
 		}
+		isRouter, nrR, _ := acc.GetNetworkResourcesRoutesToSync(ctx, p.ID, idx.resourcePolicies, idx.routers)
+		if !isRouter || len(nrR) == 0 {
+			continue
+		}
+		for _, rr := range nrR {
+			if rr != nil {
+				idx.nrRouteByRes[string(rr.GetResourceID())] = rr
+			}
+		}
+		for _, fr := range acc.GetPeerNetworkResourceFirewallRules(ctx, p, validatedPeers, nrR, idx.resourcePolicies) {
+			idx.nrRuleIdx[fr.RouteID] = append(idx.nrRuleIdx[fr.RouteID], fr)
+		}
+	}
+	return idx
+}
+
+func (b *graphBuilder) addRouteReach(ctx context.Context, acc *types.Account, focusID string, reachable []*nbpeer.Peer, validatedPeers map[string]struct{}, idx *routeIndex) {
+	focusPeer := acc.GetPeer(focusID)
+	if focusPeer == nil {
+		return
 	}
 
 	// Distribution ∩ permission: of the routes the focus receives, an
@@ -67,7 +118,7 @@ func (b *graphBuilder) addRouteReach(ctx context.Context, acc *types.Account, fo
 		}
 
 		permitted := false
-		for _, fr := range ruleIdx[r.ID] {
+		for _, fr := range idx.ruleIdx[r.ID] {
 			if !ipInAnyRange(focusPeer.IP, fr.SourceRanges) {
 				continue
 			}
@@ -106,66 +157,19 @@ func (b *graphBuilder) addRouteReach(ctx context.Context, acc *types.Account, fo
 	}
 
 	// Network-resource routes: same distribution ∩ real-permission
-	// principle as classic routes (Finding 1). The permitting policy /
-	// protocol / port come from the engine's real
-	// GetPeerNetworkResourceFirewallRules — NOT an arbitrary pols[0].
-	resourcePolicies := acc.GetResourcePoliciesMap()
-	routers := acc.GetResourceRoutersMap()
-
-	// From every router's view, index the real nr firewall rules by
-	// RouteID and remember a route per resource ID (so a stable
-	// node id/label exists even when the focus is dropped from
-	// distribution by posture — same shape as the peer D1.2 pass).
-	// A network resource is ONE logical target. Its node id is the
-	// resource id (not the per-router route id "<resID>:<peerID>"),
-	// and the label comes from the resource itself — so HA routers
-	// collapse to a single deterministic node (#50-r2 F2).
-	nrLabelByRes := map[string]string{}
-	for _, res := range acc.NetworkResources {
-		if res == nil {
-			continue
-		}
-		switch {
-		case res.Name != "":
-			nrLabelByRes[res.ID] = res.Name
-		case res.Address != "":
-			nrLabelByRes[res.ID] = res.Address
-		default:
-			nrLabelByRes[res.ID] = res.Prefix.String()
-		}
-	}
-
-	nrRuleIdx := map[route.ID][]*types.RouteFirewallRule{}
-	nrRouteByResource := map[string]*route.Route{}
-	for _, p := range acc.Peers {
-		if p == nil {
-			continue
-		}
-		isRouter, nrR, _ := acc.GetNetworkResourcesRoutesToSync(ctx, p.ID, resourcePolicies, routers)
-		if !isRouter || len(nrR) == 0 {
-			continue
-		}
-		for _, rr := range nrR {
-			if rr != nil {
-				nrRouteByResource[string(rr.GetResourceID())] = rr
-			}
-		}
-		for _, fr := range acc.GetPeerNetworkResourceFirewallRules(ctx, p, validatedPeers, nrR, resourcePolicies) {
-			nrRuleIdx[fr.RouteID] = append(nrRuleIdx[fr.RouteID], fr)
-		}
-	}
-
-	// Enforced: of the resources distributed to the focus, an edge
-	// exists only where a real nr firewall rule covers the focus IP.
+	// principle as classic routes (Finding 1). Indices were built once
+	// per BuildGraph (idx); only the focus distribution is per-focus.
+	// A network resource is ONE logical target — node id is the
+	// resource id, label from the resource (#50-r2 F2).
 	permittedRes := map[string]struct{}{}
-	_, focusNR, _ := acc.GetNetworkResourcesRoutesToSync(ctx, focusID, resourcePolicies, routers)
+	_, focusNR, _ := acc.GetNetworkResourcesRoutesToSync(ctx, focusID, idx.resourcePolicies, idx.routers)
 	for _, r := range focusNR {
 		if r == nil {
 			continue
 		}
 		resID := string(r.GetResourceID())
 		nodeID := "nr:" + resID
-		for _, fr := range nrRuleIdx[r.ID] {
+		for _, fr := range idx.nrRuleIdx[r.ID] {
 			if !ipInAnyRange(focusPeer.IP, fr.SourceRanges) {
 				continue
 			}
@@ -186,7 +190,7 @@ func (b *graphBuilder) addRouteReach(ctx context.Context, acc *types.Account, fo
 					e.PolicyName = pol.Name
 				}
 			}
-			b.addNode(nodeID, NodeNetworkResource, nrLabelByRes[resID])
+			b.addNode(nodeID, NodeNetworkResource, idx.nrLabelByRes[resID])
 			b.addRouteEdge(focusID, nodeID, e)
 		}
 	}
@@ -202,11 +206,11 @@ func (b *graphBuilder) addRouteReach(ctx context.Context, acc *types.Account, fo
 		if _, ok := permittedRes[res.ID]; ok {
 			continue
 		}
-		if nrRouteByResource[res.ID] == nil {
+		if idx.nrRouteByRes[res.ID] == nil {
 			continue // no router actually serves it — unreachable, posture aside
 		}
 		b.addPolicyPostureBlocked(ctx, acc, focusID,
-			resourcePolicies[res.ID], "nr:"+res.ID, NodeNetworkResource, nrLabelByRes[res.ID])
+			idx.resourcePolicies[res.ID], "nr:"+res.ID, NodeNetworkResource, idx.nrLabelByRes[res.ID])
 	}
 }
 

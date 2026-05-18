@@ -34,6 +34,11 @@ func buildGroupFocus(ctx context.Context, acc *types.Account, focus Focus, valid
 	aggs := map[string]*agg{}
 	toNodes := map[string]Node{}
 
+	// Route/nr firewall indices are account-invariant — build ONCE and
+	// share across every member instead of O(members × peers)
+	// recomputation (#50-r2 F3).
+	idx := newRouteIndex(ctx, acc, validatedPeers)
+
 	for _, mID := range grp.Peers {
 		m := acc.GetPeer(mID)
 		if m == nil {
@@ -50,7 +55,7 @@ func buildGroupFocus(ctx context.Context, acc *types.Account, focus Focus, valid
 		reach, fw := acc.GetPeerConnectionResources(ctx, m, validatedPeers)
 		tb.addPeerReach(acc, mID, reach, fw)
 		tb.addPostureBlocked(ctx, acc, mID, validatedPeers)
-		tb.addRouteReach(ctx, acc, mID, reach, validatedPeers)
+		tb.addRouteReach(ctx, acc, mID, reach, validatedPeers, idx)
 		tb.finalize()
 
 		for _, nd := range tmp.Nodes {
