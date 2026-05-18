@@ -1,183 +1,76 @@
 "use client";
 
 import "@xyflow/react/dist/style.css";
-import Dagre from "@dagrejs/dagre";
-import {
-  Background,
-  BaseEdge,
-  type Edge,
-  EdgeLabelRenderer,
-  type EdgeProps,
-  MarkerType,
-  type Node,
-  Position,
-  ReactFlow,
-} from "@xyflow/react";
-import React, { useMemo } from "react";
-import {
-  ControlCenterEdge,
+import { type Edge, type Node, ReactFlow } from "@xyflow/react";
+import { RefreshCw } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import type {
   ControlCenterGraph,
-  NodeKind,
+  FocusType,
 } from "@/interfaces/ControlCenter";
+import { CC_EDGE_TYPES } from "./ControlCenterFlowEdge";
+import {
+  type ColumnHeader,
+  columnHeaders,
+  layoutGraph,
+  reachableFrom,
+  STAGE_H,
+  STAGE_W,
+} from "./controlCenterLayout";
+import { CC_NODE_TYPES } from "./ControlCenterNodes";
 
-// ADR-0017 Phase 2, P4 — the xyflow canvas. Read-only; dagre lays the
-// graph out left→right. Posture-blocked edges are visually distinct
-// from enforced (never collapsed into "no edge"). Each edge is
-// labelled with its permit source (+ policy / protocol). Clicking a
-// policy-backed edge (P5) opens the policy editor.
+// ADR-0017 2026-05-18b — the v2 columnar canvas. Replaces the v1
+// dagre reach graph: a fixed 1500×760 stage, four focus tabs,
+// Policy always the middle pivot column, edges coloured by
+// enforcement state (green = enforced, red = posture_blocked —
+// owner-sanctioned brand exception). The stage is pan/zoom-locked;
+// the wrapper scrolls horizontally on narrow viewports, matching the
+// hifi handoff.
 
-const NODE_W = 190;
-const NODE_H = 44;
+const HEADER_H = 56;
+const FOOTER_H = 44;
 
-const KIND_CLASS: Record<NodeKind, string> = {
-  focus: "border-oz2-acc bg-oz2-acc/10 text-oz2-text font-semibold",
-  peer: "border-oz2-border-strong bg-oz2-surface text-oz2-text",
-  group: "border-oz2-border-strong bg-oz2-surface text-oz2-text",
-  policy: "border-oz2-border-strong bg-oz2-bg-sunken text-oz2-text-muted",
-  route: "border-oz2-border-strong bg-oz2-surface text-oz2-text",
-  network_resource: "border-oz2-border-strong bg-oz2-surface text-oz2-text",
-};
-
-function edgeLabel(e: ControlCenterEdge): string {
-  const src =
-    e.permitSource === "policy"
-      ? e.policyName || "policy"
-      : e.permitSource;
-  // protocol/ports on the edge (ADR-0017 Phase 3): e.g. "tcp/22,443",
-  // "tcp", "22,443", or nothing for an all-protocol no-port rule.
-  const protoPorts = [
-    e.protocol && e.protocol !== "all" ? e.protocol : "",
-    e.ports && e.ports.length ? e.ports.join(",") : "",
-  ]
-    .filter(Boolean)
-    .join("/");
-  const proto = protoPorts ? ` · ${protoPorts}` : "";
-  const blocked = e.state === "posture_blocked" ? " · blocked" : "";
-  return `${src}${proto}${blocked}`;
-}
-
-function layout(graph: ControlCenterGraph): {
-  nodes: Node[];
-  edges: Edge[];
-} {
-  const g = new Dagre.graphlib.Graph();
-  g.setGraph({ rankdir: "LR", nodesep: 24, ranksep: 90 });
-  g.setDefaultEdgeLabel(() => ({}));
-
-  for (const n of graph.nodes) {
-    g.setNode(n.id, { width: NODE_W, height: NODE_H });
-  }
-  for (const e of graph.edges) {
-    g.setEdge(e.from, e.to);
-  }
-  Dagre.layout(g);
-
-  const nodes: Node[] = graph.nodes.map((n) => {
-    const p = g.node(n.id);
-    // peer/group target nodes are valid v1 foci → clicking one
-    // re-centres the graph on it (Phase 3). Cue it with a pointer.
-    const switchable = n.kind === "peer" || n.kind === "group";
-    return {
-      id: n.id,
-      position: { x: (p?.x ?? 0) - NODE_W / 2, y: (p?.y ?? 0) - NODE_H / 2 },
-      data: { label: n.label || n.id, kind: n.kind },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
-      className: `rounded-oz2-input border px-3 py-2 text-xs ${
-        KIND_CLASS[n.kind] ?? KIND_CLASS.peer
-      }${switchable ? " cursor-pointer" : ""}`,
-      width: NODE_W,
-      height: NODE_H,
-    };
-  });
-
-  // Phase 1 deliberately preserves distinct relations with the same
-  // from/to (router_local vs route_default_permit, multi-cause
-  // posture_blocked, multi-policy). Number each within its (from,to)
-  // group so the custom edge fans them onto separate tracks instead
-  // of overlapping (#51 F3).
-  const parCount: Record<string, number> = {};
-  for (const e of graph.edges) {
-    const k = `${e.from}\u0000${e.to}`;
-    parCount[k] = (parCount[k] ?? 0) + 1;
-  }
-  const parSeen: Record<string, number> = {};
-
-  const edges: Edge[] = graph.edges.map((e, i) => {
-    const blocked = e.state === "posture_blocked";
-    const k = `${e.from}\u0000${e.to}`;
-    const parIndex = parSeen[k] ?? 0;
-    parSeen[k] = parIndex + 1;
-    return {
-      id: `e${i}-${e.from}-${e.to}`,
-      source: e.from,
-      target: e.to,
-      type: "parallel",
-      style: blocked
-        ? { stroke: "var(--ozv2-err)", strokeDasharray: "5 4" }
-        : { stroke: "var(--ozv2-acc)" },
-      markerEnd: { type: MarkerType.ArrowClosed },
-      data: {
-        policyId: e.policyId ?? "",
-        label: edgeLabel(e),
-        blocked,
-        parIndex,
-        parTotal: parCount[k],
-      },
-    };
-  });
-
-  return { nodes, edges };
-}
-
-// ParallelEdge fans edges that share a (source,target) onto separate
-// curved tracks (perpendicular offset by parallel index, centred on
-// zero) with the label on the same offset, so the parallel relations
-// the backend preserves are not visually collapsed (#51 F3).
-const PAR_GAP = 26;
-
-function ParallelEdge({
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  markerEnd,
-  style,
-  data,
-}: EdgeProps) {
-  const d = (data ?? {}) as {
-    label?: string;
-    blocked?: boolean;
-    parIndex?: number;
-    parTotal?: number;
-  };
-  const idx = d.parIndex ?? 0;
-  const total = d.parTotal ?? 1;
-  const offset = (idx - (total - 1) / 2) * PAR_GAP;
-
-  const dx = targetX - sourceX;
-  const dy = targetY - sourceY;
-  const len = Math.hypot(dx, dy) || 1;
-  const nx = -dy / len;
-  const ny = dx / len;
-  const mx = (sourceX + targetX) / 2 + nx * offset;
-  const my = (sourceY + targetY) / 2 + ny * offset;
-  const path = `M ${sourceX},${sourceY} Q ${mx},${my} ${targetX},${targetY}`;
-
+function ColumnHeaders({ cols }: { cols: ColumnHeader[] }) {
   return (
-    <>
-      <BaseEdge path={path} markerEnd={markerEnd} style={style} />
-      <EdgeLabelRenderer>
+    <div className="pointer-events-none absolute left-0 top-0 h-14 w-full">
+      {cols.map((c) => (
         <div
-          className={`pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded bg-oz2-surface px-1.5 py-0.5 text-[10px] ${
-            d.blocked ? "text-oz2-err" : "text-oz2-text-muted"
-          }`}
-          style={{ transform: `translate(-50%,-50%) translate(${mx}px,${my}px)` }}
+          key={c.id}
+          className="absolute flex items-center gap-2"
+          style={{ left: c.x, top: 20, width: c.width }}
         >
-          {d.label}
+          <span className="h-1.5 w-1.5 rounded-full bg-oz2-acc opacity-60" />
+          <span className="font-mono text-[10.5px] uppercase tracking-wide text-oz2-text-faint">
+            {c.label}
+          </span>
+          <span
+            className="font-mono rounded border border-oz2-border-soft bg-oz2-bg-soft
+              px-1.5 py-px text-[9.5px] text-oz2-text-muted"
+          >
+            {c.count}
+          </span>
         </div>
-      </EdgeLabelRenderer>
-    </>
+      ))}
+    </div>
+  );
+}
+
+function Legend() {
+  const Item = ({ cls, label }: { cls: string; label: string }) => (
+    <span className="flex items-center gap-1.5">
+      <span className={`h-0.5 w-5 rounded-full ${cls}`} />
+      <span>{label}</span>
+    </span>
+  );
+  return (
+    <div className="flex items-center gap-4 text-[11px] text-oz2-text-muted">
+      <Item cls="bg-oz2-ok" label="Enforced" />
+      <Item cls="bg-oz2-err" label="Posture-blocked" />
+      <span className="flex items-center gap-1.5">
+        <span className="h-0.5 w-5 rounded-full border-t border-dashed border-oz2-text-faint" />
+        <span>Policy flow</span>
+      </span>
+    </div>
   );
 }
 
@@ -185,41 +78,149 @@ export default function ControlCenterGraphCanvas({
   graph,
   onEdgeClick,
   onFocusNode,
+  onRefresh,
 }: {
   graph: ControlCenterGraph;
   onEdgeClick?: (policyId: string) => void;
-  onFocusNode?: (view: "peer" | "group", id: string) => void;
+  onFocusNode?: (view: FocusType, id: string) => void;
+  onRefresh?: () => void;
 }) {
-  const { nodes, edges } = useMemo(() => layout(graph), [graph]);
-  const edgeTypes = useMemo(() => ({ parallel: ParallelEdge }), []);
+  const laid = useMemo(() => layoutGraph(graph), [graph]);
+  const headers = useMemo(() => columnHeaders(graph), [graph]);
+  const [hovered, setHovered] = useState<string | null>(null);
+
+  const lit = useMemo(
+    () => (hovered ? reachableFrom(hovered, laid.adjacency) : null),
+    [hovered, laid.adjacency],
+  );
+
+  const nodes: Node[] = useMemo(
+    () =>
+      laid.nodes.map((n) => ({
+        id: n.id,
+        type: "cc",
+        position: n.position,
+        draggable: false,
+        selectable: !!n.data.switchable,
+        focusable: true,
+        ariaLabel: `${n.data.kind}: ${n.data.label}`,
+        style: { width: n.width, height: n.height },
+        data: {
+          ...n.data,
+          dimmed: !!lit && !lit.has(n.id),
+          emphasis: !!lit && lit.has(n.id),
+        },
+      })),
+    [laid.nodes, lit],
+  );
+
+  const edges: Edge[] = useMemo(
+    () =>
+      laid.edges.map((e) => {
+        const inLit = !!lit && lit.has(e.source) && lit.has(e.target);
+        return {
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          type: "cc",
+          data: {
+            ...e.data,
+            dimmed: !!lit && !inLit,
+            emphasis: inLit,
+          },
+        };
+      }),
+    [laid.edges, lit],
+  );
 
   return (
-    <div className="h-[68vh] w-full overflow-hidden rounded-oz2-card border border-oz2-border-strong">
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        edgeTypes={edgeTypes}
-        fitView
-        nodesDraggable={false}
-        nodesConnectable={false}
-        edgesFocusable={!!onEdgeClick}
-        proOptions={{ hideAttribution: true }}
-        onNodeClick={(_, node) => {
-          const kind = (node.data as { kind?: string } | undefined)?.kind;
-          // Only peer/group nodes are valid v1 foci; clicking the
-          // current focus or a route/resource/policy node is a no-op.
-          if (onFocusNode && (kind === "peer" || kind === "group")) {
-            onFocusNode(kind, node.id);
-          }
-        }}
-        onEdgeClick={(_, edge) => {
-          const pid = (edge.data as { policyId?: string } | undefined)
-            ?.policyId;
-          if (pid && onEdgeClick) onEdgeClick(pid);
-        }}
+    <div
+      className="oz-cc-scroll relative w-full overflow-auto rounded-oz2-card
+        border border-oz2-border-strong bg-oz2-bg"
+      style={{ height: "72vh" }}
+    >
+      <div
+        className="relative"
+        style={{ width: STAGE_W, height: STAGE_H + HEADER_H + FOOTER_H }}
       >
-        <Background />
-      </ReactFlow>
+        <div className="oz-cc-grid pointer-events-none absolute inset-0" />
+        <span
+          className="font-mono absolute right-4 top-3 z-10 rounded-md bg-oz2-acc-soft
+            px-2 py-0.5 text-[10px] uppercase text-oz2-acc-text"
+        >
+          Beta
+        </span>
+        <ColumnHeaders cols={headers} />
+
+        <div
+          className="absolute left-0"
+          style={{ top: HEADER_H, width: STAGE_W, height: STAGE_H }}
+        >
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={CC_NODE_TYPES}
+            edgeTypes={CC_EDGE_TYPES}
+            fitView={false}
+            defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+            nodesDraggable={false}
+            nodesConnectable={false}
+            elementsSelectable={!!onEdgeClick}
+            panOnDrag={false}
+            panOnScroll={false}
+            zoomOnScroll={false}
+            zoomOnPinch={false}
+            zoomOnDoubleClick={false}
+            preventScrolling={false}
+            proOptions={{ hideAttribution: true }}
+            onNodeMouseEnter={(_, n) => setHovered(n.id)}
+            onNodeMouseLeave={() => setHovered(null)}
+            onNodeClick={(_, node) => {
+              const d = node.data as {
+                kind?: string;
+                switchable?: boolean;
+              };
+              if (
+                onFocusNode &&
+                d.switchable &&
+                (d.kind === "peer" || d.kind === "group")
+              ) {
+                onFocusNode(d.kind as FocusType, node.id);
+              }
+            }}
+            onEdgeClick={(_, edge) => {
+              const pid = (edge.data as { policyId?: string } | undefined)
+                ?.policyId;
+              if (pid && onEdgeClick) onEdgeClick(pid);
+            }}
+          />
+        </div>
+
+        <div
+          className="sticky bottom-0 left-0 flex items-center justify-between
+            border-t border-oz2-border bg-oz2-surface/80 px-4 backdrop-blur-md"
+          style={{ height: FOOTER_H }}
+        >
+          <Legend />
+          <div className="flex items-center gap-3 text-[11px] text-oz2-text-muted">
+            <span>
+              {graph.edges.length} connection
+              {graph.edges.length === 1 ? "" : "s"}
+            </span>
+            {onRefresh && (
+              <button
+                type="button"
+                onClick={onRefresh}
+                className="flex items-center gap-1.5 rounded-md border border-oz2-border
+                  px-2 py-1 text-oz2-text-2 transition-colors hover:bg-oz2-hover"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Refresh
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

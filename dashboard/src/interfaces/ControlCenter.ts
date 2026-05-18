@@ -6,15 +6,19 @@
 // contract_test.go and this file is its TS counterpart. Keep the two
 // in lockstep (see ADR-0017 + project memory).
 
-export type FocusType = "peer" | "group";
+// v2 topology: one view, four focus tabs (ADR-0017 2026-05-18b).
+// Policy is always the middle pivot column.
+export type FocusType = "peer" | "user" | "group" | "network";
 
 export type NodeKind =
   | "focus"
   | "policy"
   | "group"
   | "peer"
+  | "user"
   | "route"
-  | "network_resource";
+  | "network_resource"
+  | "network";
 
 export type EdgeState = "enforced" | "posture_blocked";
 
@@ -34,6 +38,10 @@ export interface ControlCenterNode {
   id: string;
   kind: NodeKind;
   label: string;
+  // v2 columnar projection stamps meta.column ∈
+  // focus|peers|policies|resources|groups so the canvas can lane the
+  // node. Also: peer→ip/os, user→email, policy→port, resource→
+  // sub/resourceKind.
   meta?: Record<string, string>;
 }
 

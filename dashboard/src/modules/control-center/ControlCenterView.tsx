@@ -20,14 +20,27 @@ import {
   FocusType,
 } from "@/interfaces/ControlCenter";
 import { Group } from "@/interfaces/Group";
+import { NetworkResource } from "@/interfaces/Network";
 import { Peer } from "@/interfaces/Peer";
+import { User } from "@/interfaces/User";
 import ControlCenterGraphCanvas from "@/modules/control-center/ControlCenterGraphCanvas";
 
-// Control Center data layer (ADR-0017 Phase 2, P3). Owns the focus
-// view (peer|group — v1 scope; Users/inverse-Networks are v2), the
-// focus-node selector, and the graph fetch. The xyflow canvas (P4)
-// replaces the textual reachable list below; that list stays as the
-// accessible / no-JS-graph fallback.
+// Control Center data layer (ADR-0017 2026-05-18b — v2 topology).
+// Owns the focus tab (peer|user|group|network), the focus-node
+// selector (sourced per tab), and the graph fetch. The columnar
+// xyflow canvas is the primary view; the textual reachable list
+// stays as the accessible / no-graph fallback.
+
+const VIEWS: { value: FocusType; label: string }[] = [
+  { value: "peer", label: "Peer" },
+  { value: "user", label: "User" },
+  { value: "group", label: "Group" },
+  { value: "network", label: "Networks" },
+];
+
+function isFocusType(v: string | null): v is FocusType {
+  return v === "peer" || v === "user" || v === "group" || v === "network";
+}
 
 export default function ControlCenterView() {
   const router = useRouter();
@@ -38,7 +51,7 @@ export default function ControlCenterView() {
   // remounts this view, which re-initialises from these params and
   // re-fetches the graph.
   const [view, setView] = useState<FocusType>(
-    sp.get("view") === "group" ? "group" : "peer",
+    isFocusType(sp.get("view")) ? (sp.get("view") as FocusType) : "peer",
   );
   const [focusId, setFocusId] = useState<string>(sp.get("focus") ?? "");
 
@@ -50,8 +63,17 @@ export default function ControlCenterView() {
 
   const { data: peers } = useFetchApi<Peer[]>("/peers", true);
   const { data: groups } = useFetchApi<Group[]>("/groups", true);
+  const { data: users } = useFetchApi<User[]>("/users", true);
+  const { data: resources } = useFetchApi<NetworkResource[]>(
+    "/networks/resources",
+    true,
+  );
 
-  const { data: graph, isLoading } = useFetchApi<ControlCenterGraph>(
+  const {
+    data: graph,
+    isLoading,
+    mutate,
+  } = useFetchApi<ControlCenterGraph>(
     `/control-center/${view}/${focusId}`,
     true,
     true,
@@ -64,16 +86,26 @@ export default function ControlCenterView() {
         .filter((p) => p.id)
         .map((p) => ({ id: p.id as string, label: p.name || (p.id as string) }));
     }
+    if (view === "user") {
+      return (users ?? [])
+        .filter((u) => u.id)
+        .map((u) => ({ id: u.id, label: u.name || u.email || u.id }));
+    }
+    if (view === "network") {
+      return (resources ?? [])
+        .filter((r) => r.id)
+        .map((r) => ({ id: r.id, label: r.name || r.address || r.id }));
+    }
     return (groups ?? [])
       .filter((g) => g.id)
       .map((g) => ({ id: g.id as string, label: g.name }));
-  }, [view, peers, groups]);
+  }, [view, peers, groups, users, resources]);
 
   const onViewChange = (v: string) => {
-    const fv = v as FocusType;
-    setView(fv);
-    setFocusId(""); // a peer id is not a valid group focus and vice-versa
-    syncUrl(fv, "");
+    if (!isFocusType(v)) return;
+    setView(v);
+    setFocusId(""); // an id is scoped to its focus type
+    syncUrl(v, "");
   };
 
   const onFocusChange = (f: string) => {
@@ -97,16 +129,20 @@ export default function ControlCenterView() {
           Control Center
         </h1>
         <p className="mt-1 text-sm text-oz2-text-muted">
-          Read-only access graph — what a {view} reaches, through which
-          policy, and what is policy-permitted but posture-blocked.
+          Read-only topology — who reaches what, through which policy,
+          on which ports, and what is policy-permitted but
+          posture-blocked.
         </p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <OzTabs value={view} onValueChange={onViewChange}>
           <OzTabsList>
-            <OzTabsTrigger value="peer">Peers</OzTabsTrigger>
-            <OzTabsTrigger value="group">Groups</OzTabsTrigger>
+            {VIEWS.map((v) => (
+              <OzTabsTrigger key={v.value} value={v.value}>
+                {v.label}
+              </OzTabsTrigger>
+            ))}
           </OzTabsList>
         </OzTabs>
 
@@ -132,6 +168,9 @@ export default function ControlCenterView() {
         isLoading={isLoading}
         graph={graph}
         onFocusNode={onFocusNode}
+        onRefresh={() => {
+          void mutate();
+        }}
         onPolicyOpen={(policyId) => {
           // Round-trip (F1): tell the editor to return to THIS focus,
           // not the access-control list, so the audit loop closes.
@@ -156,6 +195,7 @@ function ControlCenterBody({
   graph,
   onFocusNode,
   onPolicyOpen,
+  onRefresh,
 }: {
   view: FocusType;
   focusId: string;
@@ -163,6 +203,7 @@ function ControlCenterBody({
   graph?: ControlCenterGraph;
   onFocusNode: (v: FocusType, id: string) => void;
   onPolicyOpen: (policyId: string) => void;
+  onRefresh: () => void;
 }) {
   if (focusId === "") {
     return (
@@ -215,6 +256,7 @@ function ControlCenterBody({
         graph={graph}
         onEdgeClick={onPolicyOpen}
         onFocusNode={onFocusNode}
+        onRefresh={onRefresh}
       />
       <details className="text-sm text-oz2-text-muted">
         <summary className="cursor-pointer select-none">
