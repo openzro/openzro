@@ -540,5 +540,20 @@ value and de-risks the resolver contract for the v2 widening.
   to record that it was considered and deliberately left out of the
   decision record (pixel layout is not architecture).
 
+  **Strict-green group semantics + structural edge (owner-decided in
+  the v2 build review, recorded so the decision is not lost).** "Green"
+  must be a trustworthy audit signal, so the group aggregate is strict:
+  only REAL members (`acc.GetPeer != nil`) are counted — a stale member
+  id is never a posture pass; an empty / all-stale source group emits
+  NO edge (a configured-but-actor-less group is not "permitted"), and a
+  network focus drops the policy node + `policy→resource` edge entirely
+  when every source group of the targeting policy is empty/stale (no
+  orphan green flow); partial posture stays UNION (k>0 ⇒ enforced) but
+  `meta.reachedBy="k of n members"` is ALWAYS surfaced (never shown as
+  full). Separately, the structural User→Peer edge is the explicit
+  `permitSource: "identity"` (ownership, no `policyId`) — not the
+  empty-string sentinel it used to be; the wire `PermitSource` set is
+  now `policy | route_default_permit | router_local | identity`.
+
   Same cadence: doc-only, owner-authorised, stacked on the
   2026-05-18b re-gate branch. #39 umbrella; Cypress still #52.
