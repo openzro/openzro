@@ -99,34 +99,95 @@ func (b *graphBuilder) addRouteReach(ctx context.Context, acc *types.Account, fo
 		// decision (reuses the same posture eval) — it does not
 		// re-decide enforced reach, which stays strictly real-rule.
 		if !permitted && len(r.AccessControlGroups) > 0 {
-			b.addRoutePostureBlocked(ctx, acc, focusID, r, nodeID)
+			b.addPolicyPostureBlocked(ctx, acc, focusID,
+				types.GetAllRoutePoliciesFromGroups(acc, r.AccessControlGroups),
+				nodeID, NodeRoute, routeLabel(r))
 		}
 	}
 
-	// Network-resource routes are already permission-resolved by the
-	// producer (it only returns resources the focus is entitled to), so
-	// no distribution∩permission step is needed — label the permit
-	// source from the resource's policy when there is one.
+	// Network-resource routes: same distribution ∩ real-permission
+	// principle as classic routes (Finding 1). The permitting policy /
+	// protocol / port come from the engine's real
+	// GetPeerNetworkResourceFirewallRules — NOT an arbitrary pols[0].
 	resourcePolicies := acc.GetResourcePoliciesMap()
-	_, nrRoutes, _ := acc.GetNetworkResourcesRoutesToSync(ctx, focusID, resourcePolicies, acc.GetResourceRoutersMap())
-	for _, r := range nrRoutes {
+	routers := acc.GetResourceRoutersMap()
+
+	// From every router's view, index the real nr firewall rules by
+	// RouteID and remember a route per resource ID (so a stable
+	// node id/label exists even when the focus is dropped from
+	// distribution by posture — same shape as the peer D1.2 pass).
+	nrRuleIdx := map[route.ID][]*types.RouteFirewallRule{}
+	nrRouteByResource := map[string]*route.Route{}
+	for _, p := range acc.Peers {
+		if p == nil {
+			continue
+		}
+		isRouter, nrR, _ := acc.GetNetworkResourcesRoutesToSync(ctx, p.ID, resourcePolicies, routers)
+		if !isRouter || len(nrR) == 0 {
+			continue
+		}
+		for _, rr := range nrR {
+			if rr != nil {
+				nrRouteByResource[string(rr.GetResourceID())] = rr
+			}
+		}
+		for _, fr := range acc.GetPeerNetworkResourceFirewallRules(ctx, p, validatedPeers, nrR, resourcePolicies) {
+			nrRuleIdx[fr.RouteID] = append(nrRuleIdx[fr.RouteID], fr)
+		}
+	}
+
+	// Enforced: of the resources distributed to the focus, an edge
+	// exists only where a real nr firewall rule covers the focus IP.
+	permittedRes := map[string]struct{}{}
+	_, focusNR, _ := acc.GetNetworkResourcesRoutesToSync(ctx, focusID, resourcePolicies, routers)
+	for _, r := range focusNR {
 		if r == nil {
 			continue
 		}
 		nodeID := "nr:" + string(r.ID)
-		b.addNode(nodeID, NodeNetworkResource, routeLabel(r))
-		e := &Edge{
-			PermitSource: PermitRouteDefault,
-			Protocol:     string(types.PolicyRuleProtocolALL),
-			Direction:    DirectionOut,
-			State:        EdgeEnforced,
+		for _, fr := range nrRuleIdx[r.ID] {
+			if !ipInAnyRange(focusPeer.IP, fr.SourceRanges) {
+				continue
+			}
+			permittedRes[string(r.GetResourceID())] = struct{}{}
+			e := &Edge{
+				Protocol:     fr.Protocol,
+				Ports:        routeFirewallPorts(fr),
+				SourceRanges: fr.SourceRanges,
+				Direction:    DirectionOut,
+				State:        EdgeEnforced,
+			}
+			if fr.PolicyID == "" {
+				e.PermitSource = PermitRouteDefault
+			} else {
+				e.PermitSource = PermitPolicy
+				e.PolicyID = fr.PolicyID
+				if pol := policyByID(acc, fr.PolicyID); pol != nil {
+					e.PolicyName = pol.Name
+				}
+			}
+			b.addNode(nodeID, NodeNetworkResource, routeLabel(r))
+			b.addRouteEdge(focusID, nodeID, e)
 		}
-		if pols := resourcePolicies[string(r.GetResourceID())]; len(pols) > 0 && pols[0] != nil {
-			e.PermitSource = PermitPolicy
-			e.PolicyID = pols[0].ID
-			e.PolicyName = pols[0].Name
+	}
+
+	// Explanatory (D1.2 for resources): the distribution producer also
+	// drops a posture-failing client, so iterate resources directly —
+	// a resource the focus would source but for posture surfaces as a
+	// distinct posture_blocked edge.
+	for _, res := range acc.NetworkResources {
+		if res == nil || !res.Enabled {
+			continue
 		}
-		b.addRouteEdge(focusID, nodeID, e)
+		if _, ok := permittedRes[res.ID]; ok {
+			continue
+		}
+		rr := nrRouteByResource[res.ID]
+		if rr == nil {
+			continue
+		}
+		b.addPolicyPostureBlocked(ctx, acc, focusID,
+			resourcePolicies[res.ID], "nr:"+string(rr.ID), NodeNetworkResource, routeLabel(rr))
 	}
 }
 
@@ -183,14 +244,16 @@ func routeLabel(r *route.Route) string {
 	return string(r.NetID)
 }
 
-// addRoutePostureBlocked emits a posture_blocked edge for a route the
-// focus would be a permitted source on but for posture. Annotator
-// only: reuses the same posture evaluation, makes no enforced-reach
-// decision (that stays strictly real-rule based).
-func (b *graphBuilder) addRoutePostureBlocked(ctx context.Context, acc *types.Account, focusID string, r *route.Route, nodeID string) {
+// addPolicyPostureBlocked emits a posture_blocked edge to a route or
+// network-resource node the focus would be a permitted source on but
+// for posture. Shared by the classic-route and network-resource paths
+// (Findings 1 & 2). Annotator only: reuses the same posture
+// evaluation, makes no enforced-reach decision (that stays strictly
+// real-rule based).
+func (b *graphBuilder) addPolicyPostureBlocked(ctx context.Context, acc *types.Account, focusID string, policies []*types.Policy, nodeID string, kind NodeKind, label string) {
 	postureMap := postureChecksMap(acc)
-	for _, pol := range types.GetAllRoutePoliciesFromGroups(acc, r.AccessControlGroups) {
-		if !pol.Enabled || len(pol.SourcePostureChecks) == 0 {
+	for _, pol := range policies {
+		if pol == nil || !pol.Enabled || len(pol.SourcePostureChecks) == 0 {
 			continue
 		}
 		for _, rule := range pol.Rules {
@@ -204,7 +267,7 @@ func (b *graphBuilder) addRoutePostureBlocked(ctx context.Context, acc *types.Ac
 			if d == nil {
 				continue
 			}
-			b.addNode(nodeID, NodeRoute, routeLabel(r))
+			b.addNode(nodeID, kind, label)
 			b.addRouteEdge(focusID, nodeID, &Edge{
 				PermitSource: PermitPolicy,
 				PolicyID:     pol.ID,
