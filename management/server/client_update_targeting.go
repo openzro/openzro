@@ -22,7 +22,7 @@ import (
 //      rollout ring (canary / break-glass).
 //   3. TargetGroups membership is in scope but SUBJECT to the ring.
 //   4. Empty TargetGroups AND empty TargetPeers => the whole fleet
-//      (the pre-Q2 behaviour), still subject to the ring.
+//      (the pre-Q2 behavior), still subject to the ring.
 //
 // Fail-closed: when the decision depends on group membership and that
 // membership could not be resolved (groupsKnown == false), the peer
@@ -31,7 +31,7 @@ import (
 //
 // Clean-room (AGPL management/): modeled on openZro's own in-tree
 // group-overlap precedents (applyFlowGroupFilter,
-// admission.HasGroupOverlap) and the public NetBird behaviour of an
+// admission.HasGroupOverlap) and the public NetBird behavior of an
 // operator-set fleet update target. No upstream AGPL management/
 // source consulted.
 

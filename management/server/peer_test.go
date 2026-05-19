@@ -1848,7 +1848,7 @@ func TestPeerAccountPeersUpdate(t *testing.T) {
 
 		select {
 		case <-done:
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			t.Error("timeout waiting for peerShouldNotReceiveUpdate")
 		}
 	})
@@ -1873,7 +1873,7 @@ func TestPeerAccountPeersUpdate(t *testing.T) {
 
 		select {
 		case <-done:
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			t.Error("timeout waiting for peerShouldNotReceiveUpdate")
 		}
 	})
@@ -1891,7 +1891,7 @@ func TestPeerAccountPeersUpdate(t *testing.T) {
 
 		select {
 		case <-done:
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			t.Error("timeout waiting for peerShouldNotReceiveUpdate")
 		}
 	})
@@ -1910,7 +1910,7 @@ func TestPeerAccountPeersUpdate(t *testing.T) {
 
 		select {
 		case <-done:
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			t.Error("timeout waiting for peerShouldReceiveUpdate")
 		}
 	})
@@ -1932,7 +1932,7 @@ func TestPeerAccountPeersUpdate(t *testing.T) {
 
 		select {
 		case <-done:
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			t.Error("timeout waiting for peerShouldReceiveUpdate")
 		}
 	})
@@ -1954,7 +1954,7 @@ func TestPeerAccountPeersUpdate(t *testing.T) {
 
 		select {
 		case <-done:
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			t.Error("timeout waiting for peerShouldNotReceiveUpdate")
 		}
 	})
@@ -1995,7 +1995,7 @@ func TestPeerAccountPeersUpdate(t *testing.T) {
 
 		select {
 		case <-done:
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			t.Error("timeout waiting for peerShouldReceiveUpdate")
 		}
 	})
@@ -2013,7 +2013,7 @@ func TestPeerAccountPeersUpdate(t *testing.T) {
 
 		select {
 		case <-done:
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			t.Error("timeout waiting for peerShouldReceiveUpdate")
 		}
 	})
@@ -2059,7 +2059,7 @@ func TestPeerAccountPeersUpdate(t *testing.T) {
 
 		select {
 		case <-done:
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			t.Error("timeout waiting for peerShouldReceiveUpdate")
 		}
 	})
@@ -2077,7 +2077,7 @@ func TestPeerAccountPeersUpdate(t *testing.T) {
 
 		select {
 		case <-done:
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			t.Error("timeout waiting for peerShouldReceiveUpdate")
 		}
 	})
@@ -2114,7 +2114,7 @@ func TestPeerAccountPeersUpdate(t *testing.T) {
 
 		select {
 		case <-done:
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			t.Error("timeout waiting for peerShouldReceiveUpdate")
 		}
 	})
@@ -2132,7 +2132,7 @@ func TestPeerAccountPeersUpdate(t *testing.T) {
 
 		select {
 		case <-done:
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			t.Error("timeout waiting for peerShouldReceiveUpdate")
 		}
 	})
@@ -2470,7 +2470,7 @@ func TestBufferUpdateAccountPeers(t *testing.T) {
 //   - stale disconnect → skip
 //   - matching disconnect → write Connected=false
 //   - empty streamID (legacy caller) → fall through to the unguarded
-//     behaviour so pre-fix callers / pre-upgrade peers still work.
+//     behavior so pre-fix callers / pre-upgrade peers still work.
 func TestMarkPeerConnected_StaleStreamGuard(t *testing.T) {
 	manager, err := createManager(t)
 	require.NoError(t, err)

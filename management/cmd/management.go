@@ -379,7 +379,7 @@ var (
 				// in a federated layer that routes queries by date window.
 				// Otherwise — no archive configured, NDJSON-only archive,
 				// or non-DuckDB build — federated falls through to hot-only
-				// behaviour.
+				// behavior.
 				archiveStore, archErr := flowArchive.NewFromEnv()
 				switch {
 				case errors.Is(archErr, flowArchive.ErrUnavailable):
@@ -1107,4 +1107,3 @@ func migrateToOpenzro(oldPath, newPath string) bool {
 
 	return true
 }
-

@@ -295,7 +295,7 @@ func TestScheduler_UpdatePanicDoesNotKillLoop(t *testing.T) {
 	s.afterFn = fastAfter(20 * time.Millisecond)
 	// Coalescing depends on `now()` advancing — with the fixed test
 	// clock the rate-limit would never expire, so disable it for this
-	// test. The behaviour under coalescing is exercised separately
+	// test. The behavior under coalescing is exercised separately
 	// in the leader-election test, which uses both replicas firing.
 	s.minTickInterval = 0
 

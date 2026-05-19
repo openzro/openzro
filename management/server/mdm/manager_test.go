@@ -120,7 +120,7 @@ func TestManager_SubscriptionSurvivesRequestCtxCancellation(t *testing.T) {
 	cancelBoot()
 
 	// Now publish to the provider's topic. If the subscription is
-	// still alive (bound to baseCtx, not the cancelled bootCtx), the
+	// still alive (bound to baseCtx, not the canceled bootCtx), the
 	// CachedProvider's cache fills.
 	m.mu.RLock()
 	cached := m.providers[row.ID]

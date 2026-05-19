@@ -271,7 +271,7 @@ func (c *GRPCClient) establishStream(ctx context.Context) (proto.FlowService_Eve
 	return stream, nil
 }
 
-// isContextDone reports whether the local context has been cancelled
+// isContextDone reports whether the local context has been canceled
 // or has exceeded its deadline. We deliberately do NOT inspect gRPC
 // status codes: a server- or proxy-sent codes.Canceled /
 // DeadlineExceeded must not short-circuit our retry loop, since

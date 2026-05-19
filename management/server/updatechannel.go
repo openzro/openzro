@@ -105,7 +105,7 @@ func NewPeersUpdateManager(metrics telemetry.AppMetrics) *PeersUpdateManager {
 
 // NewPeersUpdateManagerWithCluster returns a PeersUpdateManager that uses
 // coordinator to forward updates to peers registered on other instances.
-// Pass coordinator=nil for single-instance behaviour.
+// Pass coordinator=nil for single-instance behavior.
 func NewPeersUpdateManagerWithCluster(metrics telemetry.AppMetrics, coordinator cluster.Coordinator) *PeersUpdateManager {
 	parentCtx, cancel := context.WithCancel(context.Background())
 	return &PeersUpdateManager{

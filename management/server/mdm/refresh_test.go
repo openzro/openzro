@@ -95,7 +95,7 @@ func TestRefreshWorker_StopIsIdempotent(t *testing.T) {
 	w.Stop()
 }
 
-// slowProvider blocks GetDeviceStatus until ctx is cancelled.
+// slowProvider blocks GetDeviceStatus until ctx is canceled.
 // Models a vendor API that has gone slow / hung in production.
 type slowProvider struct{}
 

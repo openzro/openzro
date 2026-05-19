@@ -36,7 +36,7 @@ var (
 // backend stamped on the conntrack mark (per ADR-0013) back to the
 // management-issued PolicyID. Returns ok=false when the index is
 // unknown — the caller emits an empty RuleId in that case, matching
-// the behaviour before ADR-0013.
+// the behavior before ADR-0013.
 type PolicyResolver interface {
 	LookupPolicyID(ruleIndex uint32) ([]byte, bool)
 }
@@ -88,7 +88,7 @@ type ConnTrack struct {
 
 // New creates a new connection tracker that interfaces with the kernel's conntrack system.
 // If resolver is nil the collector emits events without RuleId, matching the
-// behaviour from before the ADR-0013 mark layout.
+// behavior from before the ADR-0013 mark layout.
 func New(flowLogger nftypes.FlowLogger, iface nftypes.IFaceMapper, resolver PolicyResolver, opts ...Option) *ConnTrack {
 	c := &ConnTrack{
 		flowLogger: flowLogger,
@@ -375,7 +375,7 @@ func (c *ConnTrack) handleEvent(event nfct.Event) {
 	// back to the originating PolicyID. The legacy 17-bit fwmark
 	// space stays on the low bits; the resolver handles unknown
 	// indices (returning ok=false) by emitting an empty RuleId,
-	// matching pre-ADR behaviour.
+	// matching pre-ADR behavior.
 	var ruleID []byte
 	if c.resolver != nil {
 		if ruleIndex := nbnet.MarkRuleIndex(flow.Mark); ruleIndex != 0 {

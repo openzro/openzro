@@ -152,7 +152,7 @@ type Scheduler struct {
 
 // NewScheduler wires the dependencies. Callers must call Run on the
 // returned scheduler to start the goroutines. Run blocks until ctx is
-// cancelled and returns nil for a graceful shutdown or the error that
+// canceled and returns nil for a graceful shutdown or the error that
 // caused premature exit.
 func NewScheduler(coord cluster.Coordinator, updater AccountUpdater, loader ScheduleLoader) *Scheduler {
 	if coord == nil || updater == nil || loader == nil {
@@ -173,7 +173,7 @@ func NewScheduler(coord cluster.Coordinator, updater AccountUpdater, loader Sche
 	}
 }
 
-// Run blocks until ctx is cancelled. It maintains a per-account
+// Run blocks until ctx is canceled. It maintains a per-account
 // scheduler loop for every account that has an active ScheduleCheck,
 // discovering new accounts WITHOUT a management restart via:
 //
@@ -357,7 +357,7 @@ func (s *Scheduler) runForAccount(ctx context.Context, accountID string) {
 }
 
 // tickWhileLeader is the boundary-firing loop. It exits when ctx is
-// cancelled, the schedule-loader returns no active checks (so the
+// canceled, the schedule-loader returns no active checks (so the
 // account no longer has any work) — in that case it waits on the
 // invalidation channel for a new schedule to arrive before exiting.
 // Returning hands the lock back to the outer loop which re-acquires
@@ -445,7 +445,7 @@ func (s *Scheduler) fireUpdate(ctx context.Context, accountID string) {
 }
 
 // sleepBackoff sleeps for backoff + 0–backoff/2 jitter. Returns false
-// when ctx was cancelled during the sleep (caller should bail).
+// when ctx was canceled during the sleep (caller should bail).
 func (s *Scheduler) sleepBackoff(ctx context.Context) bool {
 	d := s.backoff + time.Duration(rand.Int63n(int64(s.backoff/2+1)))
 	t := time.NewTimer(d)

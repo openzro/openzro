@@ -62,7 +62,7 @@ type Settings struct {
 	// infra/gateway safety); an explicit TargetPeers entry pierces the
 	// percentage ring; TargetGroups membership is subject to the ring.
 	// Empty TargetGroups AND empty TargetPeers => whole fleet (the
-	// pre-Q2 behaviour; never "nobody").
+	// pre-Q2 behavior; never "nobody").
 
 	// ClientUpdateTargetGroups: member peers of any of these groups are
 	// in scope (subject to the rollout ring). Empty = no group
@@ -222,7 +222,7 @@ type ExtraSettings struct {
 	//
 	//   "1h"   "6h"   "24h"   "7d"   "30d"   "all" (or empty)
 	//
-	// Empty / unrecognized values keep the pre-setting behaviour
+	// Empty / unrecognized values keep the pre-setting behavior
 	// (no time filter — bounded only by the hot store retention and
 	// the API's 10 000-event ceiling). Operators can still override
 	// per-session via the date picker; this is just the initial value.

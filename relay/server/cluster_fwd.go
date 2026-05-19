@@ -30,7 +30,7 @@ var errClusterPeerNotFound = cluster.ErrPeerNotFound
 // an error indicating the peer is nowhere in the cluster.
 //
 // In single-pod deployments this stays nil and the relay falls back
-// to its legacy "drop on local-store miss" behaviour, byte-for-byte.
+// to its legacy "drop on local-store miss" behavior, byte-for-byte.
 type CrossPodForwarder interface {
 	Forward(ctx context.Context, dst messages.PeerID, msg []byte) error
 

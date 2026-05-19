@@ -85,7 +85,7 @@ func TestPeerTargetedForUpdate(t *testing.T) {
 	t.Run("whole fleet when unconstrained, no ring", func(t *testing.T) {
 		s := &types.Settings{ClientUpdateTargetVersion: ver}
 		if !peerTargetedForUpdate(s, "p", "k", nil, true) {
-			t.Fatal("no constraint + no ring must target every peer (pre-Q2 behaviour)")
+			t.Fatal("no constraint + no ring must target every peer (pre-Q2 behavior)")
 		}
 	})
 

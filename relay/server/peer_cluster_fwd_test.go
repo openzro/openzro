@@ -172,7 +172,7 @@ func TestHandleTransportMsg_ClusterPeerNotFoundDropsQuietly(t *testing.T) {
 
 func TestHandleTransportMsg_NoForwarderDropsOnMiss(t *testing.T) {
 	// Single-pod path: crossPodFwd is nil, so a miss must drop
-	// silently — the legacy behaviour ADR-0014 promises to keep
+	// silently — the legacy behavior ADR-0014 promises to keep
 	// byte-for-byte for non-clustered deployments.
 	src, _, _ := newPeerForTest(t, 0xAA, nil)
 

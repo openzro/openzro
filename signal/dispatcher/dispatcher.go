@@ -28,7 +28,7 @@ type Dispatcher interface {
 
 	// ListenForMessages registers handler as the receiver for messages
 	// addressed to peer id. The handler runs in a dedicated goroutine until
-	// ctx is cancelled. The implementation is responsible for cleaning up
+	// ctx is canceled. The implementation is responsible for cleaning up
 	// any registry entries when ctx is done.
 	ListenForMessages(ctx context.Context, id string, handler func(context.Context, *proto.EncryptedMessage)) error
 }

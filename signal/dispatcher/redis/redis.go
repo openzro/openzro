@@ -98,7 +98,7 @@ type Redis struct {
 
 // New constructs a Redis-backed dispatcher and immediately subscribes to
 // this instance's pub/sub channel. The returned dispatcher remains active
-// until ctx is cancelled.
+// until ctx is canceled.
 func New(ctx context.Context, cfg Config, _ metric.Meter) (*Redis, error) {
 	if cfg.Client == nil {
 		return nil, errors.New("redis dispatcher: Client is required")
@@ -211,7 +211,7 @@ func (r *Redis) SendMessage(ctx context.Context, msg *proto.EncryptedMessage) (*
 
 // ListenForMessages registers handler as the receiver for messages addressed
 // to peer id, both from peers connected locally (fast path) and from peers
-// connected to other instances (via pub/sub). Runs until ctx is cancelled.
+// connected to other instances (via pub/sub). Runs until ctx is canceled.
 func (r *Redis) ListenForMessages(ctx context.Context, id string, handler func(context.Context, *proto.EncryptedMessage)) error {
 	r.mu.Lock()
 	if _, exists := r.localHandlers[id]; exists {

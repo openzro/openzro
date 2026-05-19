@@ -52,7 +52,7 @@ const (
 	// PolicyID. Routing / masquerade / control-plane writers leave
 	// the high bits zero, in which case `MarkRuleIndex(mark) == 0`
 	// and the collector emits an empty RuleId — matching the
-	// behaviour before ADR-0013.
+	// behavior before ADR-0013.
 
 	// MarkValueMask isolates the legacy 17-bit fwmark space.
 	MarkValueMask uint32 = 0x0001FFFF

@@ -143,7 +143,7 @@ func (am *DefaultAccountManager) getUserAccessiblePeers(ctx context.Context, acc
 // pinned on the peer. This prevents stale-stream cleanups on one
 // replica from clobbering the live Connected=true state another
 // replica already wrote after the peer reconnected. Empty streamID
-// (legacy callers) falls through to the unguarded behaviour.
+// (legacy callers) falls through to the unguarded behavior.
 func (am *DefaultAccountManager) MarkPeerConnected(ctx context.Context, peerPubKey string, connected bool, realIP net.IP, accountID string, streamID string) error {
 	start := time.Now()
 	defer func() {
@@ -202,7 +202,7 @@ func updatePeerStatusAndLocation(ctx context.Context, geo geolocation.Geolocatio
 	// The guard requires BOTH ids to be non-empty AND non-matching to
 	// fire. Empty streamID (legacy caller that hasn't been updated) or
 	// empty stored OwnerStreamID (peer hasn't reconnected since the
-	// field was added) falls through to the old behaviour so legacy
+	// field was added) falls through to the old behavior so legacy
 	// peers and pre-fix code paths continue to work unchanged.
 	if !connected && streamID != "" && peer.Status != nil &&
 		peer.Status.OwnerStreamID != "" && peer.Status.OwnerStreamID != streamID {

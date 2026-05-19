@@ -82,7 +82,7 @@ func publishStatus(
 // inbound event doesn't echo back to the broker.
 //
 // Returns the cancel func the caller must invoke at teardown. The
-// goroutine exits when ctx is cancelled OR the subscription channel
+// goroutine exits when ctx is canceled OR the subscription channel
 // is closed by the coordinator (broker outage, Close, etc.).
 func subscribeStatus(
 	parent context.Context, coord cluster.Coordinator,

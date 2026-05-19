@@ -130,7 +130,7 @@ func TestTransport_StopClosesEverything(t *testing.T) {
 
 	require.True(t, stream.closed.Load(), "Stop must close every live stream")
 	// A second Stop must be a no-op rather than panicking on the
-	// already-closed listener / cancelled context.
+	// already-closed listener / canceled context.
 	clientTr.Stop()
 }
 
