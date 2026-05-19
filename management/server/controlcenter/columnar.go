@@ -419,7 +419,7 @@ func buildNetworkFocus(ctx context.Context, acc *types.Account, focus Focus) (*G
 				continue
 			}
 			// Resolve the source groups that actually EMIT (≥1 real
-			// member) BEFORE materialising the policy. If none emit,
+			// member) BEFORE materializing the policy. If none emit,
 			// nobody can reach the resource through this rule — under
 			// strict-green that path must not be drawn at all, so we
 			// skip the policy node and the policy→resource edge too

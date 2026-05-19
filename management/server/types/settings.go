@@ -111,7 +111,7 @@ type Settings struct {
 	// AdmissionExemptGroups lists Group IDs whose member peers skip
 	// the admission gate entirely. Motivating case: routing /
 	// gateway peers — server-side machines (cloud VMs, K8s pods,
-	// on-prem servers) that are part of the mesh but never enrol
+	// on-prem servers) that are part of the mesh but never enroll
 	// in MDM/EDR. Without this, an account that turns admission on
 	// would lock its own infrastructure out the moment a posture
 	// check fires for a peer that has no MDM agent to report from.
@@ -218,11 +218,11 @@ type ExtraSettings struct {
 	// FlowTrafficDefaultRange pre-fills the date filter on the Flow
 	// Traffic page so a fresh dashboard load doesn't hammer the API
 	// for everything that fits in the 10 000-event cap. Stored as a
-	// short string (enum). Recognised values:
+	// short string (enum). Recognized values:
 	//
 	//   "1h"   "6h"   "24h"   "7d"   "30d"   "all" (or empty)
 	//
-	// Empty / unrecognised values keep the pre-setting behaviour
+	// Empty / unrecognized values keep the pre-setting behaviour
 	// (no time filter — bounded only by the hot store retention and
 	// the API's 10 000-event ceiling). Operators can still override
 	// per-session via the date picker; this is just the initial value.

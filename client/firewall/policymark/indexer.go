@@ -28,7 +28,7 @@ import (
 // returns 0 for further allocations — the firewall backend then
 // installs the rule WITHOUT the rule_index stamp, and the resulting
 // flow events arrive with empty RuleId. That degrades to the
-// pre-ADR-0013 behaviour rather than corrupting the lookup map.
+// pre-ADR-0013 behavior rather than corrupting the lookup map.
 type Indexer struct {
 	mu       sync.RWMutex
 	next     atomic.Uint32 // pre-incremented, so first hand-out is 1
@@ -93,7 +93,7 @@ func (i *Indexer) Index(policyID []byte) uint32 {
 // PolicyResolver interface expected by the netflow conntrack
 // collector. Returns ok=false when the index is 0 or unknown — in
 // that case the collector emits an empty RuleId, matching pre-ADR
-// behaviour.
+// behavior.
 func (i *Indexer) LookupPolicyID(ruleIndex uint32) ([]byte, bool) {
 	if ruleIndex == 0 {
 		return nil, false

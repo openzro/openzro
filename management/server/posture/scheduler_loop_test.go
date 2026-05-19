@@ -95,7 +95,7 @@ func (f *fakeLoader) addAccount(accountID string, checks []ScheduleCheck) {
 }
 
 // fakeCoord is a minimal in-process cluster.Coordinator stand-in. Lock
-// is honoured per name with a single token; Subscribe gives each topic
+// is honored per name with a single token; Subscribe gives each topic
 // a fresh fan-out channel; Publish broadcasts to every subscriber for
 // the topic. Suitable only for the scheduler unit tests in this file.
 type fakeCoord struct {

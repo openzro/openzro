@@ -22,7 +22,7 @@ const envArchiveFormat = "OPENZRO_FLOW_ARCHIVE_FORMAT"
 // constructor for a dashboard-configured GCS / S3 export. Row-level
 // overrides win when set; otherwise we fall through to the
 // OPENZRO_FLOW_ARCHIVE_FORMAT env var (the same operator-level knob
-// the boot-time sinks already honour); empty fallback lets the sink
+// the boot-time sinks already honor); empty fallback lets the sink
 // itself default to ndjson as it has historically.
 func archiveFormatFor(rowFormat string) string {
 	if rowFormat != "" {

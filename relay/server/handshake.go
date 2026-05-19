@@ -19,7 +19,7 @@ type Validator interface {
 	ValidateHelloMsgType(any) error
 }
 
-// preparedMsg contains the marshalled success response messages
+// preparedMsg contains the marshaled success response messages
 type preparedMsg struct {
 	responseHelloMsg []byte
 	responseAuthMsg  []byte

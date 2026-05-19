@@ -20,7 +20,7 @@ type rcvChan chan *types.EventFields
 
 // portFilterHolder boxes a types.PortFilter interface so it can ride
 // in an atomic.Pointer (Go's atomic.Value would also work, but the
-// pointer flavour matches the rest of this struct).
+// pointer flavor matches the rest of this struct).
 type portFilterHolder struct {
 	pf types.PortFilter
 }

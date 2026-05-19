@@ -29,7 +29,7 @@ import (
 // is NOT targeted — never risk auto-updating a peer we cannot prove
 // is outside an ExcludeGroup.
 //
-// Clean-room (AGPL management/): modelled on openZro's own in-tree
+// Clean-room (AGPL management/): modeled on openZro's own in-tree
 // group-overlap precedents (applyFlowGroupFilter,
 // admission.HasGroupOverlap) and the public NetBird behaviour of an
 // operator-set fleet update target. No upstream AGPL management/
@@ -73,7 +73,7 @@ func groupOverlap(a, b []string) bool {
 // PURE, cluster-deterministic function of the key alone (no time, no
 // rand, no per-replica state) so every management replica agrees on
 // who is in the ring, and a peer stays consistently in/out across
-// Syncs. The algorithm (crc32-IEEE % 100) is a behavioural contract:
+// Syncs. The algorithm (crc32-IEEE % 100) is a behavioral contract:
 // changing it re-buckets the entire fleet mid-rollout, so it must not
 // be altered. Deliberately independent of the client-side
 // selfupdate.bucketOf — under Q2 the client skips its own bucket

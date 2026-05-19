@@ -34,7 +34,7 @@ func WriteJSONObject(ctx context.Context, w http.ResponseWriter, obj interface{}
 	}
 }
 
-// Duration is used strictly for JSON requests/responses due to duration marshalling issues
+// Duration is used strictly for JSON requests/responses due to duration marshaling issues
 type Duration struct {
 	time.Duration
 }

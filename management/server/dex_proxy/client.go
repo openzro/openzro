@@ -6,7 +6,7 @@
 // Dex restart.
 //
 // Wire model: the management binary holds one *Client at boot,
-// dialled with mTLS in production (certs at the paths in
+// dialed with mTLS in production (certs at the paths in
 // OPENZRO_DEX_GRPC_*) or plaintext in dev (loopback only). The
 // admin REST handler reuses this single client.
 //
@@ -101,7 +101,7 @@ func New(cfg Config) (*Client, error) {
 	return &Client{conn: conn, dex: apiv2.NewDexClient(conn)}, nil
 }
 
-// NewWithConn wraps an already-dialled grpc.ClientConn — useful
+// NewWithConn wraps an already-dialed grpc.ClientConn — useful
 // for tests that boot an in-memory Dex via bufconn and want to
 // exercise the typed wrappers without going through TLS dial.
 // Production callers should use New, which owns the connection

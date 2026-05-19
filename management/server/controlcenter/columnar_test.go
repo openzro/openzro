@@ -402,7 +402,7 @@ func TestBuildGraph_Deterministic(t *testing.T) {
 	}
 }
 
-// A focus with no matching policy must serialise edges/nodes as
+// A focus with no matching policy must serialize edges/nodes as
 // JSON arrays, never `null` — the dashboard calls graph.edges.length
 // straight on the wire (#39 v2 review: null crashed the canvas).
 func TestEmptyGraphMarshalsAsArrays(t *testing.T) {

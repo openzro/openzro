@@ -225,7 +225,7 @@ func mergeByReceivedAtDesc(a, b []*store.Event) []*store.Event {
 	return out
 }
 
-// applyPaging slices the merged result to honour the caller's Limit
+// applyPaging slices the merged result to honor the caller's Limit
 // and Offset. Limit ≤ 0 means "no limit"; Offset > len(slice) returns
 // an empty slice (not an error).
 func applyPaging(events []*store.Event, limit, offset int) []*store.Event {

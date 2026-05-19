@@ -24,7 +24,7 @@
 // is not.
 //
 // This package is BSD-3 (root LICENSE) and pulls in nothing else, so
-// the AGPL activity/exporter callers can import it without licence
+// the AGPL activity/exporter callers can import it without license
 // contamination just as the BSD flow/sinks callers do.
 package safedial
 

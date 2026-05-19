@@ -92,7 +92,7 @@ func (s *ScheduleCheck) checkAt(now time.Time) (bool, error) {
 	}
 }
 
-// inWindow returns whether t (already localised to the check's tz) sits
+// inWindow returns whether t (already localized to the check's tz) sits
 // inside the configured window. The midnight-wrap branch checks both
 // the "evening of today" and "morning of yesterday" portions of the
 // wrapped window so a 22:00–06:00 rule scoped to "Mon" admits both

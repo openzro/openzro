@@ -25,7 +25,7 @@ import (
 //     `Settings.AdmissionExemptGroups`, the check is skipped.
 //     Motivating case: gateway / routing peers (cloud VMs, K8s
 //     pods, on-prem servers) that are part of the mesh but never
-//     enrol in MDM/EDR, so a posture check would always fail.
+//     enroll in MDM/EDR, so a posture check would always fail.
 //     Exempting their group is a one-time declarative change
 //     audited via AdmissionExemptGroupsUpdated.
 //

@@ -15,7 +15,7 @@ import (
 // This static check exists because safedial.Client is
 // testing.Testing()-aware: under `go test` it returns an UNGUARDED
 // client (so sink tests can reach loopback fixtures). That means NO
-// behavioural test can catch a regression where a sink reverts to a
+// behavioral test can catch a regression where a sink reverts to a
 // raw http.Client — the guard would silently vanish in production
 // with a green suite. This grep is the only thing that fails.
 func TestNoUnguardedHTTPClient(t *testing.T) {

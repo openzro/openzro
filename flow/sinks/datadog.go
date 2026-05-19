@@ -26,7 +26,7 @@ import (
 // rather than openzro.*, so the events show up natively in
 // Datadog's NPM views without a custom pipeline.
 type DatadogConfig struct {
-	// Site selects the destination region by preset. Recognised:
+	// Site selects the destination region by preset. Recognized:
 	//   us1 (default), us3, us5, eu1, ap1.
 	// Empty defaults to us1. Ignored when URL is set explicitly.
 	Site string
@@ -323,7 +323,7 @@ func toDatadogFlowEntry(e *store.Event, cfg DatadogConfig) map[string]any {
 }
 
 // protocolName maps the IANA protocol number to a name Datadog NPM
-// recognises. Anything not in the small set of common ones falls back
+// recognizes. Anything not in the small set of common ones falls back
 // to "proto-<n>" so the field is still searchable.
 func protocolName(proto uint16) string {
 	switch proto {

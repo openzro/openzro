@@ -33,7 +33,7 @@ type activeExporter struct {
 }
 
 // NewManager constructs a Manager and immediately runs Refresh so
-// every active row is materialised. Errors building a single row are
+// every active row is materialized. Errors building a single row are
 // logged at Error and the row is skipped — partial application is
 // preferred to a total outage.
 func NewManager(ctx context.Context, store *Store) (*Manager, error) {
