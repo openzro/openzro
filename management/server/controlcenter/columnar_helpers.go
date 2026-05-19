@@ -48,13 +48,13 @@ func (b *colBuilder) peerState(ctx context.Context, acc *types.Account, peerID s
 //     is visible, never silently shown as full.
 func (b *colBuilder) groupState(ctx context.Context, acc *types.Account, members []string) stateFn {
 	return func(pol *types.Policy) (EdgeState, map[string]string, bool) {
-		real := make([]string, 0, len(members))
+		realMembers := make([]string, 0, len(members))
 		for _, mID := range members {
 			if acc.GetPeer(mID) != nil {
-				real = append(real, mID)
+				realMembers = append(realMembers, mID)
 			}
 		}
-		n := len(real)
+		n := len(realMembers)
 		if n == 0 {
 			return EdgeEnforced, nil, false
 		}
@@ -63,10 +63,10 @@ func (b *colBuilder) groupState(ctx context.Context, acc *types.Account, members
 				map[string]string{"reachedBy": fmt.Sprintf("%d of %d members", n, n)},
 				true
 		}
-		sort.Strings(real)
+		sort.Strings(realMembers)
 		pass := 0
 		var firstDenial *types.AdmissionDenial
-		for _, mID := range real {
+		for _, mID := range realMembers {
 			if d := admissionDenial(ctx, acc, mID, pol.SourcePostureChecks, b.posture); d == nil {
 				pass++
 			} else if firstDenial == nil {

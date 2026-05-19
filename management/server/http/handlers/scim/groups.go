@@ -165,9 +165,9 @@ type memberPatchValue struct {
 
 // handlePatchGroup: PATCH /Groups/{id}. Supports:
 //
-//   replace path=displayName value="..."
-//   add path=members value=[{value:userId}, ...]
-//   remove path=members[value eq "userId"]
+//	replace path=displayName value="..."
+//	add path=members value=[{value:userId}, ...]
+//	remove path=members[value eq "userId"]
 //
 // Other operations are ignored — the format above is what Okta and
 // Entra send for the common create-and-add-members flow.
@@ -273,11 +273,11 @@ func parseDisplayNameFilter(raw string) string {
 func extractRemoveUserID(path string) string {
 	// Looking for: members[value eq "..."]
 	open := strings.Index(path, "[")
-	close := strings.LastIndex(path, "]")
-	if open < 0 || close < 0 || close < open {
+	closeIdx := strings.LastIndex(path, "]")
+	if open < 0 || closeIdx < 0 || closeIdx < open {
 		return ""
 	}
-	inner := path[open+1 : close]
+	inner := path[open+1 : closeIdx]
 	parts := strings.Fields(inner)
 	if len(parts) < 3 || !strings.EqualFold(parts[0], "value") || !strings.EqualFold(parts[1], "eq") {
 		return ""
