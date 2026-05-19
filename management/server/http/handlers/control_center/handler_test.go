@@ -67,9 +67,9 @@ func TestControlCenter_HappyPath(t *testing.T) {
 }
 
 func TestControlCenter_ForbiddenWhenNotAdmin(t *testing.T) {
-	r := newFixture(t, false, func(context.Context, string, string, string) (*controlcenter.GraphDTO, error) { //nolint:nilnil // test stub: t.Fatal above ensures this path is never reached; the return only exists to satisfy the function signature.
+	r := newFixture(t, false, func(context.Context, string, string, string) (*controlcenter.GraphDTO, error) {
 		t.Fatal("manager must not be reached when RBAC denies")
-		return nil, nil
+		return nil, nil //nolint:nilnil // unreachable: t.Fatal above stops the goroutine; the return only satisfies the signature.
 	})
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, withAuth(httptest.NewRequest(http.MethodGet, "/control-center/peer/p1", nil)))
@@ -77,9 +77,9 @@ func TestControlCenter_ForbiddenWhenNotAdmin(t *testing.T) {
 }
 
 func TestControlCenter_BadView(t *testing.T) {
-	r := newFixture(t, true, func(context.Context, string, string, string) (*controlcenter.GraphDTO, error) { //nolint:nilnil // test stub: t.Fatal above ensures this path is never reached; the return only exists to satisfy the function signature.
+	r := newFixture(t, true, func(context.Context, string, string, string) (*controlcenter.GraphDTO, error) {
 		t.Fatal("manager must not be reached for an invalid view")
-		return nil, nil
+		return nil, nil //nolint:nilnil // unreachable: t.Fatal above stops the goroutine; the return only satisfies the signature.
 	})
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, withAuth(httptest.NewRequest(http.MethodGet, "/control-center/bogus/x", nil)))
@@ -108,8 +108,11 @@ func TestControlCenter_GenericErrorIsNot404(t *testing.T) {
 }
 
 func TestControlCenter_Unauthenticated(t *testing.T) {
-	r := newFixture(t, true, func(context.Context, string, string, string) (*controlcenter.GraphDTO, error) { //nolint:nilnil // test stub: handler must short-circuit on missing UserAuth before reaching the manager; the return is unreachable in practice.
-		return nil, nil
+	r := newFixture(t, true, func(context.Context, string, string, string) (*controlcenter.GraphDTO, error) {
+		// Handler must short-circuit on missing UserAuth before reaching
+		// the manager; this stub return is here only to satisfy the
+		// signature.
+		return nil, nil //nolint:nilnil // see comment above.
 	})
 	rr := httptest.NewRecorder()
 	// no withAuth → no UserAuth in context.

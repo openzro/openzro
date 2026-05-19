@@ -47,10 +47,13 @@ type Config struct {
 // nil + nil when no Addr is set: the operator hasn't wired Dex
 // yet, so the gRPC client should not start. Callers treat the
 // nil Config as "feature off, fall back gracefully".
-func FromEnv() (*Config, error) { //nolint:nilnil // optional dependency: nil config + nil error means "Dex not configured" (see doc above); callers handle cfg == nil as "feature off".
+func FromEnv() (*Config, error) {
 	addr := strings.TrimSpace(os.Getenv("OPENZRO_DEX_GRPC_ADDR"))
 	if addr == "" {
-		return nil, nil
+		// Optional dependency: nil config + nil error means "Dex not
+		// configured" (see doc above); callers handle cfg == nil as
+		// "feature off".
+		return nil, nil //nolint:nilnil // see comment above.
 	}
 	cfg := &Config{
 		Addr:           addr,
