@@ -83,25 +83,37 @@ jobs:
       # uses (netbirdio/netbird's golang-test-windows.yml).
       - run: echo "files=$(go list ./... | ForEach-Object { $_ } | Where-Object { $_ -notmatch '/management' } | Where-Object { $_ -notmatch '/relay' } | Where-Object { $_ -notmatch '/signal' } | Where-Object { $_ -notmatch '/proxy' } | Where-Object { $_ -notmatch '/combined' })" >> $env:GITHUB_ENV
 
+      # PsExec64 has a finite command-line payload limit. Passing the
+      # full ~130-package list (thousands of chars out of `go list
+      # ./...`) directly on the PsExec64 invocation overflows it
+      # intermittently — the resolved length shifts as packages/paths
+      # change, so it tips over on some commits and not others. That is
+      # the real cause of the "flaky" Windows red (fails on main, passes
+      # on near-identical PR trees). The prior direct PsExec64 → go.exe
+      # form also never surfaced the test output at all: PsExec running
+      # as -s SYSTEM does not forward the child's stdout to the Actions
+      # log, so a failing run showed ~18 min of silence then exit 1.
+      #
+      # Fix: keep the giant package list OUT of the PsExec payload by
+      # writing the go-test invocation into a .cmd script and handing
+      # PsExec only the short script path; capture output to a file and
+      # print it unconditionally so failures are visible. This is the
+      # pattern upstream NetBird adopted after hitting the identical
+      # issue — netbirdio/netbird PR #4424 / commit d817584f5 ("Windows
+      # tests had too many directories, causing issues to the payload
+      # via psexec"). Adapted (BSD .github/, attributed) to our
+      # GOROOT-derived ${{ env.goexe }} and pre-filtered
+      # ${{ env.files }}, preserving our -v / -timeout 20m choices
+      # (per-test progress for diagnosing the slow/failing package;
+      # 20m slack — 10m was insufficient on a prior main run).
+      - name: Generate test script
+        run: |
+          $cmd = "${{ env.goexe }} test -tags=devcert -v -timeout 20m -p 1 ${{ env.files }} > test-out.txt 2>&1"
+          Set-Content -Path "${{ github.workspace }}\run-tests.cmd" -Value $cmd
+
       - name: test
-        # Direct PsExec64 → go.exe, without the cmd.exe /c "..."
-        # wrapper. The previous form redirected to test-out.txt and
-        # the next step tried to Get-Content it back, but the file
-        # was either never created (cmd.exe command-line length
-        # limit truncating the huge package list before the redirect
-        # parsed) or was SYSTEM-owned and unreadable to the runner
-        # user — either way every Windows run failed with
-        # "test-out.txt does not exist" and the underlying go test
-        # error stayed invisible. PsExec64 forwards the remote
-        # process stdout/stderr to its own stdout, which Actions
-        # captures into the job log natively — no intermediate file
-        # needed.
-        # -v emits per-test progress so when the suite hangs we can
-        # see WHICH package or test is the slow one (PsExec running
-        # as -s SYSTEM does not pty-attach the child's stdout, so
-        # without -v the buffered output only flushes on go test
-        # exit — meaning a 10-minute hang shows ~zero log lines).
-        # -timeout 20m gives slack while the slow test gets diagnosed
-        # separately; current 10m was already insufficient on at
-        # least one main run (commit 17da2d3b hit it).
-        run: PsExec64 -s -nobanner -w ${{ github.workspace }} ${{ env.goexe }} test -tags=devcert -v -timeout 20m -p 1 ${{ env.files }}
+        run: PsExec64 -s -nobanner -w ${{ github.workspace }} cmd.exe /c "${{ github.workspace }}\run-tests.cmd"
+
+      - name: test output
+        if: ${{ always() }}
+        run: Get-Content test-out.txt
