@@ -144,6 +144,10 @@ issues:
     - path: scripts/dev-seed-flow-events/main\.go
       linters:
         - forbidigo
+    # Same: dev seeding CLI — fmt.Print* is its user-facing output.
+    - path: scripts/dev-seed-peers/main\.go
+      linters:
+        - forbidigo
     - path: sharedsock/filter\.go
       linters:
       - unused
@@ -171,6 +175,17 @@ issues:
       - mirror
       - gosec
     - path: mock\.go
+      linters:
+      - nilnil
+    # Factories: `(nil, nil)` is the intentional "nothing configured /
+    # no-op backend selected" return — the caller treats a nil product
+    # with nil error as "feature disabled", not an error condition.
+    # Converting to sentinel errors would be a behavioral contract
+    # change across every call site (owner-decided: exclude, same as
+    # the mock\.go nilnil precedent above). Non-factory nilnil sites
+    # (dex_proxy, user_scim, handlers) are handled case-by-case, not
+    # here.
+    - path: (cluster/factory|flow/sinks|flow/store/archive|flow/store/factory|management/server/activity/exporter)/factory\.go
       linters:
       - nilnil
     # Exclude specific deprecation warnings for grpc methods
