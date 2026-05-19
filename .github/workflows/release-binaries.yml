@@ -1309,3 +1309,69 @@ jobs:
           git -c user.name=openZro -c user.email=dev@openzro.io \
               commit -m "openzro-ui-bin ${REF_NAME}"
           git push origin master
+
+  release_notes:
+    name: Append GitHub-generated notes (since last tag)
+    runs-on: ubuntu-22.04
+    # After every goreleaser job that could touch the release body.
+    # release_ui/_macos use mode:append + changelog:disable (they do
+    # not rewrite the body), but needs-ing them makes the release
+    # object settled before we rewrite it.
+    needs: [release, release_ui, release_ui_macos]
+    # Tag pushes only — snapshot / workflow_dispatch create no Release.
+    if: github.event_name == 'push'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Append since-last-tag notes to the release body
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          # Previous release tag = most recent tag reachable before the
+          # tagged commit (all tags here are sequential vX.Y.Z release
+          # tags, so this is deterministic). Empty (first release ever)
+          # -> let GitHub auto-detect the previous release.
+          prev="$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)"
+
+          # goreleaser already set the body to the static header
+          # (commit-log link + verification + unsigned-binary notes;
+          # changelog is intentionally disabled — the ~7k inherited
+          # NetBird commits would blow GitHub's 125k body limit).
+          # Preserve that header verbatim and append a scoped,
+          # GitHub-generated change list. Idempotent on re-run: strip
+          # any previously-appended "## Changes" block first.
+          header="$(gh release view "$TAG" --json body -q .body | sed '/^## Changes /,$d')"
+
+          if [ -n "$prev" ]; then
+            gen="$(gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+                     -f tag_name="$TAG" -f previous_tag_name="$prev" --jq .body)"
+            scope="since \`$prev\`"
+          else
+            gen="$(gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+                     -f tag_name="$TAG" --jq .body)"
+            scope="(initial release)"
+          fi
+
+          printf '%s\n\n## Changes %s\n\n%s\n' "$header" "$scope" "$gen" > /tmp/relbody.md
+
+          # GitHub body hard limit ~125000 chars. tag-to-tag notes are
+          # tiny, but stay safe: if oversized, truncate the generated
+          # block (the header already links the full commit log).
+          if [ "$(wc -c </tmp/relbody.md)" -gt 124000 ]; then
+            keep=$(( 124000 - $(printf '%s' "$header" | wc -c) - 300 ))
+            gen="$(printf '%s' "$gen" | head -c "$keep")"
+            printf '%s\n\n## Changes %s\n\n%s\n\n_…truncated — see the full commit log linked above._\n' \
+              "$header" "$scope" "$gen" > /tmp/relbody.md
+          fi
+
+          gh release edit "$TAG" --notes-file /tmp/relbody.md
+          echo "Updated $TAG release notes ($scope, $(wc -c </tmp/relbody.md) bytes)."
