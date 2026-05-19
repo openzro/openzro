@@ -16,16 +16,16 @@ import (
 //
 // Conceptually:
 //
-//   posture.EndpointSecurityCheck (this struct, persisted) stores
-//   "which provider should answer + what counts as compliant".
-//   The Manager wired into the validator resolves the provider and
-//   returns a boolean.
+//	posture.EndpointSecurityCheck (this struct, persisted) stores
+//	"which provider should answer + what counts as compliant".
+//	The Manager wired into the validator resolves the provider and
+//	returns a boolean.
 //
 // The Resolver is a function rather than a concrete dependency so
 // the posture package stays free of import cycles with mdm and so
 // tests can inject deterministic outcomes.
 type EndpointSecurityCheck struct {
-	// ProviderID is the row ID of an mdm.MDMProvider stored in the
+	// ProviderID is the row ID of an mdm.ProviderRow stored in the
 	// management's primary DB. Operators pick from the configured
 	// list when defining the check.
 	ProviderID uint64 `json:"provider_id"`

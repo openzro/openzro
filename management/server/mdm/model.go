@@ -11,11 +11,11 @@ import (
 // existing tenants see no behavior change on first boot.
 const defaultRefreshIntervalMinutes = 5
 
-// MDMProvider is the GORM-managed row holding one vendor's
+// ProviderRow is the GORM-managed row holding one vendor's
 // credentials, encrypted at rest. PublicConfig carries the
 // non-sensitive subset (tenant ID, base URL) so the dashboard can
 // render the configuration without holding the secret.
-type MDMProvider struct {
+type ProviderRow struct {
 	ID      uint64       `gorm:"primaryKey;autoIncrement"`
 	Name    string       `gorm:"size:128;not null"`
 	Type    ProviderType `gorm:"size:32;not null;index"`
@@ -44,7 +44,7 @@ type MDMProvider struct {
 // time.Duration, falling back to the default for legacy rows that
 // stored 0 (pre-knob) or values that bypassed the API layer's
 // validation. Always non-zero.
-func (p MDMProvider) ResolvedRefreshInterval() time.Duration {
+func (p ProviderRow) ResolvedRefreshInterval() time.Duration {
 	m := p.RefreshIntervalMinutes
 	if m == 0 {
 		m = defaultRefreshIntervalMinutes
@@ -52,7 +52,7 @@ func (p MDMProvider) ResolvedRefreshInterval() time.Duration {
 	return time.Duration(m) * time.Minute
 }
 
-func (MDMProvider) TableName() string { return "mdm_providers" }
+func (ProviderRow) TableName() string { return "mdm_providers" }
 
 // IntuneConfig is the full Intune configuration as stored
 // (encrypted). Public projection omits ClientSecret.

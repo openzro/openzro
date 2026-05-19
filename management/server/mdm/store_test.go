@@ -150,10 +150,10 @@ func TestStore_RefreshIntervalDefaultsToFiveWhenZero(t *testing.T) {
 func TestMDMProvider_ResolvedRefreshIntervalFallback(t *testing.T) {
 	// Row loaded from a pre-knob database carries 0 in the column.
 	// Resolver must paper over it without forcing a migration.
-	p := MDMProvider{RefreshIntervalMinutes: 0}
+	p := ProviderRow{RefreshIntervalMinutes: 0}
 	assert.Equal(t, 5*time.Minute, p.ResolvedRefreshInterval())
 
-	p = MDMProvider{RefreshIntervalMinutes: 15}
+	p = ProviderRow{RefreshIntervalMinutes: 15}
 	assert.Equal(t, 15*time.Minute, p.ResolvedRefreshInterval())
 }
 
