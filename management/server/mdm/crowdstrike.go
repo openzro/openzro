@@ -160,7 +160,7 @@ func (c *CrowdStrike) fetchAIDs(ctx context.Context, target string) ([]string, e
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
-	resp, err := c.client.Do(req)
+	resp, err := c.client.Do(req) //nolint:bodyclose // closed via drainAndClose(resp.Body) below; the linter does not see the helper.
 	if err != nil {
 		return nil, fmt.Errorf("crowdstrike: query api: %w", err)
 	}
@@ -182,7 +182,7 @@ func (c *CrowdStrike) fetchDevice(ctx context.Context, target string) (csDevice,
 		return csDevice{}, err
 	}
 	req.Header.Set("Accept", "application/json")
-	resp, err := c.client.Do(req)
+	resp, err := c.client.Do(req) //nolint:bodyclose // closed via drainAndClose(resp.Body) below; the linter does not see the helper.
 	if err != nil {
 		return csDevice{}, fmt.Errorf("crowdstrike: entities api: %w", err)
 	}
