@@ -78,44 +78,12 @@ func fromUser(u *types.User) User {
 	return out
 }
 
-// fromUserInfo is used by the list path when the data already comes
-// from the IdP-cache-backed AccountManager.GetUsersFromAccount —
-// kept for the legacy non-SCIM read flow and the GET /Users
-// endpoint's combined view.
-func fromUserInfo(u *types.UserInfo) User {
-	un := u.Email
-	if un == "" {
-		un = u.ID
-	}
-	out := User{
-		Schemas:  []string{SchemaUserURN},
-		ID:       u.ID,
-		UserName: un,
-		Active:   !u.IsBlocked,
-		Meta: ResourceMeta{
-			ResourceType: "User",
-			Location:     "/scim/v2/Users/" + u.ID,
-		},
-	}
-	if u.Name != "" {
-		out.DisplayName = u.Name
-		out.Name = &userName{Formatted: u.Name}
-	}
-	if u.Email != "" {
-		out.Emails = []userEmail{{Value: u.Email, Primary: true, Type: "work"}}
-	}
-	for _, gid := range u.AutoGroups {
-		out.Groups = append(out.Groups, userGroup{Value: gid})
-	}
-	return out
-}
-
 // handleListUsers implements GET /Users with optional filter and
 // pagination. RFC 7644 §3.4.2.
 //
 // Supported filter expressions (subset):
 //
-//   userName eq "alice@example.com"
+//	userName eq "alice@example.com"
 //
 // Anything else is ignored and a full unfiltered list is returned —
 // well-behaved IdPs send only equality filters on userName.
@@ -215,7 +183,7 @@ func (h *Handler) handleReplaceUser(w http.ResponseWriter, r *http.Request) {
 
 // patchOpRequest is the wire shape for PATCH per RFC 7644 §3.5.2.
 type patchOpRequest struct {
-	Schemas    []string `json:"schemas"`
+	Schemas    []string  `json:"schemas"`
 	Operations []patchOp `json:"Operations"`
 }
 
