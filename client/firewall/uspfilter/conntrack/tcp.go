@@ -242,10 +242,7 @@ func (t *TCPTracker) IsValidInbound(srcIP, dstIP netip.Addr, srcPort, dstPort ui
 	if !t.isValidStateForFlags(currentState, flags) {
 		t.logger.Warn("TCP state %s is not valid with flags %x for connection %s", currentState, flags, key)
 		// allow all flags for established for now
-		if currentState == TCPStateEstablished {
-			return true
-		}
-		return false
+		return currentState == TCPStateEstablished
 	}
 
 	t.updateState(key, conn, flags, nftypes.Ingress, size)
