@@ -211,8 +211,10 @@ recompute algorithm itself; a distributed/broker propagation rework.
   remove the request-path coupling; large accounts still feel slow.
 - **Bare `go UpdateAccountPeers`** — unbounded stampede under bursts;
   adds a 4th uncoordinated model.
-- **A new bespoke async/queue subsystem** — `BufferUpdateAccountPeers`
-  already exists and is sufficient; new infra is unjustified.
+- **A new bespoke async/queue subsystem** — unjustified for Phase 1;
+  evolve the existing `BufferUpdateAccountPeers` into the sanctioned
+  primitive (D2) instead of adding a fourth model. (Not "the buffer
+  already works" — D2 enumerates the gaps it must close.)
 - **Boiling all 9 callers in one PR** — unreviewable, high blast
   radius; the ADR sets the model, Phase 2 converges incrementally.
 - **Consulting the upstream AGPL implementation** — license posture
