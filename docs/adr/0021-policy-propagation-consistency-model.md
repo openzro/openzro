@@ -57,24 +57,65 @@ strict, guaranteed-before-response delivery; only the
 response, and propagate **asynchronously**. The recompute+push is
 inherent work but does not need to block the `200`.
 
-### D2 — Reuse `BufferUpdateAccountPeers`, not a bare goroutine
+### D1.1 — Mutation under the lock; propagation after the lock is released
+
+Today `SavePolicy`/`DeletePolicy` hold the account write lock
+(`AcquireWriteLockByUID` + `defer unlock()`) and call
+`UpdateAccountPeers` **before returning** — i.e. the recompute+push
+runs **while the write lock is still held** (`policy.go`). The
+mutation and audit event happen under the lock; **propagation
+scheduling (buffered) — and the sync-default fallback path too — must
+happen AFTER the write lock is released**. Otherwise the async mode
+only fixes perceived latency while the sync default keeps holding the
+account write lock across the full fanout (the contention the issue's
+follow-up called out). This applies to *both* feature-flag modes.
+
+### D2 — Reuse and evolve `BufferUpdateAccountPeers` as the single sanctioned primitive
 
 Of the two existing async precedents, the debounced buffer
-(`BufferUpdateAccountPeers`) is chosen over `go UpdateAccountPeers`.
-Policy edits arrive in bursts (operator iterating; multi-rule saves);
-the buffer **coalesces** them into one recompute and is **bounded**,
-where a bare goroutine stampedes the recompute under load. Reusing an
-existing mechanism also adds no new infrastructure and converges the
-codebase toward one async model instead of adding a fourth.
+(`BufferUpdateAccountPeers`, `peer.go:1441`) is chosen over
+`go UpdateAccountPeers` (`account.go:469`): policy edits arrive in
+bursts (operator iterating; multi-rule saves); the buffer
+**coalesces** them into one recompute and is **bounded**, where a
+bare goroutine stampedes under load. Do **not** build a fourth model
+or a new subsystem.
+
+But the current implementation is **not** "already sufficient" — it
+must be **evolved** to satisfy D3/D4/D5. Known gaps it must close:
+
+- it captures the **caller's `ctx`** in the deferred `time.AfterFunc`
+  (`peer.go:1441`) — a request `ctx` that is canceled once the API
+  returns must not silently kill the buffered propagation; the
+  scheduled work needs a lifecycle ctx of its own;
+- no defined **retry contract**, and `UpdateAccountPeers` returns no
+  error — failure is currently invisible;
+- no propagation **lag/failure metric** (see D4);
+- **undefined behavior on process death before flush** (in-memory
+  timer only — see D3 durability boundary).
+
+"Reuse/evolve as the single sanctioned propagation primitive" — not
+"it already works".
 
 ### D3 — Consistency model: bounded eventual, explicitly stated
 
 After the API confirms a policy change, connected peers receive the
 new enforcement a **short, bounded** time later (the buffer flush
-window), not strictly-before-response. This is acceptable for policy
-changes and is barely a weakening: `SendUpdate` is already
-drop-on-full/best-effort. The buffer-flush bound is the SLO and must
-be documented + metric-backed (D4).
+window), not strictly-before-response. Acceptable for policy changes
+and barely a weakening: `SendUpdate` is already drop-on-full/
+best-effort.
+
+Explicit semantics this ADR fixes:
+
+- **`200 OK` means: persisted + propagation scheduled/buffered** — it
+  does **not** mean delivered/applied by peers, nor (per D7)
+  resolver-refreshed.
+- **Durability boundary:** the buffer is an in-memory timer; pending
+  propagation **can be lost on process death before flush**. Accepted
+  for Phase 1. If durable revocation ever becomes a hard requirement
+  it is a separate mechanism/ADR — explicitly out of scope here.
+- The flush-window **bound is an SLO, not an open number to defer**:
+  the ADR does not pick the final value, but **Phase 1 cannot ship
+  without an explicit, documented SLO** and the D4 metric proving it.
 
 ### D4 — Observability is mandatory
 
@@ -97,13 +138,42 @@ pain). The other 8 synchronous callers are a **follow-up** under this
 same model — explicitly *not* boiled into one change, but new code
 must not add a 4th model; it conforms to D2.
 
+### D7 — The ADR-0018 flow-policy resolver rides the same trigger and SLO
+
+`UpdateAccountPeers` also calls `am.flowPolicyIndex.Rebuild(accountID,
+account)` (`peer.go:1328`) — the ADR-0018 server-side flow-policy
+resolver is refreshed on the *same trigger* as peer propagation
+(ADR-0018 explicitly "hooks the same triggers"). Therefore deferring
+propagation **also makes the resolver eventual on policy changes**:
+from Phase 1, `POST /policies` may return `200` **before the resolver
+reflects the change**, bounded by the same D3 SLO.
+
+This is a **deliberate, recorded** consequence that touches ADR-0018's
+freshness semantics — it must not be changed implicitly by the
+implementation. The resolver's staleness window == the propagation
+SLO; the Phase-1 test (below) asserts they are the same bound. If any
+consumer ever needs **strict** resolver freshness (synchronous rebuild
+regardless of the propagation flag), that is a **separate
+mechanism/ADR** and is *not* solved here.
+
 ### Phase plan
 
 - **Phase 0** — this ADR.
 - **Phase 1** — `SavePolicy`/`DeletePolicy`: route the affects-peers
-  branch through `BufferUpdateAccountPeers`, behind the D5 flag, with
-  the D4 metrics. Regression test: API returns before propagation;
-  propagation still happens within the bound.
+  branch through the evolved `BufferUpdateAccountPeers` (D2), behind
+  the D5 flag. **Hard ship gates (Phase 1 must NOT merge without all
+  of these):**
+  1. an explicit, **documented SLO** for the flush-window bound (D3);
+  2. the D4 **lag + failure metrics** wired and proving the SLO;
+  3. propagation scheduling / sync fallback occurs **after write-lock
+     release** (D1.1);
+  4. the buffered work runs on a **lifecycle ctx**, not the request
+     ctx that dies at the `200` (D2);
+  5. tests proving: (a) in async mode the response does **not** wait
+     on fanout; (b) propagation still happens within the SLO;
+     (c) burst **coalescing** works; (d) the `flowPolicyIndex`
+     resolver refresh follows the **same SLO bound** as peer
+     propagation (D7) — asserted explicitly, not assumed.
 - **Phase 2** *(separate issue)* — converge the other 8 sync callers
   onto the same model, one area per PR.
 
@@ -151,8 +221,9 @@ recompute algorithm itself; a distributed/broker propagation rework.
 ## Open questions
 
 - Buffer flush window: reuse the existing `BufferUpdateAccountPeers`
-  interval, or a policy-specific bound? What number is the documented
-  SLO?
+  interval, or a policy-specific bound? The *number* is open; shipping
+  Phase 1 **without a documented SLO is not** (decided — D3 + Phase-1
+  gate 1).
 - Failure semantics after a `200`: the buffer's existing retry/coalesce
   behavior — is it sufficient, or does policy need explicit
   surfacing/idempotency beyond it?
