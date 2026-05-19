@@ -147,7 +147,7 @@ func TestStore_RefreshIntervalDefaultsToFiveWhenZero(t *testing.T) {
 		"zero must be normalised to the documented default")
 }
 
-func TestMDMProvider_ResolvedRefreshIntervalFallback(t *testing.T) {
+func TestProviderRow_ResolvedRefreshIntervalFallback(t *testing.T) {
 	// Row loaded from a pre-knob database carries 0 in the column.
 	// Resolver must paper over it without forcing a migration.
 	p := ProviderRow{RefreshIntervalMinutes: 0}
