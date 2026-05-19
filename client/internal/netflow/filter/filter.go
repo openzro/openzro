@@ -1,7 +1,7 @@
 // Package filter implements the client-side port filter applied to
 // every conntrack event before it lands on the FlowLogger send queue.
 //
-// Default behaviour: drop a small built-in list of ports known to
+// Default behavior: drop a small built-in list of ports known to
 // generate "device discovery" noise on a typical corporate network —
 // SSDP, mDNS, NetBIOS, LLMNR. Operators who actually want to see
 // those events flip ExtraSettings.FlowDisableDefaultPortFilter on the

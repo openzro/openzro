@@ -92,7 +92,7 @@ func publishDedup(coord cluster.Coordinator, key dedupKey, value dedupValue) {
 // amplification in an N-replica cluster).
 //
 // Returns the cancel func the caller must invoke at teardown. The
-// goroutine exits when ctx is cancelled OR the subscription channel
+// goroutine exits when ctx is canceled OR the subscription channel
 // is closed by the coordinator (broker outage, Close, etc.).
 func subscribeDedup(parent context.Context, coord cluster.Coordinator, r *BufferedRecorder) (context.CancelFunc, error) {
 	if coord == nil {

@@ -33,7 +33,7 @@ type FileStore struct {
 	TokenID2UserID          map[string]string `json:"-"`
 	InstallationID          string
 
-	// mutex to synchronise Store read/write operations
+	// mutex to synchronize Store read/write operations
 	mux       sync.Mutex `json:"-"`
 	storeFile string     `json:"-"`
 

@@ -225,7 +225,7 @@ func (u *Update) fetchVersion() bool {
 	return true
 }
 
-// parseLatestTag accepts three GitHub-flavoured response shapes:
+// parseLatestTag accepts three GitHub-flavored response shapes:
 //   - an array of release objects (`/releases?per_page=N`, current
 //     default), in which case the first element is taken as latest
 //   - a single release object (`/releases/latest`, legacy), kept for

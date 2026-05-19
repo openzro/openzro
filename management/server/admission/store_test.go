@@ -63,7 +63,7 @@ func TestGrant_HappyPath(t *testing.T) {
 		AccountID:   "acct-1",
 		PeerID:      "peer-1",
 		InitiatorID: "admin-1",
-		Reason:      "CEO laptop pending Intune re-enrol",
+		Reason:      "CEO laptop pending Intune re-enroll",
 		ExpiresAt:   expires,
 	})
 	require.NoError(t, err)
@@ -74,7 +74,7 @@ func TestGrant_HappyPath(t *testing.T) {
 	assert.True(t, active)
 	require.NotNil(t, fetched)
 	assert.Equal(t, "admin-1", fetched.InitiatorID)
-	assert.Equal(t, "CEO laptop pending Intune re-enrol", fetched.Reason)
+	assert.Equal(t, "CEO laptop pending Intune re-enroll", fetched.Reason)
 
 	rows, err := s.List(ctx, "acct-1")
 	require.NoError(t, err)
@@ -166,10 +166,10 @@ func TestSweepExpired_RemovesPastRows(t *testing.T) {
 // TestHasGroupOverlap covers the group-scope short-circuit.
 func TestHasGroupOverlap(t *testing.T) {
 	cases := []struct {
-		name        string
-		peerGroups  []string
+		name         string
+		peerGroups   []string
 		exemptGroups []string
-		want        bool
+		want         bool
 	}{
 		{"empty peer", nil, []string{"infra"}, false},
 		{"empty exempt", []string{"users"}, nil, false},

@@ -69,7 +69,7 @@ type Client struct {
 
 	// ReverseProxyServices Openzro reverse-proxy Services API.
 	// Consumed by openzro/openzro-operator's HTTPRoute controller,
-	// which materialises Gateway API HTTPRoutes as services.
+	// which materializes Gateway API HTTPRoutes as services.
 	// Server-side handlers tracked separately — see
 	// project_enterprise_gaps.md "Reverse-proxy Services".
 	ReverseProxyServices *ReverseProxyServicesAPI

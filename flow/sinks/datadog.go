@@ -26,7 +26,7 @@ import (
 // rather than openzro.*, so the events show up natively in
 // Datadog's NPM views without a custom pipeline.
 type DatadogConfig struct {
-	// Site selects the destination region by preset. Recognised:
+	// Site selects the destination region by preset. Recognized:
 	//   us1 (default), us3, us5, eu1, ap1.
 	// Empty defaults to us1. Ignored when URL is set explicitly.
 	Site string
@@ -256,10 +256,10 @@ func (d *Datadog) flush(ctx context.Context, batch []*store.Event) {
 // buildDatadogFlowBody assembles the Logs Intake JSON array. The
 // per-event shape uses Datadog's NPM/network conventions:
 //
-//   network.client.ip / network.client.port — initiator side
-//   network.destination.ip / network.destination.port — responder
-//   network.bytes_read / network.bytes_written
-//   network.transport — protocol name
+//	network.client.ip / network.client.port — initiator side
+//	network.destination.ip / network.destination.port — responder
+//	network.bytes_read / network.bytes_written
+//	network.transport — protocol name
 //
 // plus the standard Datadog log fields (timestamp, ddsource, service,
 // host) and an `openzro_flow` namespace for fields Datadog NPM does
@@ -311,7 +311,7 @@ func toDatadogFlowEntry(e *store.Event, cfg DatadogConfig) map[string]any {
 		},
 		// Use AccountID as host so flows from different tenants
 		// separate cleanly in Datadog's host map.
-		"host":    e.AccountID,
+		"host": e.AccountID,
 		"message": fmt.Sprintf("flow %s %s:%d → %s:%d %s",
 			typeString(e.Type), e.SourceIP, e.SourcePort,
 			e.DestIP, e.DestPort, protocolName(e.Protocol)),
@@ -323,7 +323,7 @@ func toDatadogFlowEntry(e *store.Event, cfg DatadogConfig) map[string]any {
 }
 
 // protocolName maps the IANA protocol number to a name Datadog NPM
-// recognises. Anything not in the small set of common ones falls back
+// recognizes. Anything not in the small set of common ones falls back
 // to "proto-<n>" so the field is still searchable.
 func protocolName(proto uint16) string {
 	switch proto {

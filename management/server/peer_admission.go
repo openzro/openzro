@@ -25,7 +25,7 @@ import (
 //     `Settings.AdmissionExemptGroups`, the check is skipped.
 //     Motivating case: gateway / routing peers (cloud VMs, K8s
 //     pods, on-prem servers) that are part of the mesh but never
-//     enrol in MDM/EDR, so a posture check would always fail.
+//     enroll in MDM/EDR, so a posture check would always fail.
 //     Exempting their group is a one-time declarative change
 //     audited via AdmissionExemptGroupsUpdated.
 //
@@ -34,7 +34,7 @@ import (
 //     check is skipped. Bypass is the break-glass for individual
 //     non-compliant devices that need temporary access (CEO
 //     laptop with a 24h reason). The grant emitted its own
-//     audit event when it was issued; we just honour it here.
+//     audit event when it was issued; we just honor it here.
 //
 // candidateGroups is consulted only when peer.ID is empty (the
 // AddPeer flow, before the peer is persisted). For Login / Sync

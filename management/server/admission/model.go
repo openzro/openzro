@@ -10,7 +10,7 @@
 // supersedes that decision: a bypass is a legitimate break-glass
 // mechanism PROVIDED every grant, revoke, and expiry emits a durable
 // activity event. The audit trail then carries MORE information,
-// not less — the auditor sees who authorised the exception, why,
+// not less — the auditor sees who authorized the exception, why,
 // and when it expired.
 //
 // Bypass scope. A bypass is per-account-per-peer. It applies only to

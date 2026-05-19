@@ -76,7 +76,7 @@ type UpdateMessage struct {
 // this instance never touches the broker. NetworkMap on UpdateMessage is
 // metadata used only by the producer (peer.go) and is intentionally
 // dropped from the cluster wire format — only the proto.SyncResponse
-// is marshalled and forwarded.
+// is marshaled and forwarded.
 type PeersUpdateManager struct {
 	// peerChannels is an update channel indexed by Peer.ID
 	peerChannels map[string]chan *UpdateMessage
@@ -91,7 +91,7 @@ type PeersUpdateManager struct {
 	// subs holds the cancel func of the cluster Subscribe goroutine
 	// per peer; populated only when coordinator != nil.
 	subs map[string]context.CancelFunc
-	// parentCtx anchors all cluster subscriptions; cancelling it (via
+	// parentCtx anchors all cluster subscriptions; canceling it (via
 	// Stop) tears every per-peer subscription down at once.
 	parentCtx    context.Context
 	parentCancel context.CancelFunc
@@ -105,7 +105,7 @@ func NewPeersUpdateManager(metrics telemetry.AppMetrics) *PeersUpdateManager {
 
 // NewPeersUpdateManagerWithCluster returns a PeersUpdateManager that uses
 // coordinator to forward updates to peers registered on other instances.
-// Pass coordinator=nil for single-instance behaviour.
+// Pass coordinator=nil for single-instance behavior.
 func NewPeersUpdateManagerWithCluster(metrics telemetry.AppMetrics, coordinator cluster.Coordinator) *PeersUpdateManager {
 	parentCtx, cancel := context.WithCancel(context.Background())
 	return &PeersUpdateManager{

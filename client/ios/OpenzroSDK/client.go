@@ -122,7 +122,7 @@ func (c *Client) Run(fd int32, interfaceName string) error {
 	}
 
 	log.Infof("Auth successful")
-	// todo do not throw error in case of cancelled context
+	// todo do not throw error in case of canceled context
 	ctx = internal.CtxInitState(ctx)
 	c.onHostDnsFn = func([]string) {}
 	cfg.WgIface = interfaceName

@@ -34,7 +34,7 @@ type Event struct {
 // calls return an error after Close.
 type Coordinator interface {
 	// Lock acquires a named exclusive distributed lock. Blocks until the
-	// lock is held or ctx is cancelled. The returned release function
+	// lock is held or ctx is canceled. The returned release function
 	// MUST be called to free the lock (typically via defer). Releasing
 	// twice is a no-op, not an error.
 	//
@@ -51,8 +51,8 @@ type Coordinator interface {
 	Publish(ctx context.Context, topic string, payload []byte) error
 
 	// Subscribe returns a channel that receives every event published
-	// to topic from now until ctx is cancelled. The channel is closed
-	// when ctx is cancelled or Close is called on the coordinator.
+	// to topic from now until ctx is canceled. The channel is closed
+	// when ctx is canceled or Close is called on the coordinator.
 	// At-most-once delivery: if a subscriber falls behind, events MAY
 	// be dropped (with a warning log) rather than blocking publishers.
 	Subscribe(ctx context.Context, topic string) (<-chan Event, error)

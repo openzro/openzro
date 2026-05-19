@@ -36,7 +36,7 @@ import (
 
 // archiveFormat names a serialization layout the S3/GCS sinks know
 // how to emit. Operators pick the format via OPENZRO_FLOW_ARCHIVE_FORMAT;
-// the read-side federation in flow/store/archive recognises Parquet
+// the read-side federation in flow/store/archive recognizes Parquet
 // only (NDJSON is kept for back-compat write-only).
 type archiveFormat string
 

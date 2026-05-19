@@ -9,7 +9,7 @@ import (
 
 // C1: the DTO envelope is the contract Phase 2 (dashboard) and the
 // HTTP layer depend on. Pin the enum wire values and the omitempty
-// behaviour so a later refactor can't silently change the JSON shape.
+// behavior so a later refactor can't silently change the JSON shape.
 
 func TestEnumWireValues(t *testing.T) {
 	cases := []struct {

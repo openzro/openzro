@@ -73,7 +73,7 @@ type PeerStatus struct { //nolint:revive
 	// AFTER the peer has already reconnected (typically to a different
 	// replica) doesn't clobber Connected back to false.
 	// Empty for peers that haven't reconnected since the field was added —
-	// disconnects fall through to the legacy behaviour in that case.
+	// disconnects fall through to the legacy behavior in that case.
 	OwnerStreamID string
 }
 

@@ -26,7 +26,7 @@ import (
 // wrong site silently 401s. Pick the preset that matches the URL the
 // operator sees in their Datadog UI.
 type DatadogConfig struct {
-	// Site selects the destination region by preset. Recognised values
+	// Site selects the destination region by preset. Recognized values
 	// match Datadog's site identifiers:
 	//
 	//   us1  → http-intake.logs.datadoghq.com    (datadoghq.com)
@@ -93,13 +93,13 @@ type DatadogConfig struct {
 // and POSTs the batch as a single JSON array. Per-event POSTs would
 // burn Datadog rate limits at any real volume.
 type Datadog struct {
-	cfg     DatadogConfig
-	client  *http.Client
-	intake  string
-	queue   chan *activity.Event
-	wg      sync.WaitGroup
-	stopCh  chan struct{}
-	closed  sync.Once
+	cfg    DatadogConfig
+	client *http.Client
+	intake string
+	queue  chan *activity.Event
+	wg     sync.WaitGroup
+	stopCh chan struct{}
+	closed sync.Once
 }
 
 // datadogSiteToHost maps Datadog region presets to their logs intake
@@ -113,7 +113,7 @@ var datadogSiteToHost = map[string]string{
 }
 
 // NewDatadog builds and starts a Datadog exporter. Returns an error if
-// APIKey is empty or Site is unrecognised.
+// APIKey is empty or Site is unrecognized.
 func NewDatadog(cfg DatadogConfig) (*Datadog, error) {
 	if cfg.APIKey == "" {
 		return nil, fmt.Errorf("exporter: Datadog API key is required")

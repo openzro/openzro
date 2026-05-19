@@ -13,7 +13,7 @@ import (
 // re-introduced — see api.Service).
 //
 // Currently consumed by openzro/openzro-operator's HTTPRoute
-// controller, which materialises Gateway API HTTPRoutes as
+// controller, which materializes Gateway API HTTPRoutes as
 // openZro Services. Server-side implementation is tracked
 // separately — see memory file project_enterprise_gaps.md
 // "Reverse-proxy Services".

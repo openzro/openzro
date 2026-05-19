@@ -104,13 +104,13 @@ func (s *PeersStateSubscription) WaitToBeOnlineAndSubscribe(ctx context.Context,
 		return err
 	}
 
-	// Wait for peer to come online or context to be cancelled
+	// Wait for peer to come online or context to be canceled
 	timeoutCtx, cancel := context.WithTimeout(ctx, OpenConnectionTimeout)
 	defer cancel()
 	select {
 	case _, ok := <-waitCh:
 		if !ok {
-			return fmt.Errorf("wait for peer to come online has been cancelled")
+			return fmt.Errorf("wait for peer to come online has been canceled")
 		}
 
 		s.log.Debugf("peer %s is now online", peerID)

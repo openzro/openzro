@@ -67,7 +67,7 @@ func (c *statusCache) snapshot() []DeviceLookup {
 }
 
 // encodeCacheKey + decodeCacheKey are the single source of truth for
-// the cache's key shape. Centralised so the refresh worker can
+// the cache's key shape. Centralized so the refresh worker can
 // round-trip lookups through the cache without re-implementing the
 // hostname/user-email join.
 func encodeCacheKey(lookup DeviceLookup) string {

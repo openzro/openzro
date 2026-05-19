@@ -235,7 +235,7 @@ func newS3FromEnv(ctx context.Context) (store.Sink, error) {
 
 // displayFormat normalizes the format string for log lines so the
 // startup message reflects the actual format the sink will use,
-// including the "ndjson" fallback for empty / unrecognised values.
+// including the "ndjson" fallback for empty / unrecognized values.
 func displayFormat(s string) string {
 	switch s {
 	case string(formatParquet):

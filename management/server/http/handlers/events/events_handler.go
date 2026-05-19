@@ -27,7 +27,7 @@ func AddEndpoints(accountManager account.Manager, router *mux.Router) {
 	router.HandleFunc("/events/audit", eventsHandler.getAllEvents).Methods("GET", "OPTIONS")
 
 	// Admission audit export. The endpoint exists because regulated
-	// tenants (Bacen 4.893 / Circular 3.909) need a portable artefact
+	// tenants (Bacen 4.893 / Circular 3.909) need a portable artifact
 	// they can hand the auditor that proves "every non-compliant
 	// device that tried to connect was refused, with timestamp and
 	// reason." The dashboard's Activity tab covers day-to-day review;

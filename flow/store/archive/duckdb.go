@@ -123,8 +123,8 @@ func (d *duckdbStore) Query(ctx context.Context, f store.Filter) ([]*store.Event
 
 	// Gate concurrent archive queries so a Network Traffic
 	// page-load burst cannot multiply DuckDB's per-query footprint
-	// into the pod's memory ceiling. The select honours the
-	// caller's context so a cancelled request doesn't block forever
+	// into the pod's memory ceiling. The select honors the
+	// caller's context so a canceled request doesn't block forever
 	// behind a slow archive query.
 	select {
 	case d.sem <- struct{}{}:

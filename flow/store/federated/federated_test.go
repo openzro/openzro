@@ -14,7 +14,7 @@ import (
 
 // fakeStore is a programmable store.Store stub. Records every call
 // the federated wrapper makes so tests can assert on routing
-// behaviour without standing up a real backend.
+// behavior without standing up a real backend.
 type fakeStore struct {
 	name        string
 	queryCalls  []store.Filter
@@ -234,7 +234,7 @@ func TestQuery_AppliesPagingAfterMerge(t *testing.T) {
 // when the archive bucket is briefly unreachable, federated still
 // returns the hot half rather than failing the whole call. The
 // dashboard surfaces "incomplete" via the ProbeAvailability hook;
-// this test pins the behaviour.
+// this test pins the behavior.
 func TestQuery_PartialFailure_HotOnly(t *testing.T) {
 	arch := &fakeStore{name: "arch", queryErr: errors.New("bucket unreachable")}
 	hot := &fakeStore{

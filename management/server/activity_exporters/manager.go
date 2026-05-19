@@ -20,7 +20,7 @@ import (
 type Manager struct {
 	store *Store
 
-	mu       sync.RWMutex
+	mu        sync.RWMutex
 	byAccount map[string][]activeExporter // accountID → live instances
 }
 
@@ -33,7 +33,7 @@ type activeExporter struct {
 }
 
 // NewManager constructs a Manager and immediately runs Refresh so
-// every active row is materialised. Errors building a single row are
+// every active row is materialized. Errors building a single row are
 // logged at Error and the row is skipped — partial application is
 // preferred to a total outage.
 func NewManager(ctx context.Context, store *Store) (*Manager, error) {
@@ -41,7 +41,7 @@ func NewManager(ctx context.Context, store *Store) (*Manager, error) {
 		return nil, fmt.Errorf("activity_exporters: store is required")
 	}
 	m := &Manager{
-		store:    store,
+		store:     store,
 		byAccount: map[string][]activeExporter{},
 	}
 	if err := m.Refresh(ctx); err != nil {

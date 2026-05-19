@@ -114,7 +114,7 @@ func readZitadelError(body io.ReadCloser) error {
 		return fmt.Errorf("error unparsable body: %s", string(bodyBytes))
 	}
 
-	// ensure keys are ordered for consistent logging behaviour.
+	// ensure keys are ordered for consistent logging behavior.
 	errorKeys := make([]string, 0, len(target))
 	for k := range target {
 		errorKeys = append(errorKeys, k)

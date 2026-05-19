@@ -61,7 +61,7 @@ type huntressAgent struct {
 
 func (h *Huntress) GetDeviceStatus(ctx context.Context, lookup DeviceLookup) (DeviceStatus, error) {
 	// Huntress agents are keyed by hostname; per-user email isn't
-	// modelled in their API, so we ignore lookup.UserEmail.
+	// modeled in their API, so we ignore lookup.UserEmail.
 	return h.lookupAt(ctx, h.base, lookup.Hostname)
 }
 

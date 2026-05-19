@@ -166,7 +166,7 @@ func (c *ConnectClient) run(mobileDependency MobileDependency, runningChan chan 
 
 	defer c.statusRecorder.ClientStop()
 	operation := func() error {
-		// if context cancelled we not start new backoff cycle
+		// if context canceled we not start new backoff cycle
 		if c.ctx.Err() != nil {
 			return nil
 		}
@@ -298,7 +298,7 @@ func (c *ConnectClient) run(mobileDependency MobileDependency, runningChan chan 
 		<-engineCtx.Done()
 		c.engineMutex.Lock()
 		if c.engine != nil && c.engine.wgInterface != nil {
-			log.Infof("ensuring %s is removed, Openzro engine context cancelled", c.engine.wgInterface.Name())
+			log.Infof("ensuring %s is removed, Openzro engine context canceled", c.engine.wgInterface.Name())
 			if err := c.engine.Stop(); err != nil {
 				log.Errorf("Failed to stop engine: %v", err)
 			}

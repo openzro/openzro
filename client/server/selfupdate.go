@@ -114,7 +114,7 @@ func (s *Server) buildSelfUpdateConfig(target string, manual, force bool) (selfu
 		// that would double-gate and defeat operator control. The
 		// future critical-only static fallback (R6) is a DIFFERENT
 		// code path and will build its Config with Authoritative=false
-		// so it still honours staged_rollout.
+		// so it still honors staged_rollout.
 		Authoritative: true,
 		// PinnedVersion intentionally empty: in the management-driven
 		// model the directive target IS the pin and ExpectedVersion
@@ -794,7 +794,7 @@ const (
 // when the authoritative path takes over mid-flight (RunOnce's
 // fetch+download+verify can take minutes). Returned from the
 // fallback's BeforeInstall so the engine aborts BEFORE Install;
-// recognised in attemptCriticalFallback as an expected outcome, not
+// recognized in attemptCriticalFallback as an expected outcome, not
 // a failure (#5 R6 review #1).
 var errFallbackSuperseded = errors.New("critical fallback superseded — authoritative path took over")
 

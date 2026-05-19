@@ -344,7 +344,7 @@ func TestReceive_RejectsConcurrentCall(t *testing.T) {
 	err = client.Receive(ctx, time.Second, func(*proto.FlowEventAck) error { return nil })
 	require.ErrorIs(t, err, flow.ErrConcurrentReceive, "second concurrent Receive must be refused")
 
-	// Tear down by cancelling — first goroutine should exit cleanly.
+	// Tear down by canceling — first goroutine should exit cleanly.
 	cancel()
 	select {
 	case <-firstDone:

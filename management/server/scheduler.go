@@ -88,7 +88,7 @@ func (wm *DefaultScheduler) cancel(ctx context.Context, ID string) bool {
 	if ok {
 		delete(wm.jobs, ID)
 		close(cancel)
-		log.WithContext(ctx).Debugf("cancelled scheduled job %s", ID)
+		log.WithContext(ctx).Debugf("canceled scheduled job %s", ID)
 	}
 	return ok
 }

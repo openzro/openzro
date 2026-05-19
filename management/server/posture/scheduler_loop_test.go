@@ -95,7 +95,7 @@ func (f *fakeLoader) addAccount(accountID string, checks []ScheduleCheck) {
 }
 
 // fakeCoord is a minimal in-process cluster.Coordinator stand-in. Lock
-// is honoured per name with a single token; Subscribe gives each topic
+// is honored per name with a single token; Subscribe gives each topic
 // a fresh fan-out channel; Publish broadcasts to every subscriber for
 // the topic. Suitable only for the scheduler unit tests in this file.
 type fakeCoord struct {
@@ -295,7 +295,7 @@ func TestScheduler_UpdatePanicDoesNotKillLoop(t *testing.T) {
 	s.afterFn = fastAfter(20 * time.Millisecond)
 	// Coalescing depends on `now()` advancing — with the fixed test
 	// clock the rate-limit would never expire, so disable it for this
-	// test. The behaviour under coalescing is exercised separately
+	// test. The behavior under coalescing is exercised separately
 	// in the leader-election test, which uses both replicas firing.
 	s.minTickInterval = 0
 

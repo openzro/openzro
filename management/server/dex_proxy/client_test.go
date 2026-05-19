@@ -17,7 +17,7 @@ import (
 )
 
 // fakeDex stands in for the upstream Dex server. Tests register
-// per-method behaviour by setting the fields below; defaults are
+// per-method behavior by setting the fields below; defaults are
 // "succeed quietly" so each test only sets what it cares about.
 type fakeDex struct {
 	apiv2.UnimplementedDexServer

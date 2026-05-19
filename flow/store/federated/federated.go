@@ -14,12 +14,12 @@
 // Query routes by date window relative to the hot store's retention
 // boundary `now - retention`:
 //
-//   * window fully inside retention  → hot only
-//   * window fully outside retention → archive only (or empty when
-//                                       no archive is configured)
-//   * window crosses the boundary    → both, with each side's window
-//                                       trimmed to its half so the
-//                                       result has no duplicates
+//   - window fully inside retention  → hot only
+//   - window fully outside retention → archive only (or empty when
+//     no archive is configured)
+//   - window crosses the boundary    → both, with each side's window
+//     trimmed to its half so the
+//     result has no duplicates
 package federated
 
 import (
@@ -136,11 +136,11 @@ func (f *Federated) queryBoth(
 	original, hotFilter, archFilter store.Filter,
 ) ([]*store.Event, error) {
 	var (
-		wg       sync.WaitGroup
-		hotEv    []*store.Event
-		archEv   []*store.Event
-		hotErr   error
-		archErr  error
+		wg      sync.WaitGroup
+		hotEv   []*store.Event
+		archEv  []*store.Event
+		hotErr  error
+		archErr error
 	)
 	wg.Add(2)
 	go func() {
@@ -225,7 +225,7 @@ func mergeByReceivedAtDesc(a, b []*store.Event) []*store.Event {
 	return out
 }
 
-// applyPaging slices the merged result to honour the caller's Limit
+// applyPaging slices the merged result to honor the caller's Limit
 // and Offset. Limit ≤ 0 means "no limit"; Offset > len(slice) returns
 // an empty slice (not an error).
 func applyPaging(events []*store.Event, limit, offset int) []*store.Event {

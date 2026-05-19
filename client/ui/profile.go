@@ -466,7 +466,7 @@ func (p *profileMenu) refresh() {
 			for {
 				select {
 				case <-ctx.Done():
-					return // context cancelled
+					return // context canceled
 				case _, ok := <-item.ClickedCh:
 					if !ok {
 						return // channel closed
@@ -533,7 +533,7 @@ func (p *profileMenu) refresh() {
 		for {
 			select {
 			case <-ctx.Done():
-				return // context cancelled
+				return // context canceled
 			case _, ok := <-manageItem.ClickedCh:
 				if !ok {
 					return // channel closed
@@ -606,7 +606,7 @@ func (p *profileMenu) updateMenu() {
 
 			p.refresh()
 		case <-p.ctx.Done():
-			return // context cancelled
+			return // context canceled
 
 		}
 	}

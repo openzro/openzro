@@ -129,7 +129,7 @@ func New(ctx context.Context, cfg Config) (*Coordinator, error) {
 		select {
 		case <-parentCtx.Done():
 			cancel()
-			return nil, fmt.Errorf("nats coordinator: locks bucket cancelled: %w", parentCtx.Err())
+			return nil, fmt.Errorf("nats coordinator: locks bucket canceled: %w", parentCtx.Err())
 		case <-time.After(bucketRetryBackoff):
 		}
 	}
@@ -247,7 +247,7 @@ func (c *Coordinator) Publish(_ context.Context, topic string, payload []byte) e
 	return c.nc.Publish(PubSubSubjectPrefix+topic, payload)
 }
 
-// Subscribe returns events on topic until ctx is cancelled.
+// Subscribe returns events on topic until ctx is canceled.
 func (c *Coordinator) Subscribe(ctx context.Context, topic string) (<-chan cluster.Event, error) {
 	if c.isClosed() {
 		return nil, cluster.ErrClosed

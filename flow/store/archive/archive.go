@@ -14,7 +14,7 @@
 //     validated, plus operators who explicitly want a CGo-free
 //     binary): archive.New() returns ErrUnavailable. The federated
 //     wrapper detects the absent store at boot and silently falls
-//     back to hot-only — same behaviour as the v0.53.x line had
+//     back to hot-only — same behavior as the v0.53.x line had
 //     before this ADR.
 //
 // Operators do not interact with this package directly; the
@@ -29,7 +29,7 @@ import (
 // ErrUnavailable is returned by New when the binary was built
 // without the `archive_duckdb` tag. Callers that wrap archive.Store
 // alongside a hot store should treat this as "no archive
-// configured" and fall through to hot-only behaviour.
+// configured" and fall through to hot-only behavior.
 var ErrUnavailable = errors.New(
 	"flow archive store: built without archive_duckdb tag — " +
 		"rebuild with `go build -tags=archive_duckdb` to enable")
@@ -66,7 +66,7 @@ type Config struct {
 	// §"S3 vs GCS auth".
 	AccessKeyID     string
 	SecretAccessKey string
-	SessionToken   string
+	SessionToken    string
 
 	// CredentialsJSON / CredentialsFile / ProjectID are the GCS
 	// equivalents. Set whichever the operator already has wired into
@@ -92,7 +92,7 @@ type Config struct {
 	// Threads bounds the DuckDB worker pool per query. DuckDB
 	// defaults to N=CPUs which amplifies memory per query under
 	// concurrency. Default 2 keeps a single archive query
-	// well-bounded; bump for single-tenant clusters that prioritise
+	// well-bounded; bump for single-tenant clusters that prioritize
 	// query latency over predictable footprint.
 	Threads int
 

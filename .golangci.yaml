@@ -68,6 +68,11 @@ linters-settings:
     # brand notes) are intentionally written in Portuguese. misspell's
     # English dictionary flags them as typos — `momento` → `memento`,
     # `ser` → `set`, etc. Whitelist the PT words we ship deliberately.
+    # `registerdns` is NOT Portuguese: it is the literal Windows
+    # `ipconfig /registerdns` command argument (client/internal/dns/
+    # host_windows.go); misspell mangles it to `/registers`, which
+    # would break Windows DNS re-registration — a false positive on a
+    # real OS command, not a typo.
     # codespell already has the equivalent ignore_words_list in
     # .github/workflows/golangci-lint.yml; keep the two in sync if
     # adding new entries.
@@ -77,6 +82,7 @@ linters-settings:
       - ser
       - vai
       - controles
+      - registerdns
 
   revive:
     rules:

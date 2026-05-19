@@ -129,7 +129,7 @@ func (n *NATS) SendMessage(ctx context.Context, msg *proto.EncryptedMessage) (*p
 
 // ListenForMessages registers handler as the receiver for messages
 // addressed to peer id. Subscribes to oz.signal.peer.<id> and runs until
-// ctx is cancelled.
+// ctx is canceled.
 func (n *NATS) ListenForMessages(ctx context.Context, id string, handler func(context.Context, *proto.EncryptedMessage)) error {
 	subject := SubjectPrefix + id
 

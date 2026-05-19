@@ -352,7 +352,7 @@ func protoFromRule(p types.PolicyRuleProtocolType) proto {
 // portsFromRule normalises the rule's Ports (single ports as strings)
 // + PortRanges into a slice of portRange. Invalid entries are
 // silently dropped — the dataplane treats them the same way, so the
-// resolver matches that behaviour.
+// resolver matches that behavior.
 func portsFromRule(ports []string, ranges []types.RulePortRange) []portRange {
 	out := make([]portRange, 0, len(ports)+len(ranges))
 	for _, p := range ports {

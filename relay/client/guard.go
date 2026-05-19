@@ -75,7 +75,7 @@ func (g *Guard) tryToQuickReconnect(parentCtx context.Context, rc *Client) bool 
 		return false
 	}
 
-	if cancelled := waiteBeforeRetry(parentCtx); !cancelled {
+	if canceled := waiteBeforeRetry(parentCtx); !canceled {
 		return false
 	}
 

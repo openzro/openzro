@@ -77,13 +77,13 @@ type graphResp struct {
 }
 
 type graphDevice struct {
-	ID                 string `json:"id"`
-	DeviceName         string `json:"deviceName"`
-	ComplianceState    string `json:"complianceState"`
-	ManagementState    string `json:"managementState"`
-	OperatingSystem    string `json:"operatingSystem"`
-	OSVersion          string `json:"osVersion"`
-	UserPrincipalName  string `json:"userPrincipalName"`
+	ID                string `json:"id"`
+	DeviceName        string `json:"deviceName"`
+	ComplianceState   string `json:"complianceState"`
+	ManagementState   string `json:"managementState"`
+	OperatingSystem   string `json:"operatingSystem"`
+	OSVersion         string `json:"osVersion"`
+	UserPrincipalName string `json:"userPrincipalName"`
 }
 
 // graphSelect is the projection we pin on every /managedDevices call.
@@ -220,7 +220,7 @@ func (i *Intune) queryGraph(ctx context.Context, base, filter string) (graphDevi
 	return body.Value[0], true, nil
 }
 
-// classify maps a Graph device record into DeviceStatus, honouring
+// classify maps a Graph device record into DeviceStatus, honoring
 // the per-config StrictCompliance flag.
 func (i *Intune) classify(dev graphDevice, lookup DeviceLookup) DeviceStatus {
 	state := strings.ToLower(dev.ComplianceState)

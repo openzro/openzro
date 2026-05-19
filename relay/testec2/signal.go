@@ -51,7 +51,7 @@ func (rs *Signal) onNewAddresses(w http.ResponseWriter, r *http.Request) {
 	}
 	data, err := json.Marshal(respMsg)
 	if err != nil {
-		log.Errorf("Error marshalling message: %v", err)
+		log.Errorf("Error marshaling message: %v", err)
 		return
 	}
 

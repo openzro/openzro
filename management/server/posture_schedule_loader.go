@@ -56,7 +56,7 @@ func (l *scheduleLoader) LoadActiveSchedules(ctx context.Context, accountID stri
 //
 // Filtering stays in Go rather than a SQL `WHERE checks LIKE
 // '%ScheduleCheck%'` because the checks column is GORM-JSON-
-// serialised — substring matching is brittle and not portable across
+// serialized — substring matching is brittle and not portable across
 // the SQLite/Postgres/MySQL dialects the store supports. The
 // cluster-wide posture-check row count is small, so deserialise +
 // scan in memory is the right trade.

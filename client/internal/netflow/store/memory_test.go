@@ -79,7 +79,7 @@ func TestMemory_DeleteRemovesFromOrderList(t *testing.T) {
 }
 
 // TestMemory_GetEventsFIFOOrder regression: before the cap, the
-// store iterated the events map in Go's randomised order. With FIFO
+// store iterated the events map in Go's randomized order. With FIFO
 // guarantees we want oldest-first so the gRPC sender ships events
 // in the order they were captured.
 func TestMemory_GetEventsFIFOOrder(t *testing.T) {

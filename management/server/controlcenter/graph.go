@@ -48,7 +48,7 @@ type Focus struct {
 	ID   string    `json:"id"`
 }
 
-// NodeKind tags a graph node. focus is the centred node; the rest are
+// NodeKind tags a graph node. focus is the centered node; the rest are
 // the columns it fans out into. The v2 topology projection emits
 // columns of these kinds left→right (ADR-0017 2026-05-18b):
 //
@@ -93,12 +93,12 @@ const (
 	// so it reaches the routed network as its own gateway. This is
 	// NOT route_default_permit (the route may carry
 	// AccessControlGroups that gate OTHER clients); it is honestly
-	// labelled as infrastructure-local reach (#50-r2 semantic note,
+	// labeled as infrastructure-local reach (#50-r2 semantic note,
 	// owner-decided 2026-05-17).
 	PermitRouterLocal PermitSource = "router_local"
 	// PermitIdentity — a structural identity/ownership edge, NOT a
 	// policy permit: the v2 User→Peer edge ("these are the user's
-	// machines"). It carries no PolicyID. Formalised so the wire
+	// machines"). It carries no PolicyID. Formalized so the wire
 	// contract enumerates it instead of an empty-string sentinel the
 	// frontend matched by accident (#39 v2 review, finding 3).
 	PermitIdentity PermitSource = "identity"

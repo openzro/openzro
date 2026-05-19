@@ -83,7 +83,7 @@ func (r *EvalRetention) run() {
 
 	// Stagger the first run by a small random-ish delay so a cluster
 	// of management replicas don't all hit the DB at the same instant
-	// on a synchronised reboot. The interval is divided by a small
+	// on a synchronized reboot. The interval is divided by a small
 	// constant rather than calling math/rand so this stays
 	// deterministic test-wise; the staggering is a soft optimization,
 	// not a correctness requirement.

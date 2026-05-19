@@ -674,7 +674,7 @@ func TestCriticalFallbackEligible(t *testing.T) {
 
 // TestBuildCriticalFallbackConfig pins the R6 fallback Config: silent
 // (AutoInstallEnabled), non-authoritative, critical-only, no directed
-// target; env override honoured; explicit-empty disables.
+// target; env override honored; explicit-empty disables.
 func TestBuildCriticalFallbackConfig(t *testing.T) {
 	s := &Server{}
 
@@ -694,7 +694,7 @@ func TestBuildCriticalFallbackConfig(t *testing.T) {
 		}
 	})
 
-	t.Run("env override honoured", func(t *testing.T) {
+	t.Run("env override honored", func(t *testing.T) {
 		t.Setenv("OPENZRO_UPDATE_MANIFEST_URL", "https://mirror.example/u.json")
 		cfg, err := s.buildCriticalFallbackConfig()
 		if err != nil || cfg.ManifestURL != "https://mirror.example/u.json" {

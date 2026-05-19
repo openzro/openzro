@@ -119,7 +119,7 @@ func (c *Coordinator) isClosed() bool {
 }
 
 // Lock blocks (with backoff) until it acquires the named lock or ctx is
-// cancelled. The returned release func is safe to call multiple times.
+// canceled. The returned release func is safe to call multiple times.
 func (c *Coordinator) Lock(ctx context.Context, name string) (func(), error) {
 	if c.isClosed() {
 		return nil, cluster.ErrClosed
@@ -210,7 +210,7 @@ func (c *Coordinator) Publish(ctx context.Context, topic string, payload []byte)
 }
 
 // Subscribe returns a channel of events for topic. The channel closes when
-// ctx is cancelled or the coordinator is Closed.
+// ctx is canceled or the coordinator is Closed.
 func (c *Coordinator) Subscribe(ctx context.Context, topic string) (<-chan cluster.Event, error) {
 	if c.isClosed() {
 		return nil, cluster.ErrClosed

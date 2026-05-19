@@ -53,7 +53,7 @@ const (
 // log gets the event from the winner, no double-counting.
 //
 // Lifecycle: started from cmd/management.go after the Store is
-// constructed; runs until ctx is cancelled.
+// constructed; runs until ctx is canceled.
 func RunExpiryWorker(ctx context.Context, store *Store, emit EventEmitter) {
 	interval := resolveSweepInterval()
 	log.WithContext(ctx).Infof("admission bypass expiry worker running every %s", interval)

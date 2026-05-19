@@ -13,7 +13,7 @@ import (
 // ErrPeerNotFound is returned by Forward when no pod in the
 // cluster (including this one) has the peer connected. The caller
 // — relay/server/peer.go's transport-message handler — should
-// silently drop the packet, mirroring the single-pod behaviour
+// silently drop the packet, mirroring the single-pod behavior
 // from before this ADR.
 var ErrPeerNotFound = errors.New("cluster forwarder: peer not connected anywhere in the cluster")
 

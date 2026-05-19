@@ -107,7 +107,7 @@ func (m *AclManager) AddPeerFiltering(
 	// index so the netflow collector can resolve the matching
 	// PolicyID. ruleIndex == 0 means "no PolicyID" (e.g. an
 	// internal allow-rule the agent installs unprompted) and falls
-	// back to the pre-ADR behaviour of an empty FlowEvent.RuleId.
+	// back to the pre-ADR behavior of an empty FlowEvent.RuleId.
 	ruleIndex := policymark.Default().Index(id)
 
 	newRules := make([]firewall.Rule, 0, 2)
@@ -346,7 +346,7 @@ func (m *AclManager) addIOFiltering(
 	// DataPlaneMarkOut, …) lives on bits 0-16 and is preserved by
 	// the OR. ruleIndex == 0 means "no PolicyID for this rule" —
 	// skip the stamp and let the event carry an empty RuleId, the
-	// pre-ADR behaviour. We only stamp on Accept rules; Drop
+	// pre-ADR behavior. We only stamp on Accept rules; Drop
 	// packets never reach the collector via the conntrack new-event
 	// path so the stamp would be wasted.
 	if ruleIndex != 0 && action == firewall.ActionAccept {

@@ -44,7 +44,7 @@ func New(ctx context.Context, _ metric.Meter) (*InMem, error) {
 func (d *InMem) SendMessage(ctx context.Context, msg *proto.EncryptedMessage) (*proto.EncryptedMessage, error) {
 	select {
 	case <-ctx.Done():
-		return nil, errors.New("context cancelled")
+		return nil, errors.New("context canceled")
 	default:
 	}
 
@@ -64,14 +64,14 @@ func (d *InMem) SendMessage(ctx context.Context, msg *proto.EncryptedMessage) (*
 
 	select {
 	case <-ctx.Done():
-		return nil, errors.New("context cancelled")
+		return nil, errors.New("context canceled")
 	case ch <- msg:
 		return &proto.EncryptedMessage{}, nil
 	}
 }
 
 // ListenForMessages registers handler as the receiver for messages addressed
-// to peer id. A goroutine is spawned that runs until ctx is cancelled, at
+// to peer id. A goroutine is spawned that runs until ctx is canceled, at
 // which point the registry entry is removed.
 func (d *InMem) ListenForMessages(ctx context.Context, id string, messageHandler func(context.Context, *proto.EncryptedMessage)) error {
 	ch := make(chan *proto.EncryptedMessage)

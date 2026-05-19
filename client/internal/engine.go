@@ -1755,7 +1755,7 @@ func (e *Engine) probeICE(stuns, turns []*stun.URI) []relay.ProbeResult {
 	)
 }
 
-// restartEngine restarts the engine by cancelling the client context
+// restartEngine restarts the engine by canceling the client context
 func (e *Engine) restartEngine() {
 	e.syncMsgMux.Lock()
 	defer e.syncMsgMux.Unlock()
@@ -1767,7 +1767,7 @@ func (e *Engine) restartEngine() {
 	log.Info("restarting engine")
 	CtxGetState(e.ctx).Set(StatusConnecting)
 	_ = CtxGetState(e.ctx).Wrap(ErrResetConnection)
-	log.Infof("cancelling client context, engine will be recreated")
+	log.Infof("canceling client context, engine will be recreated")
 	e.clientCancel()
 }
 
