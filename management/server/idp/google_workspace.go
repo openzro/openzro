@@ -229,7 +229,12 @@ func getGoogleCredentials(ctx context.Context, serviceAccountKey string) (*googl
 		return nil, fmt.Errorf("failed to decode service account key: %w", err)
 	}
 
-	creds, err := google.CredentialsFromJSON(
+	// SA1019: google.CredentialsFromJSON is gradually being superseded by
+	// the new cloud.google.com/go/auth surface. Holding the legacy call
+	// here because this is the Google Workspace IdP path — any change to
+	// how the service-account JWT is minted needs an end-to-end test
+	// against the directory API, which is gated behind #82.
+	creds, err := google.CredentialsFromJSON( //nolint:staticcheck // SA1019 — Google IdP credential minting; migration tracked in #82.
 		context.Background(),
 		decodeKey,
 		admin.AdminDirectoryUserReadonlyScope,

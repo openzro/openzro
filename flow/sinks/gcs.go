@@ -130,9 +130,15 @@ func NewGCS(ctx context.Context, cfg GCSConfig) (*GCS, error) {
 	opts := []option.ClientOption{}
 	switch {
 	case len(cfg.CredentialsJSON) > 0:
-		opts = append(opts, option.WithCredentialsJSON(cfg.CredentialsJSON))
+		// SA1019: option.WithCredentialsJSON is being phased out in favor
+		// of the new cloud.google.com/go/auth.Credentials surface. Keeping
+		// the legacy path here because the alternative changes how the
+		// storage client minds token refresh, and that needs explicit
+		// testing against the prod GCS sink before flipping. Tracked in
+		// #82.
+		opts = append(opts, option.WithCredentialsJSON(cfg.CredentialsJSON)) //nolint:staticcheck // SA1019 — migration to cloud.google.com/go/auth tracked in #82.
 	case cfg.CredentialsFile != "":
-		opts = append(opts, option.WithCredentialsFile(cfg.CredentialsFile))
+		opts = append(opts, option.WithCredentialsFile(cfg.CredentialsFile)) //nolint:staticcheck // SA1019 — same as above, migration tracked.
 	}
 	if cfg.Endpoint != "" {
 		httpClient := cfg.HTTPClient
