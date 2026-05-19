@@ -35,7 +35,7 @@ import (
 	"time"
 
 	_ "github.com/glebarez/go-sqlite" // pure-go sqlite driver for reading the management data store
-	_ "github.com/lib/pq"              // database/sql driver for the postgres admin connection used by ensureDatabase
+	_ "github.com/lib/pq"             // database/sql driver for the postgres admin connection used by ensureDatabase
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
@@ -152,12 +152,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("flow store init: %v", err)
 	}
-	defer s.Close()
-
+	// No `defer s.Close()`: log.Fatalf calls os.Exit, which skips
+	// deferred closes (gocritic exitAfterDefer). Close explicitly on
+	// both the error and success paths so the store is always flushed.
 	events := generate(accountID)
 	if err := s.Save(context.Background(), events); err != nil {
+		_ = s.Close()
 		log.Fatalf("save: %v", err)
 	}
+	_ = s.Close()
 	fmt.Printf("✓ seeded %d flow events under account %s\n", len(events), accountID)
 	fmt.Println("  open http://localhost:3000/events/network-traffic to preview")
 }
