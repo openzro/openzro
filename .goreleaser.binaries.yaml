@@ -605,8 +605,8 @@ release:
   header: |
     ## openZro {{ .Tag }}
 
-    See `CHANGELOG.md` (or commit log) for the full list of changes
-    in this release.
+    Full list of changes in this release:
+    https://github.com/openzro/openzro/commits/{{ .Tag }}
 
     ### Verifying downloads
 
