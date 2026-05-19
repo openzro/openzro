@@ -23,11 +23,11 @@ func openSqliteForTest(_ *testing.T) (*gorm.DB, error) {
 // drained out.
 type fakeEvalStore struct {
 	mu    sync.Mutex
-	rows  []PostureEvaluation
+	rows  []Evaluation
 	calls int
 }
 
-func (f *fakeEvalStore) Insert(_ context.Context, batch []PostureEvaluation) error {
+func (f *fakeEvalStore) Insert(_ context.Context, batch []Evaluation) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.rows = append(f.rows, batch...)
@@ -35,10 +35,10 @@ func (f *fakeEvalStore) Insert(_ context.Context, batch []PostureEvaluation) err
 	return nil
 }
 
-func (f *fakeEvalStore) ListForPeer(_ context.Context, accountID, peerID string, limit int) ([]PostureEvaluation, error) {
+func (f *fakeEvalStore) ListForPeer(_ context.Context, accountID, peerID string, limit int) ([]Evaluation, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	out := []PostureEvaluation{}
+	out := []Evaluation{}
 	for i := len(f.rows) - 1; i >= 0; i-- {
 		if f.rows[i].AccountID == accountID && f.rows[i].PeerID == peerID {
 			out = append(out, f.rows[i])
@@ -66,10 +66,10 @@ func (f *fakeEvalStore) PurgeOlderThan(_ context.Context, cutoff time.Time) (int
 	return purged, nil
 }
 
-func (f *fakeEvalStore) snapshot() []PostureEvaluation {
+func (f *fakeEvalStore) snapshot() []Evaluation {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	out := make([]PostureEvaluation, len(f.rows))
+	out := make([]Evaluation, len(f.rows))
 	copy(out, f.rows)
 	return out
 }
@@ -87,7 +87,7 @@ func TestBufferedRecorder_FlushesOnBatchSize(t *testing.T) {
 	// Distinct PeerIDs so dedup does not suppress identical-state repeats —
 	// this test asserts the batch-size flush path, not dedup behavior.
 	for i := 0; i < 3; i++ {
-		r.Record(context.Background(), PostureEvaluation{
+		r.Record(context.Background(), Evaluation{
 			AccountID:      "acct",
 			PeerID:         fmt.Sprintf("peer-%d", i),
 			PostureCheckID: "check",
@@ -122,7 +122,7 @@ func TestBufferedRecorder_FlushesOnInterval(t *testing.T) {
 	}, nil)
 	defer r.Close()
 
-	r.Record(context.Background(), PostureEvaluation{
+	r.Record(context.Background(), Evaluation{
 		AccountID:      "acct",
 		PeerID:         "peer",
 		PostureCheckID: "check",
@@ -153,7 +153,7 @@ func TestBufferedRecorder_FlushesOnClose(t *testing.T) {
 		FlushInterval: 1 * time.Hour,
 	}, nil)
 
-	r.Record(context.Background(), PostureEvaluation{
+	r.Record(context.Background(), Evaluation{
 		AccountID:      "acct",
 		PeerID:         "peer",
 		PostureCheckID: "check",
@@ -191,7 +191,7 @@ func TestBufferedRecorder_DropsOnOverflow(t *testing.T) {
 	// without this every Record() after the first would short-circuit
 	// before ever reaching the channel-send path we're trying to exercise.
 	for i := 0; i < 10; i++ {
-		r.Record(context.Background(), PostureEvaluation{
+		r.Record(context.Background(), Evaluation{
 			PeerID:      fmt.Sprintf("peer-a-%d", i),
 			EvaluatedAt: now,
 		})
@@ -201,7 +201,7 @@ func TestBufferedRecorder_DropsOnOverflow(t *testing.T) {
 	// block in Insert. After that, additional Records must overflow.
 	time.Sleep(50 * time.Millisecond)
 	for i := 0; i < 20; i++ {
-		r.Record(context.Background(), PostureEvaluation{
+		r.Record(context.Background(), Evaluation{
 			PeerID:      fmt.Sprintf("peer-b-%d", i),
 			EvaluatedAt: now,
 		})
@@ -217,11 +217,11 @@ func TestBufferedRecorder_DropsOnOverflow(t *testing.T) {
 
 type blockingStore struct{ released chan struct{} }
 
-func (b *blockingStore) Insert(_ context.Context, _ []PostureEvaluation) error {
+func (b *blockingStore) Insert(_ context.Context, _ []Evaluation) error {
 	<-b.released
 	return nil
 }
-func (b *blockingStore) ListForPeer(_ context.Context, _, _ string, _ int) ([]PostureEvaluation, error) {
+func (b *blockingStore) ListForPeer(_ context.Context, _, _ string, _ int) ([]Evaluation, error) {
 	return nil, nil
 }
 func (b *blockingStore) PurgeOlderThan(_ context.Context, _ time.Time) (int64, error) {
@@ -232,7 +232,7 @@ func TestFakeStore_ListReturnsNewestFirst(t *testing.T) {
 	store := &fakeEvalStore{}
 	now := time.Now().UTC()
 	for i := 0; i < 5; i++ {
-		_ = store.Insert(context.Background(), []PostureEvaluation{{
+		_ = store.Insert(context.Background(), []Evaluation{{
 			AccountID:   "a",
 			PeerID:      "p",
 			EvaluatedAt: now.Add(time.Duration(i) * time.Second),
@@ -255,7 +255,7 @@ func TestEvalRetention_PurgesOldRows(t *testing.T) {
 	store := &fakeEvalStore{}
 	old := time.Now().UTC().Add(-48 * time.Hour)
 	fresh := time.Now().UTC().Add(-1 * time.Hour)
-	_ = store.Insert(context.Background(), []PostureEvaluation{
+	_ = store.Insert(context.Background(), []Evaluation{
 		{AccountID: "a", PeerID: "p", EvaluatedAt: old, CheckType: "old"},
 		{AccountID: "a", PeerID: "p", EvaluatedAt: fresh, CheckType: "fresh"},
 	})
@@ -305,7 +305,7 @@ func TestMigrateEvaluationTable_CreatesIndexes(t *testing.T) {
 		"idx_posture_eval_account_peer_time",
 		"idx_posture_eval_evaluated_at",
 	} {
-		if !mig.HasIndex(&PostureEvaluation{}, idx) {
+		if !mig.HasIndex(&Evaluation{}, idx) {
 			t.Errorf("expected index %q after AutoMigrate", idx)
 		}
 	}
@@ -324,7 +324,7 @@ func BenchmarkRecord_HotPath(b *testing.B) {
 	}, nil)
 	defer r.Close()
 
-	ev := PostureEvaluation{
+	ev := Evaluation{
 		AccountID:      "bench-account",
 		PeerID:         "bench-peer",
 		PostureCheckID: "bench-check",
@@ -351,7 +351,7 @@ func TestBufferedRecorder_DedupesIdenticalConsecutiveStates(t *testing.T) {
 	defer r.Close()
 
 	now := time.Now().UTC()
-	base := PostureEvaluation{
+	base := Evaluation{
 		AccountID:      "a",
 		PeerID:         "p",
 		PostureCheckID: "c",
@@ -408,7 +408,7 @@ func TestBufferedRecorder_StateChangeBreaksDedup(t *testing.T) {
 	defer r.Close()
 
 	now := time.Now().UTC()
-	base := PostureEvaluation{
+	base := Evaluation{
 		AccountID:      "a",
 		PeerID:         "p",
 		PostureCheckID: "c",
@@ -459,7 +459,7 @@ func TestBufferedRecorder_RefreshTTLBypassesDedup(t *testing.T) {
 	defer r.Close()
 
 	now := time.Now().UTC()
-	base := PostureEvaluation{
+	base := Evaluation{
 		AccountID:      "a",
 		PeerID:         "p",
 		PostureCheckID: "c",
@@ -510,7 +510,7 @@ func TestBufferedRecorder_DedupIsPerCheckType(t *testing.T) {
 
 	now := time.Now().UTC()
 	for _, check := range []string{"EndpointSecurityCheck", "OSVersionCheck"} {
-		r.Record(context.Background(), PostureEvaluation{
+		r.Record(context.Background(), Evaluation{
 			AccountID:      "a",
 			PeerID:         "p",
 			PostureCheckID: "c",

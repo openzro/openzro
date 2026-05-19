@@ -47,7 +47,7 @@ type BufferedRecorder struct {
 	flushInterval time.Duration
 	refreshTTL    time.Duration
 
-	in           chan PostureEvaluation
+	in           chan Evaluation
 	closeOnce    sync.Once
 	stop         chan struct{}
 	done         chan struct{}
@@ -147,7 +147,7 @@ func NewBufferedRecorder(store EvalStore, opts BufferedRecorderOpts, coord clust
 		batchSize:     opts.BatchSize,
 		flushInterval: opts.FlushInterval,
 		refreshTTL:    opts.RefreshTTL,
-		in:            make(chan PostureEvaluation, opts.QueueSize),
+		in:            make(chan Evaluation, opts.QueueSize),
 		stop:          make(chan struct{}),
 		done:          make(chan struct{}),
 		subCtx:        subCtx,
@@ -176,7 +176,7 @@ func NewBufferedRecorder(store EvalStore, opts BufferedRecorderOpts, coord clust
 // drainer never sees the row. State CHANGES (a previously compliant
 // peer flips to non-compliant, or a denial reason changes) propagate
 // through.
-func (r *BufferedRecorder) Record(ctx context.Context, e PostureEvaluation) {
+func (r *BufferedRecorder) Record(ctx context.Context, e Evaluation) {
 	if r == nil {
 		return
 	}
@@ -280,7 +280,7 @@ func (r *BufferedRecorder) Close() {
 func (r *BufferedRecorder) run() {
 	defer close(r.done)
 
-	buf := make([]PostureEvaluation, 0, r.batchSize)
+	buf := make([]Evaluation, 0, r.batchSize)
 	flushTimer := time.NewTimer(r.flushInterval)
 	defer flushTimer.Stop()
 

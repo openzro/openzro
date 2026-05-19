@@ -29,7 +29,7 @@ func NewGormEvalStore(db *gorm.DB) *GormEvalStore {
 // posture eval pipeline keeps working through transient persistence
 // issues (table locks, brief outage). The recorder treats this as
 // best-effort by design.
-func (s *GormEvalStore) Insert(ctx context.Context, batch []PostureEvaluation) error {
+func (s *GormEvalStore) Insert(ctx context.Context, batch []Evaluation) error {
 	if len(batch) == 0 {
 		return nil
 	}
@@ -43,7 +43,7 @@ func (s *GormEvalStore) Insert(ctx context.Context, batch []PostureEvaluation) e
 // for one peer in one account, capped at limit. The compound index
 // (account_id, peer_id, evaluated_at DESC) makes this a straight
 // index range scan with no sort.
-func (s *GormEvalStore) ListForPeer(ctx context.Context, accountID, peerID string, limit int) ([]PostureEvaluation, error) {
+func (s *GormEvalStore) ListForPeer(ctx context.Context, accountID, peerID string, limit int) ([]Evaluation, error) {
 	if accountID == "" || peerID == "" {
 		return nil, errors.New("posture: ListForPeer requires accountID and peerID")
 	}
@@ -53,7 +53,7 @@ func (s *GormEvalStore) ListForPeer(ctx context.Context, accountID, peerID strin
 		// the UI ever renders (we paginate at 50 rows there).
 		limit = 100
 	}
-	var rows []PostureEvaluation
+	var rows []Evaluation
 	err := s.db.WithContext(ctx).
 		Where("account_id = ? AND peer_id = ?", accountID, peerID).
 		Order("evaluated_at DESC").
@@ -70,7 +70,7 @@ func (s *GormEvalStore) ListForPeer(ctx context.Context, accountID, peerID strin
 func (s *GormEvalStore) PurgeOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
 	res := s.db.WithContext(ctx).
 		Where("evaluated_at < ?", cutoff).
-		Delete(&PostureEvaluation{})
+		Delete(&Evaluation{})
 	if res.Error != nil {
 		return 0, fmt.Errorf("posture: purge evaluations: %w", res.Error)
 	}
