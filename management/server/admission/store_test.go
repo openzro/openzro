@@ -166,10 +166,10 @@ func TestSweepExpired_RemovesPastRows(t *testing.T) {
 // TestHasGroupOverlap covers the group-scope short-circuit.
 func TestHasGroupOverlap(t *testing.T) {
 	cases := []struct {
-		name        string
-		peerGroups  []string
+		name         string
+		peerGroups   []string
 		exemptGroups []string
-		want        bool
+		want         bool
 	}{
 		{"empty peer", nil, []string{"infra"}, false},
 		{"empty exempt", []string{"users"}, nil, false},

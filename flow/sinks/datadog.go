@@ -256,10 +256,10 @@ func (d *Datadog) flush(ctx context.Context, batch []*store.Event) {
 // buildDatadogFlowBody assembles the Logs Intake JSON array. The
 // per-event shape uses Datadog's NPM/network conventions:
 //
-//   network.client.ip / network.client.port — initiator side
-//   network.destination.ip / network.destination.port — responder
-//   network.bytes_read / network.bytes_written
-//   network.transport — protocol name
+//	network.client.ip / network.client.port — initiator side
+//	network.destination.ip / network.destination.port — responder
+//	network.bytes_read / network.bytes_written
+//	network.transport — protocol name
 //
 // plus the standard Datadog log fields (timestamp, ddsource, service,
 // host) and an `openzro_flow` namespace for fields Datadog NPM does
@@ -311,7 +311,7 @@ func toDatadogFlowEntry(e *store.Event, cfg DatadogConfig) map[string]any {
 		},
 		// Use AccountID as host so flows from different tenants
 		// separate cleanly in Datadog's host map.
-		"host":    e.AccountID,
+		"host": e.AccountID,
 		"message": fmt.Sprintf("flow %s %s:%d → %s:%d %s",
 			typeString(e.Type), e.SourceIP, e.SourcePort,
 			e.DestIP, e.DestPort, protocolName(e.Protocol)),

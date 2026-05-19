@@ -66,7 +66,7 @@ type Config struct {
 	// §"S3 vs GCS auth".
 	AccessKeyID     string
 	SecretAccessKey string
-	SessionToken   string
+	SessionToken    string
 
 	// CredentialsJSON / CredentialsFile / ProjectID are the GCS
 	// equivalents. Set whichever the operator already has wired into

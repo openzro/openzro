@@ -20,7 +20,7 @@ import (
 type Manager struct {
 	store *Store
 
-	mu       sync.RWMutex
+	mu        sync.RWMutex
 	byAccount map[string][]activeExporter // accountID → live instances
 }
 
@@ -41,7 +41,7 @@ func NewManager(ctx context.Context, store *Store) (*Manager, error) {
 		return nil, fmt.Errorf("activity_exporters: store is required")
 	}
 	m := &Manager{
-		store:    store,
+		store:     store,
 		byAccount: map[string][]activeExporter{},
 	}
 	if err := m.Refresh(ctx); err != nil {
