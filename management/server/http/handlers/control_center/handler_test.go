@@ -67,7 +67,7 @@ func TestControlCenter_HappyPath(t *testing.T) {
 }
 
 func TestControlCenter_ForbiddenWhenNotAdmin(t *testing.T) {
-	r := newFixture(t, false, func(context.Context, string, string, string) (*controlcenter.GraphDTO, error) {
+	r := newFixture(t, false, func(context.Context, string, string, string) (*controlcenter.GraphDTO, error) { //nolint:nilnil // test stub: t.Fatal above ensures this path is never reached; the return only exists to satisfy the function signature.
 		t.Fatal("manager must not be reached when RBAC denies")
 		return nil, nil
 	})
@@ -77,7 +77,7 @@ func TestControlCenter_ForbiddenWhenNotAdmin(t *testing.T) {
 }
 
 func TestControlCenter_BadView(t *testing.T) {
-	r := newFixture(t, true, func(context.Context, string, string, string) (*controlcenter.GraphDTO, error) {
+	r := newFixture(t, true, func(context.Context, string, string, string) (*controlcenter.GraphDTO, error) { //nolint:nilnil // test stub: t.Fatal above ensures this path is never reached; the return only exists to satisfy the function signature.
 		t.Fatal("manager must not be reached for an invalid view")
 		return nil, nil
 	})
@@ -108,7 +108,7 @@ func TestControlCenter_GenericErrorIsNot404(t *testing.T) {
 }
 
 func TestControlCenter_Unauthenticated(t *testing.T) {
-	r := newFixture(t, true, func(context.Context, string, string, string) (*controlcenter.GraphDTO, error) {
+	r := newFixture(t, true, func(context.Context, string, string, string) (*controlcenter.GraphDTO, error) { //nolint:nilnil // test stub: handler must short-circuit on missing UserAuth before reaching the manager; the return is unreachable in practice.
 		return nil, nil
 	})
 	rr := httptest.NewRecorder()

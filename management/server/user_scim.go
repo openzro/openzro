@@ -252,7 +252,7 @@ func (am *DefaultAccountManager) SCIMGetUser(ctx context.Context, accountID, cal
 // findSCIMUserByUserName scans the account's user set for a match.
 // Returns nil, nil when no user has this userName (a non-error case
 // in the create flow).
-func (am *DefaultAccountManager) findSCIMUserByUserName(ctx context.Context, accountID, userName string) (*types.User, error) {
+func (am *DefaultAccountManager) findSCIMUserByUserName(ctx context.Context, accountID, userName string) (*types.User, error) { //nolint:nilnil // documented contract: "not found" is a non-error case in the SCIM create flow; caller at :38 checks err==nil && existing!=nil.
 	users, err := am.Store.GetAccountUsers(ctx, store.LockingStrengthShare, accountID)
 	if err != nil {
 		return nil, err
