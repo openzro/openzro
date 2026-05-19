@@ -95,7 +95,7 @@ func (w *refreshWorker) refresh() {
 
 	var served, errored int
 	for _, l := range lookups {
-		// Bail fast on cancellation rather than ploughing through the
+		// Bail fast on cancellation rather than plowing through the
 		// remaining lookups with a dead ctx.
 		if ctx.Err() != nil {
 			return

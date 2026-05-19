@@ -36,7 +36,7 @@ type GateInput struct {
 	// ExpectedVersion/I2 + signature/Team-ID checks still apply. It is
 	// set ONLY on the management-directive path; the critical-only
 	// static-manifest fallback (R6) leaves it false so that path
-	// still honours staged_rollout.
+	// still honors staged_rollout.
 	Authoritative bool
 }
 

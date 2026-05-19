@@ -11,7 +11,7 @@ import (
 // DNSZonesAPI is the REST surface for the DNS-as-a-service feature.
 //
 // Currently consumed primarily by openzro/openzro-operator's
-// NbResource controller, which materialises DNS records inside
+// NbResource controller, which materializes DNS records inside
 // operator-managed zones for Kubernetes Services that participate
 // in the mesh. Server-side implementation (handlers + storage) is
 // tracked as a milestone item — see memory file

@@ -145,7 +145,7 @@ func WriteFrame(w io.Writer, t MsgType, payload []byte) error {
 	// Single Write per frame would be ideal but io.Writer doesn't
 	// guarantee atomicity; the caller passes a per-stream lock. We
 	// emit header + payload back-to-back; the contract is that the
-	// caller serialises writes per stream.
+	// caller serializes writes per stream.
 	if _, err := w.Write(hdr[:]); err != nil {
 		return fmt.Errorf("write frame header: %w", err)
 	}

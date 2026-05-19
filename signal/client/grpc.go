@@ -76,7 +76,7 @@ func NewClient(ctx context.Context, addr string, key wgtypes.Key, tlsEnabled boo
 
 	err := backoff.Retry(operation, nbgrpc.Backoff(ctx))
 	if err != nil {
-		log.Errorf("failed to connect to the signalling server: %v", err)
+		log.Errorf("failed to connect to the signaling server: %v", err)
 		return nil, err
 	}
 

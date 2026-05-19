@@ -49,7 +49,7 @@ func TestRunOnce_CycleTimeoutAborts(t *testing.T) {
 		t.Fatal("expected a deadline error, not a hang")
 	}
 	if time.Since(start) > time.Second {
-		t.Fatalf("RunOnce did not honour the %v cycle timeout (took %v)", cfg.CycleTimeout, time.Since(start))
+		t.Fatalf("RunOnce did not honor the %v cycle timeout (took %v)", cfg.CycleTimeout, time.Since(start))
 	}
 }
 

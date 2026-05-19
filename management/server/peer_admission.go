@@ -34,7 +34,7 @@ import (
 //     check is skipped. Bypass is the break-glass for individual
 //     non-compliant devices that need temporary access (CEO
 //     laptop with a 24h reason). The grant emitted its own
-//     audit event when it was issued; we just honour it here.
+//     audit event when it was issued; we just honor it here.
 //
 // candidateGroups is consulted only when peer.ID is empty (the
 // AddPeer flow, before the peer is persisted). For Login / Sync

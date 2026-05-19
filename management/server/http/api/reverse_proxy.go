@@ -4,7 +4,7 @@ package api
 // upstream NetBird "Services" feature (post-v0.53.0 BSD addition).
 // A Service binds a virtual hostname (Domain) to one or more
 // Targets that traffic is forwarded to. Used primarily by the
-// Kubernetes operator's HTTPRoute controller to materialise
+// Kubernetes operator's HTTPRoute controller to materialize
 // Gateway API HTTPRoutes as openZro reverse-proxy services.
 //
 // As with DNS Zones, server-side handlers + storage are deferred

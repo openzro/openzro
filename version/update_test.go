@@ -100,7 +100,7 @@ func TestUpdate_SkipsDrafts(t *testing.T) {
 // 100% prerelease (alpha.x). Skipping them would silence the update
 // notifier across the whole alpha phase, leaving operators in the dark
 // about CVE backports. Drafts remain skipped (see TestUpdate_SkipsDrafts).
-// The skip-prereleases behaviour will return when we cut a stable.
+// The skip-prereleases behavior will return when we cut a stable.
 func TestUpdate_AcceptsPrereleases(t *testing.T) {
 	version = "1.0.0"
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

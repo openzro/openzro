@@ -31,7 +31,7 @@ type FrameHandler interface {
 }
 
 // Stream wraps one long-lived TCP connection between two pods. It
-// owns the read loop and serialises writes; multiple goroutines
+// owns the read loop and serializes writes; multiple goroutines
 // can call Send concurrently and the frames stay framed correctly.
 type Stream struct {
 	remote string
@@ -53,7 +53,7 @@ func newStream(remote string, conn net.Conn) *Stream {
 }
 
 // Send writes a single framed message to the remote pod. Safe for
-// concurrent calls — frames remain serialised on the wire.
+// concurrent calls — frames remain serialized on the wire.
 func (s *Stream) Send(t MsgType, payload []byte) error {
 	if s.closed.Load() {
 		return net.ErrClosed

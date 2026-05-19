@@ -67,7 +67,7 @@ const (
 // independent of any further .proto changes.
 type envelope struct {
 	PeerID  string `json:"p"`
-	Message []byte `json:"m"` // proto-marshalled EncryptedMessage
+	Message []byte `json:"m"` // proto-marshaled EncryptedMessage
 }
 
 // Config tunes the dispatcher. All fields are optional; zero values fall

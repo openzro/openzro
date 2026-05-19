@@ -246,7 +246,7 @@ func TestIntune_CombinedFilterPrefersUserMatch(t *testing.T) {
 
 // TestIntune_FallsBackToUPNWhenHostnameChanged simulates the
 // renamed-hostname recovery path: the agent reports a hostname Intune
-// no longer recognises, but the user's email anchor still resolves to
+// no longer recognizes, but the user's email anchor still resolves to
 // the device.
 func TestIntune_FallsBackToUPNWhenHostnameChanged(t *testing.T) {
 	f := &fakeAzure{

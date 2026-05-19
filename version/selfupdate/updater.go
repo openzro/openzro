@@ -46,7 +46,7 @@ type Config struct {
 	// subset/ring for this peer, so Evaluate skips the manifest
 	// staged_rollout. Set true on the directive path; left false on
 	// the critical-only static-manifest fallback (R6) so that path
-	// still honours staged_rollout. See GateInput.Authoritative.
+	// still honors staged_rollout. See GateInput.Authoritative.
 	Authoritative bool
 
 	// CriticalOnly restricts this cycle to a SECURITY-FLOOR breach:

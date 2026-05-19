@@ -198,7 +198,7 @@ func TestEvaluate_Authoritative(t *testing.T) {
 			AutoInstallEnabled: false, Authoritative: true}); d.Eligible {
 			t.Fatalf("authoritative must not override the auto-install opt-in: %q", d.Reason)
 		}
-		// critical still detected/labelled.
+		// critical still detected/labeled.
 		d := Evaluate(GateInput{Current: "1.0.0", Manifest: mf("1.1.0", "1.0.5", 0),
 			AutoInstallEnabled: true, ClientID: "c1", Authoritative: true})
 		if !d.Eligible || !d.Critical {
