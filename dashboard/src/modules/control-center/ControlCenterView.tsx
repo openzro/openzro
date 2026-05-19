@@ -23,6 +23,7 @@ import { Group } from "@/interfaces/Group";
 import { NetworkResource } from "@/interfaces/Network";
 import { Peer } from "@/interfaces/Peer";
 import { Policy } from "@/interfaces/Policy";
+import { PostureCheck } from "@/interfaces/PostureCheck";
 import { User } from "@/interfaces/User";
 import { AccessControlModalContent } from "@/modules/access-control/AccessControlModal";
 import ControlCenterGraphCanvas from "@/modules/control-center/ControlCenterGraphCanvas";
@@ -72,30 +73,31 @@ export default function ControlCenterView() {
   // R5b: fetch ONLY the active tab's option source — the other three
   // lists are dead weight on initial load. SWR keepPreviousData keeps
   // a previously-visited tab instant on return. (4th arg = allowFetch.)
-  const { data: peers } = useFetchApi<Peer[]>(
+  const { data: peers, isLoading: peersLoading } = useFetchApi<Peer[]>(
     "/peers",
     true,
     true,
     view === "peer",
   );
-  const { data: groups } = useFetchApi<Group[]>(
+  const { data: groups, isLoading: groupsLoading } = useFetchApi<Group[]>(
     "/groups",
     true,
     true,
     view === "group",
   );
-  const { data: users } = useFetchApi<User[]>(
+  const { data: users, isLoading: usersLoading } = useFetchApi<User[]>(
     "/users",
     true,
     true,
     view === "user",
   );
-  const { data: resources } = useFetchApi<NetworkResource[]>(
-    "/networks/resources",
-    true,
-    true,
-    view === "network",
-  );
+  const { data: resources, isLoading: resourcesLoading } =
+    useFetchApi<NetworkResource[]>(
+      "/networks/resources",
+      true,
+      true,
+      view === "network",
+    );
 
   // Policy edit happens in a modal ON the Control Center, not by
   // navigating to /access-control — the operator must not lose the
@@ -115,6 +117,22 @@ export default function ControlCenterView() {
     [policies, editPolicyId],
   );
 
+  // #70 prefetched /policies so the editPolicy LOOKUP is instant, but
+  // the modal BODY (useAccessControl + the two PeerGroupSelectors)
+  // still cold-fetched /posture-checks and /networks/resources on
+  // first mount — that residual fetch was the lingering open lag.
+  // Warm both as soon as the editor is reachable (graph has a policy
+  // node, same trigger as policiesNeeded). SWR dedupes the
+  // /networks/resources key with the Networks-tab fetch above, so
+  // this only actually fetches on the peer/user/group tabs.
+  useFetchApi<PostureCheck[]>("/posture-checks", true, true, policiesNeeded);
+  useFetchApi<NetworkResource[]>(
+    "/networks/resources",
+    true,
+    true,
+    policiesNeeded,
+  );
+
   const {
     data: graph,
     isLoading,
@@ -125,6 +143,18 @@ export default function ControlCenterView() {
     true,
     focusId !== "",
   );
+
+  // Prefetch /policies as soon as a topology with policy nodes is
+  // shown, so the edit modal is ready *before* the first click
+  // instead of blocking on the request then (R5b deferred it to
+  // the click, which made the first edit feel broken). The four
+  // entity lists stay active-tab-only — the R5b win is kept.
+  useEffect(() => {
+    if (policiesNeeded) return;
+    if (graph?.nodes?.some((n) => n.kind === "policy")) {
+      setPoliciesNeeded(true);
+    }
+  }, [graph, policiesNeeded]);
 
   const options = useMemo(() => {
     if (view === "peer") {
@@ -146,6 +176,17 @@ export default function ControlCenterView() {
       .filter((g) => g.id)
       .map((g) => ({ id: g.id as string, label: g.name }));
   }, [view, peers, groups, users, resources]);
+
+  // "This tab genuinely has no entities" vs "the tab's list is still
+  // loading" are different states. Switching tabs resets focusId to ""
+  // and the auto-select-first effect can't pick until the active
+  // list resolves — without this flag the empty-state ("No <view>
+  // available to inspect.") flashes for the whole fetch window.
+  const optionsLoading =
+    (view === "peer" && peersLoading) ||
+    (view === "user" && usersLoading) ||
+    (view === "group" && groupsLoading) ||
+    (view === "network" && resourcesLoading);
 
   const onViewChange = (v: string) => {
     if (!isFocusType(v)) return;
@@ -225,6 +266,7 @@ export default function ControlCenterView() {
             view={view}
             focusId={focusId}
             isLoading={isLoading}
+            optionsLoading={optionsLoading}
             graph={graph}
             onFocusNode={onFocusNode}
             focusOptions={options}
@@ -287,6 +329,7 @@ function ControlCenterBody({
   view,
   focusId,
   isLoading,
+  optionsLoading,
   graph,
   onFocusNode,
   onPolicyOpen,
@@ -297,6 +340,7 @@ function ControlCenterBody({
   view: FocusType;
   focusId: string;
   isLoading: boolean;
+  optionsLoading: boolean;
   graph?: ControlCenterGraph;
   onFocusNode: (v: FocusType, id: string) => void;
   onPolicyOpen: (policyId: string) => void;
@@ -305,6 +349,14 @@ function ControlCenterBody({
   onPickFocus: (id: string) => void;
 }) {
   if (focusId === "") {
+    // Don't claim "nothing here" while the tab's entity list is still
+    // in flight — that false-empty flash on every tab switch is the
+    // reported bug. Show the load state until the list resolves; the
+    // auto-select-first effect then picks an entity (or, if the list
+    // really is empty, the message below is finally correct).
+    if (optionsLoading) {
+      return <Centered>Loading {view}s…</Centered>;
+    }
     return (
       <Centered tone="faint">
         No {view} available to inspect.

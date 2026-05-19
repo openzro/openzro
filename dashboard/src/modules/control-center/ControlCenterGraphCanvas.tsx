@@ -295,6 +295,7 @@ export default function ControlCenterGraphCanvas({
               kind?: string;
               switchable?: boolean;
               column?: string;
+              entityId?: string;
             };
             // The focus card is the picker affordance: clicking it
             // (or its chevron) opens an inline selector anchored to
@@ -309,12 +310,33 @@ export default function ControlCenterGraphCanvas({
               onEdgeClick(node.id.replace(/^policy:/, ""));
               return;
             }
+            // A network-resource leaf re-focuses the Networks tab on
+            // that resource ("who else can reach this?") — symmetric
+            // with the peer/group re-focus. d.entityId is the raw
+            // resource id (the "nr:" node-id prefix is already
+            // stripped in the layout); /control-center/network/<id>
+            // and the picker both key on that raw id.
+            if (
+              onFocusNode &&
+              d.kind === "network_resource" &&
+              d.column !== "focus" &&
+              d.entityId
+            ) {
+              onFocusNode("network", d.entityId);
+              return;
+            }
             if (
               onFocusNode &&
               d.switchable &&
+              d.entityId &&
               (d.kind === "peer" || d.kind === "group")
             ) {
-              onFocusNode(d.kind as FocusType, node.id);
+              // d.entityId is the raw account-entity id; node.id is
+              // prefixed for groups ("group:<gid>") / resources, which
+              // the focus endpoint + picker do NOT understand —
+              // passing node.id 404'd or fell back to the default
+              // focus (#39 v2 review).
+              onFocusNode(d.kind as FocusType, d.entityId);
             }
           }}
           onEdgeClick={(_, edge) => {

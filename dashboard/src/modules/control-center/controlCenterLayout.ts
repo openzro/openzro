@@ -60,6 +60,10 @@ export interface CCFlowNodeData {
   column: ColumnId;
   meta: Record<string, string>;
   switchable: boolean;
+  // Raw account-entity id. Node ids are prefixed ("group:<id>",
+  // "nr:<id>", "policy:<id>"); peer/user are raw. Re-focusing and the
+  // focus endpoint need the RAW id, never the prefixed node id.
+  entityId: string;
 }
 
 export interface CCFlowEdgeData {
@@ -211,6 +215,9 @@ export function layoutGraph(
           label: n.label || n.id,
           column: col,
           meta: n.meta ?? {},
+          // strip the node-id prefix to recover the raw entity id
+          // (peer/user ids are already raw).
+          entityId: n.id.replace(/^(group|nr|policy):/, ""),
           // peer/group nodes that are not the current focus are valid
           // foci → clicking re-centres the graph on them.
           switchable:

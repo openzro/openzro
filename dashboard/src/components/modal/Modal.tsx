@@ -53,6 +53,14 @@ type ModalContentProps = {
   // `accessibilityTitle` prop is the fallback we emit visually
   // hidden when the caller hasn't supplied one. Defaults to "Dialog".
   accessibilityTitle?: string;
+  // a11y description — Radix 1.1+ also warns when Dialog.Content has
+  // neither a Dialog.Description nor an explicit aria-describedby.
+  // Same fallback strategy as accessibilityTitle: emit a visually
+  // hidden Dialog.Description so the contract is satisfied without
+  // forcing every caller to thread one through. Empty by default —
+  // the element/id alone silences the warning; pass a string when a
+  // modal has a meaningful screen-reader description.
+  accessibilityDescription?: string;
 };
 
 const ModalContent = React.forwardRef<
@@ -67,6 +75,7 @@ const ModalContent = React.forwardRef<
       showClose = true,
       maxWidthClass = "max-w-3xl",
       accessibilityTitle = "Dialog",
+      accessibilityDescription = "",
       ...props
     },
     ref,
@@ -91,6 +100,9 @@ const ModalContent = React.forwardRef<
           <>
             <VisuallyHidden.Root>
               <DialogPrimitive.Title>{accessibilityTitle}</DialogPrimitive.Title>
+              <DialogPrimitive.Description>
+                {accessibilityDescription}
+              </DialogPrimitive.Description>
             </VisuallyHidden.Root>
             {children}
             {showClose && (
@@ -122,6 +134,7 @@ const SidebarModalContent = React.forwardRef<
       showClose = true,
       maxWidthClass = "max-w-3xl",
       accessibilityTitle = "Dialog",
+      accessibilityDescription = "",
       ...props
     },
     ref,
@@ -162,6 +175,9 @@ const SidebarModalContent = React.forwardRef<
               <DialogPrimitive.Title>
                 {accessibilityTitle}
               </DialogPrimitive.Title>
+              <DialogPrimitive.Description>
+                {accessibilityDescription}
+              </DialogPrimitive.Description>
             </VisuallyHidden.Root>
             {children}
             {showClose && (

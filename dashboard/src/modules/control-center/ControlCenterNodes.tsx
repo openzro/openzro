@@ -33,10 +33,17 @@ function shellClass(d: RenderData): string {
     : "border-oz2-border hover:border-oz2-acc hover:ring-[3px] " +
       "hover:ring-oz2-acc-soft hover:-translate-y-px hover:shadow-oz2-md";
   const dim = d.dimmed ? "opacity-25" : "opacity-100";
-  // focus card is the picker affordance, peer/group target nodes are
-  // re-focus affordances → both read as clickable.
-  const click =
-    d.switchable || d.column === "focus" ? "cursor-pointer" : "";
+  // Every node the canvas wires a click to must read as clickable:
+  // focus card (picker), switchable peer/group (re-focus), policy
+  // (opens the editor), and network-resource leaves (re-focus the
+  // Networks tab on that resource). Keep this predicate in lockstep
+  // with ControlCenterGraphCanvas onNodeClick.
+  const clickable =
+    d.switchable ||
+    d.column === "focus" ||
+    d.kind === "policy" ||
+    d.kind === "network_resource";
+  const click = clickable ? "cursor-pointer" : "";
   return `${SHELL_BASE} ${tone} ${dim} ${click}`;
 }
 
