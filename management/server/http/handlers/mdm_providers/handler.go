@@ -71,7 +71,7 @@ type responseBody struct {
 	UpdatedAt              time.Time        `json:"updated_at"`
 }
 
-func toResponse(row *mdm.MDMProvider) responseBody {
+func toResponse(row *mdm.ProviderRow) responseBody {
 	return responseBody{
 		ID:                     row.ID,
 		Name:                   row.Name,

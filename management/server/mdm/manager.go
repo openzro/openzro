@@ -17,7 +17,7 @@ import (
 //   - constructs concrete drivers (Intune / SentinelOne / Huntress /
 //     CrowdStrike)
 //   - wraps them in a CachedProvider with the per-provider configured
-//     TTL (MDMProvider.RefreshIntervalMinutes)
+//     TTL (ProviderRow.RefreshIntervalMinutes)
 //   - serves status lookups to posture checks via Lookup()
 //   - keeps a per-provider RefreshWorker warming the cache so big
 //     tenants don't thunder-herd the vendor API on rollout
@@ -155,7 +155,7 @@ func (m *Manager) Refresh(ctx context.Context) error {
 	return nil
 }
 
-func (m *Manager) buildProvider(row *MDMProvider) (Provider, error) {
+func (m *Manager) buildProvider(row *ProviderRow) (Provider, error) {
 	plain, err := m.store.Decrypt(row)
 	if err != nil {
 		return nil, fmt.Errorf("decrypt: %w", err)

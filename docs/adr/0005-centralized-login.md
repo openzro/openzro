@@ -170,7 +170,7 @@ flow. Scope:
 
 1. **Schema + storage** (`management/server/auth/providers/`):
    - `AuthenticationProvider` GORM row with the same encrypted
-     blob layout as `mdm.MDMProvider`.
+     blob layout as `mdm.ProviderRow`.
    - `Store` with `Save` / `List` / `Get` / `Delete`,
      `Decrypt` for the live OIDC manager.
 2. **Provider manager** (`management/server/auth/manager.go`):

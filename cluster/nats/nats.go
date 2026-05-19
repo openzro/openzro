@@ -91,11 +91,12 @@ func New(ctx context.Context, cfg Config) (*Coordinator, error) {
 
 	parentCtx, cancel := context.WithCancel(ctx)
 
-	// JetStream cluster precisa de meta-leader eleito antes do bucket KV
-	// poder ser criado. Em deploys HA fresh (3 pods boot juntos), a eleição
-	// leva alguns segundos — o boot do management nesse momento perde a
-	// janela e o pod sai com erro, criando um loop de restart que nunca
-	// converge. Retry com backoff até 60s cobre o caso comum.
+	// The JetStream cluster needs an elected meta-leader before the KV
+	// bucket can be created. On fresh HA deploys (3 pods booting
+	// together) the election takes a few seconds; a management boot in
+	// that window misses it and the pod exits with an error, creating
+	// a restart loop that never converges. Retry with backoff up to
+	// 60s covers the common case.
 	var kv jetstream.KeyValue
 	const (
 		bucketRetryTimeout = 60 * time.Second

@@ -35,7 +35,7 @@ func validateSentinelOneCompliance(c SentinelOneCompliance) error {
 // translate it to HTTP 404 at the API layer.
 var ErrNotFound = errors.New("mdm: provider not found")
 
-// Store provides CRUD for MDMProvider rows with credentials encrypted
+// Store provides CRUD for ProviderRow rows with credentials encrypted
 // at rest. The encryption helper is reused from flow_exports — same
 // envelope, same key, same threat model.
 type Store struct {
@@ -52,7 +52,7 @@ func NewStore(db *gorm.DB, key string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := db.AutoMigrate(&MDMProvider{}); err != nil {
+	if err := db.AutoMigrate(&ProviderRow{}); err != nil {
 		return nil, err
 	}
 	return &Store{db: db, encrypt: enc}, nil
@@ -217,7 +217,7 @@ func (in *SaveInput) MergeIncomingSecret(prev any) {
 
 // Save creates or updates a row. Sensitive fields are encrypted
 // before INSERT/UPDATE.
-func (s *Store) Save(ctx context.Context, in SaveInput) (*MDMProvider, error) {
+func (s *Store) Save(ctx context.Context, in SaveInput) (*ProviderRow, error) {
 	if in.ID != 0 {
 		// Preserve write-only credentials when the caller posts
 		// placeholders. See MergeIncomingSecret for the rationale.
@@ -252,11 +252,11 @@ func (s *Store) Save(ctx context.Context, in SaveInput) (*MDMProvider, error) {
 		// Collapse 0 (operator didn't fill the form, or upgrader hasn't
 		// re-saved a pre-knob row) to the default so the column is
 		// never persisted as zero. The resolver in
-		// MDMProvider.ResolvedRefreshInterval also tolerates zero, but
+		// ProviderRow.ResolvedRefreshInterval also tolerates zero, but
 		// keeping the DB clean makes the form roundtrip readable.
 		refreshMinutes = defaultRefreshIntervalMinutes
 	}
-	row := MDMProvider{
+	row := ProviderRow{
 		ID:                     in.ID,
 		Name:                   in.Name,
 		Type:                   in.Type,
@@ -272,7 +272,7 @@ func (s *Store) Save(ctx context.Context, in SaveInput) (*MDMProvider, error) {
 			return nil, err
 		}
 	} else {
-		var existing MDMProvider
+		var existing ProviderRow
 		if err := s.db.WithContext(ctx).First(&existing, in.ID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil, ErrNotFound
@@ -287,16 +287,16 @@ func (s *Store) Save(ctx context.Context, in SaveInput) (*MDMProvider, error) {
 	return &row, nil
 }
 
-func (s *Store) List(ctx context.Context) ([]MDMProvider, error) {
-	var rows []MDMProvider
+func (s *Store) List(ctx context.Context) ([]ProviderRow, error) {
+	var rows []ProviderRow
 	if err := s.db.WithContext(ctx).Order("id ASC").Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	return rows, nil
 }
 
-func (s *Store) Get(ctx context.Context, id uint64) (*MDMProvider, error) {
-	var row MDMProvider
+func (s *Store) Get(ctx context.Context, id uint64) (*ProviderRow, error) {
+	var row ProviderRow
 	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
@@ -307,7 +307,7 @@ func (s *Store) Get(ctx context.Context, id uint64) (*MDMProvider, error) {
 }
 
 func (s *Store) Delete(ctx context.Context, id uint64) error {
-	res := s.db.WithContext(ctx).Delete(&MDMProvider{}, id)
+	res := s.db.WithContext(ctx).Delete(&ProviderRow{}, id)
 	if res.Error != nil {
 		return res.Error
 	}
@@ -319,7 +319,7 @@ func (s *Store) Delete(ctx context.Context, id uint64) error {
 
 // Decrypt reads ConfigCipher into the type-appropriate Go struct.
 // Used by the manager to instantiate live Provider drivers.
-func (s *Store) Decrypt(row *MDMProvider) (any, error) {
+func (s *Store) Decrypt(row *ProviderRow) (any, error) {
 	plain, err := s.encrypt.Decrypt(row.ConfigCipher)
 	if err != nil {
 		return nil, err
