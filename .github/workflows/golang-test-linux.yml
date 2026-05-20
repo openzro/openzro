@@ -10,6 +10,26 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || github.actor_id }}
   cancel-in-progress: true
 
+# Reroute testcontainers' Docker Hub pulls through ECR Public's mirror
+# so the Management matrix (postgres/mysql/redis) stops blowing the
+# Docker Hub pull rate limit on burst re-runs. The Hub prefix is
+# applied automatically by testcontainers-go to any bare image name
+# (mysql:8.0 -> public.ecr.aws/docker/library/mysql:8.0, same for
+# postgres:16-alpine, redis:7, etc.) — zero source changes.
+#
+# Ryuk's image (testcontainers/ryuk) lives in a different ECR Public
+# namespace (public.ecr.aws/testcontainers/ryuk) that the prefix
+# wouldn't reach, and testcontainers-go v0.42.0 has no env to
+# override the ryuk image alone. Disable Ryuk: it's only a fallback
+# garbage collector for containers a crashed test left behind, and
+# GitHub Actions runners are ephemeral — the VM destroys whatever
+# Ryuk would have killed when the job ends.
+#
+# See dashboard/.../README or future ADR for the rate-limit context.
+env:
+  TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: public.ecr.aws/docker/library
+  TESTCONTAINERS_RYUK_DISABLED: "true"
+
 jobs:
   build-cache:
     name: "Build Cache"
