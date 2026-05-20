@@ -487,3 +487,73 @@ func TestAccounts_PutRoundTripsFlowTrafficDefaultRange(t *testing.T) {
 		assert.Equal(t, "24h", captured.Extra.FlowTrafficDefaultRange)
 	}
 }
+
+// TestAccounts_PutStripsLeadingVOnClientUpdateTargetVersion locks the
+// fix: an operator who copies the release tag verbatim
+// ("v0.53.1-alpha.76") into the directive must end up with the bare
+// version ("0.53.1-alpha.76") on the stored settings. The selfupdate
+// resolver templates the stored value into
+// `releases/download/v{version}/update-manifest.json` — a leading "v"
+// would resolve to `releases/download/vv0.53.1-...` (HTTP 404, no
+// such asset), which is what surfaced as the cryptic macOS-tray
+// "manifest fetch failed: ... returned HTTP 404" on 2026-05-20.
+func TestAccounts_PutStripsLeadingVOnClientUpdateTargetVersion(t *testing.T) {
+	accountID := "test_account"
+	adminUser := types.NewAdminUser("test_user")
+
+	account := &types.Account{
+		Id:      accountID,
+		Domain:  "example.org",
+		Network: types.NewNetwork(),
+		Users: map[string]*types.User{
+			adminUser.Id: adminUser,
+		},
+		Settings: &types.Settings{
+			PeerLoginExpirationEnabled: false,
+			PeerLoginExpiration:        time.Hour,
+			Extra:                      &types.ExtraSettings{},
+		},
+	}
+	handler := initAccountsTestData(t, account)
+
+	var captured *types.Settings
+	if m, ok := handler.accountManager.(*mock_server.MockAccountManager); ok {
+		m.UpdateAccountSettingsFunc = func(ctx context.Context, accountID, userID string, newSettings *types.Settings) (*types.Settings, error) {
+			captured = newSettings
+			return newSettings, nil
+		}
+	}
+
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"with v prefix is stripped", "v0.53.1-alpha.76", "0.53.1-alpha.76"},
+		{"bare semver passes through", "0.53.1-alpha.76", "0.53.1-alpha.76"},
+		{"empty stays empty", "", ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body := `{"settings":{"peer_login_expiration":3600,"peer_login_expiration_enabled":false,"client_update_target_version":"` + tc.input + `"}}`
+
+			recorder := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPut, "/api/accounts/"+accountID, bytes.NewBufferString(body))
+			req = nbcontext.SetUserAuthInRequest(req, nbcontext.UserAuth{
+				UserId:    adminUser.Id,
+				AccountId: accountID,
+				Domain:    "example.org",
+			})
+
+			router := mux.NewRouter()
+			router.HandleFunc("/api/accounts/{accountId}", handler.updateAccount).Methods("PUT")
+			router.ServeHTTP(recorder, req)
+
+			assert.Equal(t, http.StatusOK, recorder.Code, "body=%s", recorder.Body.String())
+			if assert.NotNil(t, captured) {
+				assert.Equal(t, tc.want, captured.ClientUpdateTargetVersion)
+			}
+		})
+	}
+}
