@@ -10,24 +10,26 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || github.actor_id }}
   cancel-in-progress: true
 
-# Reroute testcontainers' Docker Hub pulls through ECR Public's mirror
-# so the Management matrix (postgres/mysql/redis) stops blowing the
-# Docker Hub pull rate limit on burst re-runs. The Hub prefix is
-# applied automatically by testcontainers-go to any bare image name
-# (mysql:8.0 -> public.ecr.aws/docker/library/mysql:8.0, same for
-# postgres:16-alpine, redis:7, etc.) — zero source changes.
+# Reroute testcontainers' Docker Hub pulls through Google's
+# `mirror.gcr.io/library` pull-through cache so the Management matrix
+# (postgres/mysql/redis) stops blowing the Docker Hub pull rate limit
+# on burst re-runs. ECR Public's mirror was tried first but its
+# catalog is curated — postgres:16-alpine and redis:7 returned
+# "No such image" while mysql:8.0 worked. mirror.gcr.io is an
+# on-demand pull-through cache so any tag Docker Hub serves is
+# reachable.
 #
-# Ryuk's image (testcontainers/ryuk) lives in a different ECR Public
-# namespace (public.ecr.aws/testcontainers/ryuk) that the prefix
-# wouldn't reach, and testcontainers-go v0.42.0 has no env to
-# override the ryuk image alone. Disable Ryuk: it's only a fallback
-# garbage collector for containers a crashed test left behind, and
-# GitHub Actions runners are ephemeral — the VM destroys whatever
-# Ryuk would have killed when the job ends.
-#
-# See dashboard/.../README or future ADR for the rate-limit context.
+# Ryuk's image (testcontainers/ryuk) lives under a different
+# namespace, and `prependHubRegistry` applies the prefix to the
+# ENTIRE image name (so `testcontainers/ryuk:0.7.0` becomes
+# `mirror.gcr.io/library/testcontainers/ryuk:0.7.0` — wrong path).
+# testcontainers-go v0.31.0 has no env to override the ryuk image
+# alone. Disable Ryuk: it's only a fallback garbage collector for
+# containers a crashed test left behind, and GitHub Actions runners
+# are ephemeral — the VM destroys whatever Ryuk would have killed
+# when the job ends.
 env:
-  TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: public.ecr.aws/docker/library
+  TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: mirror.gcr.io/library
   TESTCONTAINERS_RYUK_DISABLED: "true"
 
 jobs:
