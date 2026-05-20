@@ -109,9 +109,14 @@ export default function OIDCProvider({ children }: Props) {
         ? auth0AuthorityConfig
         : undefined,
       extras: buildExtras(),
-      ...(config.clientSecret
-        ? { token_request_extras: { client_secret: config.clientSecret } }
-        : null),
+      // No client_secret branch on purpose: this is a public OIDC
+      // client (SPA). PKCE (S256, configured in @axa-fr/oidc-client
+      // requests.ts) authenticates the token exchange without a
+      // shared secret. Putting a client_secret in `token_request_extras`
+      // here would ship it inside the JS bundle to every browser —
+      // any inspection of DevTools would leak it. Operators upgrading
+      // from a confidential-client setup must rotate the credential
+      // and register a public-client app at the IdP.
     });
     setMounted(true);
   }, []);
