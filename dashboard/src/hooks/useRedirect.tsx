@@ -23,7 +23,12 @@ export const useRedirect = (
     const performRedirect = () => {
       if (!isRedirecting.current) {
         isRedirecting.current = true;
-        router.refresh();
+        // No router.refresh() before push: in App Router, refresh()
+        // triggers a server re-fetch of the CURRENT route, and its
+        // in-flight RSC payload can race with the subsequent push()
+        // and effectively "resurrect" the old route. The retry
+        // setInterval below handles the rare case where push() is
+        // dropped on its own.
         if (replace) {
           router.replace(url);
         } else {

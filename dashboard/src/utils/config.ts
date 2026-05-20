@@ -47,6 +47,28 @@ const loadConfig = (): Config => {
 
   const authority = configJson.authAuthority.replace(/\/+$/, "");
 
+  // Plaintext-HTTP authority/apiOrigin leak the OIDC bearer over the
+  // wire when not on loopback. Loud warning in production so
+  // operators notice if their envsubst dropped the scheme; we don't
+  // hard-error because the dev/test/CI stacks intentionally run on
+  // http://localhost.
+  if (process.env.NODE_ENV === "production") {
+    const isInsecure = (url: string | undefined) =>
+      typeof url === "string" &&
+      url.startsWith("http://") &&
+      !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(url);
+    if (isInsecure(authority)) {
+      console.warn(
+        `[openZro] insecure authority URL "${authority}" — OIDC tokens will be exchanged in plaintext. Set AUTH_AUTHORITY to an https:// origin.`,
+      );
+    }
+    if (isInsecure(configJson.apiOrigin)) {
+      console.warn(
+        `[openZro] insecure apiOrigin "${configJson.apiOrigin}" — bearer tokens will be sent in plaintext. Set OPENZRO_MGMT_API_ENDPOINT to an https:// origin.`,
+      );
+    }
+  }
+
   return {
     auth0Auth: configJson.auth0Auth == "true", // Due to substitution we can't use boolean in the config
     authority: validator.isValidUrl(authority) ? authority : "http://localhost",

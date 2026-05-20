@@ -71,9 +71,25 @@ export default function OIDCProvider({ children }: Props) {
 
   const withCustomHistory = () => {
     return {
-      replaceState: (url: any) => {
-        router.replace(url);
-        window.dispatchEvent(new Event("popstate"));
+      // The OIDC lib calls this after exchanging `/auth?code=...`
+      // for the originally requested page. A hard replace guarantees
+      // Next mounts the destination route instead of keeping the
+      // callback segment alive behind a spinner.
+      //
+      // Open-redirect guard: the native history.replaceState() treats
+      // any non-same-origin URL as a relative path and stays on-origin.
+      // window.location.replace() does NOT — it cross-navigates. So
+      // accept only same-origin absolute paths ("/foo"), and reject
+      // protocol-relative ("//evil.com/x") and any absolute URL.
+      // Without this guard, a sessionStorage poisoning (XSS or
+      // malicious browser extension) into the lib's loginParams could
+      // steer the post-callback redirect to an attacker origin.
+      replaceState: (url?: string | null) => {
+        const safe =
+          typeof url === "string" &&
+          url.startsWith("/") &&
+          !url.startsWith("//");
+        window.location.replace(safe ? url : "/");
       },
     };
   };
@@ -93,9 +109,14 @@ export default function OIDCProvider({ children }: Props) {
         ? auth0AuthorityConfig
         : undefined,
       extras: buildExtras(),
-      ...(config.clientSecret
-        ? { token_request_extras: { client_secret: config.clientSecret } }
-        : null),
+      // No client_secret branch on purpose: this is a public OIDC
+      // client (SPA). PKCE (S256, configured in @axa-fr/oidc-client
+      // requests.ts) authenticates the token exchange without a
+      // shared secret. Putting a client_secret in `token_request_extras`
+      // here would ship it inside the JS bundle to every browser —
+      // any inspection of DevTools would leak it. Operators upgrading
+      // from a confidential-client setup must rotate the credential
+      // and register a public-client app at the IdP.
     });
     setMounted(true);
   }, []);
@@ -107,7 +128,7 @@ export default function OIDCProvider({ children }: Props) {
   return mounted && providerConfig ? (
     <OidcProvider
       configuration={providerConfig}
-      //withCustomHistory={withCustomHistory}
+      withCustomHistory={withCustomHistory}
       authenticatingComponent={FullScreenLoading}
       authenticatingErrorComponent={OIDCError}
       loadingComponent={FullScreenLoading}
