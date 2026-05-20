@@ -3,6 +3,7 @@ package accounts
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -183,7 +184,17 @@ func (h *handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 	// (no runtime validation middleware), and an out-of-range ring
 	// would otherwise reach the fail-closed gate as silently "nobody".
 	if req.Settings.ClientUpdateTargetVersion != nil {
-		settings.ClientUpdateTargetVersion = *req.Settings.ClientUpdateTargetVersion
+		// Normalize the conventional Git-tag leading "v" so an
+		// operator who copies a release tag verbatim ("v0.53.1-
+		// alpha.76") doesn't end up with a target the resolver
+		// templates into `releases/download/vv0.53.1-alpha.76/
+		// update-manifest.json` — a non-existent path, fetched as
+		// 404, surfaced in the macOS tray as the cryptic
+		// "manifest fetch failed: ... returned HTTP 404". Forgiving
+		// on input; the directive path stores the stripped form so
+		// the per-version manifest URL resolves.
+		settings.ClientUpdateTargetVersion = strings.TrimPrefix(
+			*req.Settings.ClientUpdateTargetVersion, "v")
 	}
 	if req.Settings.ClientUpdateForce != nil {
 		settings.ClientUpdateForce = *req.Settings.ClientUpdateForce
