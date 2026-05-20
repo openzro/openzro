@@ -4,13 +4,13 @@ Section:
 Installed-Size: 30784
 Maintainer: openZro <dev@openzro.io>
 Architecture: armhf
-Version: 0.53.1~alpha.77
-Filename: pool/main/o/openzro/openzro_0.53.1-alpha.77_linux_armv6.deb
-Size: 11851498
-MD5sum: 5a31f54fb07a48c6ee52764307dc5bc8
-SHA1: ffe0cb6debb6566753d9bb7c8c074380bd89fe82
-SHA256: db86a7e7eaa390e65e3136ea7d0425d43ae641ca549733cd5c167f97068c0431
-SHA512: 720782ef511a23cfcdbfd04060dfe2488b90d6f78d6b57ac0f6d5687d1c8983dc2f2372a8dbd9a25a2ca6927765acbd72bfbcc79608c66058af05f6b4d18d0cc
+Version: 0.53.1~alpha.78
+Filename: pool/main/o/openzro/openzro_0.53.1-alpha.78_linux_armv6.deb
+Size: 11851492
+MD5sum: a430c33c0a1908107e67a449b86fd779
+SHA1: 326b422bab2a03378a8b486dd3571643aae62444
+SHA256: cd7c8739f8a8437c6ab0df5f6e92d279bc0ccaf903adee98a23e0923cdc80664
+SHA512: c8e6346e9adf861be772e3dc24c07d8b150855694cdc3e24c5147f417130559f9c91a3ef2730868a6368ab6d4832b331a107267ceaf31d4d63390b2f499a6a07
 Description: openZro client (zero-trust mesh networking).
 Homepage: https://openzro.io/
 License: BSD-3-Clause
