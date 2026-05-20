@@ -20,16 +20,17 @@ out="$repo_root/client/ui/assets"
 canvas=256
 fill=0.97  # target ink-vs-canvas ratio after the trim pass
 
-# state -> source SVG. The "error" state intentionally reuses
-# shield-disconnected per the brand README (no dedicated error
-# variant shipped yet).
+# state -> source SVG. The error variant has its own SVG (was
+# reusing shield-disconnected.svg before the round-3 redesign,
+# which made disconnected and error literally identical pixels —
+# unhelpful for an operator trying to tell them apart at 22 pt).
 declare -A states=(
   [openzro-systemtray-connected-macos.png]=shield-connected.svg
   [openzro-systemtray-disconnected-macos.png]=shield-disconnected.svg
   [openzro-systemtray-connecting-macos.png]=shield-connecting.svg
   [openzro-systemtray-update-connected-macos.png]=shield-update-connected.svg
   [openzro-systemtray-update-disconnected-macos.png]=shield-update-disconnected.svg
-  [openzro-systemtray-error-macos.png]=shield-disconnected.svg
+  [openzro-systemtray-error-macos.png]=shield-error.svg
 )
 
 tmp="$(mktemp -d)"

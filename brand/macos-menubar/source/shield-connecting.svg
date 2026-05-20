@@ -1,26 +1,32 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="256" height="256" fill="none">
   <defs>
+    <!-- Solid-shield style + connecting variant: the badge cutout
+         carries a thick negative-space arc that reads as "in progress"
+         even without animation (AppKit doesn't honour SVG animation
+         on a static NSImage; the incomplete arc carries the meaning).
+         The arc cutout in the badge mask is what makes the connecting
+         badge visibly distinct from the solid-dot connected state. -->
     <mask id="cut">
       <rect width="64" height="64" fill="white"/>
-      <circle cx="47" cy="47" r="17" fill="black"/>
+      <g transform="translate(32 32) scale(0.78) translate(-32 -32)">
+        <path fill="black" d="m 42.69949,50.729586 c -5.246771,-1.783072 -10.782457,-1.832655 -16.63185,0 -0.668227,0.02122 -0.999265,-0.317022 -0.478323,-0.97503 L 47.71668,18.700815 c 0,0 0.157573,-0.196687 0.354413,-0.298049 0.147255,-0.07583 0.295663,-0.0759 0.450161,0.0028 0.163897,0.08346 0.281363,0.233899 0.343513,0.325372 5.118536,7.533388 8.852414,20.216321 -4.595268,31.484113 -0.587268,0.492072 -0.882773,0.514556 -1.57001,0.514557 z"/>
+        <g transform="rotate(180 32 32)">
+          <path fill="black" d="m 42.69949,50.729586 c -5.246771,-1.783072 -10.782457,-1.832655 -16.63185,0 -0.668227,0.02122 -0.999265,-0.317022 -0.478323,-0.97503 L 47.71668,18.700815 c 0,0 0.157573,-0.196687 0.354413,-0.298049 0.147255,-0.07583 0.295663,-0.0759 0.450161,0.0028 0.163897,0.08346 0.281363,0.233899 0.343513,0.325372 5.118536,7.533388 8.852414,20.216321 -4.595268,31.484113 -0.587268,0.492072 -0.882773,0.514556 -1.57001,0.514557 z"/>
+        </g>
+      </g>
+      <circle cx="47" cy="47" r="18" fill="black"/>
+    </mask>
+
+    <!-- Negative-space arc inside the badge: ¾ wedge cut out. The
+         missing ¼ at the top-right reads as motion / progress. -->
+    <mask id="badge-arc">
+      <rect width="64" height="64" fill="white"/>
+      <path fill="black" d="M47 47 L47 32 A15 15 0 1 0 47 62 Z"/>
     </mask>
   </defs>
 
-  <g mask="url(#cut)">
-    <path d="M32 5 C40 7 48 10 55 12 V32 C55 43.5 46.5 53 32 59 C17.5 53 9 43.5 9 32 V12 C16 10 24 7 32 5 Z"
-          stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/>
-    <g transform="translate(32 32) scale(0.78) translate(-32 -32)">
-      <path fill="currentColor" d="m 42.69949,50.729586 c -5.246771,-1.783072 -10.782457,-1.832655 -16.63185,0 -0.668227,0.02122 -0.999265,-0.317022 -0.478323,-0.97503 L 47.71668,18.700815 c 0,0 0.157573,-0.196687 0.354413,-0.298049 0.147255,-0.07583 0.295663,-0.0759 0.450161,0.0028 0.163897,0.08346 0.281363,0.233899 0.343513,0.325372 5.118536,7.533388 8.852414,20.216321 -4.595268,31.484113 -0.587268,0.492072 -0.882773,0.514556 -1.57001,0.514557 z"/>
-      <g transform="rotate(180 32 32)">
-        <path fill="currentColor" d="m 42.69949,50.729586 c -5.246771,-1.783072 -10.782457,-1.832655 -16.63185,0 -0.668227,0.02122 -0.999265,-0.317022 -0.478323,-0.97503 L 47.71668,18.700815 c 0,0 0.157573,-0.196687 0.354413,-0.298049 0.147255,-0.07583 0.295663,-0.0759 0.450161,0.0028 0.163897,0.08346 0.281363,0.233899 0.343513,0.325372 5.118536,7.533388 8.852414,20.216321 -4.595268,31.484113 -0.587268,0.492072 -0.882773,0.514556 -1.57001,0.514557 z"/>
-      </g>
-    </g>
-  </g>
+  <path d="M32 5 C40 7 48 10 55 12 V32 C55 43.5 46.5 53 32 59 C17.5 53 9 43.5 9 32 V12 C16 10 24 7 32 5 Z"
+        fill="currentColor" mask="url(#cut)"/>
 
-  <!-- Spinner: faint background ring + active quarter-arc. The
-       static rasterization reads as "in progress" without animation
-       (AppKit doesn't honour the SVG <animateTransform> on a static
-       NSImage). The incomplete arc carries the meaning. -->
-  <circle cx="47" cy="47" r="12" stroke="currentColor" stroke-width="2.5" opacity="0.32" fill="none"/>
-  <path d="M47 35 a12 12 0 0 1 12 12" stroke="currentColor" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <circle cx="47" cy="47" r="15" fill="currentColor" mask="url(#badge-arc)"/>
 </svg>
