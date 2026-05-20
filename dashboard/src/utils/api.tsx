@@ -72,6 +72,7 @@ async function apiRequest<T>(
 
 export function useOpenzroFetch(ignoreError: boolean = false): {
   fetch: (input: RequestInfo, init?: RequestInit) => Promise<Response>;
+  token: string | undefined;
 } {
   const tokenSource = config.tokenSource || "accessToken";
   const { idToken } = useOidcIdToken();
@@ -114,6 +115,7 @@ export function useOpenzroFetch(ignoreError: boolean = false): {
       input: RequestInfo,
       init?: RequestInit,
     ) => Promise<Response>,
+    token,
   };
 }
 
@@ -124,11 +126,24 @@ export default function useFetchApi<T>(
   allowFetch = true,
   options?: RequestOptions,
 ) {
-  const { fetch } = useOpenzroFetch(ignoreError);
+  const { fetch, token } = useOpenzroFetch(ignoreError);
   const handleErrors = useApiErrorHandling(ignoreError);
   const { globalApiParams } = useApplicationContext();
 
-  const cacheKey = options?.key ? [url, options?.key] : url;
+  // Gate the SWR key on `token` so the first render right after the
+  // OIDC callback — when the OIDC provider is still hydrating and
+  // `token` is undefined — does not fire a fetch with `Bearer
+  // undefined`. SWR treats a null key as "do not fetch"; when the
+  // token arrives in a later render, the key flips to the URL and
+  // SWR fires the request automatically. Defense-in-depth alongside
+  // the post-login navigation fix in OIDCProvider — neither alone
+  // covers every reload path.
+  const shouldFetch = allowFetch && !!token;
+  const cacheKey = !shouldFetch
+    ? null
+    : options?.key
+      ? [url, options?.key]
+      : url;
   const fetchFn = options?.key
     ? async ([url]: [url: string]) => {
         if (!allowFetch) return;
