@@ -95,7 +95,39 @@ func startPair(t *testing.T, ownsA, ownsB []messages.PeerID) (*PeerLocator, *Pee
 	_, err = transB.Dial(context.Background(), addrA)
 	require.NoError(t, err)
 
+	// Wait for HELLO-driven dedup to converge: each pod must hold
+	// exactly one live stream keyed by the OTHER pod's announced
+	// address. Without this synchronisation a test that calls
+	// Lookup() right after startPair returns can land mid-dedup —
+	// while one of the two racing TCP conns is being closed — and
+	// observe a transient "connection reset by peer" from the
+	// closing peer side. That's the recurring "Client / Unit
+	// (macOS) TestLocator_*" flake; the fix gates the test on the
+	// converged state rather than racing it.
+	waitClusterReady(t, transA, addrB)
+	waitClusterReady(t, transB, addrA)
+
 	return locA, locB, addrA, addrB
+}
+
+// waitClusterReady polls until the transport's streams map holds a
+// single live entry keyed by `expected`, signalling that the dedup
+// in Dial / handleAccepted has settled. 2s is generous — local-
+// loopback dedup completes in single-digit milliseconds in practice;
+// a stall past 2s is a real bug worth surfacing.
+func waitClusterReady(t *testing.T, tr *Transport, expected string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		streams := tr.Streams()
+		if len(streams) == 1 {
+			if _, ok := streams[expected]; ok {
+				return
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("waitClusterReady: cluster did not converge to {%s} within 2s; got %v", expected, tr.Streams())
 }
 
 func TestLocator_LookupHitsRemote(t *testing.T) {
