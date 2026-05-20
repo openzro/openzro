@@ -43,10 +43,18 @@ func (a *MockAccountManager) DeletePeer(_ context.Context, accountID, peerID, us
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.deletePeerCalls++
+	// Apply the side effect (peer removal from the store) BEFORE
+	// signaling the WaitGroup. Otherwise the test's wg.Wait() can
+	// return as soon as the 10th Done() lands, while the 10th
+	// goroutine is still parked one instruction short of the delete()
+	// call. The test then reads mockStore.account.Peers and asserts
+	// len == 0 — but peer-N is still in the map, so the assertion
+	// fails intermittently (always on the last peer because the race
+	// window is the gap between Done and delete on the LAST goroutine).
+	delete(a.store.account.Peers, peerID)
 	if a.wg != nil {
 		a.wg.Done()
 	}
-	delete(a.store.account.Peers, peerID)
 	return nil
 }
 
