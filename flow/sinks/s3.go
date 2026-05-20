@@ -79,7 +79,7 @@ type S3Config struct {
 // Object keys partition by date and account so common queries can
 // prune at the path level:
 //
-//   <prefix>/year=2026/month=04/day=26/account=<id>/<unix-nano>-<rand>.ndjson.gz
+//	<prefix>/year=2026/month=04/day=26/account=<id>/<unix-nano>-<rand>.ndjson.gz
 type S3 struct {
 	cfg    S3Config
 	format archiveFormat
@@ -354,11 +354,4 @@ func dirString(d store.Direction) string {
 		return "egress"
 	}
 	return "unknown"
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

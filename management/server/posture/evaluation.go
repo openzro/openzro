@@ -7,7 +7,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// PostureEvaluation is one row of "what happened when posture check X
+// Evaluation is one row of "what happened when posture check X
 // ran on peer Y at time T". The dashboard's per-peer Posture Status
 // panel reads the last N records for a peer to render the timeline
 // that closed the cluster-debugging loop: instead of grepping
@@ -23,7 +23,7 @@ import (
 // AccountID is denormalised onto every row so the retention worker
 // and the per-account API queries don't have to JOIN through
 // peers/posture_checks for the (very) common access pattern.
-type PostureEvaluation struct {
+type Evaluation struct {
 	// ID is an auto-incrementing surrogate. The natural key
 	// (account_id, peer_id, posture_check_id, evaluated_at) is unique
 	// enough in practice — same peer + same check at the same UTC ms
@@ -83,7 +83,7 @@ type PostureEvaluation struct {
 
 // TableName pins the GORM table name so the auto-migration emits the
 // expected SQL identifier regardless of struct renames.
-func (PostureEvaluation) TableName() string { return "posture_evaluations" }
+func (Evaluation) TableName() string { return "posture_evaluations" }
 
 // EvalRecorder is the write-side hook that validatePostureChecksOnPeer
 // calls after each check.Check() invocation. The implementation is
@@ -94,7 +94,7 @@ func (PostureEvaluation) TableName() string { return "posture_evaluations" }
 // Nil-safe by convention: callers should accept that no recorder
 // means "don't record" and skip the hook.
 type EvalRecorder interface {
-	Record(ctx context.Context, e PostureEvaluation)
+	Record(ctx context.Context, e Evaluation)
 }
 
 // evalRecorderContextKey is the context key used to carry an
@@ -137,7 +137,7 @@ func SetDefaultEvalRecorder(r EvalRecorder) {
 	defaultEvalRecorder = r
 }
 
-// EvalStore persists PostureEvaluation rows and answers the
+// EvalStore persists Evaluation rows and answers the
 // per-peer-timeline query the dashboard makes. Implemented by the
 // GORM-backed store in evaluation_store.go; tests can inject an
 // in-memory fake.
@@ -146,11 +146,11 @@ type EvalStore interface {
 	// expected to swallow individual row errors at the persistence
 	// layer (best-effort) — failing the eval pipeline on a logging
 	// hiccup is the wrong trade-off.
-	Insert(ctx context.Context, batch []PostureEvaluation) error
+	Insert(ctx context.Context, batch []Evaluation) error
 
 	// ListForPeer returns the most recent `limit` evaluations for
 	// the given peer in the given account, newest first.
-	ListForPeer(ctx context.Context, accountID, peerID string, limit int) ([]PostureEvaluation, error)
+	ListForPeer(ctx context.Context, accountID, peerID string, limit int) ([]Evaluation, error)
 
 	// PurgeOlderThan deletes rows whose EvaluatedAt is older than
 	// the cutoff. Returns the number of rows removed for telemetry.
@@ -161,5 +161,5 @@ type EvalStore interface {
 // its compound index if they don't exist yet. Called from the same
 // init path as the other GORM auto-migrations.
 func MigrateEvaluationTable(db *gorm.DB) error {
-	return db.AutoMigrate(&PostureEvaluation{})
+	return db.AutoMigrate(&Evaluation{})
 }

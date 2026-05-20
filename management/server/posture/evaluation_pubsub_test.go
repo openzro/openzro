@@ -94,7 +94,7 @@ func TestBufferedRecorder_PublishesOnCacheCommit(t *testing.T) {
 	defer r.Close()
 
 	now := time.Now().UTC()
-	e := PostureEvaluation{
+	e := Evaluation{
 		AccountID:      "a",
 		PeerID:         "p",
 		PostureCheckID: "c",
@@ -149,7 +149,7 @@ func TestBufferedRecorder_AppliesInboundBroadcastToCache(t *testing.T) {
 
 	// Now a Record() on this replica with the same state should be
 	// suppressed by the freshly-populated cache.
-	r.Record(context.Background(), PostureEvaluation{
+	r.Record(context.Background(), Evaluation{
 		AccountID:      "a",
 		PeerID:         "p",
 		PostureCheckID: "c",
@@ -252,7 +252,7 @@ func TestBufferedRecorder_SelfEchoIsNoOp(t *testing.T) {
 	defer r.Close()
 
 	now := time.Now().UTC()
-	r.Record(context.Background(), PostureEvaluation{
+	r.Record(context.Background(), Evaluation{
 		AccountID:      "a",
 		PeerID:         "p",
 		PostureCheckID: "c",
@@ -302,7 +302,7 @@ func TestBufferedRecorder_SubscribeFailureDegradesGracefully(t *testing.T) {
 
 	// Record() must still work end-to-end even though subscription
 	// failed. The write goes to the store via the channel/drainer.
-	r.Record(context.Background(), PostureEvaluation{
+	r.Record(context.Background(), Evaluation{
 		AccountID:      "a",
 		PeerID:         "p",
 		PostureCheckID: "c",
@@ -350,7 +350,7 @@ func TestBufferedRecorder_NilCoordIsSafe(t *testing.T) {
 	}, nil)
 	defer r.Close()
 
-	r.Record(context.Background(), PostureEvaluation{
+	r.Record(context.Background(), Evaluation{
 		AccountID:      "a",
 		PeerID:         "p",
 		PostureCheckID: "c",
@@ -385,7 +385,7 @@ func TestBufferedRecorder_CrossReplicaDedupReducesDuplicateWrites(t *testing.T) 
 	defer rB.Close()
 
 	now := time.Now().UTC()
-	e := PostureEvaluation{
+	e := Evaluation{
 		AccountID:      "a",
 		PeerID:         "p",
 		PostureCheckID: "c",

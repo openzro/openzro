@@ -50,7 +50,10 @@ type Config struct {
 func FromEnv() (*Config, error) {
 	addr := strings.TrimSpace(os.Getenv("OPENZRO_DEX_GRPC_ADDR"))
 	if addr == "" {
-		return nil, nil
+		// Optional dependency: nil config + nil error means "Dex not
+		// configured" (see doc above); callers handle cfg == nil as
+		// "feature off".
+		return nil, nil //nolint:nilnil // see comment above.
 	}
 	cfg := &Config{
 		Addr:           addr,

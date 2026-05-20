@@ -129,7 +129,7 @@ func TestEvaluate_StagedRollout(t *testing.T) {
 	if Evaluate(mOut).Eligible {
 		t.Fatalf("client %q (bucket %d) should be outside a 50%% rollout", outID, bucketOf(outID))
 	}
-	if Evaluate(mIn).Eligible != Evaluate(mIn).Eligible {
+	if first, second := Evaluate(mIn).Eligible, Evaluate(mIn).Eligible; first != second {
 		t.Fatal("bucketing must be deterministic")
 	}
 	crit := mOut

@@ -262,7 +262,10 @@ func (am *DefaultAccountManager) findSCIMUserByUserName(ctx context.Context, acc
 			return u, nil
 		}
 	}
-	return nil, nil
+	// Documented contract: "not found" is a non-error case in the SCIM
+	// create flow; the caller (SCIMCreateUser) checks err == nil &&
+	// existing != nil to decide whether the userName collides.
+	return nil, nil //nolint:nilnil // see comment above.
 }
 
 func (am *DefaultAccountManager) requireSCIMPermission(ctx context.Context, accountID, callerID string, op operations.Operation) error {

@@ -100,8 +100,9 @@ func TestGuardedTransport_BlocksLoopback(t *testing.T) {
 	defer srv.Close()
 
 	guarded := &http.Client{Timeout: 2 * time.Second, Transport: Transport()}
-	_, err := guarded.Get(srv.URL)
+	resp, err := guarded.Get(srv.URL)
 	if err == nil {
+		resp.Body.Close()
 		t.Fatal("guarded transport reached a loopback server — SSRF guard not wired into the dialer")
 	}
 }

@@ -87,10 +87,10 @@ func (v macVerifier) Verify(ctx context.Context, pkgPath string) error {
 }
 
 func trim(b []byte) string {
-	const max = 200
+	const maxLen = 200
 	s := string(b)
-	if len(s) > max {
-		return s[:max] + "…"
+	if len(s) > maxLen {
+		return s[:maxLen] + "…"
 	}
 	return s
 }

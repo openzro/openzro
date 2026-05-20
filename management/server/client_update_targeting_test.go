@@ -41,8 +41,8 @@ func TestUpdateBucket(t *testing.T) {
 			t.Fatalf("bucket out of 0..99: %d", b)
 		}
 	}
-	if updateBucket("stable") != updateBucket("stable") {
-		t.Fatal("updateBucket must be deterministic for the same key")
+	if first, second := updateBucket("stable"), updateBucket("stable"); first != second {
+		t.Fatalf("updateBucket must be deterministic for the same key: %d != %d", first, second)
 	}
 }
 

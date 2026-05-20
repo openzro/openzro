@@ -1172,7 +1172,7 @@ func (a *Account) validatePostureChecksOnPeer(ctx context.Context, sourcePosture
 				if err != nil {
 					reason = err.Error()
 				}
-				recorder.Record(ctx, posture.PostureEvaluation{
+				recorder.Record(ctx, posture.Evaluation{
 					AccountID:      a.Id,
 					PeerID:         peer.ID,
 					PostureCheckID: postureChecksID,
