@@ -38,6 +38,24 @@ jobs:
           # codespell's diagnostic path format (without it, the skip is
           # silently ineffective).
           skip: go.mod,go.sum,./dashboard/package-lock.json,*/package-lock.json
+  gofmt:
+    name: gofmt
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+          cache: false
+      # Runs `gofmt -l .` repo-wide and fails on any non-clean file.
+      # Mirrors what `make fmt.check` already does locally — wiring it
+      # here closes the gap that let 38 drifted files accumulate on
+      # main unnoticed (the Makefile target existed but no workflow
+      # invoked it).
+      - name: make fmt.check
+        run: make fmt.check
   golangci:
     strategy:
       fail-fast: false
