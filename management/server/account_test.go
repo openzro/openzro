@@ -1477,18 +1477,6 @@ func TestAccountManager_NetworkUpdates_DeleteGroup(t *testing.T) {
 		return
 	}
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
-		message := <-updMsg
-		networkMap := message.Update.GetNetworkMap()
-		if len(networkMap.RemotePeers) != 0 {
-			t.Errorf("mismatch peers count: 0 expected, got %v", len(networkMap.RemotePeers))
-		}
-	}()
-
 	// clean policy is pre requirement for delete group
 	if err := manager.DeletePolicy(context.Background(), account.Id, policy.ID, userID); err != nil {
 		t.Errorf("delete default rule: %v", err)
@@ -1500,7 +1488,31 @@ func TestAccountManager_NetworkUpdates_DeleteGroup(t *testing.T) {
 		return
 	}
 
-	wg.Wait()
+	// Read messages until the network map converges to 0 remote peers
+	// for peer1 — the post-state of DeleteGroup (peer1 no longer in
+	// any group with peer2/peer3, so they are not visible).
+	//
+	// The earlier single-shot `message := <-updMsg` racing on the
+	// channel was the #97 flake source: SaveGroup / SavePolicy from
+	// the test setup also publish updates, and depending on consumer
+	// scheduling the goroutine could read the in-flight SavePolicy
+	// frame (RemotePeers=2, groupA→groupA bidirectional) before the
+	// post-DeleteGroup frame (RemotePeers=0) arrived. Same shape of
+	// fix as the cluster locator `waitClusterReady` helper in #96:
+	// converge on the observed steady state with a deadline rather
+	// than race the first message.
+	deadline := time.NewTimer(5 * time.Second)
+	defer deadline.Stop()
+	for {
+		select {
+		case message := <-updMsg:
+			if len(message.Update.GetNetworkMap().RemotePeers) == 0 {
+				return // converged to the post-DeleteGroup state
+			}
+		case <-deadline.C:
+			t.Fatalf("network map did not converge to 0 remote peers within 5s — last frame still had peers in the map")
+		}
+	}
 }
 
 func TestAccountManager_DeletePeer(t *testing.T) {
