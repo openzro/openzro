@@ -88,10 +88,10 @@ func TestDecodeHello_RejectsTruncated(t *testing.T) {
 	cases := [][]byte{
 		nil,
 		{},
-		{helloVersionV2},                          // only version
-		{helloVersionV2, 5, 'a', 'b'},             // addr_len says 5 but only 2 bytes
-		{0x99, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},      // wrong version
-		make([]byte, helloMinPayload-1),           // 1 byte short of minimum
+		{helloVersionV2},                     // only version
+		{helloVersionV2, 5, 'a', 'b'},        // addr_len says 5 but only 2 bytes
+		{0x99, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // wrong version
+		make([]byte, helloMinPayload-1),      // 1 byte short of minimum
 	}
 	for _, c := range cases {
 		_, err := DecodeHello(c, nil, time.Now())

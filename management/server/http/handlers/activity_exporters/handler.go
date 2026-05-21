@@ -17,8 +17,8 @@ import (
 
 	"github.com/gorilla/mux"
 
-	exporters "github.com/openzro/openzro/management/server/activity_exporters"
 	"github.com/openzro/openzro/management/server/activity/exporter"
+	exporters "github.com/openzro/openzro/management/server/activity_exporters"
 	nbcontext "github.com/openzro/openzro/management/server/context"
 	"github.com/openzro/openzro/management/server/http/util"
 	"github.com/openzro/openzro/management/server/permissions"

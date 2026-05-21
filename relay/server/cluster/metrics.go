@@ -28,9 +28,9 @@ type Metrics struct {
 	// streams is wired via an ObservableGauge whose callback
 	// reads from a snapshotter. The transport calls SetStreamSource
 	// once at startup so the gauge can probe it on every scrape.
-	streamsGauge   metric.Int64ObservableGauge
-	streamSource   func() int
-	registration   metric.Registration
+	streamsGauge metric.Int64ObservableGauge
+	streamSource func() int
+	registration metric.Registration
 }
 
 // ForwardResult labels a forward attempt's outcome on the
@@ -38,10 +38,10 @@ type Metrics struct {
 type ForwardResult string
 
 const (
-	ForwardResultOK            ForwardResult = "ok"
-	ForwardResultPeerNotFound  ForwardResult = "peer_not_found"
-	ForwardResultStreamGone    ForwardResult = "stream_gone"
-	ForwardResultSendError     ForwardResult = "send_error"
+	ForwardResultOK           ForwardResult = "ok"
+	ForwardResultPeerNotFound ForwardResult = "peer_not_found"
+	ForwardResultStreamGone   ForwardResult = "stream_gone"
+	ForwardResultSendError    ForwardResult = "send_error"
 )
 
 // HelloRejectReason labels a HELLO that was dropped at handshake.

@@ -30,8 +30,8 @@ func TestNextBoundary_SameDayWindow(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		now     string
+		name     string
+		now      string
 		wantHHMM string // expected boundary time in HH:MM UTC
 	}{
 		{

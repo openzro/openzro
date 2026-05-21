@@ -230,10 +230,10 @@ func buildBulkBody(batch []*activity.Event, index string) []byte {
 // (https://www.elastic.co/guide/en/ecs/current/index.html) so events
 // show up in Kibana's Security app under the standard "audit" view.
 //
-//   event.kind=event, event.category=iam
-//   user.{id,name,email}
-//   organization.id (the openZro account)
-//   openzro.{...}  custom namespace for fields ECS does not cover
+//	event.kind=event, event.category=iam
+//	user.{id,name,email}
+//	organization.id (the openZro account)
+//	openzro.{...}  custom namespace for fields ECS does not cover
 func toECSDoc(ev *activity.Event) map[string]any {
 	doc := map[string]any{
 		"@timestamp": ev.Timestamp.UTC().Format(time.RFC3339Nano),

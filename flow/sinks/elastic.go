@@ -207,15 +207,15 @@ func buildBulkBody(batch []*store.Event, index string) []byte {
 // toECSDoc projects a flow event onto Elastic Common Schema. Network
 // flows map cleanly to ECS:
 //
-//   event.kind=event, event.category=[network], event.dataset=openzro.flow
-//   event.action=start|end|drop, event.outcome=success|denied
-//   network.transport=tcp|udp|icmp, network.iana_number=<protocol>
-//   network.bytes, network.packets (sum of rx+tx)
-//   source.ip,    source.port
-//   destination.ip, destination.port
-//   agent.id (peer ID), agent.type=openzro
-//   organization.id (account)
-//   openzro.{flow_id, rule_id, direction, ...} extension namespace
+//	event.kind=event, event.category=[network], event.dataset=openzro.flow
+//	event.action=start|end|drop, event.outcome=success|denied
+//	network.transport=tcp|udp|icmp, network.iana_number=<protocol>
+//	network.bytes, network.packets (sum of rx+tx)
+//	source.ip,    source.port
+//	destination.ip, destination.port
+//	agent.id (peer ID), agent.type=openzro
+//	organization.id (account)
+//	openzro.{flow_id, rule_id, direction, ...} extension namespace
 func toECSDoc(e *store.Event) map[string]any {
 	doc := map[string]any{
 		"@timestamp": ts(e.OccurredAt, e.ReceivedAt),

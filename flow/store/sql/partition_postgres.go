@@ -16,13 +16,13 @@
 //
 // This file is split off from sql.go so the cross-engine paths
 // stay readable. The contract is:
-//   * setupPostgresSchema is called by sql.New when the underlying
+//   - setupPostgresSchema is called by sql.New when the underlying
 //     gorm dialector is "postgres".
-//   * ensureFuturePartitions is called from the retention loop
+//   - ensureFuturePartitions is called from the retention loop
 //     (factory.runRetention) before every purge, to keep the
 //     "current + next" coverage so writes never hit a missing
 //     partition.
-//   * dropOldPartitions replaces the row-level DELETE on Postgres,
+//   - dropOldPartitions replaces the row-level DELETE on Postgres,
 //     also called from the retention loop.
 package sql
 

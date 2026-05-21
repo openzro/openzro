@@ -37,7 +37,7 @@ type policyCandidate struct {
 type proto uint8
 
 const (
-	protoAny  proto = 0   // matches anything (PolicyRuleProtocolALL)
+	protoAny  proto = 0 // matches anything (PolicyRuleProtocolALL)
 	protoICMP proto = 1
 	protoTCP  proto = 6
 	protoUDP  proto = 17

@@ -7,15 +7,15 @@ import "net/http"
 // speaks SCIM checks this endpoint at integration time to learn what
 // the server supports — clients refuse to connect if it returns 404.
 type ServiceProviderConfig struct {
-	Schemas               []string         `json:"schemas"`
-	DocumentationURI      string           `json:"documentationUri,omitempty"`
-	Patch                 supportedFlag    `json:"patch"`
-	Bulk                  bulkConfig       `json:"bulk"`
-	Filter                filterConfig     `json:"filter"`
-	ChangePassword        supportedFlag    `json:"changePassword"`
-	Sort                  supportedFlag    `json:"sort"`
-	ETag                  supportedFlag    `json:"etag"`
-	AuthenticationSchemes []authnScheme    `json:"authenticationSchemes"`
+	Schemas               []string      `json:"schemas"`
+	DocumentationURI      string        `json:"documentationUri,omitempty"`
+	Patch                 supportedFlag `json:"patch"`
+	Bulk                  bulkConfig    `json:"bulk"`
+	Filter                filterConfig  `json:"filter"`
+	ChangePassword        supportedFlag `json:"changePassword"`
+	Sort                  supportedFlag `json:"sort"`
+	ETag                  supportedFlag `json:"etag"`
+	AuthenticationSchemes []authnScheme `json:"authenticationSchemes"`
 }
 
 type supportedFlag struct {
@@ -64,13 +64,13 @@ func (h *Handler) handleServiceProviderConfig(w http.ResponseWriter, _ *http.Req
 
 // resourceType is the response shape for /ResourceTypes. RFC 7643 §6.
 type resourceType struct {
-	Schemas      []string     `json:"schemas"`
-	ID           string       `json:"id"`
-	Name         string       `json:"name"`
-	Endpoint     string       `json:"endpoint"`
-	Description  string       `json:"description"`
-	Schema       string       `json:"schema"`
-	Meta         ResourceMeta `json:"meta"`
+	Schemas     []string     `json:"schemas"`
+	ID          string       `json:"id"`
+	Name        string       `json:"name"`
+	Endpoint    string       `json:"endpoint"`
+	Description string       `json:"description"`
+	Schema      string       `json:"schema"`
+	Meta        ResourceMeta `json:"meta"`
 }
 
 // handleResourceTypes returns the resource catalog: Users + Groups.

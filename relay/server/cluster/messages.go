@@ -22,12 +22,12 @@ const peerIDSize = 36
 // header, so the per-type decoders only check that the length
 // matches the type's expected size.
 const (
-	whoHasPayloadSize  = peerIDSize                                                // 36
-	iHavePayloadSize   = peerIDSize + 4                                            // 40
-	openPayloadSize    = peerIDSize + peerIDSize + 4                               // 76
-	openAckPayloadSize = 4 + 1                                                     // 5
-	dataHeaderSize     = 4                                                         // channel_id, then opaque
-	closePayloadSize   = 4                                                         // channel_id
+	whoHasPayloadSize  = peerIDSize                  // 36
+	iHavePayloadSize   = peerIDSize + 4              // 40
+	openPayloadSize    = peerIDSize + peerIDSize + 4 // 76
+	openAckPayloadSize = 4 + 1                       // 5
+	dataHeaderSize     = 4                           // channel_id, then opaque
+	closePayloadSize   = 4                           // channel_id
 )
 
 // Errors returned when decoding a payload whose length doesn't

@@ -57,9 +57,9 @@ func (am *DefaultAccountManager) SCIMCreateUser(ctx context.Context, accountID, 
 	}
 
 	am.StoreEvent(ctx, callerID, user.Id, accountID, activity.UserInvited, map[string]any{
-		"scim":      true,
-		"username":  input.UserName,
-		"name":      input.DisplayName,
+		"scim":       true,
+		"username":   input.UserName,
+		"name":       input.DisplayName,
 		"externalId": input.ExternalID,
 	})
 	return user, nil

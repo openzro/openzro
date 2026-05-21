@@ -150,7 +150,6 @@ func (c *PacketConn) RemoveAddress(addr string) {
 	}
 }
 
-
 // WrapPacketConn wraps an existing net.PacketConn with nbnet functionality
 func WrapPacketConn(conn net.PacketConn) *PacketConn {
 	return &PacketConn{

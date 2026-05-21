@@ -48,9 +48,9 @@ const (
 // the Login gate (Phase 1) refuses re-entry. End-to-end revocation
 // latency is bounded by:
 //
-//	  worst_case = revalidate_interval + mdm_cache_ttl + client_backoff
-//	            =       60s            +     5min      +      ~30s
-//	            ≈ ~6 min
+//	worst_case = revalidate_interval + mdm_cache_ttl + client_backoff
+//	          =       60s            +     5min      +      ~30s
+//	          ≈ ~6 min
 //
 // HA-aware by construction: GetAllConnectedPeers is local-only, so
 // each management instance handles its own set of connected peers.

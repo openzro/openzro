@@ -97,7 +97,7 @@ func startPair(t *testing.T, ownsA, ownsB []messages.PeerID) (*PeerLocator, *Pee
 
 	// Wait for HELLO-driven dedup to converge: each pod must hold
 	// exactly one live stream keyed by the OTHER pod's announced
-	// address. Without this synchronisation a test that calls
+	// address. Without this synchronization a test that calls
 	// Lookup() right after startPair returns can land mid-dedup —
 	// while one of the two racing TCP conns is being closed — and
 	// observe a transient "connection reset by peer" from the
@@ -111,7 +111,7 @@ func startPair(t *testing.T, ownsA, ownsB []messages.PeerID) (*PeerLocator, *Pee
 }
 
 // waitClusterReady polls until the transport's streams map holds a
-// single live entry keyed by `expected`, signalling that the dedup
+// single live entry keyed by `expected`, signaling that the dedup
 // in Dial / handleAccepted has settled. 2s is generous — local-
 // loopback dedup completes in single-digit milliseconds in practice;
 // a stall past 2s is a real bug worth surfacing.

@@ -145,8 +145,8 @@ func TestListUsers_FilterParsedAndPropagated(t *testing.T) {
 		query, want string
 	}{
 		{`?filter=userName+eq+%22alice%40example.com%22`, "alice@example.com"},
-		{`?filter=username+eq+%22Bob%22`, "Bob"},     // case-insensitive attribute
-		{`?filter=garbage`, ""},                     // unparseable → empty
+		{`?filter=username+eq+%22Bob%22`, "Bob"}, // case-insensitive attribute
+		{`?filter=garbage`, ""},                  // unparseable → empty
 	}
 	for _, c := range cases {
 		capturedFilter = "<unset>"

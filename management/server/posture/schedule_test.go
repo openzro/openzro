@@ -448,11 +448,11 @@ func TestScheduleCheck_BoundaryMinutes(t *testing.T) {
 	const layout = "2006-01-02 15:04"
 
 	tests := []struct {
-		name     string
-		now      string
-		window   TimeWindow
-		action   string
-		want     bool
+		name   string
+		now    string
+		window TimeWindow
+		action string
+		want   bool
 	}{
 		{
 			name:   "all-day window — start of day passes",

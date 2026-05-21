@@ -30,9 +30,9 @@ type fakeStore struct {
 	err       error
 }
 
-func (f *fakeStore) Save(context.Context, []*store.Event) error          { return nil }
-func (f *fakeStore) Purge(context.Context, time.Time) (int64, error)     { return 0, nil }
-func (f *fakeStore) Close() error                                        { return nil }
+func (f *fakeStore) Save(context.Context, []*store.Event) error      { return nil }
+func (f *fakeStore) Purge(context.Context, time.Time) (int64, error) { return 0, nil }
+func (f *fakeStore) Close() error                                    { return nil }
 func (f *fakeStore) Query(_ context.Context, fl store.Filter) ([]*store.Event, error) {
 	f.gotFilter = fl
 	return f.out, f.err
@@ -76,7 +76,7 @@ func withAuth(accountID, userID string, next http.Handler) http.Handler {
 }
 
 func TestList_NoStore_ReturnsEmpty200(t *testing.T) {
-	srv := newServer(true,nil)
+	srv := newServer(true, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/network-traffic-events", nil)
 	rec := httptest.NewRecorder()
@@ -91,7 +91,7 @@ func TestList_NoStore_ReturnsEmpty200(t *testing.T) {
 
 func TestList_PermissionDenied(t *testing.T) {
 	fs := &fakeStore{}
-	srv := newServer(false,fs)
+	srv := newServer(false, fs)
 
 	req := httptest.NewRequest(http.MethodGet, "/network-traffic-events", nil)
 	rec := httptest.NewRecorder()
@@ -104,7 +104,7 @@ func TestList_PermissionDenied(t *testing.T) {
 
 func TestList_AccountIDComesFromAuthContextOnly(t *testing.T) {
 	fs := &fakeStore{}
-	srv := newServer(true,fs)
+	srv := newServer(true, fs)
 
 	// Even if a malicious caller passes account_id in the URL, it is
 	// ignored — AccountID always wins from the auth context. This is
@@ -122,7 +122,7 @@ func TestList_AccountIDComesFromAuthContextOnly(t *testing.T) {
 
 func TestList_ParsesAllEightFilters(t *testing.T) {
 	fs := &fakeStore{}
-	srv := newServer(true,fs)
+	srv := newServer(true, fs)
 
 	q := "?peer_id=p-1" +
 		"&source_ip=10.0.0.1" +
@@ -166,7 +166,7 @@ func TestList_ParsesAllEightFilters(t *testing.T) {
 
 func TestList_LimitCappedAtMax(t *testing.T) {
 	fs := &fakeStore{}
-	srv := newServer(true,fs)
+	srv := newServer(true, fs)
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/network-traffic-events?limit=999999", nil)
@@ -180,7 +180,7 @@ func TestList_LimitCappedAtMax(t *testing.T) {
 
 func TestList_RejectsInvalidQueryParams(t *testing.T) {
 	fs := &fakeStore{}
-	srv := newServer(true,fs)
+	srv := newServer(true, fs)
 
 	cases := []string{
 		"?protocol=not-a-number",
@@ -222,7 +222,7 @@ func TestList_RendersEventDTO(t *testing.T) {
 			},
 		},
 	}
-	srv := newServer(true,fs)
+	srv := newServer(true, fs)
 
 	req := httptest.NewRequest(http.MethodGet, "/network-traffic-events", nil)
 	rec := httptest.NewRecorder()
