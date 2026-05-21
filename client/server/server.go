@@ -126,6 +126,15 @@ type Server struct {
 
 	profileManager   profilemanager.ServiceManager
 	profilesDisabled bool
+
+	// currentVersionFn returns the running client version. Production
+	// callers leave this nil and the daemon falls back to
+	// version.OpenzroVersion() (set at goreleaser build time). Tests
+	// override it to inject a parseable semver so the gate's version
+	// comparison can be exercised — the production version is
+	// "development" in tests, which the go-version parser rejects
+	// before any other gate logic runs.
+	currentVersionFn func() string
 }
 
 type oauthAuthFlow struct {
