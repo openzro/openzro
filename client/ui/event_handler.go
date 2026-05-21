@@ -6,8 +6,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
+	"runtime"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -57,6 +59,8 @@ func (h *eventHandler) listen(ctx context.Context) {
 			h.handleGitHubClick()
 		case <-h.client.mInstallUpdate.ClickedCh:
 			h.handleInstallUpdateClick()
+		case <-h.client.mDownloadUpdate.ClickedCh:
+			h.handleDownloadUpdateClick()
 		case <-h.client.mNetworks.ClickedCh:
 			h.handleNetworksClick()
 		case <-h.client.mNotifications.ClickedCh:
@@ -221,6 +225,71 @@ func (h *eventHandler) handleInstallUpdateClick() {
 			h.client.app.SendNotification(fyne.NewNotification("No update applied", resp.GetReason()))
 		default:
 			h.client.app.SendNotification(fyne.NewNotification("Update", resp.GetReason()))
+		}
+	}()
+}
+
+// handleDownloadUpdateClick opens the direct MSI asset URL for the
+// currently directed target version in the default browser. Windows-
+// only path: macOS uses handleInstallUpdateClick (daemon-driven
+// auto-install), Linux uses the tray badge alone (no CTA). The
+// browser handles the download, the user runs the MSI manually —
+// info-only by design (the package-manager landscape on non-darwin
+// makes a daemon-driven install unsafe).
+//
+// Target snapshot comes from a live Status fetch, mirroring the
+// install handler (handleInstallUpdateClick at line 178) — the menu
+// item is only shown when target != "", but the live read insulates
+// us from a directive that moved between Show() and click.
+func (h *eventHandler) handleDownloadUpdateClick() {
+	go func() {
+		conn, err := h.client.getSrvClient(defaultFailTimeout)
+		if err != nil {
+			log.Errorf("download update: cannot reach daemon: %v", err)
+			return
+		}
+		st, err := conn.Status(h.client.ctx, &proto.StatusRequest{})
+		if err != nil {
+			log.Errorf("download update: status fetch failed: %v", err)
+			return
+		}
+		us := st.GetUpdateState()
+		target := us.GetTargetVersion()
+		if target == "" {
+			log.Warn("download update: clicked with empty target — directive cleared mid-click")
+			return
+		}
+		// Recheck the rollout-gated verdict — the menu shows the CTA
+		// only when applyUpdateStateLocked saw available=true, but the
+		// daemon polls every ~2s. Between the menu Show() and the user
+		// click, the directive could have moved or the manifest's
+		// rollout could have retracted; bail rather than opening the
+		// browser at a stale URL.
+		if !us.GetAvailable() {
+			log.Warnf("download update: clicked with available=false (decision %q) — directive moved mid-click",
+				us.GetLastDecision())
+			return
+		}
+
+		// Only windows_amd64 is shipped today. The check stays here
+		// (not in the menu apply) so a future arm64 build can extend
+		// the URL builder without changing apply call sites.
+		if runtime.GOARCH != "amd64" {
+			log.Warnf("download update: no MSI asset for windows/%s", runtime.GOARCH)
+			return
+		}
+
+		// Mirror the path-escape pattern from
+		// version/selfupdate/manifest.go::ResolveManifestTemplateURL —
+		// the directive target is operator-supplied and could in
+		// principle carry path-unsafe characters; PathEscape on each
+		// segment keeps the URL well-formed.
+		tag := url.PathEscape("v" + target)
+		filename := "openzro_" + url.PathEscape(target) + "_windows_amd64.msi"
+		assetURL := "https://github.com/openzro/openzro/releases/download/" + tag + "/" + filename
+
+		if err := openURL(assetURL); err != nil {
+			log.Errorf("download update: failed to open browser at %s: %v", assetURL, err)
 		}
 	}()
 }

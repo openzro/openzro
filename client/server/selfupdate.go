@@ -258,6 +258,13 @@ type autoInstallState struct {
 // for this gen, and the latch is only consumed if the install really
 // begins under the SAME still-current force directive that triggered
 // it — otherwise it is released so the next directive can retry.
+//
+// Platform gating lives at the call site (updatePreflightScheduler):
+// the silent-install pipeline is darwin-only because Updater.RunOnce
+// fail-closes with ErrUnsupportedPlatform elsewhere. Keeping the
+// state machine pure here means the per-generation / concurrent /
+// supersede-mid-flight semantics stay unit-testable on every
+// platform — the platform decision happens before we even enter.
 func (s *Server) maybeAutoInstall(target string, force, available bool, gen uint64) {
 	if !force || !available || target == "" {
 		return
@@ -553,7 +560,17 @@ func (s *Server) updatePreflightScheduler(kick <-chan struct{}) {
 		// now (review-1 #1), latched per directive generation
 		// (review-2 #1). No-op otherwise; self-guards repeat/concurrent
 		// attempts and releases the latch if superseded before start.
-		if published {
+		//
+		// Darwin-only: the install pipeline (Updater.RunOnce) fail-
+		// closes with ErrUnsupportedPlatform on non-darwin. Without
+		// this gate every force directive on Linux/Windows would burn
+		// its attempt latch with a guaranteed-failed install —
+		// surfacing as repeated "auto-install X failed" log spam plus
+		// a stuck autoInstall.lastErr in the daemon state. The
+		// preflight verdict still surfaces on all platforms (info-only:
+		// Windows .msi link, Linux badge); only the silent-install
+		// scheduler is platform-gated.
+		if published && runtime.GOOS == "darwin" {
 			s.maybeAutoInstall(pf.forTarget, live.force, pf.available, live.gen)
 		}
 
@@ -636,17 +653,22 @@ func isTransientFetchErr(err error) bool {
 // decides silent-vs-prompt at install time. AutoInstallEnabled is
 // pinned true so the gate reports pure version+pin+staged
 // eligibility rather than the surface-only short-circuit.
+//
+// available=true is now the source of truth for both the macOS
+// auto-install path (Update RPC → download/verify/pkg-install) and
+// the Linux/Windows info-only surface (tray badge + Windows .msi
+// link). The platform gate that used to short-circuit non-darwin
+// to "macOS-only" was removed: the install side
+// (selfupdate.Updater.RunOnce) still fail-closes with
+// ErrUnsupportedPlatform on non-darwin, but the preflight verdict
+// now reaches the UI so the tray icon flips and Windows gets a
+// direct .msi download CTA.
 func (s *Server) computeUpdatePreflight(ctx context.Context, target string, _ bool) updatePreflight {
 	pf := updatePreflight{forTarget: target, done: true}
 
-	// A cleared directive is the same truth on every platform — answer
-	// it before the macOS-only gate so the UI shows the real reason.
+	// A cleared directive is the same truth on every platform.
 	if target == "" {
 		pf.reason = "no directive (operator cleared the target)"
-		return pf
-	}
-	if runtime.GOOS != "darwin" {
-		pf.reason = "self-update is macOS-only in phase 1"
 		return pf
 	}
 
@@ -691,15 +713,40 @@ func (s *Server) computeUpdatePreflight(ctx context.Context, target string, _ bo
 		return pf
 	}
 
+	// Authoritative: true mirrors the install path's
+	// buildSelfUpdateConfig — both flows are the management-directive
+	// surface (#5 Q2), so the preflight verdict and the actual install
+	// MUST agree on staged_rollout being skipped. The server already
+	// evaluated the operator's subset/ring for this peer; a second
+	// client-side dice roll here would only double-gate and could hide
+	// the CTA from a peer the server explicitly selected. Without
+	// alignment, a manifest with staged_rollout=10% would suppress the
+	// macOS Install CTA / the Windows .msi Download CTA while the
+	// install path (Authoritative=true) would have happily succeeded
+	// if invoked.
 	d := selfupdate.Evaluate(selfupdate.GateInput{
-		Current:            version.OpenzroVersion(),
+		Current:            s.currentVersion(),
 		Manifest:           m,
 		AutoInstallEnabled: true,
 		ClientID:           s.clientUpdateBucketID(),
+		Authoritative:      true,
 	})
 	pf.available = d.Eligible
 	pf.reason = d.Reason
 	return pf
+}
+
+// currentVersion returns the running client version for gate
+// evaluation. Production goes through version.OpenzroVersion() (set
+// at build time); tests can substitute a parseable semver via
+// s.currentVersionFn so the gate's version + staged_rollout +
+// Authoritative logic stays exercisable (the production "development"
+// fallback fails go-version parsing before any other check runs).
+func (s *Server) currentVersion() string {
+	if s.currentVersionFn != nil {
+		return s.currentVersionFn()
+	}
+	return version.OpenzroVersion()
 }
 
 // clientUpdateBucketID snapshots the stable staged-rollout bucket id

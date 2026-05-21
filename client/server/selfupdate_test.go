@@ -2,9 +2,12 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -102,14 +105,100 @@ func TestBuildUpdateState(t *testing.T) {
 		if st.GetTargetVersion() != "9.9.9" || !st.GetForce() {
 			t.Fatalf("round-trip mismatch: %q force=%v", st.GetTargetVersion(), st.GetForce())
 		}
-		// macOS-only in this phase OR template not configured — either
-		// way the safe default is NOT available, never an accidental
-		// "yes" off an unconfigured path.
+		// Template not configured — the safe default is NOT available,
+		// never an accidental "yes" off an unconfigured path. (Used to
+		// also cover the macOS-only phase-1 short-circuit; that gate
+		// was removed once Linux/Windows landed the info-only surface.)
 		if st.GetAvailable() {
 			t.Fatalf("must fail closed, got available with decision %q", st.GetLastDecision())
 		}
 		if st.GetLastDecision() == "" {
 			t.Fatal("a not-available verdict must still carry a reason")
+		}
+	})
+
+	t.Run("authoritative skips staged_rollout in preflight (alignment with install path)", func(t *testing.T) {
+		// Regression for openZro #5 Q2: the management-directive flow
+		// MUST skip the manifest's staged_rollout in the preflight too,
+		// not just at install time. buildSelfUpdateConfig already sets
+		// Authoritative=true; the preflight was missing the same flag,
+		// so a peer the server picked but the manifest rolled to 0%/X%
+		// would never see the CTA even though the install would have
+		// succeeded. This test pins both directions: staged_rollout=0
+		// (refusal without Authoritative) still resolves to available
+		// here because the gate input is authoritative.
+		zero := 0
+		body, jerr := json.Marshal(selfupdate.Manifest{
+			Version:       "9.9.9",
+			StagedRollout: &zero,
+			// ParseManifest requires at least one artifact. We do not
+			// reach install here — preflight only fetches + gates —
+			// but the manifest must still be well-formed to pass parse.
+			Artifacts: map[string]selfupdate.Artifact{
+				"linux/amd64": {
+					URL:    "https://example.invalid/openzro-9.9.9-linux-amd64.tar.gz",
+					SHA256: "0000000000000000000000000000000000000000000000000000000000000000",
+				},
+			},
+		})
+		if jerr != nil {
+			t.Fatalf("manifest marshal: %v", jerr)
+		}
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write(body)
+		}))
+		t.Cleanup(srv.Close)
+		t.Setenv("OPENZRO_UPDATE_MANIFEST_TEMPLATE", srv.URL+"/{version}/manifest.json")
+
+		s := &Server{
+			// Inject a parseable lower version so the gate runs past
+			// the cur-vs-next check. Production uses version.
+			// OpenzroVersion() which is "development" in tests — that
+			// fails parsing before staged_rollout / Authoritative can
+			// matter.
+			currentVersionFn: func() string { return "0.20.0" },
+		}
+		s.onUpdateDirective("9.9.9", false)
+		st := waitPreflightDone(t, s)
+
+		if !st.GetAvailable() {
+			t.Fatalf("Authoritative must bypass staged_rollout=0; got reason %q",
+				st.GetLastDecision())
+		}
+		if !strings.Contains(st.GetLastDecision(), "management-directed") {
+			t.Fatalf("authoritative reason should mention management-directed, got %q",
+				st.GetLastDecision())
+		}
+	})
+
+	t.Run("non-darwin reaches the manifest fetch (no macOS-only short-circuit)", func(t *testing.T) {
+		// 404 server: the manifest fetch will fail, but the failure
+		// SHAPE proves the preflight reached the fetch path. With the
+		// old runtime.GOOS != "darwin" early-return the decision was
+		// "self-update is macOS-only in phase 1" on every non-darwin
+		// run; this test pins the regression so that gate cannot quietly
+		// come back.
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.NotFound(w, r)
+		}))
+		t.Cleanup(srv.Close)
+		t.Setenv("OPENZRO_UPDATE_MANIFEST_TEMPLATE", srv.URL+"/{version}/manifest.json")
+
+		s := &Server{}
+		s.onUpdateDirective("9.9.9", false)
+		st := waitPreflightDone(t, s)
+
+		if st.GetAvailable() {
+			t.Fatal("a 404 manifest must never resolve to available")
+		}
+		if strings.Contains(st.GetLastDecision(), "macOS-only") {
+			t.Fatalf("the darwin early-return must stay removed, got %q",
+				st.GetLastDecision())
+		}
+		if !strings.Contains(st.GetLastDecision(), "manifest") {
+			t.Fatalf("decision must reflect the manifest path, got %q",
+				st.GetLastDecision())
 		}
 	})
 

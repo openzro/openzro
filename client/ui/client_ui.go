@@ -237,6 +237,7 @@ type serviceClient struct {
 	mVersionDaemon     *systray.MenuItem
 	mUpdateStatus      *systray.MenuItem
 	mInstallUpdate     *systray.MenuItem
+	mDownloadUpdate    *systray.MenuItem
 	mQuit              *systray.MenuItem
 	mNetworks          *systray.MenuItem
 	mAllowSSH          *systray.MenuItem
@@ -868,8 +869,17 @@ func (s *serviceClient) onTrayReady() {
 	// #5: ask the privileged daemon to download+verify+install the
 	// update (rollout-gated). Only shown for a non-force directive
 	// (forced installs are silent); label carries the target version.
+	// macOS-only — Windows/Linux can't auto-install (no signed pkg
+	// pipeline, package-manager landscape respectively).
 	s.mInstallUpdate = s.mAbout.AddSubMenuItem("Install update now", "Download, verify and install the update via the daemon")
 	s.mInstallUpdate.Hide()
+
+	// Windows-only counterpart: a Download CTA that opens the direct
+	// MSI asset URL in the default browser. Linux has no CTA — the
+	// tray icon badge is the entire signal (apt/dnf/pacman handle
+	// install). Hidden on init; applyUpdateStateLocked decides.
+	s.mDownloadUpdate = s.mAbout.AddSubMenuItem("Download update", "Open the MSI installer download page")
+	s.mDownloadUpdate.Hide()
 
 	systray.AddSeparator()
 	s.mQuit = systray.AddMenuItem("Quit", quitMenuDescr)
@@ -1102,40 +1112,99 @@ func protoConfigToConfig(cfg *proto.GetConfigResponse) *profilemanager.Config {
 // us may be nil (no directive / post-restart): the getters are
 // nil-safe and yield the not-available, menus-hidden state.
 //
-// The manual "Install update now" item is shown ONLY for a NON-force
-// directive (review-#1): when the operator forced the update the
-// daemon installs it silently, so a manual CTA would be misleading.
-// #5 R5: the status line + the CTA label surface the target version
-// and the daemon's decision reason.
+// Decision is delegated to decideUpdateMenu (pure, testable); this
+// method is the thin glue that turns the verdict into Show/Hide/
+// SetTitle calls on the opaque systray items.
 func (s *serviceClient) applyUpdateStateLocked(us *proto.UpdateState) {
-	available := us.GetAvailable()
-	s.isUpdateIconActive = available
+	s.isUpdateIconActive = us.GetAvailable()
+	v := decideUpdateMenu(runtime.GOOS, us)
+	applyUpdateMenuItem(s.mUpdateStatus, v.statusShown, v.statusTitle, v.statusTooltip)
+	applyUpdateMenuItem(s.mInstallUpdate, v.installShown, v.installTitle, v.installTooltip)
+	applyUpdateMenuItem(s.mDownloadUpdate, v.downloadShown, v.downloadTitle, v.downloadTooltip)
+}
+
+// updateMenuVerdict is the per-platform decision about how the
+// update items in the About submenu should render. Pure data so
+// the platform branching is testable without a live systray.
+type updateMenuVerdict struct {
+	statusShown   bool
+	statusTitle   string
+	statusTooltip string
+
+	installShown   bool
+	installTitle   string
+	installTooltip string
+
+	downloadShown   bool
+	downloadTitle   string
+	downloadTooltip string
+}
+
+// decideUpdateMenu maps (goos, daemon update state) → which items
+// in the About submenu show, with what labels and tooltips:
+//
+//   - macOS: status line + "Install openZro X" CTA wired to the
+//     daemon Update RPC. Force directives hide the CTA (the daemon
+//     installs silently).
+//   - Windows: status line + "Download openZro X (.msi)" CTA that
+//     opens the MSI asset URL in the browser. No silent install on
+//     Windows — info-only by design.
+//   - Linux + others: badge-only. The package manager (apt/dnf/
+//     pacman/…) is the install path; a tray CTA would be redundant.
+//
+// us may be nil; all getters are nil-safe and yield the menus-hidden
+// "no directive yet" verdict.
+func decideUpdateMenu(goos string, us *proto.UpdateState) updateMenuVerdict {
 	target := us.GetTargetVersion()
 	decision := us.GetLastDecision()
+	available := us.GetAvailable()
+	force := us.GetForce()
 
-	if target != "" {
-		s.mUpdateStatus.SetTitle("Update: " + target)
-		if decision != "" {
-			s.mUpdateStatus.SetTooltip(decision)
-		}
-		s.mUpdateStatus.Show()
-	} else {
-		s.mUpdateStatus.Hide()
-	}
-
-	if available && !us.GetForce() {
-		label := "Install update now"
+	var v updateMenuVerdict
+	switch goos {
+	case "darwin":
 		if target != "" {
-			label = "Install openZro " + target
+			v.statusShown = true
+			v.statusTitle = "Update: " + target
+			v.statusTooltip = decision
 		}
-		s.mInstallUpdate.SetTitle(label)
-		if decision != "" {
-			s.mInstallUpdate.SetTooltip(decision)
+		if available && !force {
+			v.installShown = true
+			if target != "" {
+				v.installTitle = "Install openZro " + target
+			} else {
+				v.installTitle = "Install update now"
+			}
+			v.installTooltip = decision
 		}
-		s.mInstallUpdate.Show()
-	} else {
-		s.mInstallUpdate.Hide()
+	case "windows":
+		if target != "" {
+			v.statusShown = true
+			v.statusTitle = "Update: " + target
+			v.statusTooltip = decision
+		}
+		if available && target != "" {
+			v.downloadShown = true
+			v.downloadTitle = "Download openZro " + target + " (.msi)"
+			v.downloadTooltip = decision
+		}
 	}
+	return v
+}
+
+// applyUpdateMenuItem is the opaque-systray glue: SetTitle + optional
+// SetTooltip + Show when shown, Hide otherwise. Kept tiny so the
+// pure decideUpdateMenu carries the policy and this stays mechanical.
+func applyUpdateMenuItem(item *systray.MenuItem, show bool, title, tooltip string) {
+	if !show {
+		item.Hide()
+		return
+	}
+	item.SetTitle(title)
+	if tooltip != "" {
+		item.SetTooltip(tooltip)
+	}
+	item.Show()
 }
 
 // onSessionExpire sends a notification to the user when the session expires.
