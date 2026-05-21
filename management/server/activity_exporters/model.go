@@ -4,13 +4,13 @@
 //
 // Two configuration layers coexist by design:
 //
-//   1. Process-wide env-var config (OPENZRO_ACTIVITY_EXPORT_*) — the
-//      operator's baseline, applied to every account's events. Useful
-//      for SaaS instances that ship one canonical pipeline regardless
-//      of tenant.
-//   2. Per-account DB rows managed via the dashboard. Each account's
-//      events fan out to that account's configured exporters in
-//      addition to the global baseline.
+//  1. Process-wide env-var config (OPENZRO_ACTIVITY_EXPORT_*) — the
+//     operator's baseline, applied to every account's events. Useful
+//     for SaaS instances that ship one canonical pipeline regardless
+//     of tenant.
+//  2. Per-account DB rows managed via the dashboard. Each account's
+//     events fan out to that account's configured exporters in
+//     addition to the global baseline.
 //
 // This split mirrors how flow_exports works (env baseline + DB rows)
 // and means a self-host operator can stay env-only without touching
@@ -73,11 +73,11 @@ func (ActivityExporter) TableName() string { return "activity_exporters" }
 // time.Duration encoded as JSON-friendly milliseconds — ConfigCipher
 // is JSON over the wire of the encryption envelope.
 type HTTPDestConfig struct {
-	URL            string            `json:"url"`
-	Headers        map[string]string `json:"headers,omitempty"`
-	TimeoutMs      int               `json:"timeout_ms,omitempty"`
-	MaxAttempts    int               `json:"max_attempts,omitempty"`
-	BackoffMs      int               `json:"initial_backoff_ms,omitempty"`
+	URL         string            `json:"url"`
+	Headers     map[string]string `json:"headers,omitempty"`
+	TimeoutMs   int               `json:"timeout_ms,omitempty"`
+	MaxAttempts int               `json:"max_attempts,omitempty"`
+	BackoffMs   int               `json:"initial_backoff_ms,omitempty"`
 }
 
 func (c HTTPDestConfig) PublicView() HTTPDestConfigPublic {
@@ -105,30 +105,30 @@ type HTTPDestConfigPublic struct {
 // DatadogDestConfig configures the Datadog Logs Intake exporter.
 // See exporter.DatadogConfig for field semantics.
 type DatadogDestConfig struct {
-	Site          string `json:"site,omitempty"`
-	URL           string `json:"url,omitempty"`
-	APIKey        string `json:"api_key,omitempty"`
-	Service       string `json:"service,omitempty"`
-	Source        string `json:"source,omitempty"`
-	Tags          string `json:"tags,omitempty"`
-	Hostname      string `json:"hostname,omitempty"`
-	BatchSize     int    `json:"batch_size,omitempty"`
-	FlushMs       int    `json:"flush_interval_ms,omitempty"`
-	BufferSize    int    `json:"buffer_size,omitempty"`
+	Site       string `json:"site,omitempty"`
+	URL        string `json:"url,omitempty"`
+	APIKey     string `json:"api_key,omitempty"`
+	Service    string `json:"service,omitempty"`
+	Source     string `json:"source,omitempty"`
+	Tags       string `json:"tags,omitempty"`
+	Hostname   string `json:"hostname,omitempty"`
+	BatchSize  int    `json:"batch_size,omitempty"`
+	FlushMs    int    `json:"flush_interval_ms,omitempty"`
+	BufferSize int    `json:"buffer_size,omitempty"`
 }
 
 func (c DatadogDestConfig) PublicView() DatadogDestConfigPublic {
 	return DatadogDestConfigPublic{
-		Site:        c.Site,
-		URL:         c.URL,
-		HasAPIKey:   c.APIKey != "",
-		Service:     c.Service,
-		Source:      c.Source,
-		Tags:        c.Tags,
-		Hostname:    c.Hostname,
-		BatchSize:   c.BatchSize,
-		FlushMs:     c.FlushMs,
-		BufferSize:  c.BufferSize,
+		Site:       c.Site,
+		URL:        c.URL,
+		HasAPIKey:  c.APIKey != "",
+		Service:    c.Service,
+		Source:     c.Source,
+		Tags:       c.Tags,
+		Hostname:   c.Hostname,
+		BatchSize:  c.BatchSize,
+		FlushMs:    c.FlushMs,
+		BufferSize: c.BufferSize,
 	}
 }
 

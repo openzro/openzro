@@ -3,11 +3,11 @@
 //
 // Endpoints (all require account owner/admin role):
 //
-//   GET    /api/admin/flow-exports          list configured destinations
-//   POST   /api/admin/flow-exports          create a destination
-//   GET    /api/admin/flow-exports/{id}     fetch a single destination
-//   PUT    /api/admin/flow-exports/{id}     update a destination
-//   DELETE /api/admin/flow-exports/{id}     remove a destination
+//	GET    /api/admin/flow-exports          list configured destinations
+//	POST   /api/admin/flow-exports          create a destination
+//	GET    /api/admin/flow-exports/{id}     fetch a single destination
+//	PUT    /api/admin/flow-exports/{id}     update a destination
+//	DELETE /api/admin/flow-exports/{id}     remove a destination
 //
 // Credentials (Elastic API key, S3 secret key, HTTP Authorization
 // headers) are write-only — POST/PUT accept them in the request body

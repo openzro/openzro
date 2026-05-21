@@ -68,9 +68,9 @@ func AddEndpoints(perms permissions.Manager, s *admission.Store, accountManager 
 // "24 hours from now" not "Jan 4 2026 14:32 UTC", and the relative
 // form survives clock drift between the client and the management.
 type requestBody struct {
-	Reason            string `json:"reason"`
-	ExpiresInSeconds  int64  `json:"expires_in_seconds,omitempty"`
-	ExpiresAtRFC3339  string `json:"expires_at,omitempty"`
+	Reason           string `json:"reason"`
+	ExpiresInSeconds int64  `json:"expires_in_seconds,omitempty"`
+	ExpiresAtRFC3339 string `json:"expires_at,omitempty"`
 }
 
 type responseBody struct {
@@ -268,4 +268,3 @@ func resolveExpiry(body requestBody) (time.Time, error) {
 	}
 	return time.Time{}, errors.New("either expires_in_seconds or expires_at is required (no-expiry bypasses are not permitted)")
 }
-

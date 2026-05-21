@@ -30,11 +30,11 @@ import (
 //
 // Auth precedence (highest to lowest):
 //
-//   1. CredentialsJSON inline (the JSON content of a service account)
-//   2. CredentialsFile path
-//   3. Application Default Credentials — picks up GOOGLE_APPLICATION_CREDENTIALS,
-//      gcloud user creds, GCE/GKE Workload Identity, and Cloud Run/
-//      Cloud Functions injected creds, in that order.
+//  1. CredentialsJSON inline (the JSON content of a service account)
+//  2. CredentialsFile path
+//  3. Application Default Credentials — picks up GOOGLE_APPLICATION_CREDENTIALS,
+//     gcloud user creds, GCE/GKE Workload Identity, and Cloud Run/
+//     Cloud Functions injected creds, in that order.
 //
 // The recommended posture for production is GKE Workload Identity:
 // no credential files in the container, IAM bound to the workload
@@ -99,7 +99,7 @@ type GCSConfig struct {
 //
 // Object keys partition by date and account, identical to S3:
 //
-//   <prefix>/year=2026/month=04/day=26/account=<id>/<unix-nano>-<rand>.ndjson.gz
+//	<prefix>/year=2026/month=04/day=26/account=<id>/<unix-nano>-<rand>.ndjson.gz
 type GCS struct {
 	cfg    GCSConfig
 	format archiveFormat

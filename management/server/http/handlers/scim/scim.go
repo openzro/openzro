@@ -1,11 +1,11 @@
 // Package scim implements the SCIM 2.0 (RFC 7644) provisioning API
 // surface for openZro. The first iteration is read-only:
 //
-//   GET /scim/v2/ServiceProviderConfig  describes capabilities
-//   GET /scim/v2/Schemas                lists supported schemas
-//   GET /scim/v2/ResourceTypes          lists provisioned resource types
-//   GET /scim/v2/Users                  lists users in the caller's account
-//   GET /scim/v2/Users/{id}             single-user lookup
+//	GET /scim/v2/ServiceProviderConfig  describes capabilities
+//	GET /scim/v2/Schemas                lists supported schemas
+//	GET /scim/v2/ResourceTypes          lists provisioned resource types
+//	GET /scim/v2/Users                  lists users in the caller's account
+//	GET /scim/v2/Users/{id}             single-user lookup
 //
 // Mutating operations (POST/PUT/PATCH/DELETE on Users and Groups) are
 // intentionally not yet exposed: they require a manager-level path
@@ -28,13 +28,13 @@ import (
 
 // SCIM URN constants from RFC 7643 §8.7. Stable; do not change.
 const (
-	SchemaUserURN          = "urn:ietf:params:scim:schemas:core:2.0:User"
-	SchemaGroupURN         = "urn:ietf:params:scim:schemas:core:2.0:Group"
-	SchemaListResponseURN  = "urn:ietf:params:scim:api:messages:2.0:ListResponse"
-	SchemaErrorURN         = "urn:ietf:params:scim:api:messages:2.0:Error"
-	SchemaServiceProvider  = "urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"
-	SchemaResourceTypeURN  = "urn:ietf:params:scim:schemas:core:2.0:ResourceType"
-	SchemaEnterpriseUser   = "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"
+	SchemaUserURN         = "urn:ietf:params:scim:schemas:core:2.0:User"
+	SchemaGroupURN        = "urn:ietf:params:scim:schemas:core:2.0:Group"
+	SchemaListResponseURN = "urn:ietf:params:scim:api:messages:2.0:ListResponse"
+	SchemaErrorURN        = "urn:ietf:params:scim:api:messages:2.0:Error"
+	SchemaServiceProvider = "urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"
+	SchemaResourceTypeURN = "urn:ietf:params:scim:schemas:core:2.0:ResourceType"
+	SchemaEnterpriseUser  = "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"
 )
 
 // ContentType is the SCIM-specific media type. Most IdPs fall back to

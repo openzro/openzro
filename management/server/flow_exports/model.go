@@ -39,10 +39,10 @@ const (
 // the API for display (e.g. URL, bucket name) — this lets the UI show
 // what's configured without round-tripping the secret.
 type FlowExport struct {
-	ID        uint64     `gorm:"primaryKey;autoIncrement"`
-	Name      string     `gorm:"size:128;not null"`
-	Type      ExportType `gorm:"size:32;not null;index"`
-	Enabled   bool       `gorm:"not null;default:true"`
+	ID      uint64     `gorm:"primaryKey;autoIncrement"`
+	Name    string     `gorm:"size:128;not null"`
+	Type    ExportType `gorm:"size:32;not null;index"`
+	Enabled bool       `gorm:"not null;default:true"`
 
 	// PublicConfig is the non-secret JSON view of the destination —
 	// safe to return to API callers. Concrete shape depends on Type.

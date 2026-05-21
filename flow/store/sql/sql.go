@@ -31,9 +31,9 @@ import (
 // so the same migrations work on SQLite for dev, Postgres for
 // production, and MySQL if anyone wants it.
 type row struct {
-	ID            uint64    `gorm:"primaryKey;autoIncrement"`
-	EventID       []byte    `gorm:"size:32"`
-	FlowID        []byte    `gorm:"size:32"`
+	ID            uint64 `gorm:"primaryKey;autoIncrement"`
+	EventID       []byte `gorm:"size:32"`
+	FlowID        []byte `gorm:"size:32"`
 	PeerPublicKey []byte
 	IsInitiator   bool
 

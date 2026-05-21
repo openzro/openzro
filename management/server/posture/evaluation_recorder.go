@@ -47,12 +47,12 @@ type BufferedRecorder struct {
 	flushInterval time.Duration
 	refreshTTL    time.Duration
 
-	in           chan Evaluation
-	closeOnce    sync.Once
-	stop         chan struct{}
-	done         chan struct{}
-	subCtx       context.Context
-	subCancel    context.CancelFunc
+	in        chan Evaluation
+	closeOnce sync.Once
+	stop      chan struct{}
+	done      chan struct{}
+	subCtx    context.Context
+	subCancel context.CancelFunc
 
 	mu      sync.Mutex
 	dropped uint64

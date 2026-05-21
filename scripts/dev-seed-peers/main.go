@@ -51,16 +51,16 @@ var errNoAccount = errors.New("dev seed: no account in management store")
 // The schema has many more columns; the rest get filled with sane
 // defaults inside insertPeer below.
 type seedPeer struct {
-	id, name, ip                            string
-	country, city                           string
-	osLabel, osVersion, kernel              string
-	version                                 string
-	serial                                  string
-	connected, loginExpired                 bool
-	requiresApproval                        bool
-	loginExpirationEnabled                  bool
-	lastSeen                                time.Time
-	groupIDs                                []string
+	id, name, ip               string
+	country, city              string
+	osLabel, osVersion, kernel string
+	version                    string
+	serial                     string
+	connected, loginExpired    bool
+	requiresApproval           bool
+	loginExpirationEnabled     bool
+	lastSeen                   time.Time
+	groupIDs                   []string
 }
 
 // seedGroup is the minimal shape for the groups table.
@@ -130,8 +130,8 @@ func buildPeers(now time.Time) []seedPeer {
 			id: "dev-peer-mac-1", name: "alice-laptop", ip: "100.65.0.50",
 			country: "BR", city: "São Paulo",
 			osLabel: "darwin", osVersion: "15.3", kernel: "Darwin",
-			version: "0.53.1-alpha.50",
-			serial:  "C02XL0AAJG5L",
+			version:   "0.53.1-alpha.50",
+			serial:    "C02XL0AAJG5L",
 			connected: true, lastSeen: now,
 			loginExpirationEnabled: true,
 			groupIDs:               []string{"grp-all", "grp-developers"},
@@ -140,8 +140,8 @@ func buildPeers(now time.Time) []seedPeer {
 			id: "dev-peer-mac-2", name: "bob-mbp", ip: "100.65.0.51",
 			country: "BR", city: "São Paulo",
 			osLabel: "darwin", osVersion: "14.7", kernel: "Darwin",
-			version: "0.53.1-alpha.49",
-			serial:  "C02WK0AAJG5L",
+			version:   "0.53.1-alpha.49",
+			serial:    "C02WK0AAJG5L",
 			connected: true, lastSeen: now.Add(-2 * time.Minute),
 			loginExpirationEnabled: true,
 			groupIDs:               []string{"grp-all", "grp-developers"},
@@ -150,7 +150,7 @@ func buildPeers(now time.Time) []seedPeer {
 			id: "dev-peer-rocky-1", name: "routing-peer-br-1", ip: "100.65.0.52",
 			country: "BR", city: "São Paulo",
 			osLabel: "linux", osVersion: "9.5", kernel: "Linux",
-			version: "0.53.1-alpha.50",
+			version:   "0.53.1-alpha.50",
 			connected: true, lastSeen: now,
 			// expiration disabled — "Expiration disabled" badge
 			loginExpirationEnabled: false,
@@ -160,7 +160,7 @@ func buildPeers(now time.Time) []seedPeer {
 			id: "dev-peer-rocky-2", name: "routing-peer-br-2", ip: "100.65.0.53",
 			country: "BR", city: "São Paulo",
 			osLabel: "linux", osVersion: "9.5", kernel: "Linux",
-			version: "0.53.1-alpha.50",
+			version:   "0.53.1-alpha.50",
 			connected: true, lastSeen: now,
 			loginExpirationEnabled: false,
 			groupIDs:               []string{"grp-all", "grp-routing-peers-br", "grp-production"},
@@ -190,8 +190,8 @@ func buildPeers(now time.Time) []seedPeer {
 			id: "dev-peer-win-1", name: "carol-workstation", ip: "100.65.0.56",
 			country: "BR", city: "São Paulo",
 			osLabel: "windows", osVersion: "11 23H2", kernel: "Windows",
-			version: "0.53.1-alpha.50",
-			serial:  "WIN-AN12-3456",
+			version:   "0.53.1-alpha.50",
+			serial:    "WIN-AN12-3456",
 			connected: true, lastSeen: now,
 			loginExpirationEnabled: true,
 			groupIDs:               []string{"grp-all", "grp-developers", "grp-designers"},
@@ -211,8 +211,8 @@ func buildPeers(now time.Time) []seedPeer {
 			id: "dev-peer-mac-3", name: "dave-laptop", ip: "100.65.0.58",
 			country: "BR", city: "Rio de Janeiro",
 			osLabel: "darwin", osVersion: "15.2", kernel: "Darwin",
-			version: "0.53.1-alpha.50",
-			serial:  "C02ZL0AAJG5L",
+			version:   "0.53.1-alpha.50",
+			serial:    "C02ZL0AAJG5L",
 			connected: true, lastSeen: now,
 			loginExpirationEnabled: true,
 			groupIDs:               []string{"grp-all", "grp-developers"},
@@ -221,7 +221,7 @@ func buildPeers(now time.Time) []seedPeer {
 			id: "dev-peer-arch-1", name: "dev-server-1", ip: "100.65.0.59",
 			country: "US", city: "Oregon",
 			osLabel: "linux", osVersion: "rolling", kernel: "Linux",
-			version: "0.53.1-alpha.50",
+			version:   "0.53.1-alpha.50",
 			connected: true, lastSeen: now.Add(-30 * time.Second),
 			loginExpirationEnabled: true,
 			groupIDs:               []string{"grp-all", "grp-developers"},
@@ -230,7 +230,7 @@ func buildPeers(now time.Time) []seedPeer {
 			id: "dev-peer-fedora-1", name: "analytics-pipeline", ip: "100.65.0.60",
 			country: "IE", city: "Dublin",
 			osLabel: "linux", osVersion: "39", kernel: "Linux",
-			version: "0.53.1-alpha.50",
+			version:   "0.53.1-alpha.50",
 			connected: true, lastSeen: now,
 			loginExpirationEnabled: false,
 			groupIDs:               []string{"grp-all", "grp-production"},
@@ -239,7 +239,7 @@ func buildPeers(now time.Time) []seedPeer {
 			id: "dev-peer-mac-4", name: "client-poc", ip: "100.65.0.61",
 			country: "GB", city: "London",
 			osLabel: "darwin", osVersion: "13.5", kernel: "Darwin",
-			version: "0.53.1-alpha.30",
+			version:   "0.53.1-alpha.30",
 			connected: false, lastSeen: now.Add(-2 * 24 * time.Hour),
 			loginExpirationEnabled: true,
 			groupIDs:               []string{"grp-all"},

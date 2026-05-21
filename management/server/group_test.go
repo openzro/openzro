@@ -451,7 +451,7 @@ func TestGroupAccountPeersUpdate(t *testing.T) {
 
 		select {
 		case <-done:
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			t.Error("timeout waiting for peerShouldNotReceiveUpdate")
 		}
 	})
@@ -470,7 +470,7 @@ func TestGroupAccountPeersUpdate(t *testing.T) {
 
 		select {
 		case <-done:
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			t.Error("timeout waiting for peerShouldNotReceiveUpdate")
 		}
 	})
@@ -489,7 +489,7 @@ func TestGroupAccountPeersUpdate(t *testing.T) {
 
 		select {
 		case <-done:
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			t.Error("timeout waiting for peerShouldNotReceiveUpdate")
 		}
 	})
@@ -507,7 +507,7 @@ func TestGroupAccountPeersUpdate(t *testing.T) {
 
 		select {
 		case <-done:
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			t.Error("timeout waiting for peerShouldNotReceiveUpdate")
 		}
 	})
@@ -544,7 +544,7 @@ func TestGroupAccountPeersUpdate(t *testing.T) {
 
 		select {
 		case <-done:
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			t.Error("timeout waiting for peerShouldReceiveUpdate")
 		}
 	})
@@ -562,7 +562,7 @@ func TestGroupAccountPeersUpdate(t *testing.T) {
 
 		select {
 		case <-done:
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			t.Error("timeout waiting for peerShouldReceiveUpdate")
 		}
 	})
@@ -580,7 +580,7 @@ func TestGroupAccountPeersUpdate(t *testing.T) {
 
 		select {
 		case <-done:
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			t.Error("timeout waiting for peerShouldReceiveUpdate")
 		}
 	})
@@ -613,7 +613,7 @@ func TestGroupAccountPeersUpdate(t *testing.T) {
 
 		select {
 		case <-done:
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			t.Error("timeout waiting for peerShouldReceiveUpdate")
 		}
 	})
@@ -654,7 +654,7 @@ func TestGroupAccountPeersUpdate(t *testing.T) {
 
 		select {
 		case <-done:
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			t.Error("timeout waiting for peerShouldReceiveUpdate")
 		}
 	})
@@ -681,7 +681,7 @@ func TestGroupAccountPeersUpdate(t *testing.T) {
 
 		select {
 		case <-done:
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			t.Error("timeout waiting for peerShouldReceiveUpdate")
 		}
 	})
@@ -728,7 +728,7 @@ func TestGroupAccountPeersUpdate(t *testing.T) {
 
 		select {
 		case <-done:
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			t.Error("timeout waiting for peerShouldReceiveUpdate")
 		}
 	})

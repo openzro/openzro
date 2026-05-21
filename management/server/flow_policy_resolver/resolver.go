@@ -31,8 +31,8 @@ import (
 // Methods are safe for concurrent use; the hot path holds an RLock
 // while reading the per-account index.
 type Resolver struct {
-	mu     sync.RWMutex
-	cache  map[string]*accountIndex // accountID → index
+	mu    sync.RWMutex
+	cache map[string]*accountIndex // accountID → index
 }
 
 // New returns a Resolver with no accounts cached. Callers must
