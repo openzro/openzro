@@ -48,18 +48,21 @@ jobs:
           filters: |
             # The Management/* matrix (Unit/Benchmark/Benchmark API/
             # Integration) is gated on this filter. It must list every
-            # top-level package management/ actually imports — otherwise
-            # a change in a shared dep (go.mod bump, route/, dns/, util/)
-            # would still build management code but the matrix would
-            # skip, hiding a real break behind a green PR. The list is
-            # derived from `grep github.com/openzro/openzro/...
-            # management/server management/cmd` — top-level direct
-            # imports, plus the module manifest and workflow file
-            # itself.
+            # top-level package the management/ tree actually imports —
+            # otherwise a change in a shared dep (go.mod bump, route/,
+            # dns/, util/) would still build management code at a
+            # different SHA but the matrix would skip, hiding a real
+            # break behind a green PR. The list is derived from
+            # `grep -rohE 'github.com/openzro/openzro/[a-zA-Z0-9_/-]+'
+            # management/` (full tree, not just server/cmd — an
+            # earlier filter derived only from those subdirs missed
+            # base62, safedial, and client/system).
             management:
               - 'management/**'
               - 'go.mod'
               - 'go.sum'
+              - 'base62/**'
+              - 'client/system/**'
               - 'cluster/**'
               - 'dns/**'
               - 'encryption/**'
@@ -68,6 +71,7 @@ jobs:
               - 'relay/auth/**'
               - 'releases/**'
               - 'route/**'
+              - 'safedial/**'
               - 'util/**'
               - 'version/**'
               - '.github/workflows/golang-test-linux.yml'
