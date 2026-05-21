@@ -452,6 +452,45 @@ brews:
       To check status:
         sudo brew services info openzro
 
+# Scoop bucket — Windows power-user install path. The bucket repo is
+# created out-of-band (one-time: `openzro/scoop-bucket`) and the
+# SCOOP_BUCKET_TOKEN secret is a fine-grained PAT scoped to "Contents:
+# write" on that repo only. End-user flow:
+#
+#     scoop bucket add openzro https://github.com/openzro/scoop-bucket
+#     scoop install openzro
+#
+# Same skip-on-missing-token shape as `brews` above: the calling
+# workflow adds `--skip=scoop` when SCOOP_BUCKET_TOKEN is unset, so
+# this whole block is bypassed (no manifest push) without a template
+# error on the empty env.
+#
+# Winget is intentionally NOT wired here yet — `winget-pkgs` review
+# rejects unsigned MSIs (microsoft/winget-pkgs validators flag the
+# SmartScreen reputation), and the .msi this pipeline produces is
+# still unsigned (see release_msi step "Build Windows MSI installer
+# (unsigned)" in release-binaries.yml + open SignPath integration work
+# referenced from issue #1). Add a `winget:` block here once the MSI
+# carries an Authenticode signature.
+scoops:
+  - name: openzro
+    ids: [client]
+    repository:
+      owner: openzro
+      name: scoop-bucket
+      branch: main
+      token: "{{ .Env.SCOOP_BUCKET_TOKEN }}"
+    homepage: "https://openzro.io/"
+    description: "Open-source mesh networking with WireGuard"
+    license: "BSD-3-Clause"
+    # auto = skip push for snapshots / prereleases (still builds the
+    # manifest file in dist/ for inspection). For tag-mode the manifest
+    # gets pushed.
+    skip_upload: auto
+    commit_msg_template: "Scoop update for {{ .ProjectName }} v{{ .Version }}"
+    post_install:
+      - 'Write-Host "openZro CLI installed. The daemon needs Administrator to manage WireGuard interfaces — run `openzro service install` from an elevated PowerShell to register the Windows service."'
+
 # Docker images to ghcr.io only. GITHUB_TOKEN is sufficient — no
 # DOCKER_USER / DOCKER_TOKEN required.
 dockers:
