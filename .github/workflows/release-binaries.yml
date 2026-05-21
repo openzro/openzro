@@ -90,6 +90,11 @@ jobs:
           # push-time. Once the org creates openzro/homebrew-tap and
           # adds the secret, this branch flips automatically.
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          # Same shape for the Scoop bucket push (#4 / ADR-0007 Stage 7).
+          # Empty until the org creates openzro/scoop-bucket + a fine-
+          # grained PAT scoped to "Contents: write" on that repo; the
+          # branch flips automatically once the secret is set.
+          SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.snapshot }}" = "true" ]; then
             args="release --clean --snapshot --skip=publish"
@@ -101,6 +106,10 @@ jobs:
           if [ -z "$HOMEBREW_TAP_TOKEN" ]; then
             args="$args --skip=homebrew"
             echo "::notice::HOMEBREW_TAP_TOKEN not set — skipping brew formula push (ADR-0007 Stage 5)"
+          fi
+          if [ -z "$SCOOP_BUCKET_TOKEN" ]; then
+            args="$args --skip=scoop"
+            echo "::notice::SCOOP_BUCKET_TOKEN not set — skipping scoop manifest push (ADR-0007 Stage 7)"
           fi
           echo "args=$args" >> "$GITHUB_OUTPUT"
 
@@ -117,6 +126,12 @@ jobs:
           # `--skip=homebrew` flag (set above when token is absent)
           # bypasses the brews step entirely.
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          # Same export-always pattern for the scoop manifest token —
+          # the scoops template references `{{ .Env.SCOOP_BUCKET_TOKEN }}`
+          # and goreleaser errors on an undefined env. `--skip=scoop`
+          # (set above when token is absent) bypasses the whole scoop
+          # block; the export here only prevents the template error.
+          SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
           # #5 R4: the openzro build ldflag pins
           # selfupdate.buildTeamID via `{{ index .Env "APPLE_TEAM_ID" }}`.
           # Without this export the shipped daemon has BuildTeamID()==""
