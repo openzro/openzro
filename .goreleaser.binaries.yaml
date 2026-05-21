@@ -483,10 +483,18 @@ scoops:
     homepage: "https://openzro.io/"
     description: "Open-source mesh networking with WireGuard"
     license: "BSD-3-Clause"
-    # auto = skip push for snapshots / prereleases (still builds the
-    # manifest file in dist/ for inspection). For tag-mode the manifest
-    # gets pushed.
-    skip_upload: auto
+    # `auto` is GoReleaser's default — it skips push for both
+    # snapshots AND prereleases. Every openZro release shipped so
+    # far has been a prerelease tag (v0.53.1-alpha.N), so `auto`
+    # would never publish until a stable cut. The whole point of
+    # Stage 7 is to let alpha testers exercise `scoop install
+    # openzro`, so the bucket must update on prereleases too.
+    # Explicit `"false"` keeps snapshot builds (no real tag) from
+    # pushing while still letting every tag-build publish, including
+    # alphas. The pinned v2.3.2 schema accepts strings here. Source:
+    # https://goreleaser.com/customization/publish/scoop/ describes
+    # the same `auto` semantics that bit on prerelease tags.
+    skip_upload: "false"
     commit_msg_template: "Scoop update for {{ .ProjectName }} v{{ .Version }}"
     post_install:
       - 'Write-Host "openZro CLI installed. The daemon needs Administrator to manage WireGuard interfaces — run `openzro service install` from an elevated PowerShell to register the Windows service."'
