@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	b64 "encoding/base64"
 	"fmt"
-	"math/rand"
 	"net"
 	"net/netip"
 	"os"
@@ -87,7 +86,7 @@ func runLargeTest(t *testing.T, store Store) {
 	account.SetupKeys[setupKey.Key] = setupKey
 	const numPerAccount = 6000
 	for n := 0; n < numPerAccount; n++ {
-		netIP := randomIPv4()
+		netIP := sequentialIPv4(n)
 		peerID := fmt.Sprintf("%s-peer-%d", account.Id, n)
 
 		peer := &nbpeer.Peer{
@@ -210,13 +209,19 @@ func runLargeTest(t *testing.T, store Store) {
 	}
 }
 
-func randomIPv4() net.IP {
-	rand.New(rand.NewSource(time.Now().UnixNano()))
-	b := make([]byte, 4)
-	for i := range b {
-		b[i] = byte(rand.Intn(256))
-	}
-	return net.IP(b)
+// sequentialIPv4 maps an iteration counter to a unique 10.x.y.z
+// address inside 10.0.0.0/8 (~16M addresses). The previous helper —
+// randomIPv4 — built each peer's address from a 32-bit unseeded
+// (and never-assigned) rand.NewSource, so 6000 calls under
+// Test_SaveAccount_Large produced a birthday-paradox collision
+// roughly once every ~250 runs, surfacing as a "duplicate key value
+// violates unique constraint idx_account_ip" flake on Postgres
+// (#97). Sequential addressing eliminates the collision class
+// entirely without changing what the test exercises (the
+// SaveAccount path; routes and nameservers reuse the IP only as a
+// payload string).
+func sequentialIPv4(n int) net.IP {
+	return net.IPv4(10, byte((n>>16)&0xff), byte((n>>8)&0xff), byte(n&0xff))
 }
 
 func Test_SaveAccount(t *testing.T) {

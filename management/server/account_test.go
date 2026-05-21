@@ -1477,17 +1477,17 @@ func TestAccountManager_NetworkUpdates_DeleteGroup(t *testing.T) {
 		return
 	}
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
-		message := <-updMsg
-		networkMap := message.Update.GetNetworkMap()
-		if len(networkMap.RemotePeers) != 0 {
-			t.Errorf("mismatch peers count: 0 expected, got %v", len(networkMap.RemotePeers))
-		}
-	}()
+	// Drain every frame the setup steps queued — SaveGroup,
+	// DeletePolicy (default), SavePolicy each publish a NetworkMap
+	// update to peer1. Without draining, the convergence loop below
+	// could land on the DeletePolicy(default) frame (which already
+	// has RemotePeers=0 because peer1 has no active policy at that
+	// moment) and return BEFORE DeleteGroup actually fires — a false
+	// pass. 200ms is comfortably above the local fan-out latency
+	// (a few hundred microseconds in practice). Review of PR #102
+	// caught this race shape — the earlier convergence-only loop
+	// fixed message ordering but kept the buffered-frame ambiguity.
+	drainUpdateChannel(updMsg, 200*time.Millisecond)
 
 	// clean policy is pre requirement for delete group
 	if err := manager.DeletePolicy(context.Background(), account.Id, policy.ID, userID); err != nil {
@@ -1500,7 +1500,46 @@ func TestAccountManager_NetworkUpdates_DeleteGroup(t *testing.T) {
 		return
 	}
 
-	wg.Wait()
+	// Read messages until the network map converges to 0 remote peers
+	// for peer1 — the post-state of DeleteGroup. With the pre-action
+	// drain above, every frame the loop sees was caused by either
+	// DeletePolicy(policy) or DeleteGroup, never by leftover setup
+	// noise; so the FIRST RemotePeers=0 frame is provably caused by
+	// one of the steps under test.
+	deadline := time.NewTimer(5 * time.Second)
+	defer deadline.Stop()
+	for {
+		select {
+		case message := <-updMsg:
+			if len(message.Update.GetNetworkMap().RemotePeers) == 0 {
+				return // converged to the post-DeleteGroup state
+			}
+		case <-deadline.C:
+			t.Fatalf("network map did not converge to 0 remote peers within 5s — last frame still had peers in the map")
+		}
+	}
+}
+
+// drainUpdateChannel reads every queued frame off ch and discards
+// them, returning after a short idle window with no new arrivals.
+// Used to gate test assertions against setup-step noise — the test
+// only cares about the network map AFTER the under-test action
+// fires, so any frame already in the buffer is by definition stale.
+func drainUpdateChannel(ch <-chan *UpdateMessage, idle time.Duration) {
+	t := time.NewTimer(idle)
+	defer t.Stop()
+	for {
+		select {
+		case <-ch:
+			// Reset the idle window: more frames may follow.
+			if !t.Stop() {
+				<-t.C
+			}
+			t.Reset(idle)
+		case <-t.C:
+			return
+		}
+	}
 }
 
 func TestAccountManager_DeletePeer(t *testing.T) {
