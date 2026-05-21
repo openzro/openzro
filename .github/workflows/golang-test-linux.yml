@@ -46,8 +46,31 @@ jobs:
         id: filter
         with:
           filters: |
+            # The Management/* matrix (Unit/Benchmark/Benchmark API/
+            # Integration) is gated on this filter. It must list every
+            # top-level package management/ actually imports — otherwise
+            # a change in a shared dep (go.mod bump, route/, dns/, util/)
+            # would still build management code but the matrix would
+            # skip, hiding a real break behind a green PR. The list is
+            # derived from `grep github.com/openzro/openzro/...
+            # management/server management/cmd` — top-level direct
+            # imports, plus the module manifest and workflow file
+            # itself.
             management:
               - 'management/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'cluster/**'
+              - 'dns/**'
+              - 'encryption/**'
+              - 'flow/**'
+              - 'formatter/**'
+              - 'relay/auth/**'
+              - 'releases/**'
+              - 'route/**'
+              - 'util/**'
+              - 'version/**'
+              - '.github/workflows/golang-test-linux.yml'
 
       - name: Install Go
         uses: actions/setup-go@v5
