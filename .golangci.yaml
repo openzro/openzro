@@ -132,6 +132,14 @@ issues:
   # Default: 3
   max-same-issues: 5
 
+  # Skip vendored / generated trees that ship .go files we don't own.
+  # dashboard/node_modules contains npm-installed packages (the
+  # `flatted` JSON-serializer ships a Go reference impl); linting
+  # them is meaningless and produces false positives like flatted's
+  # `(nil, nil)` return triggering our nilnil rule.
+  exclude-dirs:
+    - dashboard/node_modules
+
   exclude-rules:
     # allow fmt
     - path: management/cmd/root\.go
