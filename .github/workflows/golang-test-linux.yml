@@ -336,6 +336,17 @@ jobs:
   test_management:
     name: "Management / Unit"
     needs: [ build-cache ]
+    # Gate on the management-path detector (build-cache.outputs.management):
+    # skip the 3-store matrix entirely on dashboard-only / docs-only /
+    # client-icon-only PRs that have zero chance of breaking management
+    # code. Pushes to main / tags always run (the OR-clause keeps
+    # release/CI-config changes from silently skipping).
+    # The three other Management/* jobs (Benchmark, Benchmark (API),
+    # Integration) already carry this gate — this one was left
+    # unguarded since the fork, surfacing as a 3-store matrix +
+    # postgres/mysql/redis container pull on every PR. See #87/#88 for
+    # the Docker Hub rate-limit symptom history.
+    if: ${{ needs.build-cache.outputs.management == 'true' || github.event_name != 'pull_request' }}
     strategy:
       fail-fast: false
       matrix:
