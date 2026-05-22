@@ -23,19 +23,26 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/openzro/openzro/dns"
-	"github.com/openzro/openzro/management/server/telemetry"
-	"github.com/openzro/openzro/management/server/testutil"
-	"github.com/openzro/openzro/management/server/types"
-	"github.com/openzro/openzro/util"
-
 	"github.com/openzro/openzro/management/server/migration"
 	resourceTypes "github.com/openzro/openzro/management/server/networks/resources/types"
 	routerTypes "github.com/openzro/openzro/management/server/networks/routers/types"
 	networkTypes "github.com/openzro/openzro/management/server/networks/types"
 	nbpeer "github.com/openzro/openzro/management/server/peer"
 	"github.com/openzro/openzro/management/server/posture"
+	"github.com/openzro/openzro/management/server/telemetry"
+	"github.com/openzro/openzro/management/server/testutil"
+	"github.com/openzro/openzro/management/server/types"
 	"github.com/openzro/openzro/route"
+	"github.com/openzro/openzro/util"
 )
+
+// ErrUserMFANotFound is the sentinel returned by GetUserMFA when
+// the user has no MFA enrolled. Callers use errors.Is to branch on
+// the "not enrolled" path without parsing a string error — the
+// distinction matters for the auth-middleware gate, which treats
+// "not enrolled + enforcement on" as a forced-enrollment redirect
+// rather than a generic 500.
+var ErrUserMFANotFound = errors.New("store: user has no MFA enrolled")
 
 type LockingStrength string
 
@@ -85,6 +92,13 @@ type Store interface {
 	SaveUser(ctx context.Context, lockStrength LockingStrength, user *types.User) error
 	SaveUserLastLogin(ctx context.Context, accountID, userID string, lastLogin time.Time) error
 	DeleteUser(ctx context.Context, lockStrength LockingStrength, accountID, userID string) error
+
+	// UserMFA — per-user second-factor state. Issue #31. ErrUserMFANotFound
+	// is the sentinel for "user has no MFA enrolled" so the caller can
+	// distinguish that from a real store error.
+	GetUserMFA(ctx context.Context, lockStrength LockingStrength, userID string) (*types.UserMFA, error)
+	SaveUserMFA(ctx context.Context, lockStrength LockingStrength, mfa *types.UserMFA) error
+	DeleteUserMFA(ctx context.Context, lockStrength LockingStrength, userID string) error
 	GetTokenIDByHashedToken(ctx context.Context, secret string) (string, error)
 	DeleteHashedPAT2TokenIDIndex(hashedToken string) error
 	DeleteTokenID2UserIDIndex(tokenID string) error

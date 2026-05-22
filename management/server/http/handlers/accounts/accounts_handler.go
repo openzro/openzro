@@ -103,6 +103,21 @@ func (h *handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 		PeerInactivityExpiration:        time.Duration(float64(time.Second.Nanoseconds()) * float64(req.Settings.PeerInactivityExpiration)),
 	}
 
+	// MFA enforcement toggles (openZro #31). Both default OFF — when
+	// the dashboard omits them (legacy clients) we preserve the
+	// existing value rather than silently turning enforcement off,
+	// which would let a user without MFA quietly bypass policy.
+	if req.Settings.MfaEnforceLocal != nil {
+		settings.MFAEnforceLocal = *req.Settings.MfaEnforceLocal
+	} else if existing, err := h.settingsManager.GetSettings(r.Context(), accountID, userID); err == nil && existing != nil {
+		settings.MFAEnforceLocal = existing.MFAEnforceLocal
+	}
+	if req.Settings.MfaEnforceFederated != nil {
+		settings.MFAEnforceFederated = *req.Settings.MfaEnforceFederated
+	} else if existing, err := h.settingsManager.GetSettings(r.Context(), accountID, userID); err == nil && existing != nil {
+		settings.MFAEnforceFederated = existing.MFAEnforceFederated
+	}
+
 	if req.Settings.Extra != nil {
 		var groups []string
 		if req.Settings.Extra.NetworkTrafficLogsGroups != nil {
@@ -325,6 +340,8 @@ func toAccountResponse(accountID string, settings *types.Settings, meta *types.A
 		ClientUpdateTargetPeers:         &clientUpdateTargetPeers,
 		ClientUpdateExcludeGroups:       &clientUpdateExcludeGroups,
 		ClientUpdateRolloutPercent:      settings.ClientUpdateRolloutPercent,
+		MfaEnforceLocal:                 &settings.MFAEnforceLocal,
+		MfaEnforceFederated:             &settings.MFAEnforceFederated,
 	}
 
 	apiOnboarding := api.AccountOnboarding{

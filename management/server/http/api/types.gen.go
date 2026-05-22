@@ -395,6 +395,12 @@ type AccountSettings struct {
 	// LazyConnectionEnabled Enables or disables experimental lazy connection
 	LazyConnectionEnabled *bool `json:"lazy_connection_enabled,omitempty"`
 
+	// MfaEnforceFederated When true, users authenticating via any federated provider (connector_id != "local") must also complete an openZro-side TOTP challenge AFTER their IdP-side login. The IdP's own MFA still runs first; this is a REDUNDANCY layer for operators wanting defense-in-depth against IdP misconfiguration, social engineering, or a compromised IdP key. Users enter two codes per login. Default false; turn on when the threat model treats the IdP as a separate trust domain (openZro #31).
+	MfaEnforceFederated *bool `json:"mfa_enforce_federated,omitempty"`
+
+	// MfaEnforceLocal When true, users authenticating via the bundled Dex local connector (federated_claims.connector_id == "local", i.e. staticPasswords) must enroll AND complete a TOTP challenge on every session-bound API call. Local accounts have NO IdP-side MFA so this is the PRIMARY second factor for teams running openZro without an external IdP (openZro #31). Default false; users may still enroll voluntarily via the profile page regardless.
+	MfaEnforceLocal *bool `json:"mfa_enforce_local,omitempty"`
+
 	// PeerInactivityExpiration Period of time of inactivity after which peer session expires (seconds).
 	PeerInactivityExpiration int `json:"peer_inactivity_expiration"`
 

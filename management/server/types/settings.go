@@ -119,6 +119,33 @@ type Settings struct {
 	// Membership in ANY exempt group is sufficient (OR semantics).
 	// Changes are audited via activity.AdmissionExemptGroupsUpdated.
 	AdmissionExemptGroups []string `gorm:"serializer:json"`
+
+	// MFAEnforceLocal, when true, requires users authenticating via
+	// the bundled Dex local connector (federated_claims.connector_id
+	// == "local", i.e. staticPasswords) to enroll AND complete a TOTP
+	// challenge on every session-bound API call. Local accounts have
+	// NO IdP-side MFA — Dex's staticPasswords connector is bare
+	// email/password — so this toggle is the PRIMARY second factor for
+	// teams running openZro without an external IdP (issue #31).
+	//
+	// Default: false. Users can still enroll voluntarily via the
+	// profile page regardless of this flag; flipping it on flips the
+	// not-yet-enrolled local users into a forced-enrollment redirect
+	// on next session check.
+	MFAEnforceLocal bool `gorm:"default:false"`
+
+	// MFAEnforceFederated, when true, requires users authenticating
+	// via ANY federated provider (connector_id != "local") to also
+	// complete an openZro-side TOTP challenge after their IdP-side
+	// login. The IdP's own MFA (if any) still runs first; this is a
+	// REDUNDANCY layer for operators who want defense-in-depth against
+	// IdP misconfiguration, social engineering against the IdP, or a
+	// compromised IdP key. Users effectively enter two codes per
+	// login — the IdP's, then openZro's.
+	//
+	// Default: false. Most operators won't need this; turn it on when
+	// the threat model treats the IdP as a separate trust domain.
+	MFAEnforceFederated bool `gorm:"default:false"`
 }
 
 // Copy copies the Settings struct
@@ -141,6 +168,8 @@ func (s *Settings) Copy() *Settings {
 		AdmissionEnforcementEnabled:     s.AdmissionEnforcementEnabled,
 		AdmissionPostureChecks:          append([]string(nil), s.AdmissionPostureChecks...),
 		AdmissionExemptGroups:           append([]string(nil), s.AdmissionExemptGroups...),
+		MFAEnforceLocal:                 s.MFAEnforceLocal,
+		MFAEnforceFederated:             s.MFAEnforceFederated,
 
 		ClientUpdateTargetVersion: s.ClientUpdateTargetVersion,
 		ClientUpdateForce:         s.ClientUpdateForce,

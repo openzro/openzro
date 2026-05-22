@@ -44,6 +44,17 @@ type UserAuth struct {
 
 	// Indicates whether this user has authenticated with a Personal Access Token
 	IsPAT bool
+
+	// ConnectorID is the Dex connector that authenticated this JWT,
+	// extracted from `federated_claims.connector_id`. Dex's bundled
+	// staticPasswords connector emits the literal value "local";
+	// federated providers (Okta, Google Workspace, Microsoft Entra,
+	// Authentik, Keycloak, etc.) emit their configured connector id.
+	// Used by the MFA gate (issue #31) to apply MFAEnforceLocal vs.
+	// MFAEnforceFederated. Empty when the JWT didn't carry
+	// federated_claims (PAT auth, legacy tokens, non-Dex IdPs that
+	// don't emit the claim).
+	ConnectorID string
 }
 
 func GetUserAuthFromRequest(r *http.Request) (UserAuth, error) {

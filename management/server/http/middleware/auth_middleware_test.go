@@ -193,6 +193,8 @@ func TestAuthMiddleware_Handler(t *testing.T) {
 		func(ctx context.Context, userAuth nbcontext.UserAuth) (*types.User, error) {
 			return &types.User{}, nil
 		},
+		nil, // mfaGate disabled in this middleware unit test
+		nil, // getAccountSettings unused
 	)
 
 	handlerToTest := authMiddleware.Handler(nextHandler)
@@ -300,6 +302,8 @@ func TestAuthMiddleware_Handler_Child(t *testing.T) {
 		func(ctx context.Context, userAuth nbcontext.UserAuth) (*types.User, error) {
 			return &types.User{}, nil
 		},
+		nil, // mfaGate disabled in this middleware unit test
+		nil, // getAccountSettings unused
 	)
 
 	for _, tc := range tt {

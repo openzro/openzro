@@ -32,6 +32,7 @@ import AccessTokensTable from "@/modules/access-tokens/AccessTokensTable";
 import CreateAccessTokenModal from "@/modules/access-tokens/CreateAccessTokenModal";
 import useGroupHelper from "@/modules/groups/useGroupHelper";
 import { useGroupIdsToGroups } from "@/modules/groups/useGroupIdsToGroups";
+import MFASection from "@/modules/mfa/MFASection";
 import UserBlockCell from "@/modules/users/table-cells/UserBlockCell";
 import { UserRoleSelector } from "@/modules/users/UserRoleSelector";
 import UserStatusCellV2 from "@/modules/users/v2/UserStatusCellV2";
@@ -213,6 +214,20 @@ function UserOverview({ user, initialGroups }: Readonly<Props>) {
           </OzCard>
         </div>
       </div>
+
+      {isLoggedInUser && !user.is_service_user && (
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-[18px] font-semibold tracking-tight">
+              Security
+            </h2>
+            <p className="mt-1 max-w-2xl text-[13.5px] text-oz2-text-muted">
+              Your personal second factor for openZro sign-in.
+            </p>
+          </div>
+          <MFASection />
+        </section>
+      )}
 
       {showAccessTokens && (
         <section className="space-y-4">

@@ -50,5 +50,15 @@ export interface Account {
     // 0..100 staged ring. undefined = no ring (everyone in scope); an
     // explicit 0 = nobody (fail-closed).
     client_update_rollout_percent?: number;
+    // MFA enforcement (openZro #31). Both default false; users may
+    // enroll voluntarily via Profile > Security regardless.
+    // mfa_enforce_local: gate Dex local accounts (staticPasswords,
+    //   connector_id == "local") on openZro-side TOTP — the PRIMARY
+    //   second factor since staticPasswords has no built-in MFA.
+    // mfa_enforce_federated: gate federated accounts (connector_id !=
+    //   "local") on openZro-side TOTP as a REDUNDANCY layer on top of
+    //   the IdP's own MFA. Users enter two codes per login.
+    mfa_enforce_local?: boolean;
+    mfa_enforce_federated?: boolean;
   };
 }
