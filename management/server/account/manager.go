@@ -242,6 +242,12 @@ type Manager interface {
 // doesn't have to import the mfa package.
 type MFATokenPurpose string
 
+// gosec G101 fires on the literal values because they end in
+// "enrollment"/"challenge" and the scanner heuristic flags any
+// string-literal const containing common credential keywords. These
+// are purpose discriminants on a JWT claim, not credentials.
+//
+//nolint:gosec
 const (
 	MFATokenPurposeChallenge         MFATokenPurpose = "mfa_challenge"
 	MFATokenPurposeEnrollment        MFATokenPurpose = "mfa_enrollment"

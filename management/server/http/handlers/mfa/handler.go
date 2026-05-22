@@ -130,11 +130,6 @@ func (h *handler) enrollStartTokenAuth(w http.ResponseWriter, r *http.Request) {
 	h.doEnrollStart(w, r, "", res.UserID)
 }
 
-type tokenAuthFinishRequest struct {
-	Code         string `json:"code"`
-	PendingToken string `json:"pending_token"`
-}
-
 func (h *handler) enrollFinishTokenAuth(w http.ResponseWriter, r *http.Request) {
 	res := h.extractMFAToken(r, account.MFATokenPurposeEnrollment)
 	if res == nil {

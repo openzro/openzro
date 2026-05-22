@@ -270,7 +270,7 @@ var (
 				return fmt.Errorf("failed to build default manager: %v", err)
 			}
 
-			// Initialise the MFA subsystem (issue #31). Fails closed
+			// Initialize the MFA subsystem (issue #31). Fails closed
 			// without DataStoreEncryptionKey configured — the gate then
 			// refuses any enforced request rather than silently letting
 			// the operator's policy intent through. Local Dex deployments

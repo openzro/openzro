@@ -1,12 +1,11 @@
 "use client";
 
 import { notify } from "@components/Notification";
-import { useApiCall } from "@utils/api";
+import useFetchApi, { useApiCall } from "@utils/api";
 import { clearMfaSessionToken } from "@utils/mfaSession";
 import dayjs from "dayjs";
 import { ShieldCheck, ShieldOff, ShieldQuestion } from "lucide-react";
 import React, { useState } from "react";
-import useSWR from "swr";
 import OzButton from "@/components/v2/OzButton";
 import OzCard from "@/components/v2/OzCard";
 import MFAEnrollmentModal from "@/modules/mfa/MFAEnrollmentModal";
@@ -36,7 +35,10 @@ interface RegenerateResponse {
 }
 
 export default function MFASection() {
-  const { data, mutate, isLoading } = useSWR<MFAStatus>("/users/me/mfa");
+  // Use the project-wide useFetchApi helper rather than raw useSWR —
+  // there is no global SWR fetcher / SWRConfig configured, so raw
+  // useSWR would just store the URL as a cache key and never fetch.
+  const { data, mutate, isLoading } = useFetchApi<MFAStatus>("/users/me/mfa");
   const [enrollOpen, setEnrollOpen] = useState(false);
 
   const disenroll = useApiCall<{ disenrolled: boolean }>(

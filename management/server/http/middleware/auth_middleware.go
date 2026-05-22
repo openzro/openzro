@@ -280,7 +280,7 @@ func isMFAExemptRequest(r *http.Request) bool {
 
 // jwtSessionID derives a short, opaque session id from the raw JWT.
 // The MFA layer uses this to bind challenge / session tokens to a
-// specific browser session: a stolen JWT alone cannot re-use a
+// specific browser session: a stolen JWT alone cannot reuse a
 // stolen mfa_session_token unless both came from the same session.
 //
 // We hash the entire token rather than reading the `jti` claim

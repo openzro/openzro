@@ -71,9 +71,10 @@ const sessionTokenTTL = 8 * time.Hour
 // (and vice versa). The label is versioned so future rotation can
 // re-derive cleanly.
 //
-//nolint:gosec // G101 — not a credential, it's a fixed domain-
 // separation label used as HKDF info parameter. The label is
 // public information; the secret is the AES key it's combined with.
+//
+//nolint:gosec // G101 — not a credential, it's a fixed domain-
 const mfaTokenSigningKeyInfo = "openzro-mfa-token-v1"
 
 // Signer mints and validates short-lived MFA-scoped JWTs. Bound to
