@@ -232,39 +232,43 @@ func (gm *GoogleWorkspaceManager) DeleteUser(_ context.Context, userID string) e
 // `option.WithCredentials` legacy surface is also SA1019-deprecated).
 // Closes #82 along with the gcs.go sink call sites.
 func getGoogleCredentials(ctx context.Context, serviceAccountKey string) (*auth.Credentials, error) {
+	scopes := []string{admin.AdminDirectoryUserReadonlyScope}
+
+	// Empty configuration: ADC only. Same chain the old code
+	// reached via FindDefaultCredentials — env vars, gcloud user-
+	// creds, GCE/GKE Workload Identity, Cloud Run/Functions
+	// injected creds.
+	if serviceAccountKey == "" {
+		log.WithContext(ctx).Debug("no service account key configured, using application default credentials")
+		return authcreds.DetectDefault(&authcreds.DetectOptions{Scopes: scopes})
+	}
+
 	log.WithContext(ctx).Debug("retrieving google credentials from the base64 encoded service account key")
 	decodeKey, err := base64.StdEncoding.DecodeString(serviceAccountKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode service account key: %w", err)
 	}
 
-	scopes := []string{admin.AdminDirectoryUserReadonlyScope}
-
-	// Explicit key first; DetectDefault parses + validates the JSON
-	// inline so a malformed key surfaces here rather than at request
-	// time. Logging shape preserved verbatim so an operator following
-	// the fallback in management.log doesn't see a change.
-	creds, err := authcreds.DetectDefault(&authcreds.DetectOptions{
-		CredentialsJSON: decodeKey,
-		Scopes:          scopes,
-	})
-	if err == nil {
-		return creds, nil
-	}
-
-	log.WithContext(ctx).Debugf("failed to retrieve Google credentials from ServiceAccountKey: %v", err)
-	log.WithContext(ctx).Debug("falling back to default google credentials location")
-
-	// ADC fallback: empty CredentialsJSON + CredentialsFile triggers
-	// the detector's environment-and-metadata-server probe, identical
-	// to the old FindDefaultCredentials behavior.
-	creds, err = authcreds.DetectDefault(&authcreds.DetectOptions{
-		Scopes: scopes,
-	})
+	// Explicit key path is fail-CLOSED. NewCredentialsFromJSON PINS
+	// the credential type to ServiceAccount, so a workforce-pool or
+	// impersonated-SA JSON shape that an operator pasted by mistake
+	// (or got from an untrusted source) is rejected at parse time —
+	// that is the security upgrade the SA1019 deprecation flagged.
+	//
+	// Pre-migration the function fell back to ADC whenever the key
+	// failed to parse, which silently substituted environment creds
+	// for the operator's explicit (wrong-shaped) input. That hides
+	// the misconfiguration and grants reach the operator did not
+	// intend. We no longer fall back here: a non-empty key that
+	// fails the type pin surfaces as a hard error.
+	creds, err := authcreds.NewCredentialsFromJSON(
+		authcreds.ServiceAccount,
+		decodeKey,
+		&authcreds.DetectOptions{Scopes: scopes},
+	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("service account key: %w", err)
 	}
-
 	return creds, nil
 }
 

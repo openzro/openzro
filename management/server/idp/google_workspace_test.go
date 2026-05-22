@@ -45,6 +45,66 @@ func TestGetGoogleCredentials_RejectsBadBase64(t *testing.T) {
 		"error must identify the base64 boundary")
 }
 
+// TestGetGoogleCredentials_RejectsNonServiceAccountJSON pins the
+// security upgrade the SA1019 deprecation flagged: a credential JSON
+// of a DIFFERENT type (external_account / workforce-pool / etc.)
+// that an operator pasted by mistake — or sourced from an untrusted
+// place — must be REFUSED at parse time, not silently honored AND
+// not silently overridden by environment credentials via ADC.
+//
+// Pre-migration the function fell back to ADC whenever the key
+// failed to parse, which substituted environment creds for the
+// operator's explicit (wrong-shaped) input — granting reach the
+// operator did not intend. The migration removes that fallback;
+// these tests pin the new fail-closed contract.
+func TestGetGoogleCredentials_RejectsNonServiceAccountJSON(t *testing.T) {
+	t.Run("external_account JSON is rejected with type-pin error", func(t *testing.T) {
+		payload := map[string]any{
+			"type":               "external_account",
+			"audience":           "//iam.googleapis.com/projects/123/locations/global/workloadIdentityPools/pool-x/providers/prov-y",
+			"subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
+			"token_url":          "https://sts.googleapis.com/v1/token",
+			"credential_source":  map[string]any{"file": "/var/run/secrets/tokens/jwt"},
+		}
+		_, err := getGoogleCredentials(context.Background(),
+			base64.StdEncoding.EncodeToString(mustJSON(t, payload)))
+		require.Error(t, err)
+		// The error must come from the type pin, not from a later
+		// ADC failure — pins the no-fallback guarantee.
+		require.Contains(t, err.Error(), "service_account",
+			"error must identify the expected vs. found credential type, not surface as a generic ADC failure")
+		require.Contains(t, err.Error(), "external_account",
+			"error must identify which wrong type was passed")
+	})
+
+	t.Run("impersonated_service_account JSON is rejected with type-pin error", func(t *testing.T) {
+		payload := map[string]any{
+			"type":                              "impersonated_service_account",
+			"service_account_impersonation_url": "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/target@p.iam.gserviceaccount.com:generateAccessToken",
+			"source_credentials": map[string]any{
+				"type":          "authorized_user",
+				"client_id":     "x",
+				"client_secret": "y",
+				"refresh_token": "z",
+			},
+		}
+		_, err := getGoogleCredentials(context.Background(),
+			base64.StdEncoding.EncodeToString(mustJSON(t, payload)))
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "service_account",
+			"error must identify the expected credential type")
+		require.Contains(t, err.Error(), "impersonated_service_account",
+			"error must identify which wrong type was passed")
+	})
+}
+
+func mustJSON(t *testing.T, v any) []byte {
+	t.Helper()
+	b, err := json.Marshal(v)
+	require.NoError(t, err)
+	return b
+}
+
 // serviceAccountKeyB64 builds the minimum-viable JSON that
 // credentials.DetectDefault accepts as a service account — type,
 // project_id, private_key_id, private_key (PEM), client_email, and
