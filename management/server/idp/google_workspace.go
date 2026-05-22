@@ -7,8 +7,9 @@ import (
 	"net/http"
 	"time"
 
+	"cloud.google.com/go/auth"
+	authcreds "cloud.google.com/go/auth/credentials"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
 	"google.golang.org/api/option"
 
@@ -73,7 +74,7 @@ func NewGoogleWorkspaceManager(ctx context.Context, config GoogleWorkspaceClient
 
 	service, err := admin.NewService(context.Background(),
 		option.WithScopes(admin.AdminDirectoryUserReadonlyScope),
-		option.WithCredentials(adminCredentials),
+		option.WithAuthCredentials(adminCredentials),
 	)
 	if err != nil {
 		return nil, err
@@ -218,43 +219,66 @@ func (gm *GoogleWorkspaceManager) DeleteUser(_ context.Context, userID string) e
 	return nil
 }
 
-// getGoogleCredentials retrieves Google credentials based on the provided serviceAccountKey.
-// It decodes the base64-encoded serviceAccountKey and attempts to obtain credentials using it.
-// If that fails, it falls back to using the default Google credentials path.
-// It returns the retrieved credentials or an error if unsuccessful.
-func getGoogleCredentials(ctx context.Context, serviceAccountKey string) (*google.Credentials, error) {
+// getGoogleCredentials retrieves Google credentials for the
+// Workspace Admin Directory client. Two paths:
+//
+//   - serviceAccountKey == ""  → Application Default Credentials
+//     (env vars, gcloud user-creds, GCE/GKE Workload Identity, Cloud
+//     Run/Functions injected creds — the chain the old
+//     FindDefaultCredentials walked).
+//   - serviceAccountKey != ""  → base64-decoded JSON parsed via the
+//     type-pinned authcreds.NewCredentialsFromJSON(ServiceAccount,
+//     ...). Fail-CLOSED: a key the operator pasted that isn't a
+//     service-account shape (workforce-pool / impersonated-SA / etc.)
+//     surfaces as an error, NOT a silent fallback to ADC. The pre-
+//     migration code DID fall back, which silently substituted
+//     environment creds for the operator's wrong-shaped explicit
+//     input — the security upgrade the SA1019 deprecation flagged.
+//
+// Migrated off the SA1019-deprecated `golang.org/x/oauth2/google`
+// surface (`CredentialsFromJSON` + `FindDefaultCredentials`) onto
+// `cloud.google.com/go/auth/credentials`. The returned
+// *auth.Credentials is passed to `option.WithAuthCredentials` at
+// the call site (`option.WithCredentials` is also SA1019-deprecated).
+// Closes #82 along with the gcs.go sink call sites.
+func getGoogleCredentials(ctx context.Context, serviceAccountKey string) (*auth.Credentials, error) {
+	scopes := []string{admin.AdminDirectoryUserReadonlyScope}
+
+	// Empty configuration: ADC only. Same chain the old code
+	// reached via FindDefaultCredentials — env vars, gcloud user-
+	// creds, GCE/GKE Workload Identity, Cloud Run/Functions
+	// injected creds.
+	if serviceAccountKey == "" {
+		log.WithContext(ctx).Debug("no service account key configured, using application default credentials")
+		return authcreds.DetectDefault(&authcreds.DetectOptions{Scopes: scopes})
+	}
+
 	log.WithContext(ctx).Debug("retrieving google credentials from the base64 encoded service account key")
 	decodeKey, err := base64.StdEncoding.DecodeString(serviceAccountKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode service account key: %w", err)
 	}
 
-	// SA1019: google.CredentialsFromJSON is gradually being superseded by
-	// the new cloud.google.com/go/auth surface. Holding the legacy call
-	// here because this is the Google Workspace IdP path — any change to
-	// how the service-account JWT is minted needs an end-to-end test
-	// against the directory API, which is gated behind #82.
-	creds, err := google.CredentialsFromJSON( //nolint:staticcheck // SA1019 — Google IdP credential minting; migration tracked in #82.
-		context.Background(),
+	// Explicit key path is fail-CLOSED. NewCredentialsFromJSON PINS
+	// the credential type to ServiceAccount, so a workforce-pool or
+	// impersonated-SA JSON shape that an operator pasted by mistake
+	// (or got from an untrusted source) is rejected at parse time —
+	// that is the security upgrade the SA1019 deprecation flagged.
+	//
+	// Pre-migration the function fell back to ADC whenever the key
+	// failed to parse, which silently substituted environment creds
+	// for the operator's explicit (wrong-shaped) input. That hides
+	// the misconfiguration and grants reach the operator did not
+	// intend. We no longer fall back here: a non-empty key that
+	// fails the type pin surfaces as a hard error.
+	creds, err := authcreds.NewCredentialsFromJSON(
+		authcreds.ServiceAccount,
 		decodeKey,
-		admin.AdminDirectoryUserReadonlyScope,
-	)
-	if err == nil {
-		// No need to fallback to the default Google credentials path
-		return creds, nil
-	}
-
-	log.WithContext(ctx).Debugf("failed to retrieve Google credentials from ServiceAccountKey: %v", err)
-	log.WithContext(ctx).Debug("falling back to default google credentials location")
-
-	creds, err = google.FindDefaultCredentials(
-		context.Background(),
-		admin.AdminDirectoryUserReadonlyScope,
+		&authcreds.DetectOptions{Scopes: scopes},
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("service account key: %w", err)
 	}
-
 	return creds, nil
 }
 

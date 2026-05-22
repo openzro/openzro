@@ -130,15 +130,18 @@ func NewGCS(ctx context.Context, cfg GCSConfig) (*GCS, error) {
 	opts := []option.ClientOption{}
 	switch {
 	case len(cfg.CredentialsJSON) > 0:
-		// SA1019: option.WithCredentialsJSON is being phased out in favor
-		// of the new cloud.google.com/go/auth.Credentials surface. Keeping
-		// the legacy path here because the alternative changes how the
-		// storage client minds token refresh, and that needs explicit
-		// testing against the prod GCS sink before flipping. Tracked in
-		// #82.
-		opts = append(opts, option.WithCredentialsJSON(cfg.CredentialsJSON)) //nolint:staticcheck // SA1019 — migration to cloud.google.com/go/auth tracked in #82.
+		// Migrated off SA1019-deprecated option.WithCredentialsJSON.
+		// The new `WithAuthCredentialsJSON` is credential-type-aware:
+		// declaring `option.ServiceAccount` here pins the parser so an
+		// unexpected workforce-pool or impersonation-config JSON is
+		// rejected before reaching GCS — the security risk the
+		// deprecation comment flagged. GCS sinks are always
+		// service-account JSON in this fork (Cora Cloud sinks +
+		// generic operator configs); workforce-pool would be added
+		// behind its own config branch if/when needed. Closes #82.
+		opts = append(opts, option.WithAuthCredentialsJSON(option.ServiceAccount, cfg.CredentialsJSON))
 	case cfg.CredentialsFile != "":
-		opts = append(opts, option.WithCredentialsFile(cfg.CredentialsFile)) //nolint:staticcheck // SA1019 — same as above, migration tracked.
+		opts = append(opts, option.WithAuthCredentialsFile(option.ServiceAccount, cfg.CredentialsFile))
 	}
 	if cfg.Endpoint != "" {
 		httpClient := cfg.HTTPClient
