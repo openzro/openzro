@@ -3583,6 +3583,124 @@ func TestPropagateUserGroupMemberships(t *testing.T) {
 	})
 }
 
+// TestSCIMRemoveGroupMember_RecoversFromPartialWrite pins openzro
+// #104 review-1: a retry after a partial-write failure (User.AutoGroups
+// already removed by an earlier attempt, but Group.Peers still
+// carries the user's peer) MUST repair Group.Peers — not no-op out
+// because User.AutoGroups is already in the desired state.
+//
+// Setup mirrors the post-partial-write state directly: the test
+// leaves peer1 in Group.Peers (simulating the Group write that
+// didn't commit) while User.AutoGroups is already CLEAN (the user's
+// AutoGroups is empty by default in GetOrCreateAccountByUser — so
+// User looks "already removed"). A retry that short-circuits on
+// "User.AutoGroups already correct" leaves Group.Peers wrong.
+func TestSCIMRemoveGroupMember_RecoversFromPartialWrite(t *testing.T) {
+	manager, err := createManager(t)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	initiatorId := "test-user"
+	dom := "example.com"
+
+	account, err := manager.GetOrCreateAccountByUser(ctx, initiatorId, dom)
+	require.NoError(t, err)
+
+	peer1 := &nbpeer.Peer{
+		ID: "peer1", AccountID: account.Id, UserID: initiatorId,
+		IP: net.IP{1, 1, 1, 1}, DNSLabel: "peer1.domain.test",
+	}
+	require.NoError(t, manager.Store.AddPeerToAccount(ctx, store.LockingStrengthUpdate, peer1))
+
+	// Pre-state: peer in Group.Peers (the Group save the partial-
+	// write left committed) but User.AutoGroups is clean (the User
+	// save that DID commit on the earlier attempt). A no-op
+	// short-circuit on "User.AutoGroups already correct" would
+	// leave Group.Peers stale.
+	group := &types.Group{
+		ID: "scim-group", Name: "SCIM Group", AccountID: account.Id,
+		Issued: types.GroupIssuedIntegration,
+		Peers:  []string{peer1.ID},
+	}
+	require.NoError(t, manager.Store.SaveGroup(ctx, store.LockingStrengthUpdate, group))
+	// User.AutoGroups intentionally left untouched — the default
+	// account user has empty AutoGroups, mirroring the post-half-
+	// write state where the group was already cleared from the
+	// user but not from the group's peer list.
+
+	// Retry the SCIM call. The new transactional shape must
+	// detect the Group.Peers drift and repair it.
+	require.NoError(t, manager.SCIMRemoveGroupMember(ctx, account.Id, initiatorId, group.ID, initiatorId))
+
+	updatedGroup, err := manager.Store.GetGroupByID(ctx, store.LockingStrengthShare, account.Id, group.ID)
+	require.NoError(t, err)
+	require.NotContains(t, updatedGroup.Peers, peer1.ID,
+		"Group.Peers must be repaired on retry even when User.AutoGroups was already correct (#104 review-1)")
+}
+
+// TestSCIMRemoveGroupMember_PropagatesToGroupPeers pins openzro #104:
+// a SCIM remove-member call MUST propagate the User.AutoGroups change
+// into Group.Peers (and trigger NetworkMap fan-out for any connected
+// peer) so the IdP-driven offboarding actually narrows peer reach.
+// Before the fix the call only persisted User.AutoGroups; the policy
+// resolver reads Group.Peers, so the peer's NetworkMap stayed wide
+// open until some other account mutation bumped the serial.
+func TestSCIMRemoveGroupMember_PropagatesToGroupPeers(t *testing.T) {
+	manager, err := createManager(t)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	initiatorId := "test-user"
+	dom := "example.com"
+
+	account, err := manager.GetOrCreateAccountByUser(ctx, initiatorId, dom)
+	require.NoError(t, err)
+
+	// One user-owned peer; the SCIM path's propagation only kicks in
+	// when the user actually has peers (the len==0 short-circuit
+	// matches the dashboard SaveUser path).
+	peer1 := &nbpeer.Peer{
+		ID: "peer1", AccountID: account.Id, UserID: initiatorId,
+		IP: net.IP{1, 1, 1, 1}, DNSLabel: "peer1.domain.test",
+	}
+	require.NoError(t, manager.Store.AddPeerToAccount(ctx, store.LockingStrengthUpdate, peer1))
+
+	// Pre-state: a group with the peer in Peers, and the user's
+	// AutoGroups carries the group ID — mirrors what a previous SCIM
+	// add-member would have produced once #104 lands.
+	group := &types.Group{
+		ID: "scim-group", Name: "SCIM Group", AccountID: account.Id,
+		Issued: types.GroupIssuedIntegration,
+		Peers:  []string{peer1.ID},
+	}
+	require.NoError(t, manager.Store.SaveGroup(ctx, store.LockingStrengthUpdate, group))
+
+	user, err := manager.Store.GetUserByUserID(ctx, store.LockingStrengthShare, initiatorId)
+	require.NoError(t, err)
+	user.AutoGroups = append(user.AutoGroups, group.ID)
+	require.NoError(t, manager.Store.SaveUser(ctx, store.LockingStrengthUpdate, user))
+
+	// Exercise the SCIM remove path. The initiator is the account
+	// owner (created by GetOrCreateAccountByUser) so the permission
+	// gate at requireSCIMGroupPermission passes without extra
+	// fixture work.
+	require.NoError(t, manager.SCIMRemoveGroupMember(ctx, account.Id, initiatorId, group.ID, initiatorId))
+
+	// User.AutoGroups must lose the group (existing behavior).
+	updatedUser, err := manager.Store.GetUserByUserID(ctx, store.LockingStrengthShare, initiatorId)
+	require.NoError(t, err)
+	require.NotContains(t, updatedUser.AutoGroups, group.ID,
+		"AutoGroups must drop the group on SCIM remove")
+
+	// Group.Peers must lose peer1 — the #104 regression target.
+	// Pre-fix this assertion would FAIL because Group.Peers stayed
+	// at [peer1] indefinitely.
+	updatedGroup, err := manager.Store.GetGroupByID(ctx, store.LockingStrengthShare, account.Id, group.ID)
+	require.NoError(t, err)
+	require.NotContains(t, updatedGroup.Peers, peer1.ID,
+		"Group.Peers must drop the user's peer on SCIM remove (#104)")
+}
+
 func TestDefaultAccountManager_GetAccountOnboarding(t *testing.T) {
 	manager, err := createManager(t)
 	require.NoError(t, err)

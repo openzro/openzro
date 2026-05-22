@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/openzro/openzro/management/server/account"
@@ -43,8 +44,16 @@ func (am *DefaultAccountManager) SCIMCreateGroup(ctx context.Context, accountID,
 	if err := am.SaveGroup(ctx, accountID, callerID, group, true); err != nil {
 		return nil, err
 	}
-	if err := am.applyGroupMembers(ctx, accountID, group.ID, memberUserIDs, nil); err != nil {
+	propagated, err := am.applySCIMGroupMembers(ctx, accountID, group.ID, memberUserIDs, nil)
+	if err != nil {
 		return nil, err
+	}
+	// SaveGroup above only fans out for a group already referenced
+	// by a policy / route — impossible for a fresh group — so this
+	// is the only path that can produce a fan-out on SCIMCreateGroup
+	// with pre-seeded members.
+	if propagated {
+		am.UpdateAccountPeers(ctx, accountID)
 	}
 	return group, nil
 }
@@ -74,29 +83,76 @@ func (am *DefaultAccountManager) SCIMReplaceGroup(ctx context.Context, accountID
 	if err != nil {
 		return nil, err
 	}
-	if err := am.applyGroupMembers(ctx, accountID, groupID, memberUserIDs, prev); err != nil {
+	propagated, err := am.applySCIMGroupMembers(ctx, accountID, groupID, memberUserIDs, prev)
+	if err != nil {
 		return nil, err
+	}
+	// SaveGroup above already fans out for a rename if the group
+	// affects peers, but the membership diff is a separate axis —
+	// a PUT can leave the display name untouched while moving 50
+	// users in or out, and the peer reach must reflect both.
+	if propagated {
+		am.UpdateAccountPeers(ctx, accountID)
 	}
 	return group, nil
 }
 
 // SCIMAddGroupMember and SCIMRemoveGroupMember support PATCH ops.
+// Both trigger NetworkMap fan-out when membership actually moves
+// (openzro #104): a user added to / removed from a group via the IdP
+// must have their peers' reach recomputed in the same Sync cycle as
+// any dashboard-side group edit — without it an offboarding via the
+// IdP would silently leave the user's peers reaching the group's
+// destinations until some other account mutation bumped the serial.
 func (am *DefaultAccountManager) SCIMAddGroupMember(ctx context.Context, accountID, callerID, groupID, userID string) error {
-	unlock := am.Store.AcquireWriteLockByUID(ctx, accountID)
-	defer unlock()
-	if err := am.requireSCIMGroupPermission(ctx, accountID, callerID, operations.Update); err != nil {
-		return err
-	}
-	return am.modifyUserAutoGroup(ctx, accountID, userID, groupID, true)
+	return am.scimSingleUserMembership(ctx, accountID, callerID, groupID, userID, true)
 }
 
 func (am *DefaultAccountManager) SCIMRemoveGroupMember(ctx context.Context, accountID, callerID, groupID, userID string) error {
+	return am.scimSingleUserMembership(ctx, accountID, callerID, groupID, userID, false)
+}
+
+// scimSingleUserMembership is the shared body of SCIMAddGroupMember
+// + SCIMRemoveGroupMember. Wraps the User + Group.Peers + serial
+// writes in a single transaction so a partial-write failure leaves
+// no torn state (#104 review-1: SaveUser succeeding while a later
+// Group.Peers / serial save fails used to leave the user "removed"
+// in their AutoGroups while the group still listed their peers,
+// because the retry path no-op'd on User.AutoGroups already being
+// correct). IncrementNetworkSerial runs inside the same transaction
+// so concurrent SCIM membership changes can't emit different
+// NetworkMaps under the same serial (#104 review-2).
+func (am *DefaultAccountManager) scimSingleUserMembership(ctx context.Context, accountID, callerID, groupID, userID string, add bool) error {
 	unlock := am.Store.AcquireWriteLockByUID(ctx, accountID)
 	defer unlock()
 	if err := am.requireSCIMGroupPermission(ctx, accountID, callerID, operations.Update); err != nil {
 		return err
 	}
-	return am.modifyUserAutoGroup(ctx, accountID, userID, groupID, false)
+
+	var propagated bool
+	err := am.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
+		ctx := ctx
+		settings, err := tx.GetAccountSettings(ctx, store.LockingStrengthShare, accountID)
+		if err != nil {
+			return err
+		}
+		groupsMap, err := loadGroupsMap(ctx, tx, accountID)
+		if err != nil {
+			return err
+		}
+		groupsTouched := newGroupSet()
+		if err := am.applyUserAutoGroupInTx(ctx, tx, accountID, settings, groupsMap, groupsTouched, userID, groupID, add); err != nil {
+			return err
+		}
+		return am.commitSCIMGroupChanges(ctx, tx, accountID, groupsMap, groupsTouched, &propagated)
+	})
+	if err != nil {
+		return err
+	}
+	if propagated {
+		am.UpdateAccountPeers(ctx, accountID)
+	}
+	return nil
 }
 
 // SCIMRenameGroup updates only the display name. Used by PATCH
@@ -121,7 +177,9 @@ func (am *DefaultAccountManager) SCIMRenameGroup(ctx context.Context, accountID,
 }
 
 // SCIMDeleteGroup removes the Group and clears its ID from every
-// member's AutoGroups list.
+// member's AutoGroups list — in a single transaction so a failure
+// mid-way doesn't leave half-cleaned User.AutoGroups records that a
+// retry's no-op check would skip (#104 review-1).
 func (am *DefaultAccountManager) SCIMDeleteGroup(ctx context.Context, accountID, callerID, groupID string) error {
 	unlock := am.Store.AcquireWriteLockByUID(ctx, accountID)
 	defer unlock()
@@ -135,8 +193,31 @@ func (am *DefaultAccountManager) SCIMDeleteGroup(ctx context.Context, accountID,
 	if err != nil {
 		return err
 	}
-	for _, uid := range prev {
-		_ = am.modifyUserAutoGroup(ctx, accountID, uid, groupID, false)
+
+	var propagated bool
+	err = am.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
+		ctx := ctx
+		settings, err := tx.GetAccountSettings(ctx, store.LockingStrengthShare, accountID)
+		if err != nil {
+			return err
+		}
+		groupsMap, err := loadGroupsMap(ctx, tx, accountID)
+		if err != nil {
+			return err
+		}
+		groupsTouched := newGroupSet()
+		for _, uid := range prev {
+			if err := am.applyUserAutoGroupInTx(ctx, tx, accountID, settings, groupsMap, groupsTouched, uid, groupID, false); err != nil {
+				return err
+			}
+		}
+		return am.commitSCIMGroupChanges(ctx, tx, accountID, groupsMap, groupsTouched, &propagated)
+	})
+	if err != nil {
+		return err
+	}
+	if propagated {
+		am.UpdateAccountPeers(ctx, accountID)
 	}
 	return am.DeleteGroup(ctx, accountID, callerID, groupID)
 }
@@ -211,45 +292,161 @@ func (am *DefaultAccountManager) usersInGroup(ctx context.Context, accountID, gr
 	return out, nil
 }
 
-// applyGroupMembers reconciles members from the desired list against
-// previous list. Users in `next` not in `prev` get the group added;
-// users in `prev` not in `next` get it removed. Bulk-friendly — one
-// SaveUser per affected user, no work for unchanged users.
-func (am *DefaultAccountManager) applyGroupMembers(ctx context.Context, accountID, groupID string, next, prev []string) error {
+// applySCIMGroupMembers reconciles members from the desired list
+// against the previous list inside a single transaction. Users in
+// `next` not in `prev` get the group added; users in `prev` not in
+// `next` get it removed. Loads account settings + groups ONCE for
+// the whole batch (#104 review-3), mutates the in-memory groupsMap
+// across users, and writes SaveGroups + IncrementNetworkSerial
+// exactly once at the end. Returns propagated=true when any
+// User.AutoGroups change actually moved Group.Peers (the signal the
+// caller uses to fire one UpdateAccountPeers per SCIM operation).
+func (am *DefaultAccountManager) applySCIMGroupMembers(ctx context.Context, accountID, groupID string, next, prev []string) (bool, error) {
 	want := stringSet(next)
 	have := stringSet(prev)
-	for uid := range want {
-		if _, ok := have[uid]; ok {
-			continue
-		}
-		if err := am.modifyUserAutoGroup(ctx, accountID, uid, groupID, true); err != nil {
+
+	var propagated bool
+	err := am.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
+		ctx := ctx
+		settings, err := tx.GetAccountSettings(ctx, store.LockingStrengthShare, accountID)
+		if err != nil {
 			return err
 		}
-	}
-	for uid := range have {
-		if _, ok := want[uid]; ok {
-			continue
-		}
-		if err := am.modifyUserAutoGroup(ctx, accountID, uid, groupID, false); err != nil {
+		groupsMap, err := loadGroupsMap(ctx, tx, accountID)
+		if err != nil {
 			return err
 		}
-	}
-	return nil
+		groupsTouched := newGroupSet()
+
+		for uid := range want {
+			if _, ok := have[uid]; ok {
+				continue
+			}
+			if err := am.applyUserAutoGroupInTx(ctx, tx, accountID, settings, groupsMap, groupsTouched, uid, groupID, true); err != nil {
+				return err
+			}
+		}
+		for uid := range have {
+			if _, ok := want[uid]; ok {
+				continue
+			}
+			if err := am.applyUserAutoGroupInTx(ctx, tx, accountID, settings, groupsMap, groupsTouched, uid, groupID, false); err != nil {
+				return err
+			}
+		}
+		return am.commitSCIMGroupChanges(ctx, tx, accountID, groupsMap, groupsTouched, &propagated)
+	})
+	return propagated, err
 }
 
-// modifyUserAutoGroup adds or removes a single group ID from a user's
-// AutoGroups list. No-op if already in the desired state.
-func (am *DefaultAccountManager) modifyUserAutoGroup(ctx context.Context, accountID, userID, groupID string, add bool) error {
-	user, err := am.Store.GetUserByUserID(ctx, store.LockingStrengthUpdate, userID)
+// applyUserAutoGroupInTx performs one user's AutoGroups delta inside
+// an existing transaction. Adds/removes the group ID from User.
+// AutoGroups, persists the user when actually changed, and — when
+// GroupsPropagationEnabled — runs updateUserPeersInGroups against
+// the shared groupsMap to keep Group.Peers in sync. The shared
+// groupsTouched set records which group IDs the caller must
+// persist (the caller batches the SaveGroups + IncrementNetwork-
+// Serial at commit time so the whole transaction emits ONE serial
+// bump regardless of how many users moved).
+//
+// Crucially this routine does NOT short-circuit when User.AutoGroups
+// is already in the desired state — it still runs the Group.Peers
+// reconciliation (idempotent via updateUserPeersInGroups). That
+// closes the partial-write recovery hole #104 review-1 flagged: a
+// retry must repair Group.Peers even when User.AutoGroups was
+// already correct from an earlier half-completed attempt.
+func (am *DefaultAccountManager) applyUserAutoGroupInTx(
+	ctx context.Context,
+	tx store.Store,
+	accountID string,
+	settings *types.Settings,
+	groupsMap map[string]*types.Group,
+	groupsTouched groupSet,
+	userID, groupID string,
+	add bool,
+) error {
+	user, err := tx.GetUserByUserID(ctx, store.LockingStrengthUpdate, userID)
 	if err != nil {
 		return err
 	}
 	if user.AccountID != accountID {
 		return status.NewUserNotFoundError(userID)
 	}
+
+	next, userChanged := mutateAutoGroups(user.AutoGroups, groupID, add)
+	if userChanged {
+		user.AutoGroups = next
+		if err := tx.SaveUser(ctx, store.LockingStrengthUpdate, user); err != nil {
+			return err
+		}
+	}
+
+	if !settings.GroupsPropagationEnabled {
+		return nil
+	}
+	userPeers, err := tx.GetUserPeers(ctx, store.LockingStrengthShare, accountID, userID)
+	if err != nil {
+		return err
+	}
+	if len(userPeers) == 0 {
+		return nil
+	}
+
+	var addGroups, removeGroups []string
+	if add {
+		addGroups = []string{groupID}
+	} else {
+		removeGroups = []string{groupID}
+	}
+	updatedGroups, err := updateUserPeersInGroups(groupsMap, userPeers, addGroups, removeGroups)
+	if err != nil {
+		return fmt.Errorf("update user peers in groups: %w", err)
+	}
+	for _, g := range updatedGroups {
+		groupsTouched[g.ID] = struct{}{}
+	}
+	return nil
+}
+
+// commitSCIMGroupChanges writes the groups touched in this
+// transaction and bumps the network serial — both inside the
+// transaction so concurrent SCIM operations can't sneak conflicting
+// NetworkMaps under the same serial (#104 review-2). Sets *propagated
+// to true when at least one group was touched so the caller knows
+// to fire UpdateAccountPeers after the transaction commits.
+func (am *DefaultAccountManager) commitSCIMGroupChanges(
+	ctx context.Context,
+	tx store.Store,
+	accountID string,
+	groupsMap map[string]*types.Group,
+	groupsTouched groupSet,
+	propagated *bool,
+) error {
+	if len(groupsTouched) == 0 {
+		return nil
+	}
+	groupsToSave := make([]*types.Group, 0, len(groupsTouched))
+	for gid := range groupsTouched {
+		groupsToSave = append(groupsToSave, groupsMap[gid])
+	}
+	if err := tx.SaveGroups(ctx, store.LockingStrengthUpdate, accountID, groupsToSave); err != nil {
+		return fmt.Errorf("save groups: %w", err)
+	}
+	if err := tx.IncrementNetworkSerial(ctx, store.LockingStrengthUpdate, accountID); err != nil {
+		return fmt.Errorf("increment network serial: %w", err)
+	}
+	*propagated = true
+	return nil
+}
+
+// mutateAutoGroups builds the new AutoGroups list after adding or
+// removing groupID. Pure (no store access) so it stays trivially
+// testable. Returns changed=false when the input already matched
+// the target state.
+func mutateAutoGroups(curr []string, groupID string, add bool) (next []string, changed bool) {
 	have := false
-	out := make([]string, 0, len(user.AutoGroups))
-	for _, g := range user.AutoGroups {
+	out := make([]string, 0, len(curr))
+	for _, g := range curr {
 		if g == groupID {
 			have = true
 			if add {
@@ -262,8 +459,29 @@ func (am *DefaultAccountManager) modifyUserAutoGroup(ctx context.Context, accoun
 	if add && !have {
 		out = append(out, groupID)
 	}
-	user.AutoGroups = out
-	return am.Store.SaveUser(ctx, store.LockingStrengthUpdate, user)
+	return out, add != have
+}
+
+// groupSet is a tiny alias for the set of group IDs touched in a
+// SCIM transaction. Named so the helper signatures stay readable.
+type groupSet map[string]struct{}
+
+func newGroupSet() groupSet { return groupSet{} }
+
+// loadGroupsMap reads every group in the account and returns it
+// keyed by ID. Used once per SCIM transaction so the per-user
+// Group.Peers reconciliation can mutate the same map across all
+// modified users.
+func loadGroupsMap(ctx context.Context, tx store.Store, accountID string) (map[string]*types.Group, error) {
+	groups, err := tx.GetAccountGroups(ctx, store.LockingStrengthShare, accountID)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]*types.Group, len(groups))
+	for _, g := range groups {
+		out[g.ID] = g
+	}
+	return out, nil
 }
 
 func (am *DefaultAccountManager) requireSCIMGroupPermission(ctx context.Context, accountID, callerID string, op operations.Operation) error {
