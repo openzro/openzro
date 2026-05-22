@@ -7,8 +7,9 @@ import (
 	"net/http"
 	"time"
 
+	"cloud.google.com/go/auth"
+	authcreds "cloud.google.com/go/auth/credentials"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
 	"google.golang.org/api/option"
 
@@ -73,7 +74,7 @@ func NewGoogleWorkspaceManager(ctx context.Context, config GoogleWorkspaceClient
 
 	service, err := admin.NewService(context.Background(),
 		option.WithScopes(admin.AdminDirectoryUserReadonlyScope),
-		option.WithCredentials(adminCredentials),
+		option.WithAuthCredentials(adminCredentials),
 	)
 	if err != nil {
 		return nil, err
@@ -218,39 +219,48 @@ func (gm *GoogleWorkspaceManager) DeleteUser(_ context.Context, userID string) e
 	return nil
 }
 
-// getGoogleCredentials retrieves Google credentials based on the provided serviceAccountKey.
-// It decodes the base64-encoded serviceAccountKey and attempts to obtain credentials using it.
-// If that fails, it falls back to using the default Google credentials path.
-// It returns the retrieved credentials or an error if unsuccessful.
-func getGoogleCredentials(ctx context.Context, serviceAccountKey string) (*google.Credentials, error) {
+// getGoogleCredentials retrieves Google credentials based on the
+// provided serviceAccountKey. It decodes the base64-encoded
+// serviceAccountKey and attempts to obtain credentials using it. If
+// that fails, it falls back to Application Default Credentials (ADC).
+//
+// Migrated off the SA1019-deprecated `golang.org/x/oauth2/google`
+// surface (`CredentialsFromJSON` + `FindDefaultCredentials`) onto
+// `cloud.google.com/go/auth/credentials.DetectDefault` — same fallback
+// shape, current upstream API. The detector returns *auth.Credentials
+// which the caller passes to `option.WithAuthCredentials` (the
+// `option.WithCredentials` legacy surface is also SA1019-deprecated).
+// Closes #82 along with the gcs.go sink call sites.
+func getGoogleCredentials(ctx context.Context, serviceAccountKey string) (*auth.Credentials, error) {
 	log.WithContext(ctx).Debug("retrieving google credentials from the base64 encoded service account key")
 	decodeKey, err := base64.StdEncoding.DecodeString(serviceAccountKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode service account key: %w", err)
 	}
 
-	// SA1019: google.CredentialsFromJSON is gradually being superseded by
-	// the new cloud.google.com/go/auth surface. Holding the legacy call
-	// here because this is the Google Workspace IdP path — any change to
-	// how the service-account JWT is minted needs an end-to-end test
-	// against the directory API, which is gated behind #82.
-	creds, err := google.CredentialsFromJSON( //nolint:staticcheck // SA1019 — Google IdP credential minting; migration tracked in #82.
-		context.Background(),
-		decodeKey,
-		admin.AdminDirectoryUserReadonlyScope,
-	)
+	scopes := []string{admin.AdminDirectoryUserReadonlyScope}
+
+	// Explicit key first; DetectDefault parses + validates the JSON
+	// inline so a malformed key surfaces here rather than at request
+	// time. Logging shape preserved verbatim so an operator following
+	// the fallback in management.log doesn't see a change.
+	creds, err := authcreds.DetectDefault(&authcreds.DetectOptions{
+		CredentialsJSON: decodeKey,
+		Scopes:          scopes,
+	})
 	if err == nil {
-		// No need to fallback to the default Google credentials path
 		return creds, nil
 	}
 
 	log.WithContext(ctx).Debugf("failed to retrieve Google credentials from ServiceAccountKey: %v", err)
 	log.WithContext(ctx).Debug("falling back to default google credentials location")
 
-	creds, err = google.FindDefaultCredentials(
-		context.Background(),
-		admin.AdminDirectoryUserReadonlyScope,
-	)
+	// ADC fallback: empty CredentialsJSON + CredentialsFile triggers
+	// the detector's environment-and-metadata-server probe, identical
+	// to the old FindDefaultCredentials behavior.
+	creds, err = authcreds.DetectDefault(&authcreds.DetectOptions{
+		Scopes: scopes,
+	})
 	if err != nil {
 		return nil, err
 	}
