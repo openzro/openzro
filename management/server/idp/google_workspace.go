@@ -219,17 +219,27 @@ func (gm *GoogleWorkspaceManager) DeleteUser(_ context.Context, userID string) e
 	return nil
 }
 
-// getGoogleCredentials retrieves Google credentials based on the
-// provided serviceAccountKey. It decodes the base64-encoded
-// serviceAccountKey and attempts to obtain credentials using it. If
-// that fails, it falls back to Application Default Credentials (ADC).
+// getGoogleCredentials retrieves Google credentials for the
+// Workspace Admin Directory client. Two paths:
+//
+//   - serviceAccountKey == ""  → Application Default Credentials
+//     (env vars, gcloud user-creds, GCE/GKE Workload Identity, Cloud
+//     Run/Functions injected creds — the chain the old
+//     FindDefaultCredentials walked).
+//   - serviceAccountKey != ""  → base64-decoded JSON parsed via the
+//     type-pinned authcreds.NewCredentialsFromJSON(ServiceAccount,
+//     ...). Fail-CLOSED: a key the operator pasted that isn't a
+//     service-account shape (workforce-pool / impersonated-SA / etc.)
+//     surfaces as an error, NOT a silent fallback to ADC. The pre-
+//     migration code DID fall back, which silently substituted
+//     environment creds for the operator's wrong-shaped explicit
+//     input — the security upgrade the SA1019 deprecation flagged.
 //
 // Migrated off the SA1019-deprecated `golang.org/x/oauth2/google`
 // surface (`CredentialsFromJSON` + `FindDefaultCredentials`) onto
-// `cloud.google.com/go/auth/credentials.DetectDefault` — same fallback
-// shape, current upstream API. The detector returns *auth.Credentials
-// which the caller passes to `option.WithAuthCredentials` (the
-// `option.WithCredentials` legacy surface is also SA1019-deprecated).
+// `cloud.google.com/go/auth/credentials`. The returned
+// *auth.Credentials is passed to `option.WithAuthCredentials` at
+// the call site (`option.WithCredentials` is also SA1019-deprecated).
 // Closes #82 along with the gcs.go sink call sites.
 func getGoogleCredentials(ctx context.Context, serviceAccountKey string) (*auth.Credentials, error) {
 	scopes := []string{admin.AdminDirectoryUserReadonlyScope}
