@@ -1041,3 +1041,50 @@ func (am *MockAccountManager) GetCurrentUserInfo(ctx context.Context, userAuth n
 	}
 	return nil, status.Errorf(codes.Unimplemented, "method GetCurrentUserInfo is not implemented")
 }
+
+// MFA stubs for the mock account manager (issue #31). Defaults
+// chosen so existing handler-level unit tests that don't care about
+// MFA keep working: gate always returns Pass, subsystem reports
+// disabled, every state query / mutation returns Unimplemented.
+
+func (am *MockAccountManager) MFAGateForRequest(ctx context.Context, connectorID string, user *types.User, settings *types.Settings, isPAT bool, jwtSessionID, mfaSessionToken string) (*account.MFAGateDecision, error) {
+	return &account.MFAGateDecision{Pass: true}, nil
+}
+
+func (am *MockAccountManager) MFAEnabled() bool { return false }
+
+func (am *MockAccountManager) MFAStartEnrollment(ctx context.Context, accountID, userID string) (*account.MFAStartEnrollmentResult, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MFAStartEnrollment is not implemented")
+}
+
+func (am *MockAccountManager) MFAFinishEnrollment(ctx context.Context, accountID, userID, pendingToken, code, jwtSessionID string) (*account.MFAFinishEnrollmentResult, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MFAFinishEnrollment is not implemented")
+}
+
+func (am *MockAccountManager) MFAChallenge(ctx context.Context, userID, code, jwtSessionID string) (*account.MFAChallengeOutcome, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MFAChallenge is not implemented")
+}
+
+func (am *MockAccountManager) MFADisenroll(ctx context.Context, userID string) error {
+	return status.Errorf(codes.Unimplemented, "method MFADisenroll is not implemented")
+}
+
+func (am *MockAccountManager) MFARegenerateBackupCodes(ctx context.Context, userID string) ([]string, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MFARegenerateBackupCodes is not implemented")
+}
+
+func (am *MockAccountManager) MFAStatus(ctx context.Context, userID string) (*account.MFAStatus, error) {
+	return &account.MFAStatus{Enrolled: false}, nil
+}
+
+func (am *MockAccountManager) MFAVerifyToken(raw string, purpose account.MFATokenPurpose) (*account.MFATokenVerifyResult, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MFAVerifyToken is not implemented")
+}
+
+func (am *MockAccountManager) MFASessionValid(userID, mfaSessionToken, jwtSessionID string) bool {
+	return false
+}
+
+func (am *MockAccountManager) MFAIssueChallengeToken(userID, jwtSessionID string) (string, error) {
+	return "", status.Errorf(codes.Unimplemented, "method MFAIssueChallengeToken is not implemented")
+}

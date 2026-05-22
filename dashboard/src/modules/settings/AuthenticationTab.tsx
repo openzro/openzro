@@ -50,6 +50,18 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
     }
   });
 
+  // openZro-side TOTP enforcement toggles (issue #31). Both default
+  // OFF. Local = primary second factor for Dex staticPasswords; the
+  // bundled local connector has no built-in MFA. Federated = optional
+  // redundancy on top of the IdP's own MFA — users enter two codes
+  // per login when this is on.
+  const [mfaEnforceLocal, setMfaEnforceLocal] = useState<boolean>(
+    () => account?.settings?.mfa_enforce_local ?? false,
+  );
+  const [mfaEnforceFederated, setMfaEnforceFederated] = useState<boolean>(
+    () => account?.settings?.mfa_enforce_federated ?? false,
+  );
+
   const [
     loginExpiration,
     setLoginExpiration,
@@ -85,6 +97,8 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
     peerInactivityExpirationEnabled,
     peerInactivityExpiresIn,
     peerInactivityExpireInterval,
+    mfaEnforceLocal,
+    mfaEnforceFederated,
   ]);
 
   const saveChanges = async () => {
@@ -104,6 +118,8 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
               ? peerInactivityExpirationEnabled
               : false,
             peer_inactivity_expiration: 600,
+            mfa_enforce_local: mfaEnforceLocal,
+            mfa_enforce_federated: mfaEnforceFederated,
             extra: {
               ...account.settings?.extra,
               peer_approval_enabled: peerApproval,
@@ -120,6 +136,8 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
             peerInactivityExpirationEnabled,
             peerInactivityExpiresIn,
             peerInactivityExpireInterval,
+            mfaEnforceLocal,
+            mfaEnforceFederated,
           ]);
         }),
       loadingMessage: "Saving the authentication settings...",
@@ -254,6 +272,48 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
             />
           </div>
         )}
+      </OzSettingsCard>
+
+      <OzSettingsCard
+        title="Two-factor authentication (TOTP)"
+        sub="openZro-side TOTP applied at the management session. Users
+        enrol via Profile → Security; an authenticator app
+        (Google Authenticator, Authy, 1Password, Bitwarden) generates
+        the 6-digit code."
+      >
+        <OzSettingsToggle
+          value={mfaEnforceLocal}
+          onChange={setMfaEnforceLocal}
+          disabled={editDisabled}
+          dataCy="mfa-enforce-local"
+          label="Require 2FA for local accounts"
+          desc={
+            <>
+              Bundled Dex <code>staticPasswords</code> has no built-in
+              MFA — this is the <strong>primary</strong> second factor
+              for teams running openZro without an external IdP. When
+              on, local users without TOTP are forced into the
+              enrollment flow on their next session check.
+            </>
+          }
+        />
+        <OzSettingsToggle
+          value={mfaEnforceFederated}
+          onChange={setMfaEnforceFederated}
+          disabled={editDisabled}
+          dataCy="mfa-enforce-federated"
+          label="Require 2FA for federated accounts (redundancy)"
+          desc={
+            <>
+              On top of your IdP&apos;s own MFA. Useful when the threat
+              model treats the IdP as a separate trust domain
+              (compromised IdP key, social engineering, IdP
+              misconfiguration). Users enter two codes per login — one
+              at the IdP, one at openZro. Leave off if you trust your
+              IdP&apos;s MFA fully.
+            </>
+          }
+        />
       </OzSettingsCard>
     </Tabs.Content>
   );

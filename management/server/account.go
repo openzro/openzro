@@ -28,6 +28,7 @@ import (
 	"github.com/openzro/openzro/formatter/hook"
 	"github.com/openzro/openzro/management/server/account"
 	"github.com/openzro/openzro/management/server/activity"
+	activityStore "github.com/openzro/openzro/management/server/activity/store"
 	"github.com/openzro/openzro/management/server/activity_exporters"
 	"github.com/openzro/openzro/management/server/admission"
 	nbcache "github.com/openzro/openzro/management/server/cache"
@@ -36,6 +37,7 @@ import (
 	"github.com/openzro/openzro/management/server/idp"
 	"github.com/openzro/openzro/management/server/integrations/integrated_validator"
 	"github.com/openzro/openzro/management/server/integrations/port_forwarding"
+	"github.com/openzro/openzro/management/server/mfa"
 	nbpeer "github.com/openzro/openzro/management/server/peer"
 	"github.com/openzro/openzro/management/server/permissions"
 	"github.com/openzro/openzro/management/server/permissions/modules"
@@ -136,6 +138,27 @@ type DefaultAccountManager struct {
 	// effectively disabled and flow events keep whatever RuleID the
 	// agent stamped (or none).
 	flowPolicyIndex FlowPolicyIndex
+
+	// mfaSigner mints and verifies all MFA-scoped tokens (issue #31):
+	//   - challenge_token / enrollment_token: emitted by the gate
+	//     when an MFA step is required, redeemed at /api/mfa/*.
+	//   - pending_enrollment_token: replaces an in-memory cache so a
+	//     daemon restart or HA replica change between /enroll/start
+	//     and /enroll/finish doesn't lose the in-flight secret.
+	//   - mfa_session_token: minted on successful challenge /
+	//     enroll-finish, bound to the JWT session id that triggered
+	//     the flow. Replaces the per-user `last_verified_at`
+	//     heuristic (one device verifying no longer elevates another
+	//     device logged in as the same user).
+	// Derived from Config.DataStoreEncryptionKey via SHA-256 +
+	// domain-separation label so a leak of one doesn't trivially
+	// yield the other.
+	mfaSigner *mfa.Signer
+
+	// mfaSecretCipher encrypts the TOTP shared secret at rest with
+	// AES-256-GCM via the existing FieldEncrypt helper. Key is
+	// Config.DataStoreEncryptionKey.
+	mfaSecretCipher *activityStore.FieldEncrypt
 }
 
 // FlowPolicyIndex is the narrow contract DefaultAccountManager uses

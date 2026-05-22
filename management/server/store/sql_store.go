@@ -100,6 +100,7 @@ func NewSqlStore(ctx context.Context, db *gorm.DB, storeEngine types.Engine, met
 		&types.Account{}, &types.Policy{}, &types.PolicyRule{}, &route.Route{}, &nbdns.NameServerGroup{},
 		&installation{}, &types.ExtraSettings{}, &posture.Checks{}, &nbpeer.NetworkAddress{},
 		&networkTypes.Network{}, &routerTypes.NetworkRouter{}, &resourceTypes.NetworkResource{}, &types.AccountOnboarding{},
+		&types.UserMFA{},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("auto migratePreAuto: %w", err)
@@ -582,6 +583,54 @@ func (s *SqlStore) GetUserByUserID(ctx context.Context, lockStrength LockingStre
 	}
 
 	return &user, nil
+}
+
+// GetUserMFA returns the user_mfa row for userID or
+// ErrUserMFANotFound if the user has no MFA enrolled. The not-found
+// case is a normal control-flow signal — the auth-middleware gate
+// distinguishes "enrolled but unverified" from "never enrolled".
+func (s *SqlStore) GetUserMFA(ctx context.Context, lockStrength LockingStrength, userID string) (*types.UserMFA, error) {
+	tx := s.db
+	if lockStrength != LockingStrengthNone {
+		tx = tx.Clauses(clause.Locking{Strength: string(lockStrength)})
+	}
+
+	var mfa types.UserMFA
+	result := tx.First(&mfa, "user_id = ?", userID)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, ErrUserMFANotFound
+		}
+		log.WithContext(ctx).Errorf("failed to get user_mfa from store: %s", result.Error)
+		return nil, status.Errorf(status.Internal, "failed to get user_mfa from store")
+	}
+	return &mfa, nil
+}
+
+// SaveUserMFA upserts the user_mfa row by its UserID primary key.
+// Used by enrollment, challenge (to bump last_verified_at and
+// reset failed_attempts), backup-code consumption, and regenerate.
+func (s *SqlStore) SaveUserMFA(ctx context.Context, lockStrength LockingStrength, mfa *types.UserMFA) error {
+	result := s.db.Clauses(clause.Locking{Strength: string(lockStrength)}).Save(mfa)
+	if result.Error != nil {
+		log.WithContext(ctx).Errorf("failed to save user_mfa to store: %s", result.Error)
+		return status.Errorf(status.Internal, "failed to save user_mfa to store")
+	}
+	return nil
+}
+
+// DeleteUserMFA removes the user_mfa row for userID — the
+// disenrollment path (operator override OR user reset). A delete
+// for a user with no MFA enrolled is a no-op (no error) so the
+// idempotent caller doesn't have to GetUserMFA first.
+func (s *SqlStore) DeleteUserMFA(ctx context.Context, lockStrength LockingStrength, userID string) error {
+	result := s.db.Clauses(clause.Locking{Strength: string(lockStrength)}).
+		Delete(&types.UserMFA{}, "user_id = ?", userID)
+	if result.Error != nil {
+		log.WithContext(ctx).Errorf("failed to delete user_mfa from store: %s", result.Error)
+		return status.Errorf(status.Internal, "failed to delete user_mfa from store")
+	}
+	return nil
 }
 
 func (s *SqlStore) DeleteUser(ctx context.Context, lockStrength LockingStrength, accountID, userID string) error {

@@ -131,6 +131,21 @@ func (c *ClaimsExtractor) ToUserAuth(token *jwt.Token) (nbcontext.UserAuth, erro
 		}
 	}
 
+	// federated_claims.connector_id is the Dex-emitted identifier for
+	// the connector that authenticated this JWT. Used by the MFA gate
+	// (issue #31) to distinguish "local" (Dex staticPasswords, no
+	// IdP-side MFA, openZro TOTP is the primary second factor) from
+	// federated providers (TOTP is an optional redundancy layer on
+	// top of the IdP's own MFA). Absent on PATs / non-Dex IdPs that
+	// don't emit the claim — Empty string is the natural default and
+	// the gate's resolveMFAEnforcement treats anything-other-than-
+	// "local" as the federated branch.
+	if fc, ok := claims["federated_claims"].(map[string]any); ok {
+		if cid, ok := fc["connector_id"].(string); ok {
+			userAuth.ConnectorID = cid
+		}
+	}
+
 	return userAuth, nil
 }
 

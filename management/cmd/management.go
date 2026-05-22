@@ -270,6 +270,16 @@ var (
 				return fmt.Errorf("failed to build default manager: %v", err)
 			}
 
+			// Initialise the MFA subsystem (issue #31). Fails closed
+			// without DataStoreEncryptionKey configured — the gate then
+			// refuses any enforced request rather than silently letting
+			// the operator's policy intent through. Local Dex deployments
+			// always have this key configured; managed deployments wire
+			// it via the operator-controlled management.json.
+			if err := accountManager.SetMFA(config.DataStoreEncryptionKey); err != nil {
+				log.WithContext(ctx).Errorf("MFA subsystem disabled: %v (enforced accounts will reject inbound requests until this is fixed)", err)
+			}
+
 			// Wire the cluster coordinator so the account manager can
 			// publish posture-schedule-change invalidations and so the
 			// posture scheduler below can subscribe + acquire locks.

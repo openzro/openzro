@@ -5,6 +5,11 @@ import {
 } from "@axa-fr/react-oidc";
 import loadConfig from "@utils/config";
 import { sleep } from "@utils/helpers";
+import {
+  clearMfaSessionToken,
+  getMfaSessionToken,
+  setMfaRedirectToken,
+} from "@utils/mfaSession";
 import { usePathname } from "next/navigation";
 import { isExpired } from "react-jwt";
 import useSWR from "swr";
@@ -53,8 +58,43 @@ async function apiRequest<T>(
 
   try {
     if (!res.ok) {
-      const error = (await res.json()) as ErrorResponse;
-      return Promise.reject(error);
+      const body = (await res.json()) as ErrorResponse & {
+        mfa_required?: boolean;
+        mfa_enrollment_required?: boolean;
+        token?: string;
+      };
+      // Issue #31: the middleware emits 403 + { mfa_required |
+      // mfa_enrollment_required, token } to redirect the user
+      // through the MFA challenge / enrollment flow. Stash the
+      // one-shot token in sessionStorage and bounce the browser to
+      // the corresponding public page. The originating request is
+      // dropped (the caller's .catch will fire) — after the user
+      // completes MFA, the dashboard reloads naturally and the next
+      // request rides the X-MFA-Token header.
+      if (res.status === 403 && body?.token) {
+        if (body.mfa_required || body.mfa_enrollment_required) {
+          setMfaRedirectToken(body.token);
+          if (typeof window !== "undefined") {
+            const dest = body.mfa_enrollment_required
+              ? "/mfa/enroll"
+              : "/mfa/challenge";
+            window.location.assign(dest);
+          }
+          return Promise.reject({
+            code: 403,
+            message: body.mfa_required ? "mfa challenge required" : "mfa enrollment required",
+          } as ErrorResponse);
+        }
+        // A handler-level 403 + mfa_required (no fresh challenge
+        // token — the sensitive-op gate at the handler) means the
+        // user's mfa_session_token is stale; clear it so the next
+        // gated request gets a proper challenge_token from the
+        // middleware.
+        if ((body as { mfa_required?: boolean }).mfa_required) {
+          clearMfaSessionToken();
+        }
+      }
+      return Promise.reject(body as ErrorResponse);
     }
     if (options?.blob) return (await res.blob()) as T;
     return (await res.json()) as T;
@@ -98,11 +138,19 @@ export function useOpenzroFetch(ignoreError: boolean = false): {
       } as ErrorResponse);
     }
 
-    const headers = {
+    const headers: Record<string, string> = {
       "Content-Type": "application/json",
       Accept: "application/json",
       Authorization: `Bearer ${token}`,
     };
+    // X-MFA-Token rides alongside Authorization when present
+    // (issue #31): the backend's per-session MFA gate verifies it
+    // against the JWT bearer's session id. Absent on first request
+    // after login until the user clears the gate.
+    const mfaToken = getMfaSessionToken();
+    if (mfaToken) {
+      headers["X-MFA-Token"] = mfaToken;
+    }
 
     return fetch(input, {
       ...init,

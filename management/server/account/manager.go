@@ -165,4 +165,150 @@ type Manager interface {
 	UpdateToPrimaryAccount(ctx context.Context, accountId string) (*types.Account, error)
 	GetOwnerInfo(ctx context.Context, accountId string) (*types.UserInfo, error)
 	GetCurrentUserInfo(ctx context.Context, userAuth nbcontext.UserAuth) (*users.UserInfoWithPermissions, error)
+
+	// MFAGateForRequest decides whether a JWT-authenticated request
+	// continues, must complete a TOTP challenge, or must enroll —
+	// issue #31. The auth middleware calls this after JWT validation
+	// + user lookup. `jwtSessionID` identifies the current JWT
+	// session (sha256 of the bearer, prefixed); `mfaSessionToken` is
+	// the X-MFA-Token header value (empty when absent). When the user
+	// is enrolled but does not present a valid session token bound to
+	// the current JWT session, the gate returns Challenge=true.
+	MFAGateForRequest(ctx context.Context, connectorID string, user *types.User, settings *types.Settings, isPAT bool, jwtSessionID, mfaSessionToken string) (*MFAGateDecision, error)
+
+	// MFAEnabled reports whether the MFA subsystem initialized OK
+	// at startup. False when the operator hasn't configured
+	// DataStoreEncryptionKey or when the derivation failed; in that
+	// case any enforcement-on request fails closed.
+	MFAEnabled() bool
+
+	// MFAStartEnrollment provisions a fresh TOTP secret for the
+	// user. The secret is NOT persisted — instead it rides in the
+	// returned `PendingToken` (HS256-signed, 15min TTL) which
+	// /enroll/finish must echo back. Stateless across HA replicas.
+	MFAStartEnrollment(ctx context.Context, accountID, userID string) (*MFAStartEnrollmentResult, error)
+
+	// MFAFinishEnrollment validates the pending_enrollment_token,
+	// verifies the user-supplied TOTP code against the secret it
+	// carries, persists the user_mfa row (secret AES-256-GCM
+	// encrypted), and mints an mfa_session_token bound to
+	// `jwtSessionID`. Returns the plaintext backup codes (only
+	// chance to see them) and the session token.
+	MFAFinishEnrollment(ctx context.Context, accountID, userID, pendingToken, code, jwtSessionID string) (*MFAFinishEnrollmentResult, error)
+
+	// MFAChallenge verifies a TOTP code OR a single-use backup
+	// code against the stored row, with lockout after 5 consecutive
+	// failures. On success mints an mfa_session_token bound to
+	// `jwtSessionID` so the dashboard can resume gated calls.
+	MFAChallenge(ctx context.Context, userID, code, jwtSessionID string) (*MFAChallengeOutcome, error)
+
+	// MFADisenroll removes the user's MFA row (admin override OR
+	// user-initiated reset).
+	MFADisenroll(ctx context.Context, userID string) error
+
+	// MFARegenerateBackupCodes mints fresh codes, invalidating all
+	// previous ones atomically.
+	MFARegenerateBackupCodes(ctx context.Context, userID string) ([]string, error)
+
+	// MFAStatus is the read for the profile / security page.
+	MFAStatus(ctx context.Context, userID string) (*MFAStatus, error)
+
+	// MFAVerifyToken validates a challenge_token / enrollment_token /
+	// pending_enrollment_token / mfa_session_token. Returns the
+	// userID + JTI binding + carried secret (only set for pending
+	// enrollment). Empty values + non-nil error on any failure.
+	MFAVerifyToken(raw string, purpose MFATokenPurpose) (*MFATokenVerifyResult, error)
+
+	// MFASessionValid reports whether `mfaSessionToken` is a valid
+	// mfa_session_token for `userID` bound to `jwtSessionID`. Used
+	// by handlers that demand MFA-verified status before performing
+	// sensitive operations (disenroll, regenerate, re-enroll over an
+	// existing TOTP) regardless of the operator's enforcement flag.
+	MFASessionValid(userID, mfaSessionToken, jwtSessionID string) bool
+
+	// MFAIssueChallengeToken mints a fresh challenge_token bound to
+	// the supplied JWT session id. Used by sensitive-op handlers
+	// (disenroll, regenerate, re-enroll) when they refuse a request
+	// missing an mfa_session_token — the dashboard's 403 interceptor
+	// reads the returned token from the response body and bounces the
+	// browser to /mfa/challenge so the user can step up. Without
+	// this, voluntary MFA users (enforcement OFF) hit a dead-end on
+	// disable after a tab reset wiped sessionStorage.
+	MFAIssueChallengeToken(userID, jwtSessionID string) (string, error)
+}
+
+// MFATokenPurpose identifies what a short-lived MFA token can be
+// redeemed for. Mirrors mfa.TokenPurpose so the account interface
+// doesn't have to import the mfa package.
+type MFATokenPurpose string
+
+const (
+	MFATokenPurposeChallenge         MFATokenPurpose = "mfa_challenge"
+	MFATokenPurposeEnrollment        MFATokenPurpose = "mfa_enrollment"
+	MFATokenPurposePendingEnrollment MFATokenPurpose = "mfa_pending_enrollment"
+	MFATokenPurposeSession           MFATokenPurpose = "mfa_session"
+)
+
+// MFATokenVerifyResult is the manager-layer view of a verified MFA
+// token. Mirrors mfa.VerifyResult; lives here so the account.Manager
+// interface stays free of the leaf mfa package import.
+type MFATokenVerifyResult struct {
+	UserID     string
+	JTIBinding string
+	Secret     string
+}
+
+// MFAGateDecision is the wire type the MFAGateForRequest method
+// returns. Mirrors server.MFAGateDecision in shape; lives here so
+// the account.Manager interface stays free of the heavier
+// management/server import.
+type MFAGateDecision struct {
+	Pass      bool
+	Challenge bool
+	Enroll    bool
+	Token     string
+}
+
+// MFAStartEnrollmentResult carries the otpauth:// URL the dashboard
+// renders as a QR, the raw secret (text fallback for manual entry),
+// and the pending_enrollment_token that /enroll/finish must echo
+// back. The token replaces the legacy in-memory pending cache so
+// /finish can land on any HA replica.
+type MFAStartEnrollmentResult struct {
+	OTPAuthURL   string `json:"otpauth_url"`
+	Secret       string `json:"secret"`
+	PendingToken string `json:"pending_token"`
+}
+
+// MFAFinishEnrollmentResult is the response shape of a successful
+// /enroll/finish: the one-time-display backup codes + the
+// mfa_session_token the dashboard sends as X-MFA-Token on
+// subsequent gated calls.
+type MFAFinishEnrollmentResult struct {
+	BackupCodes  []string `json:"backup_codes"`
+	SessionToken string   `json:"mfa_session_token"`
+}
+
+// MFAChallengeOutcome maps to the HTTP response of POST /api/mfa/
+// challenge. Exactly one of (OK, Locked) carries the verdict;
+// UsedBackupCode is a hint to the dashboard for the "you have N
+// backup codes left, regenerate now?" nudge. SessionToken is set
+// only on OK and gives the dashboard its mfa_session_token.
+type MFAChallengeOutcome struct {
+	OK             bool
+	Locked         bool
+	LockedUntil    *time.Time
+	UsedBackupCode bool
+	SessionToken   string
+}
+
+// MFAStatus is the response of GET /api/users/me/mfa for the
+// profile / security page.
+type MFAStatus struct {
+	Enrolled             bool
+	EnrolledAt           *time.Time
+	LastVerifiedAt       *time.Time
+	BackupCodesRemaining int
+	Locked               bool
+	LockedUntil          *time.Time
 }

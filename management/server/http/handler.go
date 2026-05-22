@@ -32,6 +32,7 @@ import (
 	flowExportsHandler "github.com/openzro/openzro/management/server/http/handlers/flow_exports"
 	"github.com/openzro/openzro/management/server/http/handlers/groups"
 	mdmProvidersHandler "github.com/openzro/openzro/management/server/http/handlers/mdm_providers"
+	mfaHandler "github.com/openzro/openzro/management/server/http/handlers/mfa"
 	"github.com/openzro/openzro/management/server/http/handlers/network_events"
 	"github.com/openzro/openzro/management/server/http/handlers/networks"
 	"github.com/openzro/openzro/management/server/http/handlers/peers"
@@ -51,7 +52,9 @@ import (
 	"github.com/openzro/openzro/management/server/networks/routers"
 	nbpeers "github.com/openzro/openzro/management/server/peers"
 	"github.com/openzro/openzro/management/server/posture"
+	"github.com/openzro/openzro/management/server/store"
 	"github.com/openzro/openzro/management/server/telemetry"
+	"github.com/openzro/openzro/management/server/types"
 )
 
 const apiPrefix = "/api"
@@ -85,11 +88,36 @@ func NewAPIHandler(
 	postureEvalStore posture.EvalStore,
 ) (http.Handler, error) {
 
+	// Adapt accountManager.MFAGateForRequest (returns
+	// server.MFAGateDecision) to middleware.MFAGateFunc (returns
+	// middleware.MFAGateDecision). The two types are structurally
+	// identical but live in different packages so the middleware
+	// stays free of the heavier server import cycle.
+	mfaGate := func(ctx context.Context, connectorID string, user *types.User, settings *types.Settings, isPAT bool, jwtSessionID, mfaSessionToken string) (*middleware.MFAGateDecision, error) {
+		d, err := accountManager.MFAGateForRequest(ctx, connectorID, user, settings, isPAT, jwtSessionID, mfaSessionToken)
+		if err != nil || d == nil {
+			return nil, err
+		}
+		return &middleware.MFAGateDecision{
+			Pass:      d.Pass,
+			Challenge: d.Challenge,
+			Enroll:    d.Enroll,
+			Token:     d.Token,
+		}, nil
+	}
+	mfaSettings := func(ctx context.Context, accountID string) (*types.Settings, error) {
+		// Use the raw store accessor — no per-request permission check
+		// is appropriate here; the auth middleware already validated
+		// the JWT and bound the user to this accountID.
+		return accountManager.GetStore().GetAccountSettings(ctx, store.LockingStrengthShare, accountID)
+	}
 	authMiddleware := middleware.NewAuthMiddleware(
 		authManager,
 		accountManager.GetAccountIDFromUserAuth,
 		accountManager.SyncUserJWTGroups,
 		accountManager.GetUserFromUserAuth,
+		mfaGate,
+		mfaSettings,
 	)
 
 	corsMiddleware := cors.AllowAll()
@@ -109,6 +137,7 @@ func NewAPIHandler(
 	accounts.AddEndpoints(accountManager, settingsManager, router)
 	peers.AddEndpoints(accountManager, postureEvalStore, router)
 	users.AddEndpoints(accountManager, router)
+	mfaHandler.AddEndpoints(accountManager, router)
 	setup_keys.AddEndpoints(accountManager, router)
 	policies.AddEndpoints(accountManager, LocationManager, router)
 	policies.AddPostureCheckEndpoints(accountManager, LocationManager, router)
