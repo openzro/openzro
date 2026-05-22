@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/openzro/openzro/management/server/account"
@@ -43,8 +44,17 @@ func (am *DefaultAccountManager) SCIMCreateGroup(ctx context.Context, accountID,
 	if err := am.SaveGroup(ctx, accountID, callerID, group, true); err != nil {
 		return nil, err
 	}
-	if err := am.applyGroupMembers(ctx, accountID, group.ID, memberUserIDs, nil); err != nil {
+	changed, err := am.applyGroupMembers(ctx, accountID, group.ID, memberUserIDs, nil)
+	if err != nil {
 		return nil, err
+	}
+	// Fan out NetworkMap when any membership actually moved (#104).
+	// The SaveGroup above only fans out when the new (empty) group
+	// is already referenced by a policy / route, which is impossible
+	// for a fresh group — so this is the only path that can produce
+	// a fan-out on SCIMCreateGroup with pre-seeded members.
+	if changed {
+		am.UpdateAccountPeers(ctx, accountID)
 	}
 	return group, nil
 }
@@ -74,20 +84,42 @@ func (am *DefaultAccountManager) SCIMReplaceGroup(ctx context.Context, accountID
 	if err != nil {
 		return nil, err
 	}
-	if err := am.applyGroupMembers(ctx, accountID, groupID, memberUserIDs, prev); err != nil {
+	changed, err := am.applyGroupMembers(ctx, accountID, groupID, memberUserIDs, prev)
+	if err != nil {
 		return nil, err
+	}
+	// Fan out NetworkMap when any membership actually moved (#104).
+	// SaveGroup above already fans out for a rename if the group
+	// affects peers, but the membership diff is a separate axis —
+	// a PUT can leave the display name untouched while moving 50
+	// users in or out, and the peer reach must reflect both.
+	if changed {
+		am.UpdateAccountPeers(ctx, accountID)
 	}
 	return group, nil
 }
 
 // SCIMAddGroupMember and SCIMRemoveGroupMember support PATCH ops.
+// Both trigger NetworkMap fan-out when membership actually moves
+// (openzro #104): a user added to / removed from a group via the IdP
+// must have their peers' reach recomputed in the same Sync cycle as
+// any dashboard-side group edit — without it an offboarding via the
+// IdP would silently leave the user's peers reaching the group's
+// destinations until some other account mutation bumped the serial.
 func (am *DefaultAccountManager) SCIMAddGroupMember(ctx context.Context, accountID, callerID, groupID, userID string) error {
 	unlock := am.Store.AcquireWriteLockByUID(ctx, accountID)
 	defer unlock()
 	if err := am.requireSCIMGroupPermission(ctx, accountID, callerID, operations.Update); err != nil {
 		return err
 	}
-	return am.modifyUserAutoGroup(ctx, accountID, userID, groupID, true)
+	changed, err := am.modifyUserAutoGroup(ctx, accountID, userID, groupID, true)
+	if err != nil {
+		return err
+	}
+	if changed {
+		am.UpdateAccountPeers(ctx, accountID)
+	}
+	return nil
 }
 
 func (am *DefaultAccountManager) SCIMRemoveGroupMember(ctx context.Context, accountID, callerID, groupID, userID string) error {
@@ -96,7 +128,14 @@ func (am *DefaultAccountManager) SCIMRemoveGroupMember(ctx context.Context, acco
 	if err := am.requireSCIMGroupPermission(ctx, accountID, callerID, operations.Update); err != nil {
 		return err
 	}
-	return am.modifyUserAutoGroup(ctx, accountID, userID, groupID, false)
+	changed, err := am.modifyUserAutoGroup(ctx, accountID, userID, groupID, false)
+	if err != nil {
+		return err
+	}
+	if changed {
+		am.UpdateAccountPeers(ctx, accountID)
+	}
+	return nil
 }
 
 // SCIMRenameGroup updates only the display name. Used by PATCH
@@ -136,7 +175,12 @@ func (am *DefaultAccountManager) SCIMDeleteGroup(ctx context.Context, accountID,
 		return err
 	}
 	for _, uid := range prev {
-		_ = am.modifyUserAutoGroup(ctx, accountID, uid, groupID, false)
+		// Errors here are intentionally swallowed (same as before
+		// #104): one user's AutoGroups corruption shouldn't block the
+		// rest of the cleanup. The DeleteGroup below already triggers
+		// fan-out when the group affects peers, so the per-user
+		// SaveUser changes will be visible in the next NetworkMap.
+		_, _ = am.modifyUserAutoGroup(ctx, accountID, uid, groupID, false)
 	}
 	return am.DeleteGroup(ctx, accountID, callerID, groupID)
 }
@@ -215,37 +259,59 @@ func (am *DefaultAccountManager) usersInGroup(ctx context.Context, accountID, gr
 // previous list. Users in `next` not in `prev` get the group added;
 // users in `prev` not in `next` get it removed. Bulk-friendly — one
 // SaveUser per affected user, no work for unchanged users.
-func (am *DefaultAccountManager) applyGroupMembers(ctx context.Context, accountID, groupID string, next, prev []string) error {
+//
+// Returns changed=true when at least one user's AutoGroups actually
+// moved; the caller can use that to fire a SINGLE NetworkMap fan-out
+// after the whole batch (rather than once per modified user, which
+// would amplify the fan-out cost on big SCIM PUT operations).
+func (am *DefaultAccountManager) applyGroupMembers(ctx context.Context, accountID, groupID string, next, prev []string) (changed bool, err error) {
 	want := stringSet(next)
 	have := stringSet(prev)
 	for uid := range want {
 		if _, ok := have[uid]; ok {
 			continue
 		}
-		if err := am.modifyUserAutoGroup(ctx, accountID, uid, groupID, true); err != nil {
-			return err
+		moved, err := am.modifyUserAutoGroup(ctx, accountID, uid, groupID, true)
+		if err != nil {
+			return changed, err
 		}
+		changed = changed || moved
 	}
 	for uid := range have {
 		if _, ok := want[uid]; ok {
 			continue
 		}
-		if err := am.modifyUserAutoGroup(ctx, accountID, uid, groupID, false); err != nil {
-			return err
+		moved, err := am.modifyUserAutoGroup(ctx, accountID, uid, groupID, false)
+		if err != nil {
+			return changed, err
 		}
+		changed = changed || moved
 	}
-	return nil
+	return changed, nil
 }
 
 // modifyUserAutoGroup adds or removes a single group ID from a user's
-// AutoGroups list. No-op if already in the desired state.
-func (am *DefaultAccountManager) modifyUserAutoGroup(ctx context.Context, accountID, userID, groupID string, add bool) error {
+// AutoGroups list AND propagates the membership to the affected
+// group's Peers list when GroupsPropagationEnabled. Returns
+// propagated=true when the change is meaningful to peer reach (User
+// row was actually moved, propagation is enabled, and the user has
+// at least one peer); the SCIM entrypoints fire UpdateAccountPeers
+// on propagated=true so the rest of the account's NetworkMap
+// reflects the IdP's new picture in the same Sync cycle.
+//
+// Mirrors the dashboard's processUserUpdate path (user.go:697-707):
+// SaveUser, then if GroupsPropagationEnabled, updateUserPeersInGroups
+// + SaveGroups. Closes openzro #104 — without the Group.Peers sync
+// here, NetworkMap recomputation reads stale group membership
+// because the policy resolver iterates Group.Peers, not
+// User.AutoGroups (see GetPeerNetworkMap in account.go).
+func (am *DefaultAccountManager) modifyUserAutoGroup(ctx context.Context, accountID, userID, groupID string, add bool) (propagated bool, err error) {
 	user, err := am.Store.GetUserByUserID(ctx, store.LockingStrengthUpdate, userID)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if user.AccountID != accountID {
-		return status.NewUserNotFoundError(userID)
+		return false, status.NewUserNotFoundError(userID)
 	}
 	have := false
 	out := make([]string, 0, len(user.AutoGroups))
@@ -262,8 +328,67 @@ func (am *DefaultAccountManager) modifyUserAutoGroup(ctx context.Context, accoun
 	if add && !have {
 		out = append(out, groupID)
 	}
+	// No-op short-circuit: the AutoGroups slice would be identical
+	// after the rewrite. Avoid the SaveUser write AND signal the
+	// caller that no fan-out is needed.
+	if add == have {
+		return false, nil
+	}
 	user.AutoGroups = out
-	return am.Store.SaveUser(ctx, store.LockingStrengthUpdate, user)
+	if err := am.Store.SaveUser(ctx, store.LockingStrengthUpdate, user); err != nil {
+		return false, err
+	}
+
+	// Propagate the AutoGroups delta into Group.Peers so the next
+	// NetworkMap recomputation reflects the IdP-driven change.
+	// Mirrors the gate the dashboard user-update uses at
+	// user.go:614 + the propagation block at user.go:697-707 —
+	// settings.GroupsPropagationEnabled is honored verbatim so an
+	// operator who opted out keeps their previous behavior.
+	settings, err := am.Store.GetAccountSettings(ctx, store.LockingStrengthShare, accountID)
+	if err != nil {
+		return false, err
+	}
+	if !settings.GroupsPropagationEnabled {
+		return false, nil
+	}
+	userPeers, err := am.Store.GetUserPeers(ctx, store.LockingStrengthShare, accountID, userID)
+	if err != nil {
+		return false, err
+	}
+	if len(userPeers) == 0 {
+		return false, nil
+	}
+	accountGroups, err := am.Store.GetAccountGroups(ctx, store.LockingStrengthShare, accountID)
+	if err != nil {
+		return false, err
+	}
+	groupsMap := make(map[string]*types.Group, len(accountGroups))
+	for _, g := range accountGroups {
+		groupsMap[g.ID] = g
+	}
+	var addGroups, removeGroups []string
+	if add {
+		addGroups = []string{groupID}
+	} else {
+		removeGroups = []string{groupID}
+	}
+	updatedGroups, err := updateUserPeersInGroups(groupsMap, userPeers, addGroups, removeGroups)
+	if err != nil {
+		return false, fmt.Errorf("modify user peers in groups: %w", err)
+	}
+	if len(updatedGroups) == 0 {
+		// SaveUser already flipped User.AutoGroups; the user's peers
+		// were just not in the affected group (e.g. operator removed
+		// a user whose peers had never joined the group's Peers list
+		// for some reason). Nothing for the fan-out to do — same
+		// terminal state.
+		return false, nil
+	}
+	if err := am.Store.SaveGroups(ctx, store.LockingStrengthUpdate, accountID, updatedGroups); err != nil {
+		return false, fmt.Errorf("save groups: %w", err)
+	}
+	return true, nil
 }
 
 func (am *DefaultAccountManager) requireSCIMGroupPermission(ctx context.Context, accountID, callerID string, op operations.Operation) error {
