@@ -2344,14 +2344,32 @@ func (s *SqlStore) GetDNSZoneByID(ctx context.Context, lockStrength LockingStren
 }
 
 // SaveDNSZone upserts the zone along with its Records +
-// DistributionGroups. FullSaveAssociations:true is required so that
-// removing an item from `zone.DistributionGroups` (or `zone.Records`)
-// actually deletes the row — without it GORM only upserts the
-// supplied children and leaves orphans behind.
+// DistributionGroups in a single statement.
+//
+// Pattern matches SaveAccount (sql_store.go:195):
+// `Create(...).Clauses(OnConflict{UpdateAll:true}).Session(FullSaveAssociations:true)`.
+// `Create` (vs `Save`) guarantees GORM emits the parent INSERT
+// FIRST and then the child INSERTs, which postgres + mysql require
+// for the FK constraint `fk_dns_zones_distribution_groups`. Sqlite
+// permits out-of-order child INSERT because it doesn't enforce FK
+// constraints by default; the previous `Save()` path therefore
+// passed local sqlite tests but failed under postgres / mysql with
+// SQLSTATE 23503.
+//
+// `OnConflict{UpdateAll:true}` turns the Create into an UPSERT so
+// the same code path covers both initial create and subsequent
+// update — the manager layer's caller doesn't have to disambiguate.
+//
+// `lockStrength` is intentionally ignored: clause.Locking on an
+// upsert/insert path interacts badly with FullSaveAssociations
+// (driver-dependent ordering); the surrounding ExecuteInTransaction
+// + the GetDNSZoneByID-with-Update prior read in the manager
+// already provide the serialization guarantee.
 func (s *SqlStore) SaveDNSZone(ctx context.Context, lockStrength LockingStrength, zone *types.DNSZone) error {
-	tx := s.db.Session(&gorm.Session{FullSaveAssociations: true}).
-		Clauses(clause.Locking{Strength: string(lockStrength)})
-	if err := tx.Save(zone).Error; err != nil {
+	tx := s.db.
+		Session(&gorm.Session{FullSaveAssociations: true}).
+		Clauses(clause.OnConflict{UpdateAll: true})
+	if err := tx.Create(zone).Error; err != nil {
 		log.WithContext(ctx).Errorf("failed to save dns zone to the store: %s", err)
 		return status.Errorf(status.Internal, "failed to save dns zone to store")
 	}
