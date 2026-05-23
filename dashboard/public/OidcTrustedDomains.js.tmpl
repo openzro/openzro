@@ -1,6 +1,77 @@
-﻿
-// Add here trusted domains, access tokens will be send to 
+// @axa-fr/react-oidc Service Worker — trusted-domains list.
+//
+// Two domain sets per configuration:
+//
+//   oidcDomains        — IdP endpoints (/.well-known/openid-configuration,
+//                        /authorize, /token, /userinfo). The SW intercepts
+//                        responses from these URLs to capture the tokens
+//                        before they reach page JS.
+//
+//   accessTokenDomains — URLs that get `Authorization: Bearer <access_token>`
+//                        injected on the way out. ANY API endpoint not
+//                        listed here goes WITHOUT a bearer header (silent
+//                        401 footgun — audit every new API origin against
+//                        this file).
+//
+// envsubst at container start replaces $AUTH_AUTHORITY and
+// $OPENZRO_MGMT_API_ENDPOINT (see docker/init_react_envs.sh). The
+// substituted values feed into anchored, regex-escaped RegExps below
+// so that "https://api.openzro.io" does NOT also match a malicious
+// "https://api.openzro.io.attacker.test" (a string passed to the SW
+// would be turned into a raw `new RegExp("^" + str)` — every `.` and
+// `/` would act as a metachar — so we hand-craft the RegExp here).
+//
+// `/api/mfa/*` is deliberately excluded from accessTokenDomains: the
+// MFA flow's challenge / enrollment endpoints carry MFA-scoped JWTs
+// (issue #31), NOT the OIDC access token. If the SW overwrote those
+// requests with the OIDC bearer, the entire forced-MFA flow would
+// dead-end at 401.
+
+// Variables substituted by envsubst at container start. Normalize
+// trailing slashes so the SW regex matches the URLs the app actually
+// emits — `src/utils/config.ts` does the same `replace(/\/+$/, "")`
+// on the authority before building endpoints, so the SW must match
+// that normalization or the regex `/dex/$|/` boundary would only
+// accept `/dex//foo` (double slash) and reject the real `/dex/foo`.
+const _stripTrailingSlash = (s) => s.replace(/\/+$/, "");
+const _idpAuthority = _stripTrailingSlash("$AUTH_AUTHORITY");
+const _mgmtApiOrigin = _stripTrailingSlash("$OPENZRO_MGMT_API_ENDPOINT");
+
+// Escape characters that have a regex meaning. Without this a literal
+// hostname like "api.openzro.io" would be treated as a pattern where
+// every `.` is a wildcard; "https://api.openzro.io.evil.test/api/users"
+// would match.
+const _esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Boundary char class: after the escaped origin we require either a
+// `/` (path) or end-of-string. This prevents
+// "https://api.openzro.io.attacker.test" from being accepted — `.` is
+// neither `/` nor end.
+const _hostBoundary = "(?:$|/)";
+
+// IdP endpoints (Dex / Auth0 / Keycloak / ...). Token interception
+// only — these URLs return the access token, they don't get a bearer
+// injected on the way out.
+const _idpRegex = new RegExp("^" + _esc(_idpAuthority) + _hostBoundary);
+
+// Mgmt API URLs that get the OIDC bearer injected. Negative lookahead
+// `(?!mfa/)` after `/api/` lets all paths through EXCEPT the MFA
+// token-bearer endpoints (/api/mfa/challenge, /api/mfa/enroll/start,
+// /api/mfa/enroll/finish), which carry their own short-lived
+// MFA-scoped JWTs.
+const _apiRegex = new RegExp("^" + _esc(_mgmtApiOrigin) + "/api/(?!mfa/)");
+
 const trustedDomains = {
-    default:["$OPENZRO_MGMT_API_ENDPOINT"],
-    auth0:[]
-};  
+  default: {
+    oidcDomains: [_idpRegex],
+    accessTokenDomains: [_apiRegex],
+    showAccessToken: false,
+    allowMultiTabLogin: false,
+  },
+  auth0: {
+    oidcDomains: [_idpRegex],
+    accessTokenDomains: [_apiRegex],
+    showAccessToken: false,
+    allowMultiTabLogin: false,
+  },
+};
