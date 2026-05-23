@@ -456,10 +456,37 @@ message DNSConfig {
   repeated CustomZone CustomZones = 3;
 }
 
-// CustomZone represents a dns.CustomZone
+// CustomZone represents a dns.CustomZone — operator-managed
+// authoritative DNS namespace distributed to peers in selected
+// groups (issue #108, ADR-0022 Phase 2). Two new fields are
+// additive: older agents that don't know about them read zero
+// values and behave as today (zone always added to search list,
+// no source distinction).
 message CustomZone {
   string Domain = 1;
   repeated SimpleRecord Records = 2;
+  // SearchDomainEnabled — when true, the agent appends the zone's
+  // Domain to the OS DNS search list (so a bare-name lookup like
+  // `db` resolves as `db.<Domain>`). The synthetic peer zone is
+  // emitted with this flag = true to preserve current peer-name
+  // resolution behavior; user-managed zones default to false
+  // (operator opts in per zone).
+  bool SearchDomainEnabled = 3;
+  // Source distinguishes the synthetic peer zone (PEERS) from
+  // operator-managed zones (USER). UNSPECIFIED is the default for
+  // backwards compatibility with old management daemons that don't
+  // populate this field; new agents treat UNSPECIFIED zones as
+  // PEERS (legacy behavior).
+  CustomZoneSource Source = 4;
+}
+
+// CustomZoneSource enumerates the origin of a CustomZone — see
+// ADR-0022 D4b. Wire-compatible with older agents: the default
+// (UNSPECIFIED = 0) means "no information, treat as legacy".
+enum CustomZoneSource {
+  CUSTOM_ZONE_SOURCE_UNSPECIFIED = 0;
+  CUSTOM_ZONE_SOURCE_PEERS = 1;
+  CUSTOM_ZONE_SOURCE_USER = 2;
 }
 
 // SimpleRecord represents a dns.SimpleRecord

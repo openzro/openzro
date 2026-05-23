@@ -305,6 +305,13 @@ func (a *Account) GetPeerNetworkMap(
 		if peersCustomZone.Domain != "" {
 			zones = append(zones, peersCustomZone)
 		}
+		// User-managed zones (issue #108) ride the SAME CustomZones
+		// slice as the synthetic peer zone — distinguished on the
+		// wire by the CustomZone.Source field. The agent doesn't
+		// special-case source at resolution time; only the
+		// SearchDomainEnabled flag affects whether the zone is
+		// added to the OS DNS search list.
+		zones = append(zones, getPeerDNSZones(a, peerID)...)
 		dnsUpdate.CustomZones = zones
 		dnsUpdate.NameServerGroups = getPeerNSGroups(a, peerID)
 	}
@@ -402,6 +409,88 @@ func getPeerNSGroups(account *Account, peerID string) []*nbdns.NameServerGroup {
 	return peerNSGroups
 }
 
+// getPeerDNSZones returns the user-managed Custom DNS Zones a given
+// peer should receive in its NetworkMap.DNSConfig.CustomZones slice
+// (issue #108, ADR-0022 Phase 2). A zone is included when:
+//
+//   - the peer is in at least one of the zone's distribution groups, AND
+//   - zone.Enabled is true, AND
+//   - the zone has at least one record (ADR-0022 D5: empty zones do
+//     not reach the wire — they exist on the management side so the
+//     operator can mid-edit, but the agent never sees them).
+//
+// Each emitted zone is value-copied and tagged with
+// `Source = CustomZoneSourceUser` + the operator-chosen
+// `SearchDomainEnabled` flag. Mirrors getPeerNSGroups (above).
+func getPeerDNSZones(account *Account, peerID string) []nbdns.CustomZone {
+	groupList := account.GetPeerGroups(peerID)
+	if len(groupList) == 0 || len(account.DNSZones) == 0 {
+		return nil
+	}
+
+	var peerZones []nbdns.CustomZone
+	for _, zone := range account.DNSZones {
+		if !zone.Enabled || len(zone.Records) == 0 {
+			continue
+		}
+
+		matched := false
+		for _, dg := range zone.DistributionGroups {
+			if _, ok := groupList[dg.GroupID]; ok {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			continue
+		}
+
+		// Convert records from the storage shape (types.DNSRecord)
+		// to the wire shape (nbdns.SimpleRecord). The mapping is
+		// straightforward: storage stores `Type` as a string
+		// (`"A"|"AAAA"|"CNAME"`) for API friendliness; the wire
+		// uses RFC 1035 numeric type codes via miekg/dns constants.
+		records := make([]nbdns.SimpleRecord, 0, len(zone.Records))
+		for _, r := range zone.Records {
+			records = append(records, nbdns.SimpleRecord{
+				Name:  dns.Fqdn(r.Name),
+				Type:  int(dnsRecordTypeNumeric(r.Type)),
+				Class: nbdns.DefaultClass,
+				TTL:   r.TTL,
+				RData: r.Content,
+			})
+		}
+
+		peerZones = append(peerZones, nbdns.CustomZone{
+			Domain:              dns.Fqdn(zone.Domain),
+			Records:             records,
+			SearchDomainEnabled: zone.SearchDomainEnabled,
+			Source:              nbdns.CustomZoneSourceUser,
+		})
+	}
+
+	return peerZones
+}
+
+// dnsRecordTypeNumeric maps the storage Type string ("A"|"AAAA"|"CNAME")
+// to the RFC 1035 numeric type code consumed by miekg/dns. Unknown
+// values default to A (defensive; Phase 1 validation rejects unknown
+// types at write time, so this branch is never hit under normal
+// flow — present only so a future record type can be added without
+// a runtime panic).
+func dnsRecordTypeNumeric(t string) uint16 {
+	switch t {
+	case DNSRecordTypeA:
+		return dns.TypeA
+	case DNSRecordTypeAAAA:
+		return dns.TypeAAAA
+	case DNSRecordTypeCNAME:
+		return dns.TypeCNAME
+	default:
+		return dns.TypeA
+	}
+}
+
 // peerIsNameserver returns true if the peer is a nameserver for a nsGroup
 func peerIsNameserver(peer *nbpeer.Peer, nsGroup *nbdns.NameServerGroup) bool {
 	for _, ns := range nsGroup.NameServers {
@@ -466,8 +555,16 @@ func (a *Account) GetPeersCustomZone(ctx context.Context, dnsDomain string) nbdn
 	}
 
 	customZone := nbdns.CustomZone{
-		Domain:  dns.Fqdn(dnsDomain),
-		Records: make([]nbdns.SimpleRecord, 0, len(a.Peers)),
+		Domain: dns.Fqdn(dnsDomain),
+		// Source=PEERS + SearchDomainEnabled=true preserves the
+		// current behavior — the agent adds the peer DNS domain to
+		// the OS search list so `dig myhost` resolves as
+		// `myhost.<dnsDomain>` (issue #108 / ADR-0022 D4b + D6).
+		// User-managed zones default to SearchDomainEnabled=false
+		// and Source=USER; see getPeerDNSZones below.
+		Source:              nbdns.CustomZoneSourcePeers,
+		SearchDomainEnabled: true,
+		Records:             make([]nbdns.SimpleRecord, 0, len(a.Peers)),
 	}
 
 	domainSuffix := "." + dnsDomain

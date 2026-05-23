@@ -89,12 +89,21 @@ func (am *DefaultAccountManager) CreateDNSZone(ctx context.Context, accountID, u
 	zone.AccountID = accountID
 	zone.Records = nil // records added via CreateDNSRecord
 
+	var updateAccountPeers bool
 	err := am.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
 		dnsDomain, err := am.resolvePeerDNSDomainTx(ctx, tx, accountID)
 		if err != nil {
 			return err
 		}
 		if err := validateDNSZone(ctx, tx, accountID, zone, dnsDomain, true); err != nil {
+			return err
+		}
+		// A new zone has no records yet (records arrive via
+		// CreateDNSRecord), so the predicate is effectively false at
+		// create time — but we still compute it for symmetry with the
+		// other mutations and to keep the wiring uniform.
+		updateAccountPeers, err = areDNSZoneChangesAffectPeers(ctx, tx, accountID, zone, nil)
+		if err != nil {
 			return err
 		}
 		if err := tx.IncrementNetworkSerial(ctx, store.LockingStrengthUpdate, accountID); err != nil {
@@ -107,6 +116,9 @@ func (am *DefaultAccountManager) CreateDNSZone(ctx context.Context, accountID, u
 	}
 
 	am.StoreEvent(ctx, userID, zone.ID, accountID, activity.DNSZoneCreated, zone.EventMeta())
+	if updateAccountPeers {
+		am.UpdateAccountPeers(ctx, accountID)
+	}
 	return zone, nil
 }
 
@@ -127,6 +139,7 @@ func (am *DefaultAccountManager) SaveDNSZone(ctx context.Context, accountID, use
 	}
 
 	var saved *types.DNSZone
+	var updateAccountPeers bool
 	err := am.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
 		dnsDomain, err := am.resolvePeerDNSDomainTx(ctx, tx, accountID)
 		if err != nil {
@@ -156,6 +169,10 @@ func (am *DefaultAccountManager) SaveDNSZone(ctx context.Context, accountID, use
 		if err := validateDNSZone(ctx, tx, accountID, zoneToSave, dnsDomain, false); err != nil {
 			return err
 		}
+		updateAccountPeers, err = areDNSZoneChangesAffectPeers(ctx, tx, accountID, zoneToSave, existing)
+		if err != nil {
+			return err
+		}
 		if err := tx.IncrementNetworkSerial(ctx, store.LockingStrengthUpdate, accountID); err != nil {
 			return err
 		}
@@ -170,6 +187,9 @@ func (am *DefaultAccountManager) SaveDNSZone(ctx context.Context, accountID, use
 	}
 
 	am.StoreEvent(ctx, userID, saved.ID, accountID, activity.DNSZoneUpdated, saved.EventMeta())
+	if updateAccountPeers {
+		am.UpdateAccountPeers(ctx, accountID)
+	}
 	return saved, nil
 }
 
@@ -184,12 +204,20 @@ func (am *DefaultAccountManager) DeleteDNSZone(ctx context.Context, accountID, z
 	}
 
 	var deleted *types.DNSZone
+	var updateAccountPeers bool
 	err := am.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
 		zone, err := tx.GetDNSZoneByID(ctx, store.LockingStrengthUpdate, accountID, zoneID)
 		if err != nil {
 			if errors.Is(err, store.ErrDNSZoneNotFound) {
 				return status.NewDNSZoneNotFoundError(zoneID)
 			}
+			return err
+		}
+		// Delete fans out iff the zone was distributable before the
+		// delete — passing the zone as `oldZone` (with newZone=nil)
+		// captures exactly that.
+		updateAccountPeers, err = areDNSZoneChangesAffectPeers(ctx, tx, accountID, nil, zone)
+		if err != nil {
 			return err
 		}
 		if err := tx.IncrementNetworkSerial(ctx, store.LockingStrengthUpdate, accountID); err != nil {
@@ -206,6 +234,9 @@ func (am *DefaultAccountManager) DeleteDNSZone(ctx context.Context, accountID, z
 	}
 
 	am.StoreEvent(ctx, userID, deleted.ID, accountID, activity.DNSZoneDeleted, deleted.EventMeta())
+	if updateAccountPeers {
+		am.UpdateAccountPeers(ctx, accountID)
+	}
 	return nil
 }
 
@@ -268,6 +299,7 @@ func (am *DefaultAccountManager) CreateDNSRecord(ctx context.Context, accountID,
 		record.TTL = types.DNSRecordDefaultTTL
 	}
 
+	var updateAccountPeers bool
 	err := am.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
 		zone, err := tx.GetDNSZoneByID(ctx, store.LockingStrengthUpdate, accountID, zoneID)
 		if err != nil {
@@ -282,6 +314,17 @@ func (am *DefaultAccountManager) CreateDNSRecord(ctx context.Context, accountID,
 		if err := validateRecordTypeMutex(zone.Records, record, ""); err != nil {
 			return err
 		}
+		// Compute fan-out signal: synthesize a "post-create"
+		// snapshot of the zone (records + the new one) and compare
+		// against the pre-create snapshot. Empty → non-empty is the
+		// common case that flips a zone from "not distributed" to
+		// "distributed", which is exactly the fan-out trigger.
+		afterCreate := *zone
+		afterCreate.Records = append(append([]types.DNSRecord(nil), zone.Records...), *record)
+		updateAccountPeers, err = areDNSZoneChangesAffectPeers(ctx, tx, accountID, &afterCreate, zone)
+		if err != nil {
+			return err
+		}
 		if err := tx.IncrementNetworkSerial(ctx, store.LockingStrengthUpdate, accountID); err != nil {
 			return err
 		}
@@ -292,6 +335,9 @@ func (am *DefaultAccountManager) CreateDNSRecord(ctx context.Context, accountID,
 	}
 
 	am.StoreEvent(ctx, userID, record.ID, accountID, activity.DNSRecordCreated, record.EventMeta())
+	if updateAccountPeers {
+		am.UpdateAccountPeers(ctx, accountID)
+	}
 	return record, nil
 }
 
@@ -312,6 +358,7 @@ func (am *DefaultAccountManager) SaveDNSRecord(ctx context.Context, accountID, u
 		recordToSave.TTL = types.DNSRecordDefaultTTL
 	}
 
+	var updateAccountPeers bool
 	err := am.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
 		zone, err := tx.GetDNSZoneByID(ctx, store.LockingStrengthUpdate, accountID, zoneID)
 		if err != nil {
@@ -336,6 +383,14 @@ func (am *DefaultAccountManager) SaveDNSRecord(ctx context.Context, accountID, u
 		if err := validateRecordTypeMutex(zone.Records, recordToSave, recordToSave.ID); err != nil {
 			return err
 		}
+		// Record update doesn't change zone-level distributability
+		// (count stays the same). If the zone was distributable
+		// before, it still is — fan-out signal is the same as the
+		// zone's pre-mutation state vs itself.
+		updateAccountPeers, err = areDNSZoneChangesAffectPeers(ctx, tx, accountID, zone, zone)
+		if err != nil {
+			return err
+		}
 		if err := tx.IncrementNetworkSerial(ctx, store.LockingStrengthUpdate, accountID); err != nil {
 			return err
 		}
@@ -346,6 +401,9 @@ func (am *DefaultAccountManager) SaveDNSRecord(ctx context.Context, accountID, u
 	}
 
 	am.StoreEvent(ctx, userID, recordToSave.ID, accountID, activity.DNSRecordUpdated, recordToSave.EventMeta())
+	if updateAccountPeers {
+		am.UpdateAccountPeers(ctx, accountID)
+	}
 	return recordToSave, nil
 }
 
@@ -360,12 +418,35 @@ func (am *DefaultAccountManager) DeleteDNSRecord(ctx context.Context, accountID,
 	}
 
 	var deleted *types.DNSRecord
+	var updateAccountPeers bool
 	err := am.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
+		zone, err := tx.GetDNSZoneByID(ctx, store.LockingStrengthUpdate, accountID, zoneID)
+		if err != nil {
+			if errors.Is(err, store.ErrDNSZoneNotFound) {
+				return status.NewDNSZoneNotFoundError(zoneID)
+			}
+			return err
+		}
 		rec, err := tx.GetDNSRecordByID(ctx, store.LockingStrengthUpdate, accountID, zoneID, recordID)
 		if err != nil {
 			if errors.Is(err, store.ErrDNSRecordNotFound) {
 				return status.NewDNSRecordNotFoundError(recordID)
 			}
+			return err
+		}
+		// Synthesize the post-delete zone snapshot so the predicate
+		// sees the right "after" state. If this was the last record
+		// the zone flips from distributable to not-distributable —
+		// which IS a fan-out trigger (peers must stop seeing it).
+		afterDelete := *zone
+		afterDelete.Records = make([]types.DNSRecord, 0, len(zone.Records))
+		for i := range zone.Records {
+			if zone.Records[i].ID != recordID {
+				afterDelete.Records = append(afterDelete.Records, zone.Records[i])
+			}
+		}
+		updateAccountPeers, err = areDNSZoneChangesAffectPeers(ctx, tx, accountID, &afterDelete, zone)
+		if err != nil {
 			return err
 		}
 		if err := tx.IncrementNetworkSerial(ctx, store.LockingStrengthUpdate, accountID); err != nil {
@@ -382,6 +463,9 @@ func (am *DefaultAccountManager) DeleteDNSRecord(ctx context.Context, accountID,
 	}
 
 	am.StoreEvent(ctx, userID, deleted.ID, accountID, activity.DNSRecordDeleted, deleted.EventMeta())
+	if updateAccountPeers {
+		am.UpdateAccountPeers(ctx, accountID)
+	}
 	return nil
 }
 
@@ -630,6 +714,46 @@ func isWithinZone(recordName, zoneDomain string) bool {
 		return true
 	}
 	return strings.HasSuffix(recordName, "."+zoneDomain)
+}
+
+// areDNSZoneChangesAffectPeers reports whether a zone mutation needs
+// to fan out via UpdateAccountPeers. Returns true iff at least one
+// peer is in one of the distribution groups associated with either
+// the new OR the old version of the zone, AND the zone is in a
+// distributable state in at least one snapshot (Enabled + has
+// records). An empty-or-disabled → empty-or-disabled transition is a
+// no-op on the wire.
+//
+// Mirrors `areNameServerGroupChangesAffectPeers` at
+// management/server/nameserver.go:238-253. Both versions accept nil
+// for `oldZone` to support the create path; pass the new zone as
+// both arguments for record-level mutations where the zone metadata
+// is unchanged.
+func areDNSZoneChangesAffectPeers(ctx context.Context, tx store.Store, accountID string, newZone, oldZone *types.DNSZone) (bool, error) {
+	// Optimization: if neither snapshot reaches the wire, no fan-out
+	// needed.
+	newDistributable := newZone != nil && newZone.Enabled && len(newZone.Records) > 0
+	oldDistributable := oldZone != nil && oldZone.Enabled && len(oldZone.Records) > 0
+	if !newDistributable && !oldDistributable {
+		return false, nil
+	}
+
+	check := func(zone *types.DNSZone) (bool, error) {
+		if zone == nil {
+			return false, nil
+		}
+		return anyGroupHasPeersOrResources(ctx, tx, accountID, zone.GroupIDs())
+	}
+	if newDistributable {
+		hit, err := check(newZone)
+		if err != nil || hit {
+			return hit, err
+		}
+	}
+	if oldDistributable {
+		return check(oldZone)
+	}
+	return false, nil
 }
 
 // permitted is a thin wrapper around the existing permissions manager
