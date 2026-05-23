@@ -1844,6 +1844,25 @@ func TestAccount_Copy(t *testing.T) {
 				NameServers: []nbdns.NameServer{},
 			},
 		},
+		// Custom DNS Zones (issue #108). hasNilField requires this
+		// map to be non-empty (Len()>0). One sample zone with one
+		// record + one group membership covers the Copy()
+		// deep-clone + JSON serialization the test asserts.
+		DNSZones: map[string]*types.DNSZone{
+			"zone1": {
+				ID:                  "zone1",
+				Name:                "internal",
+				Domain:              "internal.example",
+				Enabled:             true,
+				SearchDomainEnabled: false,
+				Records: []types.DNSRecord{
+					{ID: "rec1", ZoneID: "zone1", Name: "db.internal.example", Type: types.DNSRecordTypeA, Content: "10.0.0.5", TTL: 300},
+				},
+				DistributionGroups: []types.DNSZoneGroup{
+					{ZoneID: "zone1", GroupID: "group1"},
+				},
+			},
+		},
 		DNSSettings: types.DNSSettings{DisabledManagementGroups: []string{}},
 		PostureChecks: []*posture.Checks{
 			{

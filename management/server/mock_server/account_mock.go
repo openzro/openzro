@@ -99,6 +99,16 @@ type MockAccountManager struct {
 	SaveNameServerGroupFunc               func(ctx context.Context, accountID, userID string, nsGroupToSave *nbdns.NameServerGroup) error
 	DeleteNameServerGroupFunc             func(ctx context.Context, accountID, nsGroupID, userID string) error
 	ListNameServerGroupsFunc              func(ctx context.Context, accountID string, userID string) ([]*nbdns.NameServerGroup, error)
+	GetDNSZoneFunc                        func(ctx context.Context, accountID, userID, zoneID string) (*types.DNSZone, error)
+	ListDNSZonesFunc                      func(ctx context.Context, accountID, userID string) ([]*types.DNSZone, error)
+	CreateDNSZoneFunc                     func(ctx context.Context, accountID, userID string, zone *types.DNSZone) (*types.DNSZone, error)
+	SaveDNSZoneFunc                       func(ctx context.Context, accountID, userID string, zoneToSave *types.DNSZone) (*types.DNSZone, error)
+	DeleteDNSZoneFunc                     func(ctx context.Context, accountID, zoneID, userID string) error
+	GetDNSRecordFunc                      func(ctx context.Context, accountID, userID, zoneID, recordID string) (*types.DNSRecord, error)
+	ListDNSRecordsFunc                    func(ctx context.Context, accountID, userID, zoneID string) ([]*types.DNSRecord, error)
+	CreateDNSRecordFunc                   func(ctx context.Context, accountID, userID, zoneID string, record *types.DNSRecord) (*types.DNSRecord, error)
+	SaveDNSRecordFunc                     func(ctx context.Context, accountID, userID, zoneID string, recordToSave *types.DNSRecord) (*types.DNSRecord, error)
+	DeleteDNSRecordFunc                   func(ctx context.Context, accountID, zoneID, recordID, userID string) error
 	CreateUserFunc                        func(ctx context.Context, accountID, userID string, key *types.UserInfo) (*types.UserInfo, error)
 	GetAccountIDFromUserAuthFunc          func(ctx context.Context, userAuth nbcontext.UserAuth) (string, string, error)
 	DeleteAccountFunc                     func(ctx context.Context, accountID, userID string) error
@@ -731,6 +741,78 @@ func (am *MockAccountManager) ListNameServerGroups(ctx context.Context, accountI
 		return am.ListNameServerGroupsFunc(ctx, accountID, userID)
 	}
 	return nil, nil
+}
+
+// -- Custom DNS Zones mock stubs (issue #108, ADR-0022 Phase 1) ------
+
+func (am *MockAccountManager) GetDNSZone(ctx context.Context, accountID, userID, zoneID string) (*types.DNSZone, error) {
+	if am.GetDNSZoneFunc != nil {
+		return am.GetDNSZoneFunc(ctx, accountID, userID, zoneID)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method GetDNSZone is not implemented")
+}
+
+func (am *MockAccountManager) ListDNSZones(ctx context.Context, accountID, userID string) ([]*types.DNSZone, error) {
+	if am.ListDNSZonesFunc != nil {
+		return am.ListDNSZonesFunc(ctx, accountID, userID)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method ListDNSZones is not implemented")
+}
+
+func (am *MockAccountManager) CreateDNSZone(ctx context.Context, accountID, userID string, zone *types.DNSZone) (*types.DNSZone, error) {
+	if am.CreateDNSZoneFunc != nil {
+		return am.CreateDNSZoneFunc(ctx, accountID, userID, zone)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method CreateDNSZone is not implemented")
+}
+
+func (am *MockAccountManager) SaveDNSZone(ctx context.Context, accountID, userID string, zoneToSave *types.DNSZone) (*types.DNSZone, error) {
+	if am.SaveDNSZoneFunc != nil {
+		return am.SaveDNSZoneFunc(ctx, accountID, userID, zoneToSave)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method SaveDNSZone is not implemented")
+}
+
+func (am *MockAccountManager) DeleteDNSZone(ctx context.Context, accountID, zoneID, userID string) error {
+	if am.DeleteDNSZoneFunc != nil {
+		return am.DeleteDNSZoneFunc(ctx, accountID, zoneID, userID)
+	}
+	return status.Errorf(codes.Unimplemented, "method DeleteDNSZone is not implemented")
+}
+
+func (am *MockAccountManager) GetDNSRecord(ctx context.Context, accountID, userID, zoneID, recordID string) (*types.DNSRecord, error) {
+	if am.GetDNSRecordFunc != nil {
+		return am.GetDNSRecordFunc(ctx, accountID, userID, zoneID, recordID)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method GetDNSRecord is not implemented")
+}
+
+func (am *MockAccountManager) ListDNSRecords(ctx context.Context, accountID, userID, zoneID string) ([]*types.DNSRecord, error) {
+	if am.ListDNSRecordsFunc != nil {
+		return am.ListDNSRecordsFunc(ctx, accountID, userID, zoneID)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method ListDNSRecords is not implemented")
+}
+
+func (am *MockAccountManager) CreateDNSRecord(ctx context.Context, accountID, userID, zoneID string, record *types.DNSRecord) (*types.DNSRecord, error) {
+	if am.CreateDNSRecordFunc != nil {
+		return am.CreateDNSRecordFunc(ctx, accountID, userID, zoneID, record)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method CreateDNSRecord is not implemented")
+}
+
+func (am *MockAccountManager) SaveDNSRecord(ctx context.Context, accountID, userID, zoneID string, recordToSave *types.DNSRecord) (*types.DNSRecord, error) {
+	if am.SaveDNSRecordFunc != nil {
+		return am.SaveDNSRecordFunc(ctx, accountID, userID, zoneID, recordToSave)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method SaveDNSRecord is not implemented")
+}
+
+func (am *MockAccountManager) DeleteDNSRecord(ctx context.Context, accountID, zoneID, recordID, userID string) error {
+	if am.DeleteDNSRecordFunc != nil {
+		return am.DeleteDNSRecordFunc(ctx, accountID, zoneID, recordID, userID)
+	}
+	return status.Errorf(codes.Unimplemented, "method DeleteDNSRecord is not implemented")
 }
 
 // CreateUser mocks CreateUser of the AccountManager interface

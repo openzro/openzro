@@ -79,8 +79,15 @@ type Account struct {
 	RoutesG                []route.Route                     `json:"-" gorm:"foreignKey:AccountID;references:id"`
 	NameServerGroups       map[string]*nbdns.NameServerGroup `gorm:"-"`
 	NameServerGroupsG      []nbdns.NameServerGroup           `json:"-" gorm:"foreignKey:AccountID;references:id"`
-	DNSSettings            DNSSettings                       `gorm:"embedded;embeddedPrefix:dns_settings_"`
-	PostureChecks          []*posture.Checks                 `gorm:"foreignKey:AccountID;references:id"`
+	// DNSZones — user-managed Custom DNS Zones (issue #108). Mirrors
+	// the NameServerGroups map/slice duality: the map is the runtime
+	// view keyed by zone ID; the *G slice is GORM's projection used
+	// for persistence. The store layer converts between them in
+	// GetAccount / SaveAccount. ADR-0022 Phase 1.
+	DNSZones      map[string]*DNSZone `gorm:"-"`
+	DNSZonesG     []DNSZone           `json:"-" gorm:"foreignKey:AccountID;references:id;constraint:OnDelete:CASCADE"`
+	DNSSettings   DNSSettings         `gorm:"embedded;embeddedPrefix:dns_settings_"`
+	PostureChecks []*posture.Checks   `gorm:"foreignKey:AccountID;references:id"`
 	// Settings is a dictionary of Account settings
 	Settings         *Settings                        `gorm:"embedded;embeddedPrefix:settings_"`
 	Networks         []*networkTypes.Network          `gorm:"foreignKey:AccountID;references:id"`
@@ -832,6 +839,11 @@ func (a *Account) Copy() *Account {
 		nsGroups[id] = nsGroup.Copy()
 	}
 
+	dnsZones := map[string]*DNSZone{}
+	for id, zone := range a.DNSZones {
+		dnsZones[id] = zone.Copy()
+	}
+
 	dnsSettings := a.DNSSettings.Copy()
 
 	var settings *Settings
@@ -874,6 +886,7 @@ func (a *Account) Copy() *Account {
 		Policies:               policies,
 		Routes:                 routes,
 		NameServerGroups:       nsGroups,
+		DNSZones:               dnsZones,
 		DNSSettings:            dnsSettings,
 		PostureChecks:          postureChecks,
 		Settings:               settings,

@@ -44,6 +44,17 @@ import (
 // rather than a generic 500.
 var ErrUserMFANotFound = errors.New("store: user has no MFA enrolled")
 
+// ErrDNSZoneNotFound is the sentinel returned by GetDNSZoneByID when
+// the (account, zone) tuple has no row. Issue #108 Phase 1 — used by
+// the manager layer to translate to status.NotFound at the API
+// boundary without parsing a string error.
+var ErrDNSZoneNotFound = errors.New("store: dns zone not found")
+
+// ErrDNSRecordNotFound is the sentinel returned by GetDNSRecordByID
+// when the (zone, record) tuple has no row. Same role as
+// ErrDNSZoneNotFound but for records.
+var ErrDNSRecordNotFound = errors.New("store: dns record not found")
+
 type LockingStrength string
 
 const (
@@ -176,6 +187,19 @@ type Store interface {
 	GetNameServerGroupByID(ctx context.Context, lockStrength LockingStrength, nameServerGroupID string, accountID string) (*dns.NameServerGroup, error)
 	SaveNameServerGroup(ctx context.Context, lockStrength LockingStrength, nameServerGroup *dns.NameServerGroup) error
 	DeleteNameServerGroup(ctx context.Context, lockStrength LockingStrength, accountID, nameServerGroupID string) error
+
+	// Custom DNS Zones (issue #108, ADR-0022 Phase 1). The GetDNSZoneByID
+	// path preloads Records + DistributionGroups in a single round
+	// trip so callers don't N+1 on the per-peer recompute (Phase 2)
+	// or on /dns/zones/{id} fetches. ErrDNSZoneNotFound /
+	// ErrDNSRecordNotFound surface as control-flow signals.
+	GetAccountDNSZones(ctx context.Context, lockStrength LockingStrength, accountID string) ([]*types.DNSZone, error)
+	GetDNSZoneByID(ctx context.Context, lockStrength LockingStrength, accountID, zoneID string) (*types.DNSZone, error)
+	SaveDNSZone(ctx context.Context, lockStrength LockingStrength, zone *types.DNSZone) error
+	DeleteDNSZone(ctx context.Context, lockStrength LockingStrength, accountID, zoneID string) error
+	GetDNSRecordByID(ctx context.Context, lockStrength LockingStrength, accountID, zoneID, recordID string) (*types.DNSRecord, error)
+	SaveDNSRecord(ctx context.Context, lockStrength LockingStrength, record *types.DNSRecord) error
+	DeleteDNSRecord(ctx context.Context, lockStrength LockingStrength, accountID, zoneID, recordID string) error
 
 	GetTakenIPs(ctx context.Context, lockStrength LockingStrength, accountId string) ([]net.IP, error)
 	IncrementNetworkSerial(ctx context.Context, lockStrength LockingStrength, accountId string) error

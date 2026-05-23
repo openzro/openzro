@@ -51,6 +51,12 @@ var NetworkAdmin = RolePermissions{
 			operations.Update: true,
 			operations.Delete: true,
 		},
+		modules.DNSZones: {
+			operations.Read:   true,
+			operations.Create: true,
+			operations.Update: true,
+			operations.Delete: true,
+		},
 		modules.Events: {
 			operations.Read:   true,
 			operations.Create: false,

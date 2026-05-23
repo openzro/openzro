@@ -101,6 +101,11 @@ func NewSqlStore(ctx context.Context, db *gorm.DB, storeEngine types.Engine, met
 		&installation{}, &types.ExtraSettings{}, &posture.Checks{}, &nbpeer.NetworkAddress{},
 		&networkTypes.Network{}, &routerTypes.NetworkRouter{}, &resourceTypes.NetworkResource{}, &types.AccountOnboarding{},
 		&types.UserMFA{},
+		// Custom DNS Zones (issue #108, ADR-0022 D4). Three GORM
+		// models for the (zone → records, zone → groups) relations.
+		// DNSZone owns the cascade-delete via foreignKey:ZoneID on
+		// its DNSRecord + DNSZoneGroup children.
+		&types.DNSZone{}, &types.DNSRecord{}, &types.DNSZoneGroup{},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("auto migratePreAuto: %w", err)
@@ -259,6 +264,13 @@ func generateAccountSQLTypes(account *types.Account) {
 	for id, ns := range account.NameServerGroups {
 		ns.ID = id
 		account.NameServerGroupsG = append(account.NameServerGroupsG, *ns)
+	}
+
+	// DNS Zones (issue #108): mirror the map → slice projection used
+	// by every other Account child for GORM persistence.
+	for id, zone := range account.DNSZones {
+		zone.ID = id
+		account.DNSZonesG = append(account.DNSZonesG, *zone)
 	}
 }
 
@@ -816,6 +828,14 @@ func (s *SqlStore) GetAccount(ctx context.Context, accountID string) (*types.Acc
 	var account types.Account
 	result := s.db.Model(&account).
 		Preload("UsersG.PATsG"). // have to be specifies as this is nester reference
+		// DNS Zones (issue #108): the zone's Records + DistributionGroups
+		// are nested associations off DNSZonesG; without explicit deep
+		// preload they come back empty and the generic SaveAccount path
+		// (line 195 below, which clause.Associations-deletes + recreates)
+		// would orphan / wipe them. Same nested-preload shape as
+		// UsersG.PATsG above.
+		Preload("DNSZonesG.Records").
+		Preload("DNSZonesG.DistributionGroups").
 		Preload(clause.Associations).
 		First(&account, idQueryCondition, accountID)
 	if result.Error != nil {
@@ -875,6 +895,15 @@ func (s *SqlStore) GetAccount(ctx context.Context, accountID string) (*types.Acc
 		account.NameServerGroups[ns.ID] = ns.Copy()
 	}
 	account.NameServerGroupsG = nil
+
+	// DNS Zones (issue #108): mirror the slice → map projection used
+	// by every other Account child after a GORM load. The slice was
+	// populated by GORM's foreignKey:AccountID association.
+	account.DNSZones = make(map[string]*types.DNSZone, len(account.DNSZonesG))
+	for _, zone := range account.DNSZonesG {
+		account.DNSZones[zone.ID] = zone.Copy()
+	}
+	account.DNSZonesG = nil
 
 	return &account, nil
 }
@@ -2259,6 +2288,217 @@ func (s *SqlStore) DeleteNameServerGroup(ctx context.Context, lockStrength Locki
 		return status.NewNameServerGroupNotFoundError(nsGroupID)
 	}
 
+	return nil
+}
+
+// -- Custom DNS Zones (issue #108) --------------------------------------
+//
+// GetDNSZoneByID preloads Records + DistributionGroups so callers
+// don't N+1 on the per-peer recompute path that Phase 2 will exercise
+// (and that today's API handlers also rely on for the GET response).
+// SaveDNSZone uses Session{FullSaveAssociations:true} so deleting the
+// last record of a zone (or the last group) via the parent Save flushes
+// the child rows too — matches the JSON-serializer semantics older
+// resources rely on, but for the FK-relation shape ADR-0022 D4
+// mandated.
+
+// GetAccountDNSZones lists user-managed DNS zones for an account.
+// Records + DistributionGroups are preloaded so the response shape is
+// complete without a follow-up roundtrip per zone.
+func (s *SqlStore) GetAccountDNSZones(ctx context.Context, lockStrength LockingStrength, accountID string) ([]*types.DNSZone, error) {
+	tx := s.db
+	if lockStrength != LockingStrengthNone {
+		tx = tx.Clauses(clause.Locking{Strength: string(lockStrength)})
+	}
+
+	var zones []*types.DNSZone
+	result := tx.Preload("Records").Preload("DistributionGroups").
+		Find(&zones, accountIDCondition, accountID)
+	if err := result.Error; err != nil {
+		log.WithContext(ctx).Errorf("failed to get dns zones from the store: %s", err)
+		return nil, status.Errorf(status.Internal, "failed to get dns zones from store")
+	}
+	return zones, nil
+}
+
+// GetDNSZoneByID retrieves one zone scoped to its account, with its
+// Records + DistributionGroups preloaded. ErrDNSZoneNotFound on miss
+// so the manager layer can branch cleanly into NotFound.
+func (s *SqlStore) GetDNSZoneByID(ctx context.Context, lockStrength LockingStrength, accountID, zoneID string) (*types.DNSZone, error) {
+	tx := s.db
+	if lockStrength != LockingStrengthNone {
+		tx = tx.Clauses(clause.Locking{Strength: string(lockStrength)})
+	}
+
+	var zone types.DNSZone
+	result := tx.Preload("Records").Preload("DistributionGroups").
+		First(&zone, accountAndIDQueryCondition, accountID, zoneID)
+	if err := result.Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrDNSZoneNotFound
+		}
+		log.WithContext(ctx).Errorf("failed to get dns zone from the store: %s", err)
+		return nil, status.Errorf(status.Internal, "failed to get dns zone from store")
+	}
+	return &zone, nil
+}
+
+// SaveDNSZone upserts the zone along with its Records +
+// DistributionGroups in a single statement.
+//
+// Pattern matches SaveAccount (sql_store.go:195):
+// `Create(...).Clauses(OnConflict{UpdateAll:true}).Session(FullSaveAssociations:true)`.
+// `Create` (vs `Save`) guarantees GORM emits the parent INSERT
+// FIRST and then the child INSERTs, which postgres + mysql require
+// for the FK constraint `fk_dns_zones_distribution_groups`. Sqlite
+// permits out-of-order child INSERT because it doesn't enforce FK
+// constraints by default; the previous `Save()` path therefore
+// passed local sqlite tests but failed under postgres / mysql with
+// SQLSTATE 23503.
+//
+// `OnConflict{UpdateAll:true}` turns the Create into an UPSERT so
+// the same code path covers both initial create and subsequent
+// update — the manager layer's caller doesn't have to disambiguate.
+//
+// `lockStrength` is intentionally ignored: clause.Locking on an
+// upsert/insert path interacts badly with FullSaveAssociations
+// (driver-dependent ordering); the surrounding ExecuteInTransaction
+// + the GetDNSZoneByID-with-Update prior read in the manager
+// already provide the serialization guarantee.
+func (s *SqlStore) SaveDNSZone(ctx context.Context, lockStrength LockingStrength, zone *types.DNSZone) error {
+	tx := s.db.
+		Session(&gorm.Session{FullSaveAssociations: true}).
+		Clauses(clause.OnConflict{UpdateAll: true})
+	if err := tx.Create(zone).Error; err != nil {
+		log.WithContext(ctx).Errorf("failed to save dns zone to the store: %s", err)
+		return status.Errorf(status.Internal, "failed to save dns zone to store")
+	}
+	// FullSaveAssociations upserts children but does NOT delete rows
+	// that were removed from the in-memory slice. For records and
+	// group memberships we need delete-on-omission semantics. Wipe
+	// children that aren't in the new slice.
+	if err := s.pruneDNSZoneChildren(ctx, zone); err != nil {
+		return err
+	}
+	return nil
+}
+
+// pruneDNSZoneChildren removes dns_records and dns_zone_groups rows
+// for the given zone that are NOT in the current in-memory slice.
+// Called from SaveDNSZone to give SaveDNSZone the "replace children"
+// semantics callers expect.
+func (s *SqlStore) pruneDNSZoneChildren(ctx context.Context, zone *types.DNSZone) error {
+	keepRecordIDs := make([]string, 0, len(zone.Records))
+	for _, r := range zone.Records {
+		if r.ID != "" {
+			keepRecordIDs = append(keepRecordIDs, r.ID)
+		}
+	}
+	delRec := s.db.Where("zone_id = ?", zone.ID)
+	if len(keepRecordIDs) > 0 {
+		delRec = delRec.Where("id NOT IN ?", keepRecordIDs)
+	}
+	if err := delRec.Delete(&types.DNSRecord{}).Error; err != nil {
+		log.WithContext(ctx).Errorf("failed to prune dns records: %s", err)
+		return status.Errorf(status.Internal, "failed to prune dns records")
+	}
+
+	keepGroupIDs := make([]string, 0, len(zone.DistributionGroups))
+	for _, g := range zone.DistributionGroups {
+		keepGroupIDs = append(keepGroupIDs, g.GroupID)
+	}
+	delGrp := s.db.Where("zone_id = ?", zone.ID)
+	if len(keepGroupIDs) > 0 {
+		delGrp = delGrp.Where("group_id NOT IN ?", keepGroupIDs)
+	}
+	if err := delGrp.Delete(&types.DNSZoneGroup{}).Error; err != nil {
+		log.WithContext(ctx).Errorf("failed to prune dns zone groups: %s", err)
+		return status.Errorf(status.Internal, "failed to prune dns zone groups")
+	}
+	return nil
+}
+
+// DeleteDNSZone removes a zone and (via CASCADE on the FK) its
+// records + group memberships in a single SQL statement.
+func (s *SqlStore) DeleteDNSZone(ctx context.Context, lockStrength LockingStrength, accountID, zoneID string) error {
+	result := s.db.Clauses(clause.Locking{Strength: string(lockStrength)}).
+		Delete(&types.DNSZone{}, accountAndIDQueryCondition, accountID, zoneID)
+	if err := result.Error; err != nil {
+		log.WithContext(ctx).Errorf("failed to delete dns zone from the store: %s", err)
+		return status.Errorf(status.Internal, "failed to delete dns zone from store")
+	}
+	if result.RowsAffected == 0 {
+		return ErrDNSZoneNotFound
+	}
+	return nil
+}
+
+// GetDNSRecordByID retrieves one record, JOIN-scoped to its parent
+// zone's account so a record ID from a different account cannot leak
+// through. Returns ErrDNSRecordNotFound on miss.
+func (s *SqlStore) GetDNSRecordByID(ctx context.Context, lockStrength LockingStrength, accountID, zoneID, recordID string) (*types.DNSRecord, error) {
+	tx := s.db
+	if lockStrength != LockingStrengthNone {
+		tx = tx.Clauses(clause.Locking{Strength: string(lockStrength)})
+	}
+
+	var record types.DNSRecord
+	// Join with dns_zones to enforce account ownership at the SQL
+	// level (an attacker guessing a record ID from another account
+	// gets 0 rows, never a cross-tenant leak).
+	result := tx.
+		Joins("JOIN dns_zones ON dns_zones.id = dns_records.zone_id").
+		Where("dns_records.id = ? AND dns_records.zone_id = ? AND dns_zones.account_id = ?", recordID, zoneID, accountID).
+		First(&record)
+	if err := result.Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrDNSRecordNotFound
+		}
+		log.WithContext(ctx).Errorf("failed to get dns record from the store: %s", err)
+		return nil, status.Errorf(status.Internal, "failed to get dns record from store")
+	}
+	return &record, nil
+}
+
+// SaveDNSRecord upserts a single record. The parent zone's existence
+// is the responsibility of the manager layer (which validated the
+// zone before calling here).
+func (s *SqlStore) SaveDNSRecord(ctx context.Context, lockStrength LockingStrength, record *types.DNSRecord) error {
+	if err := s.db.Clauses(clause.Locking{Strength: string(lockStrength)}).Save(record).Error; err != nil {
+		log.WithContext(ctx).Errorf("failed to save dns record to the store: %s", err)
+		return status.Errorf(status.Internal, "failed to save dns record to store")
+	}
+	return nil
+}
+
+// DeleteDNSRecord removes a record. JOIN-scoped account check guards
+// against cross-tenant deletes (same defensive pattern as
+// GetDNSRecordByID).
+func (s *SqlStore) DeleteDNSRecord(ctx context.Context, lockStrength LockingStrength, accountID, zoneID, recordID string) error {
+	// First confirm the record belongs to the account+zone (one tiny
+	// SELECT) so the subsequent DELETE can be a single-key wipe.
+	var ownerCheck types.DNSRecord
+	checkErr := s.db.
+		Joins("JOIN dns_zones ON dns_zones.id = dns_records.zone_id").
+		Where("dns_records.id = ? AND dns_records.zone_id = ? AND dns_zones.account_id = ?", recordID, zoneID, accountID).
+		Select("dns_records.id").
+		First(&ownerCheck).Error
+	if checkErr != nil {
+		if errors.Is(checkErr, gorm.ErrRecordNotFound) {
+			return ErrDNSRecordNotFound
+		}
+		log.WithContext(ctx).Errorf("failed to check dns record ownership: %s", checkErr)
+		return status.Errorf(status.Internal, "failed to delete dns record")
+	}
+	result := s.db.Clauses(clause.Locking{Strength: string(lockStrength)}).
+		Delete(&types.DNSRecord{}, idQueryCondition, recordID)
+	if err := result.Error; err != nil {
+		log.WithContext(ctx).Errorf("failed to delete dns record from the store: %s", err)
+		return status.Errorf(status.Internal, "failed to delete dns record from store")
+	}
+	if result.RowsAffected == 0 {
+		return ErrDNSRecordNotFound
+	}
 	return nil
 }
 
