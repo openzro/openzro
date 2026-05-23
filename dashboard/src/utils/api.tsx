@@ -4,7 +4,6 @@ import {
   useOidcIdToken,
 } from "@axa-fr/react-oidc";
 import loadConfig from "@utils/config";
-import { sleep } from "@utils/helpers";
 import {
   clearMfaSessionToken,
   getMfaSessionToken,
@@ -110,28 +109,55 @@ async function apiRequest<T>(
   }
 }
 
+// SW_TOKEN_PLACEHOLDER_PREFIX is the literal prefix axa-fr/react-oidc
+// returns from `useOidcAccessToken()` when the Service Worker is
+// active — the real JWT lives inside the SW scope and is never
+// handed to page JS. The full string follows the shape
+// `ACCESS_TOKEN_SECURED_BY_OIDC_SERVICE_WORKER_<configurationName>`.
+// `isExpired()` from `react-jwt` cannot decode this synthetic value
+// and always returns true, which would 401-loop every request — so
+// expiry checks must consult the lib-parsed claims (`accessTokenPayload.exp`)
+// instead, and the manual Bearer header we attach gets silently
+// overwritten by the SW on the wire (last-write-wins).
+const SW_TOKEN_PLACEHOLDER_PREFIX = "ACCESS_TOKEN_SECURED_BY_OIDC_SERVICE_WORKER";
+
 export function useOpenzroFetch(ignoreError: boolean = false): {
   fetch: (input: RequestInfo, init?: RequestInit) => Promise<Response>;
   token: string | undefined;
 } {
   const tokenSource = config.tokenSource || "accessToken";
-  const { idToken } = useOidcIdToken();
-  const { accessToken } = useOidcAccessToken();
+  const { idToken, idTokenPayload } = useOidcIdToken();
+  const { accessToken, accessTokenPayload } = useOidcAccessToken();
   const token = tokenSource.toLowerCase() == "idtoken" ? idToken : accessToken;
+  const payload =
+    tokenSource.toLowerCase() == "idtoken" ? idTokenPayload : accessTokenPayload;
   const handleErrors = useApiErrorHandling(ignoreError);
 
-  const isTokenExpired = async () => {
-    let attempts = 20;
-    while (isExpired(token) && attempts > 0) {
-      await sleep(500);
-      attempts = attempts - 1;
+  // Expiry check: prefer the lib's parsed claims (`payload.exp` in
+  // seconds since epoch). This works in BOTH modes:
+  //   - SW active: `token` is a placeholder we cannot decode, but
+  //     `payload` reflects the real token's exp.
+  //   - SW inactive (legacy fallback): `token` is the real JWT and
+  //     `payload` is the decoded claim set — same result, no
+  //     library-internal decoding needed.
+  // Treat missing payload (post-logout, pre-login) as expired so the
+  // request is refused cleanly via the standard error path.
+  const isTokenExpired = (): boolean => {
+    if (!payload?.exp) {
+      // Belt-and-suspenders: if SW gave us the placeholder but no
+      // payload yet (very early in the SW handshake), don't 401 — let
+      // the SW handle the auth, the placeholder will be overwritten on
+      // the wire. Only payload-less AND non-SW means truly unauth.
+      if (typeof token === "string" && token.startsWith(SW_TOKEN_PLACEHOLDER_PREFIX)) {
+        return false;
+      }
+      return token ? isExpired(token) : true;
     }
-    return isExpired(token);
+    return payload.exp * 1000 < Date.now();
   };
 
   const nativeFetch = async (input: RequestInfo, init?: RequestInit) => {
-    const tokenExpired = await isTokenExpired();
-    if (tokenExpired) {
+    if (isTokenExpired()) {
       return handleErrors({
         code: 401,
         message: "token expired",
@@ -141,6 +167,12 @@ export function useOpenzroFetch(ignoreError: boolean = false): {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       Accept: "application/json",
+      // Authorization is attached manually so the legacy non-SW
+      // fallback (Safari private mode, etc.) keeps working. With SW
+      // active, the SW overwrites this header on the wire for every
+      // URL matched by `accessTokenDomains` in
+      // dashboard/public/OidcTrustedDomains.js — the manual value is
+      // only used when the SW skips the request.
       Authorization: `Bearer ${token}`,
     };
     // X-MFA-Token rides alongside Authorization when present

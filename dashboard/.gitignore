@@ -12,6 +12,15 @@
 /.next/
 /out/
 
+# Service Worker bundled by `prebuild` from
+# @axa-fr/oidc-client-service-worker — generated at build time, not
+# committed (the version in node_modules is the source of truth).
+/public/OidcServiceWorker.js
+# Dev-mode trusted-domains file copied from public/local/ by
+# `predev` / `preturbo`. Prod containers generate this from
+# OidcTrustedDomains.js.tmpl via envsubst at startup.
+/public/OidcTrustedDomains.js
+
 # production
 /build
 /out

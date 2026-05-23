@@ -102,9 +102,35 @@ export default function OIDCProvider({ children }: Props) {
       refresh_time_before_tokens_expiration_in_second: 30,
       silent_redirect_uri: window.location.origin + config.silentRedirectURI,
       scope: config.scopesSupported,
-      // disabling service worker
-      //service_worker_relative_url: "/OidcServiceWorker.js",
+      // Service Worker enabled (issue #86). Tokens live inside the SW
+      // scope and are never reachable from page JS, defeating XSS /
+      // browser-extension token-theft. The SW intercepts fetches to
+      // the trusted domains in OidcTrustedDomains.js (oidcDomains =
+      // Dex authority, accessTokenDomains = openZro mgmt API) and
+      // injects `Authorization: Bearer <access_token>` server-side.
+      //
+      // Hybrid mode (`service_worker_only: false`): when SW
+      // registration fails (Safari private mode, locked-down browser),
+      // the lib falls back to its non-SW token storage. That fallback
+      // is the same surface as before this change, so no regression.
+      // Once telemetry confirms ≥99% SW success we can flip to true
+      // for strict-SW-only enforcement.
+      //
+      // Dev tip: HMR can leave a stale SW controlling the page. In
+      // DevTools → Application → Service Workers, tick "Update on
+      // reload" + "Bypass for network" while iterating, OR temporarily
+      // unregister the SW from there.
+      service_worker_relative_url: "/OidcServiceWorker.js",
       service_worker_only: false,
+      // Intentionally NO `service_worker_update_require_callback`
+      // override: the library default unregisters the stale worker
+      // and triggers a reload on version mismatch, which is what we
+      // want post-upgrade. A no-op callback here would suppress that
+      // reset and strand users on the old SW (upstream issue #1131
+      // class of bug). If we ever want a soft "an update is
+      // available — reload?" banner instead of the automatic reload,
+      // wire a callback that returns a Promise resolving on user
+      // confirmation; do not pass a fire-and-forget no-op.
       authority_configuration: config.auth0Auth
         ? auth0AuthorityConfig
         : undefined,
