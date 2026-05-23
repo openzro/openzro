@@ -11,8 +11,10 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	nbdns "github.com/openzro/openzro/dns"
 	"github.com/openzro/openzro/management/server/activity"
 	"github.com/openzro/openzro/management/server/integrations/port_forwarding"
+	nbpeer "github.com/openzro/openzro/management/server/peer"
 	"github.com/openzro/openzro/management/server/permissions"
 	"github.com/openzro/openzro/management/server/settings"
 	"github.com/openzro/openzro/management/server/store"
@@ -439,6 +441,126 @@ func TestStore_AccountRoundtripPreservesDNSZoneChildren(t *testing.T) {
 	require.Lenf(t, refreshed.DistributionGroups, 1,
 		"SaveAccount round-trip dropped the distribution-group links; got %#v", refreshed.DistributionGroups)
 	require.Equal(t, dnsZoneTestGroupID, refreshed.DistributionGroups[0].GroupID)
+}
+
+// TestNetworkMap_CustomZonesComposition pins Phase 2 per-peer
+// composition rules from ADR-0022 D5/D1. Exercised through the
+// public `am.GetNetworkMap(peerID)` path (same shape
+// dns_test.go uses for the synthetic-only case at
+// TestGetNetworkMap_DNSConfigSync). A user-managed zone reaches a
+// peer's DNSConfig.CustomZones iff: peer in distribution group AND
+// zone.Enabled AND len(zone.Records) > 0. Synthetic peer zone is
+// always present alongside.
+func TestNetworkMap_CustomZonesComposition(t *testing.T) {
+	am, _ := initDNSZoneTestAccount(t)
+	ctx := context.Background()
+
+	// Add two peers — one in the test group, one outside.
+	peer1, _, _, err := am.AddPeer(ctx, "", dnsZoneTestUserID, &nbpeer.Peer{
+		Key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", Name: "host1@openzro.example",
+		Meta: nbpeer.PeerSystemMeta{Hostname: "host1@openzro.example", GoOS: "linux"},
+	})
+	require.NoError(t, err)
+	peer2, _, _, err := am.AddPeer(ctx, "", dnsZoneTestUserID, &nbpeer.Peer{
+		Key: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=", Name: "host2@openzro.example",
+		Meta: nbpeer.PeerSystemMeta{Hostname: "host2@openzro.example", GoOS: "linux"},
+	})
+	require.NoError(t, err)
+
+	// Add peer1 to the test group via the existing group save path —
+	// this is the operator's natural flow and exercises the group
+	// membership wiring end-to-end.
+	g := &types.Group{ID: dnsZoneTestGroupID, Name: "test-group", Peers: []string{peer1.ID}}
+	require.NoError(t, am.SaveGroup(ctx, dnsZoneTestAccountID, dnsZoneTestUserID, g, true))
+
+	// Three zones distributed to dnsZoneTestGroupID:
+	//   - "ok": enabled with a record -> peer1 must see, peer2 must not
+	//   - "empty": no records -> nobody sees
+	//   - "disabled": records but disabled -> nobody sees
+	okZone, err := am.CreateDNSZone(ctx, dnsZoneTestAccountID, dnsZoneTestUserID, &types.DNSZone{
+		Name: "ok", Domain: "ok.example", Enabled: true,
+		DistributionGroups: []types.DNSZoneGroup{{GroupID: dnsZoneTestGroupID}},
+	})
+	require.NoError(t, err)
+	_, err = am.CreateDNSRecord(ctx, dnsZoneTestAccountID, dnsZoneTestUserID, okZone.ID, &types.DNSRecord{
+		Name: "h.ok.example", Type: types.DNSRecordTypeA, Content: "10.0.0.5",
+	})
+	require.NoError(t, err)
+
+	_, err = am.CreateDNSZone(ctx, dnsZoneTestAccountID, dnsZoneTestUserID, &types.DNSZone{
+		Name: "empty", Domain: "empty.example", Enabled: true,
+		DistributionGroups: []types.DNSZoneGroup{{GroupID: dnsZoneTestGroupID}},
+	})
+	require.NoError(t, err)
+
+	disabledZone, err := am.CreateDNSZone(ctx, dnsZoneTestAccountID, dnsZoneTestUserID, &types.DNSZone{
+		Name: "disabled", Domain: "disabled.example", Enabled: true,
+		DistributionGroups: []types.DNSZoneGroup{{GroupID: dnsZoneTestGroupID}},
+	})
+	require.NoError(t, err)
+	_, err = am.CreateDNSRecord(ctx, dnsZoneTestAccountID, dnsZoneTestUserID, disabledZone.ID, &types.DNSRecord{
+		Name: "h.disabled.example", Type: types.DNSRecordTypeA, Content: "10.0.0.6",
+	})
+	require.NoError(t, err)
+	disabledZone.Enabled = false
+	_, err = am.SaveDNSZone(ctx, dnsZoneTestAccountID, dnsZoneTestUserID, disabledZone)
+	require.NoError(t, err)
+
+	// peer1 (in group) — synthetic peer zone + ok zone, that's it.
+	nm1, err := am.GetNetworkMap(ctx, peer1.ID)
+	require.NoError(t, err)
+	userZones1 := filterUserZones(nm1.DNSConfig.CustomZones)
+	require.Len(t, userZones1, 1, "peer-in-group: only the ok zone; got %+v", userZones1)
+	require.Equal(t, "ok.example.", userZones1[0].Domain)
+	require.Equal(t, nbdns.CustomZoneSourceUser, userZones1[0].Source)
+
+	// peer2 (out of group) — only the synthetic peer zone.
+	nm2, err := am.GetNetworkMap(ctx, peer2.ID)
+	require.NoError(t, err)
+	require.Empty(t, filterUserZones(nm2.DNSConfig.CustomZones),
+		"peer NOT in distribution group sees no user-managed zones")
+}
+
+// TestSyntheticPeerZone_SourceAndSearchDomainFlag pins ADR-0022 D4b
+// migration of the existing synthetic peer zone — it MUST arrive on
+// the wire with Source=PEERS + SearchDomainEnabled=true so the agent
+// continues to add the peer DNS domain to the OS search list
+// (preserves `dig myhost` working as `myhost.<dnsDomain>`).
+func TestSyntheticPeerZone_SourceAndSearchDomainFlag(t *testing.T) {
+	am, _ := initDNSZoneTestAccount(t)
+	ctx := context.Background()
+
+	peer, _, _, err := am.AddPeer(ctx, "", dnsZoneTestUserID, &nbpeer.Peer{
+		Key: "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=", Name: "host3@openzro.example",
+		Meta: nbpeer.PeerSystemMeta{Hostname: "host3@openzro.example", GoOS: "linux"},
+	})
+	require.NoError(t, err)
+	nm, err := am.GetNetworkMap(ctx, peer.ID)
+	require.NoError(t, err)
+	var peerZone *nbdns.CustomZone
+	for i := range nm.DNSConfig.CustomZones {
+		if nm.DNSConfig.CustomZones[i].Source == nbdns.CustomZoneSourcePeers {
+			peerZone = &nm.DNSConfig.CustomZones[i]
+			break
+		}
+	}
+	require.NotNil(t, peerZone, "synthetic peer zone must be present on the wire")
+	require.True(t, peerZone.SearchDomainEnabled,
+		"synthetic peer zone must keep SearchDomainEnabled=true (legacy compat)")
+}
+
+// filterUserZones returns the user-managed zones (Source=USER) from
+// a slice that mixes synthetic peer zone + user zones. The composition
+// tests don't care about the synthetic zone; this helper keeps the
+// assertions focused.
+func filterUserZones(zones []nbdns.CustomZone) []nbdns.CustomZone {
+	out := make([]nbdns.CustomZone, 0, len(zones))
+	for _, z := range zones {
+		if z.Source == nbdns.CustomZoneSourceUser {
+			out = append(out, z)
+		}
+	}
+	return out
 }
 
 // TestDNSZoneOverlap unit-tests the helper directly. Same matrix as

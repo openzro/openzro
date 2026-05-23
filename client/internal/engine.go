@@ -1213,6 +1213,25 @@ func toDNSConfig(protoDNSConfig *mgmProto.DNSConfig, network netip.Prefix) nbdns
 	for _, zone := range protoDNSConfig.GetCustomZones() {
 		dnsZone := nbdns.CustomZone{
 			Domain: zone.GetDomain(),
+			// Issue #108 / ADR-0022 D4b + D6: SearchDomainEnabled
+			// and Source ride alongside the existing fields so
+			// host.go can decide per-zone whether to add Domain
+			// to the OS DNS search list.
+			SearchDomainEnabled: zone.GetSearchDomainEnabled(),
+			Source:              nbdns.CustomZoneSource(zone.GetSource()),
+		}
+		// Backward compatibility: an older management daemon (pre-Phase 2)
+		// sends Source=UNSPECIFIED and SearchDomainEnabled=false (zero
+		// values) for every zone. The only zone such a daemon emits is
+		// the synthetic peer zone, which legacy clients add to the OS
+		// search list unconditionally. Preserve that — operators
+		// upgrading clients before management would otherwise lose
+		// bare-name peer resolution (`dig myhost` → `myhost.<dnsDomain>`).
+		// New management always sets Source=PEERS or Source=USER plus an
+		// explicit SearchDomainEnabled, so this branch fires only when
+		// the field is genuinely absent.
+		if dnsZone.Source == nbdns.CustomZoneSourceUnspecified {
+			dnsZone.SearchDomainEnabled = true
 		}
 		for _, record := range zone.Records {
 			dnsRecord := nbdns.SimpleRecord{

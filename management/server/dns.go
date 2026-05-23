@@ -239,8 +239,10 @@ func toProtocolDNSConfig(update nbdns.Config, cache *DNSConfigCache) *proto.DNSC
 // Helper function to convert nbdns.CustomZone to proto.CustomZone
 func convertToProtoCustomZone(zone nbdns.CustomZone) *proto.CustomZone {
 	protoZone := &proto.CustomZone{
-		Domain:  zone.Domain,
-		Records: make([]*proto.SimpleRecord, 0, len(zone.Records)),
+		Domain:              zone.Domain,
+		SearchDomainEnabled: zone.SearchDomainEnabled,
+		Source:              proto.CustomZoneSource(zone.Source),
+		Records:             make([]*proto.SimpleRecord, 0, len(zone.Records)),
 	}
 	for _, record := range zone.Records {
 		protoZone.Records = append(protoZone.Records, &proto.SimpleRecord{

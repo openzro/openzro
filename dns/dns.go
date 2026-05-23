@@ -33,12 +33,55 @@ type Config struct {
 	CustomZones []CustomZone
 }
 
-// CustomZone represents a custom zone to be resolved by the dns server
+// CustomZoneSource enumerates the origin of a CustomZone — see
+// ADR-0022 D4b. Mirrors the protobuf enum
+// proto.CustomZoneSource. UNSPECIFIED is the zero value and the
+// default for older management daemons that don't set the field;
+// new agents treat UNSPECIFIED as PEERS (legacy behavior).
+type CustomZoneSource int32
+
+const (
+	// CustomZoneSourceUnspecified is the wire-default for older
+	// daemons that don't populate the field. Treated as PEERS by
+	// new agents.
+	CustomZoneSourceUnspecified CustomZoneSource = 0
+	// CustomZoneSourcePeers — the synthetic peer DNS zone built
+	// from peer.DNSLabel + ExtraDNSLabels.
+	CustomZoneSourcePeers CustomZoneSource = 1
+	// CustomZoneSourceUser — an operator-managed zone created via
+	// the /api/dns/zones endpoints (issue #108).
+	CustomZoneSourceUser CustomZoneSource = 2
+)
+
+// CustomZone represents a custom zone to be resolved by the dns
+// server. Two source kinds today (see CustomZoneSource):
+//
+//   - PEERS: the synthetic zone openZro builds from the account's
+//     peer DNS labels; one apex (`<dnsDomain>`), one A record per
+//     peer. Always SearchDomainEnabled=true.
+//   - USER: operator-managed zones distributed via the dashboard.
+//     SearchDomainEnabled is per-zone (default false).
+//
+// The agent does not need to distinguish on resolution — both
+// sources flow through the same buildLocalHandlerUpdate path. The
+// Source field is informational (telemetry, dashboard UX); the
+// resolution-time behavior is driven by Domain/Records/
+// SearchDomainEnabled.
 type CustomZone struct {
 	// Domain is the zone's domain
 	Domain string
 	// Records custom zone records
 	Records []SimpleRecord
+	// SearchDomainEnabled — when true, the agent appends Domain to
+	// the OS DNS search list. The synthetic peer zone is emitted
+	// with this = true (preserves bare-name peer resolution like
+	// `dig myhost`). User-managed zones default to false; the
+	// operator opts in per zone via the API.
+	SearchDomainEnabled bool
+	// Source identifies whether the zone is the synthetic peer
+	// zone (PEERS) or operator-managed (USER). Informational; see
+	// the struct doc above.
+	Source CustomZoneSource
 }
 
 // SimpleRecord provides a simple DNS record specification for CNAME, A and AAAA records

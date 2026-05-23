@@ -57,14 +57,23 @@ type DNSZone struct {
 	// distribution. A disabled zone is not distributed to peers even
 	// if it has records. An enabled zone with zero records is also not
 	// distributed (ADR-0022 D5 empty-zone semantics).
-	Enabled bool `gorm:"default:true"`
+	//
+	// NO `gorm:"default:true"` tag — GORM treats the Go zero-value
+	// (false) as "absent, apply default" and would overwrite explicit
+	// disables. The default-when-omitted contract is enforced at the
+	// API layer (dashboard/src/... + fromAPIZoneRequest in
+	// management/server/http/handlers/dns/zones_handler.go) and at
+	// create time in the manager (CreateDNSZone).
+	Enabled bool
 
 	// SearchDomainEnabled controls whether the agent appends this
 	// zone's Domain to the OS DNS search list (see ADR-0022 D6).
 	// Defaults false for user-managed zones; the synthetic peer zone
 	// (built in Account.GetPeersCustomZone) is emitted with this flag
 	// = true to preserve the current peer-name search behavior.
-	SearchDomainEnabled bool `gorm:"default:false"`
+	// No `gorm:"default:false"` tag for the same reason as Enabled
+	// above — the Go zero-value IS false; the tag would be a no-op.
+	SearchDomainEnabled bool
 
 	// Records is the set of A / AAAA / CNAME records under the zone
 	// apex, loaded by the store as a separate JOIN. Each record's

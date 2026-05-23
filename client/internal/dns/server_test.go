@@ -145,8 +145,12 @@ func TestUpdateDNSServer(t *testing.T) {
 				ServiceEnable: true,
 				CustomZones: []nbdns.CustomZone{
 					{
-						Domain:  "openzro.cloud",
-						Records: zoneRecords,
+						// Legacy synthetic peer zone shape — see note
+						// at line ~520 / issue #108.
+						Domain:              "openzro.cloud",
+						Records:             zoneRecords,
+						SearchDomainEnabled: true,
+						Source:              nbdns.CustomZoneSourcePeers,
 					},
 				},
 				NameServerGroups: []*nbdns.NameServerGroup{
@@ -195,8 +199,12 @@ func TestUpdateDNSServer(t *testing.T) {
 				ServiceEnable: true,
 				CustomZones: []nbdns.CustomZone{
 					{
-						Domain:  "openzro.cloud",
-						Records: zoneRecords,
+						// Legacy synthetic peer zone shape — see note
+						// at line ~520 / issue #108.
+						Domain:              "openzro.cloud",
+						Records:             zoneRecords,
+						SearchDomainEnabled: true,
+						Source:              nbdns.CustomZoneSourcePeers,
 					},
 				},
 				NameServerGroups: []*nbdns.NameServerGroup{
@@ -238,8 +246,12 @@ func TestUpdateDNSServer(t *testing.T) {
 				ServiceEnable: true,
 				CustomZones: []nbdns.CustomZone{
 					{
-						Domain:  "openzro.cloud",
-						Records: zoneRecords,
+						// Legacy synthetic peer zone shape — see note
+						// at line ~520 / issue #108.
+						Domain:              "openzro.cloud",
+						Records:             zoneRecords,
+						SearchDomainEnabled: true,
+						Source:              nbdns.CustomZoneSourcePeers,
 					},
 				},
 				NameServerGroups: []*nbdns.NameServerGroup{
@@ -260,8 +272,12 @@ func TestUpdateDNSServer(t *testing.T) {
 				ServiceEnable: true,
 				CustomZones: []nbdns.CustomZone{
 					{
-						Domain:  "openzro.cloud",
-						Records: zoneRecords,
+						// Legacy synthetic peer zone shape — see note
+						// at line ~520 / issue #108.
+						Domain:              "openzro.cloud",
+						Records:             zoneRecords,
+						SearchDomainEnabled: true,
+						Source:              nbdns.CustomZoneSourcePeers,
 					},
 				},
 				NameServerGroups: []*nbdns.NameServerGroup{
@@ -282,7 +298,11 @@ func TestUpdateDNSServer(t *testing.T) {
 				ServiceEnable: true,
 				CustomZones: []nbdns.CustomZone{
 					{
-						Domain: "openzro.cloud",
+						// Legacy synthetic peer zone shape — see note
+						// at line ~520 / issue #108.
+						Domain:              "openzro.cloud",
+						SearchDomainEnabled: true,
+						Source:              nbdns.CustomZoneSourcePeers,
 					},
 				},
 				NameServerGroups: []*nbdns.NameServerGroup{
@@ -519,8 +539,16 @@ func TestDNSFakeResolverHandleUpdates(t *testing.T) {
 		ServiceEnable: true,
 		CustomZones: []nbdns.CustomZone{
 			{
-				Domain:  "openzro.cloud",
-				Records: zoneRecords,
+				// Issue #108 / ADR-0022 D6: these tests model the
+				// legacy synthetic peer zone, which always rode in
+				// the OS search list. After Phase 2 the agent
+				// honors SearchDomainEnabled per zone; the legacy
+				// behavior is preserved by setting the flag true
+				// here (and Source=PEERS for documentation).
+				Domain:              "openzro.cloud",
+				Records:             zoneRecords,
+				SearchDomainEnabled: true,
+				Source:              nbdns.CustomZoneSourcePeers,
 			},
 		},
 		NameServerGroups: []*nbdns.NameServerGroup{
@@ -750,8 +778,16 @@ func TestDNSPermanent_updateUpstream(t *testing.T) {
 		ServiceEnable: true,
 		CustomZones: []nbdns.CustomZone{
 			{
-				Domain:  "openzro.cloud",
-				Records: zoneRecords,
+				// Issue #108 / ADR-0022 D6: these tests model the
+				// legacy synthetic peer zone, which always rode in
+				// the OS search list. After Phase 2 the agent
+				// honors SearchDomainEnabled per zone; the legacy
+				// behavior is preserved by setting the flag true
+				// here (and Source=PEERS for documentation).
+				Domain:              "openzro.cloud",
+				Records:             zoneRecords,
+				SearchDomainEnabled: true,
+				Source:              nbdns.CustomZoneSourcePeers,
 			},
 		},
 		NameServerGroups: []*nbdns.NameServerGroup{
@@ -790,8 +826,16 @@ func TestDNSPermanent_updateUpstream(t *testing.T) {
 		ServiceEnable: true,
 		CustomZones: []nbdns.CustomZone{
 			{
-				Domain:  "openzro.cloud",
-				Records: zoneRecords,
+				// Issue #108 / ADR-0022 D6: these tests model the
+				// legacy synthetic peer zone, which always rode in
+				// the OS search list. After Phase 2 the agent
+				// honors SearchDomainEnabled per zone; the legacy
+				// behavior is preserved by setting the flag true
+				// here (and Source=PEERS for documentation).
+				Domain:              "openzro.cloud",
+				Records:             zoneRecords,
+				SearchDomainEnabled: true,
+				Source:              nbdns.CustomZoneSourcePeers,
 			},
 		},
 		NameServerGroups: []*nbdns.NameServerGroup{},
@@ -842,8 +886,16 @@ func TestDNSPermanent_matchOnly(t *testing.T) {
 		ServiceEnable: true,
 		CustomZones: []nbdns.CustomZone{
 			{
-				Domain:  "openzro.cloud",
-				Records: zoneRecords,
+				// Issue #108 / ADR-0022 D6: these tests model the
+				// legacy synthetic peer zone, which always rode in
+				// the OS search list. After Phase 2 the agent
+				// honors SearchDomainEnabled per zone; the legacy
+				// behavior is preserved by setting the flag true
+				// here (and Source=PEERS for documentation).
+				Domain:              "openzro.cloud",
+				Records:             zoneRecords,
+				SearchDomainEnabled: true,
+				Source:              nbdns.CustomZoneSourcePeers,
 			},
 		},
 		NameServerGroups: []*nbdns.NameServerGroup{
@@ -1471,7 +1523,8 @@ func TestExtraDomains(t *testing.T) {
 			initialConfig: nbdns.Config{
 				ServiceEnable: true,
 				CustomZones: []nbdns.CustomZone{
-					{Domain: "config.example.com"},
+					// Legacy synthetic-zone shape — see note above.
+					{Domain: "config.example.com", SearchDomainEnabled: true, Source: nbdns.CustomZoneSourcePeers},
 				},
 			},
 			expectedDomains: []string{
@@ -1490,7 +1543,8 @@ func TestExtraDomains(t *testing.T) {
 			initialConfig: nbdns.Config{
 				ServiceEnable: true,
 				CustomZones: []nbdns.CustomZone{
-					{Domain: "config.example.com"},
+					// Legacy synthetic-zone shape — see note above.
+					{Domain: "config.example.com", SearchDomainEnabled: true, Source: nbdns.CustomZoneSourcePeers},
 				},
 			},
 			registerDomains: []domain.List{
@@ -1512,8 +1566,9 @@ func TestExtraDomains(t *testing.T) {
 			initialConfig: nbdns.Config{
 				ServiceEnable: true,
 				CustomZones: []nbdns.CustomZone{
-					{Domain: "config.example.com"},
-					{Domain: "overlap.example.com"},
+					// Legacy synthetic-zone shape — see note above.
+					{Domain: "config.example.com", SearchDomainEnabled: true, Source: nbdns.CustomZoneSourcePeers},
+					{Domain: "overlap.example.com", SearchDomainEnabled: true, Source: nbdns.CustomZoneSourcePeers},
 				},
 			},
 			registerDomains: []domain.List{
@@ -1534,7 +1589,8 @@ func TestExtraDomains(t *testing.T) {
 			initialConfig: nbdns.Config{
 				ServiceEnable: true,
 				CustomZones: []nbdns.CustomZone{
-					{Domain: "config.example.com"},
+					// Legacy synthetic-zone shape — see note above.
+					{Domain: "config.example.com", SearchDomainEnabled: true, Source: nbdns.CustomZoneSourcePeers},
 				},
 			},
 			registerDomains: []domain.List{
@@ -1560,7 +1616,8 @@ func TestExtraDomains(t *testing.T) {
 			initialConfig: nbdns.Config{
 				ServiceEnable: true,
 				CustomZones: []nbdns.CustomZone{
-					{Domain: "config.example.com"},
+					// Legacy synthetic-zone shape — see note above.
+					{Domain: "config.example.com", SearchDomainEnabled: true, Source: nbdns.CustomZoneSourcePeers},
 				},
 			},
 			registerDomains: []domain.List{
@@ -1588,7 +1645,8 @@ func TestExtraDomains(t *testing.T) {
 			initialConfig: nbdns.Config{
 				ServiceEnable: true,
 				CustomZones: []nbdns.CustomZone{
-					{Domain: "config.example.com"},
+					// Legacy synthetic-zone shape — see note above.
+					{Domain: "config.example.com", SearchDomainEnabled: true, Source: nbdns.CustomZoneSourcePeers},
 				},
 			},
 			registerDomains: []domain.List{
@@ -1597,8 +1655,9 @@ func TestExtraDomains(t *testing.T) {
 			finalConfig: nbdns.Config{
 				ServiceEnable: true,
 				CustomZones: []nbdns.CustomZone{
-					{Domain: "config.example.com"},
-					{Domain: "newconfig.example.com"},
+					// Legacy synthetic-zone shape — see note above.
+					{Domain: "config.example.com", SearchDomainEnabled: true, Source: nbdns.CustomZoneSourcePeers},
+					{Domain: "newconfig.example.com", SearchDomainEnabled: true, Source: nbdns.CustomZoneSourcePeers},
 				},
 			},
 			expectedDomains: []string{
@@ -1618,8 +1677,9 @@ func TestExtraDomains(t *testing.T) {
 			initialConfig: nbdns.Config{
 				ServiceEnable: true,
 				CustomZones: []nbdns.CustomZone{
-					{Domain: "config.example.com"},
-					{Domain: "protected.example.com"},
+					// Legacy synthetic-zone shape — see note above.
+					{Domain: "config.example.com", SearchDomainEnabled: true, Source: nbdns.CustomZoneSourcePeers},
+					{Domain: "protected.example.com", SearchDomainEnabled: true, Source: nbdns.CustomZoneSourcePeers},
 				},
 			},
 			registerDomains: []domain.List{
@@ -1846,7 +1906,8 @@ func TestUpdateConfigWithExistingExtraDomains(t *testing.T) {
 	initialConfig := nbdns.Config{
 		ServiceEnable: true,
 		CustomZones: []nbdns.CustomZone{
-			{Domain: "config.example.com"},
+			// Legacy synthetic-zone shape — see note above.
+			{Domain: "config.example.com", SearchDomainEnabled: true, Source: nbdns.CustomZoneSourcePeers},
 		},
 	}
 	err := server.applyConfiguration(initialConfig)
@@ -1863,8 +1924,9 @@ func TestUpdateConfigWithExistingExtraDomains(t *testing.T) {
 	updatedConfig := nbdns.Config{
 		ServiceEnable: true,
 		CustomZones: []nbdns.CustomZone{
-			{Domain: "config.example.com"},
-			{Domain: "extra.example.com"},
+			// Legacy synthetic-zone shape — see note above.
+			{Domain: "config.example.com", SearchDomainEnabled: true, Source: nbdns.CustomZoneSourcePeers},
+			{Domain: "extra.example.com", SearchDomainEnabled: true, Source: nbdns.CustomZoneSourcePeers},
 		},
 	}
 	err = server.applyConfiguration(updatedConfig)
@@ -1932,7 +1994,8 @@ func TestDomainCaseHandling(t *testing.T) {
 	config := nbdns.Config{
 		ServiceEnable: true,
 		CustomZones: []nbdns.CustomZone{
-			{Domain: "config.example.com"},
+			// Legacy synthetic-zone shape — see note above.
+			{Domain: "config.example.com", SearchDomainEnabled: true, Source: nbdns.CustomZoneSourcePeers},
 		},
 	}
 	err := server.applyConfiguration(config)

@@ -110,7 +110,19 @@ func dnsConfigToHostDNSConfig(dnsConfig nbdns.Config, ip netip.Addr, port int) H
 	}
 
 	for _, customZone := range dnsConfig.CustomZones {
-		matchOnly := strings.HasSuffix(customZone.Domain, ipv4ReverseZone) || strings.HasSuffix(customZone.Domain, ipv6ReverseZone)
+		// MatchOnly=true means the OS resolver routes queries for the
+		// zone to us but does NOT add the zone to its bare-name
+		// search list. We force MatchOnly for reverse-DNS zones
+		// (PTR lookups should never bare-name-resolve) and for any
+		// zone the operator explicitly opted out of via
+		// SearchDomainEnabled=false (issue #108 / ADR-0022 D6).
+		//
+		// Phase-2 backward compat: engine.toDNSConfig (issue #108)
+		// already normalizes Source=UNSPECIFIED → SearchDomainEnabled=true
+		// to preserve legacy management behavior, so we only have to
+		// honor the field as-is here.
+		isReverse := strings.HasSuffix(customZone.Domain, ipv4ReverseZone) || strings.HasSuffix(customZone.Domain, ipv6ReverseZone)
+		matchOnly := isReverse || !customZone.SearchDomainEnabled
 		config.Domains = append(config.Domains, DomainConfig{
 			Domain:    strings.ToLower(dns.Fqdn(customZone.Domain)),
 			MatchOnly: matchOnly,
