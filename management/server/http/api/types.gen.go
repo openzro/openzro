@@ -22,6 +22,20 @@ const (
 	AccountExtraSettingsNetworkTrafficDefaultRangeN7d  AccountExtraSettingsNetworkTrafficDefaultRange = "7d"
 )
 
+// Defines values for DNSRecordType.
+const (
+	DNSRecordTypeA     DNSRecordType = "A"
+	DNSRecordTypeAAAA  DNSRecordType = "AAAA"
+	DNSRecordTypeCNAME DNSRecordType = "CNAME"
+)
+
+// Defines values for DNSRecordRequestType.
+const (
+	DNSRecordRequestTypeA     DNSRecordRequestType = "A"
+	DNSRecordRequestTypeAAAA  DNSRecordRequestType = "AAAA"
+	DNSRecordRequestTypeCNAME DNSRecordRequestType = "CNAME"
+)
+
 // Defines values for EventActivityCode.
 const (
 	EventActivityCodeAccountCreate                            EventActivityCode = "account.create"
@@ -510,10 +524,107 @@ type CreateSetupKeyRequest struct {
 	UsageLimit int `json:"usage_limit"`
 }
 
+// DNSRecord defines model for DNSRecord.
+type DNSRecord struct {
+	// Content Record value (IPv4 for A, IPv6 for AAAA, hostname for CNAME)
+	Content string `json:"content"`
+
+	// Id Record ID
+	Id string `json:"id"`
+
+	// Name Record FQDN within (or equal to) the zone domain
+	Name string `json:"name"`
+
+	// Ttl Time to live in seconds. Defaults to 300 when omitted.
+	// Must be ≥ 1 — a TTL of 0 would tell every resolver to bypass
+	// the cache, defeating the purpose of an authoritative private
+	// zone. If you genuinely need uncached resolution, raise an
+	// ADR amendment rather than setting TTL=0 here.
+	Ttl *int `json:"ttl,omitempty"`
+
+	// Type Record type (v1 supports A, AAAA, CNAME)
+	Type DNSRecordType `json:"type"`
+}
+
+// DNSRecordType Record type (v1 supports A, AAAA, CNAME)
+type DNSRecordType string
+
+// DNSRecordRequest A single A / AAAA / CNAME record under a DNS zone. The record name
+// MUST be the zone apex or a subdomain of the zone domain. A
+// hostname with a CNAME may NOT also have an A or AAAA (RFC 1034
+// §3.6.2) — enforced server-side.
+type DNSRecordRequest struct {
+	// Content Record value (IPv4 for A, IPv6 for AAAA, hostname for CNAME)
+	Content string `json:"content"`
+
+	// Name Record FQDN within (or equal to) the zone domain
+	Name string `json:"name"`
+
+	// Ttl Time to live in seconds. Defaults to 300 when omitted.
+	// Must be ≥ 1 — a TTL of 0 would tell every resolver to bypass
+	// the cache, defeating the purpose of an authoritative private
+	// zone. If you genuinely need uncached resolution, raise an
+	// ADR amendment rather than setting TTL=0 here.
+	Ttl *int `json:"ttl,omitempty"`
+
+	// Type Record type (v1 supports A, AAAA, CNAME)
+	Type DNSRecordRequestType `json:"type"`
+}
+
+// DNSRecordRequestType Record type (v1 supports A, AAAA, CNAME)
+type DNSRecordRequestType string
+
 // DNSSettings defines model for DNSSettings.
 type DNSSettings struct {
 	// DisabledManagementGroups Groups whose DNS management is disabled
 	DisabledManagementGroups []string `json:"disabled_management_groups"`
+}
+
+// DNSZone defines model for DNSZone.
+type DNSZone struct {
+	// DistributionGroups Peer group IDs that receive this zone (≥ 1 required)
+	DistributionGroups []string `json:"distribution_groups"`
+
+	// Domain FQDN apex of the zone (immutable after creation)
+	Domain string `json:"domain"`
+
+	// EnableSearchDomain Append zone domain to peer DNS search list (default false)
+	EnableSearchDomain *bool `json:"enable_search_domain,omitempty"`
+
+	// Enabled When false, the zone is not distributed to peers
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// Id DNS zone ID
+	Id string `json:"id"`
+
+	// Name Human-readable zone name (1-255 chars)
+	Name string `json:"name"`
+
+	// Records Records currently registered under the zone
+	Records []DNSRecord `json:"records"`
+}
+
+// DNSZoneRequest Operator-managed authoritative DNS zone, distributed to peers
+// in the listed groups. Resolution on the agent is authoritative
+// for the zone (NXDOMAIN on miss within the zone — see ADR-0022
+// D1). Domain is immutable after creation; a PUT that changes it
+// is rejected. The zone must not overlap (in either direction)
+// with the peer DNS domain.
+type DNSZoneRequest struct {
+	// DistributionGroups Peer group IDs that receive this zone (≥ 1 required)
+	DistributionGroups []string `json:"distribution_groups"`
+
+	// Domain FQDN apex of the zone (immutable after creation)
+	Domain string `json:"domain"`
+
+	// EnableSearchDomain Append zone domain to peer DNS search list (default false)
+	EnableSearchDomain *bool `json:"enable_search_domain,omitempty"`
+
+	// Enabled When false, the zone is not distributed to peers
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// Name Human-readable zone name (1-255 chars)
+	Name string `json:"name"`
 }
 
 // EndpointSecurityCheck Posture check that delegates compliance to a configured MDM/EDR provider (Intune, SentinelOne, Huntress).
@@ -2072,6 +2183,18 @@ type PutApiDnsNameserversNsgroupIdJSONRequestBody = NameserverGroupRequest
 
 // PutApiDnsSettingsJSONRequestBody defines body for PutApiDnsSettings for application/json ContentType.
 type PutApiDnsSettingsJSONRequestBody = DNSSettings
+
+// PostApiDnsZonesJSONRequestBody defines body for PostApiDnsZones for application/json ContentType.
+type PostApiDnsZonesJSONRequestBody = DNSZoneRequest
+
+// PutApiDnsZonesZoneIdJSONRequestBody defines body for PutApiDnsZonesZoneId for application/json ContentType.
+type PutApiDnsZonesZoneIdJSONRequestBody = DNSZoneRequest
+
+// PostApiDnsZonesZoneIdRecordsJSONRequestBody defines body for PostApiDnsZonesZoneIdRecords for application/json ContentType.
+type PostApiDnsZonesZoneIdRecordsJSONRequestBody = DNSRecordRequest
+
+// PutApiDnsZonesZoneIdRecordsRecordIdJSONRequestBody defines body for PutApiDnsZonesZoneIdRecordsRecordId for application/json ContentType.
+type PutApiDnsZonesZoneIdRecordsRecordIdJSONRequestBody = DNSRecordRequest
 
 // PostApiGroupsJSONRequestBody defines body for PostApiGroups for application/json ContentType.
 type PostApiGroupsJSONRequestBody = GroupRequest

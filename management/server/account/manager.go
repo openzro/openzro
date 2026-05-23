@@ -128,6 +128,19 @@ type Manager interface {
 	SaveNameServerGroup(ctx context.Context, accountID, userID string, nsGroupToSave *nbdns.NameServerGroup) error
 	DeleteNameServerGroup(ctx context.Context, accountID, nsGroupID, userID string) error
 	ListNameServerGroups(ctx context.Context, accountID string, userID string) ([]*nbdns.NameServerGroup, error)
+
+	// Custom DNS Zones (issue #108, ADR-0022 Phase 1).
+	GetDNSZone(ctx context.Context, accountID, userID, zoneID string) (*types.DNSZone, error)
+	ListDNSZones(ctx context.Context, accountID, userID string) ([]*types.DNSZone, error)
+	CreateDNSZone(ctx context.Context, accountID, userID string, zone *types.DNSZone) (*types.DNSZone, error)
+	SaveDNSZone(ctx context.Context, accountID, userID string, zoneToSave *types.DNSZone) (*types.DNSZone, error)
+	DeleteDNSZone(ctx context.Context, accountID, zoneID, userID string) error
+	GetDNSRecord(ctx context.Context, accountID, userID, zoneID, recordID string) (*types.DNSRecord, error)
+	ListDNSRecords(ctx context.Context, accountID, userID, zoneID string) ([]*types.DNSRecord, error)
+	CreateDNSRecord(ctx context.Context, accountID, userID, zoneID string, record *types.DNSRecord) (*types.DNSRecord, error)
+	SaveDNSRecord(ctx context.Context, accountID, userID, zoneID string, recordToSave *types.DNSRecord) (*types.DNSRecord, error)
+	DeleteDNSRecord(ctx context.Context, accountID, zoneID, recordID, userID string) error
+
 	GetDNSDomain(settings *types.Settings) string
 	StoreEvent(ctx context.Context, initiatorID, targetID, accountID string, activityID activity.ActivityDescriber, meta map[string]any)
 	GetEvents(ctx context.Context, accountID, userID string) ([]*activity.Event, error)

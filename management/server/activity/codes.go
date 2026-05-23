@@ -220,6 +220,17 @@ const (
 	// reserved per ADR-0006, so this takes 100.
 	ClientUpdateDirectiveUpdated Activity = 100
 
+	// Custom DNS Zones (issue #108, ADR-0022 Phase 1). One code per
+	// (zone, record) × (create, update, delete). The dashboard's
+	// activity log surfaces these so operators audit who shadowed
+	// which public domain when.
+	DNSZoneCreated   Activity = 101
+	DNSZoneUpdated   Activity = 102
+	DNSZoneDeleted   Activity = 103
+	DNSRecordCreated Activity = 104
+	DNSRecordUpdated Activity = 105
+	DNSRecordDeleted Activity = 106
+
 	AccountDeleted Activity = 99999
 )
 
@@ -334,6 +345,13 @@ var activityMap = map[Activity]Code{
 	AdmissionExemptGroupsUpdated: {"Admission exempt groups updated", "account.setting.admission.exempt_groups.update"},
 
 	ClientUpdateDirectiveUpdated: {"Client update directive updated", "account.setting.client_update.update"},
+
+	DNSZoneCreated:   {"DNS zone created", "dns.zone.add"},
+	DNSZoneUpdated:   {"DNS zone updated", "dns.zone.update"},
+	DNSZoneDeleted:   {"DNS zone deleted", "dns.zone.delete"},
+	DNSRecordCreated: {"DNS record created", "dns.record.add"},
+	DNSRecordUpdated: {"DNS record updated", "dns.record.update"},
+	DNSRecordDeleted: {"DNS record deleted", "dns.record.delete"},
 }
 
 // StringCode returns a string code of the activity

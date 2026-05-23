@@ -22,6 +22,7 @@ type dnsSettingsHandler struct {
 func AddEndpoints(accountManager account.Manager, router *mux.Router) {
 	addDNSSettingEndpoint(accountManager, router)
 	addDNSNameserversEndpoint(accountManager, router)
+	addDNSZonesEndpoint(accountManager, router) // issue #108, ADR-0022
 }
 
 func addDNSSettingEndpoint(accountManager account.Manager, router *mux.Router) {

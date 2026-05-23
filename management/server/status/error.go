@@ -179,6 +179,16 @@ func NewNameServerGroupNotFoundError(nsGroupID string) error {
 	return Errorf(NotFound, "nameserver group: %s not found", nsGroupID)
 }
 
+// NewDNSZoneNotFoundError creates a new Error with NotFound type for a missing DNS zone (issue #108).
+func NewDNSZoneNotFoundError(zoneID string) error {
+	return Errorf(NotFound, "dns zone: %s not found", zoneID)
+}
+
+// NewDNSRecordNotFoundError creates a new Error with NotFound type for a missing DNS record (issue #108).
+func NewDNSRecordNotFoundError(recordID string) error {
+	return Errorf(NotFound, "dns record: %s not found", recordID)
+}
+
 // NewNetworkNotFoundError creates a new Error with NotFound type for a missing network.
 func NewNetworkNotFoundError(networkID string) error {
 	return Errorf(NotFound, "network: %s not found", networkID)

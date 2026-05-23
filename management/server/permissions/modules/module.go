@@ -10,6 +10,7 @@ const (
 	Accounts    Module = "accounts"
 	Dns         Module = "dns"
 	Nameservers Module = "nameservers"
+	DNSZones    Module = "dns_zones"
 	Events      Module = "events"
 	Policies    Module = "policies"
 	Routes      Module = "routes"
@@ -26,6 +27,7 @@ var All = map[Module]struct{}{
 	Accounts:    {},
 	Dns:         {},
 	Nameservers: {},
+	DNSZones:    {},
 	Events:      {},
 	Policies:    {},
 	Routes:      {},
