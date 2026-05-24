@@ -475,7 +475,7 @@ func (p *profileMenu) setupManageProfilesItem() {
 // spawnProfileClickHandler launches the per-item click goroutine for
 // a per-profile subItem. The item's IsActive state is re-checked at
 // click time (against p.profilesState) — captured IsActive would go
-// stale across refreshes. Lives until si.ctx is cancelled (i.e. the
+// stale across refreshes. Lives until si.ctx is canceled (i.e. the
 // profile got removed and refresh swept the item).
 func (p *profileMenu) spawnProfileClickHandler(si *subItem, profileName, username string) {
 	go func() {
