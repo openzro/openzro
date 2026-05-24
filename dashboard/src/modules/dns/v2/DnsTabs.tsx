@@ -1,7 +1,7 @@
 "use client";
 
 import classNames from "classnames";
-import { Globe, Settings2 } from "lucide-react";
+import { Globe, Layers, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React from "react";
@@ -35,6 +35,14 @@ export default function DnsTabs() {
       href: "/dns/nameservers",
       match: (p) => p === "/dns/nameservers" || p === "/dns",
       visible: permission.nameservers.read,
+    },
+    {
+      id: "zones",
+      label: "DNS Zones",
+      icon: <Layers size={14} />,
+      href: "/dns/zones",
+      match: (p) => p === "/dns/zones",
+      visible: permission.dns_zones.read,
     },
     {
       id: "settings",

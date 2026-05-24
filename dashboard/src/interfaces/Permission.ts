@@ -12,6 +12,7 @@ export interface Permissions {
     networks: Permission;
     routes: Permission;
     nameservers: Permission;
+    dns_zones: Permission;
     dns: Permission;
 
     users: Permission;

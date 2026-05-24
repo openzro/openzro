@@ -331,6 +331,8 @@ function breadcrumbForPath(path: string | null): OzBreadcrumbSegment[] {
   if (
     path === "/dns" ||
     path === "/dns/nameservers" ||
+    path === "/dns/zones" ||
+    path === "/dns/zone" ||
     path === "/dns/settings"
   ) {
     return [{ label: "Workspace" }, { label: "DNS" }];
