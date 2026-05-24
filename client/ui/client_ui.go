@@ -291,6 +291,16 @@ type serviceClient struct {
 	wNetworks            fyne.Window
 	wProfiles            fyne.Window
 
+	// trayCache memoises the last value applied to each systray
+	// setter that updateStatus / setConnectingStatus /
+	// setDisconnectedStatus / applyUpdateStateLocked would otherwise
+	// re-fire on every 2s tick. Each helper that pushes a property
+	// out to fyne.io/systray checks this cache first and skips the
+	// call when the value is unchanged. Eliminates the repaint-per-
+	// tick that GTK/X11 + KDE Plasma render as visible flicker
+	// (steals the user's hover/selection mid-menu).
+	trayCache trayStateCache
+
 	eventManager *event.Manager
 
 	exitNodeMu           sync.Mutex
@@ -299,6 +309,65 @@ type serviceClient struct {
 	mExitNodeDeselectAll *systray.MenuItem
 	logFile              string
 	wLoginURL            fyne.Window
+}
+
+// trayStateCache holds the last-applied value for every systray
+// property that updateStatus and friends would otherwise unconditionally
+// re-set on every poll tick. `initialized` flips to true after the
+// first apply — before that, every field is treated as "needs apply"
+// regardless of whether the desired value happens to equal the zero
+// value (avoids the "first Enable() never fires because !want==false"
+// trap). mExitTouched does the same job specifically for mExit, which
+// is driven by updateExitNodes outside the connected/connecting/
+// disconnected switch and therefore may be set before applyTray runs.
+//
+// mu is independent from serviceClient.updateIndicationLock because
+// setDisconnectedStatus is called both from inside the lock (normal
+// tick path) and from outside (the RPC-failed branch at the top of
+// updateStatus). A dedicated short-held mutex keeps the cache
+// thread-safe in both call sites.
+type trayStateCache struct {
+	mu            sync.Mutex
+	initialized   bool
+	iconKey       string
+	tooltip       string
+	statusTitle   string
+	statusIconKey string
+	mUpDisabled   bool
+	mDownDisabled bool
+	mNetDisabled  bool
+	mExitDisabled bool
+	mExitTouched  bool
+	updateItems   map[string]updateItemState
+}
+
+// updateItemState memoises one row of the About-submenu update group.
+// applyUpdateMenuItem re-fires SetTitle/SetTooltip/Show/Hide on three
+// items every 2s; without caching that's six SetTitle + three Hide/Show
+// per tick on a typical session.
+type updateItemState struct {
+	shown   bool
+	title   string
+	tooltip string
+}
+
+// desiredTrayState is the full set of properties one branch of
+// updateStatus wants to push to the tray. nil-able fields opt the
+// helper out of touching a given property (used for mExit, which is
+// driven by updateExitNodes outside the connected/connecting/
+// disconnected switch).
+type desiredTrayState struct {
+	iconKey         string
+	iconBytes       []byte
+	iconMacOSBytes  []byte
+	tooltip         string
+	statusTitle     string
+	statusIconKey   string // empty → don't touch
+	statusIconBytes []byte
+	mUpDisabled     bool
+	mDownDisabled   bool
+	mNetDisabled    bool
+	mExitDisabled   *bool // nil → leave alone
 }
 
 type menuHandler struct {
@@ -712,17 +781,20 @@ func (s *serviceClient) updateStatus() error {
 		case status.Status == string(internal.StatusConnected):
 			s.connected = true
 			s.sendNotification = true
-			if s.isUpdateIconActive {
-				systray.SetTemplateIcon(iconUpdateConnectedMacOS, s.icUpdateConnected)
-			} else {
-				systray.SetTemplateIcon(iconConnectedMacOS, s.icConnected)
-			}
-			systray.SetTooltip("Openzro (Connected)")
-			s.mStatus.SetTitle("Connected")
-			s.mStatus.SetIcon(s.icConnectedDot)
-			s.mUp.Disable()
-			s.mDown.Enable()
-			s.mNetworks.Enable()
+			iconKey, iconBytes, iconMacOS := s.connectedIcon()
+			s.applyTray(desiredTrayState{
+				iconKey:         iconKey,
+				iconBytes:       iconBytes,
+				iconMacOSBytes:  iconMacOS,
+				tooltip:         "Openzro (Connected)",
+				statusTitle:     "Connected",
+				statusIconKey:   "connected-dot",
+				statusIconBytes: s.icConnectedDot,
+				mUpDisabled:     true,
+				mDownDisabled:   false,
+				mNetDisabled:    false,
+				// mExit driven by updateExitNodes goroutine below.
+			})
 			go s.updateExitNodes()
 		case status.Status == string(internal.StatusConnecting):
 			s.setConnectingStatus()
@@ -764,30 +836,137 @@ func (s *serviceClient) updateStatus() error {
 
 func (s *serviceClient) setDisconnectedStatus() {
 	s.connected = false
-	if s.isUpdateIconActive {
-		systray.SetTemplateIcon(iconUpdateDisconnectedMacOS, s.icUpdateDisconnected)
-	} else {
-		systray.SetTemplateIcon(iconDisconnectedMacOS, s.icDisconnected)
-	}
-	systray.SetTooltip("Openzro (Disconnected)")
-	s.mStatus.SetTitle("Disconnected")
-	s.mStatus.SetIcon(s.icDisconnectedDot)
-	s.mDown.Disable()
-	s.mUp.Enable()
-	s.mNetworks.Disable()
-	s.mExitNode.Disable()
+	exitDisabled := true
+	iconKey, iconBytes, iconMacOS := s.disconnectedIcon()
+	s.applyTray(desiredTrayState{
+		iconKey:         iconKey,
+		iconBytes:       iconBytes,
+		iconMacOSBytes:  iconMacOS,
+		tooltip:         "Openzro (Disconnected)",
+		statusTitle:     "Disconnected",
+		statusIconKey:   "disconnected-dot",
+		statusIconBytes: s.icDisconnectedDot,
+		mUpDisabled:     false,
+		mDownDisabled:   true,
+		mNetDisabled:    true,
+		mExitDisabled:   &exitDisabled,
+	})
 	go s.updateExitNodes()
 }
 
 func (s *serviceClient) setConnectingStatus() {
 	s.connected = false
-	systray.SetTemplateIcon(iconConnectingMacOS, s.icConnecting)
-	systray.SetTooltip("Openzro (Connecting)")
-	s.mStatus.SetTitle("Connecting")
-	s.mUp.Disable()
-	s.mDown.Enable()
-	s.mNetworks.Disable()
-	s.mExitNode.Disable()
+	exitDisabled := true
+	s.applyTray(desiredTrayState{
+		iconKey:        "connecting",
+		iconBytes:      s.icConnecting,
+		iconMacOSBytes: iconConnectingMacOS,
+		tooltip:        "Openzro (Connecting)",
+		statusTitle:    "Connecting",
+		// statusIconKey left empty → don't touch mStatus.SetIcon.
+		// The pre-refactor code never set the dot icon on
+		// Connecting either, so behavior is preserved.
+		mUpDisabled:   true,
+		mDownDisabled: false,
+		mNetDisabled:  true,
+		mExitDisabled: &exitDisabled,
+	})
+}
+
+// connectedIcon returns the cache key + byte slices for the connected
+// icon, branching on whether an update is currently available.
+func (s *serviceClient) connectedIcon() (string, []byte, []byte) {
+	if s.isUpdateIconActive {
+		return "connected-update", s.icUpdateConnected, iconUpdateConnectedMacOS
+	}
+	return "connected", s.icConnected, iconConnectedMacOS
+}
+
+// disconnectedIcon returns the cache key + byte slices for the
+// disconnected icon, branching on whether an update is currently
+// available.
+func (s *serviceClient) disconnectedIcon() (string, []byte, []byte) {
+	if s.isUpdateIconActive {
+		return "disconnected-update", s.icUpdateDisconnected, iconUpdateDisconnectedMacOS
+	}
+	return "disconnected", s.icDisconnected, iconDisconnectedMacOS
+}
+
+// applyTray pushes `desired` to the systray, skipping any setter
+// whose value matches the last-applied entry in s.trayCache. Safe to
+// call from any goroutine; the cache has its own mutex independent
+// of serviceClient.updateIndicationLock.
+func (s *serviceClient) applyTray(d desiredTrayState) {
+	s.trayCache.mu.Lock()
+	defer s.trayCache.mu.Unlock()
+
+	first := !s.trayCache.initialized
+
+	if first || s.trayCache.iconKey != d.iconKey {
+		systray.SetTemplateIcon(d.iconMacOSBytes, d.iconBytes)
+		s.trayCache.iconKey = d.iconKey
+	}
+	if first || s.trayCache.tooltip != d.tooltip {
+		systray.SetTooltip(d.tooltip)
+		s.trayCache.tooltip = d.tooltip
+	}
+	if first || s.trayCache.statusTitle != d.statusTitle {
+		s.mStatus.SetTitle(d.statusTitle)
+		s.trayCache.statusTitle = d.statusTitle
+	}
+	if d.statusIconKey != "" && (first || s.trayCache.statusIconKey != d.statusIconKey) {
+		s.mStatus.SetIcon(d.statusIconBytes)
+		s.trayCache.statusIconKey = d.statusIconKey
+	}
+	if first || s.trayCache.mUpDisabled != d.mUpDisabled {
+		setMenuItemEnabled(s.mUp, !d.mUpDisabled)
+		s.trayCache.mUpDisabled = d.mUpDisabled
+	}
+	if first || s.trayCache.mDownDisabled != d.mDownDisabled {
+		setMenuItemEnabled(s.mDown, !d.mDownDisabled)
+		s.trayCache.mDownDisabled = d.mDownDisabled
+	}
+	if first || s.trayCache.mNetDisabled != d.mNetDisabled {
+		setMenuItemEnabled(s.mNetworks, !d.mNetDisabled)
+		s.trayCache.mNetDisabled = d.mNetDisabled
+	}
+	if d.mExitDisabled != nil {
+		want := *d.mExitDisabled
+		if !s.trayCache.mExitTouched || s.trayCache.mExitDisabled != want {
+			setMenuItemEnabled(s.mExitNode, !want)
+			s.trayCache.mExitDisabled = want
+			s.trayCache.mExitTouched = true
+		}
+	}
+
+	s.trayCache.initialized = true
+}
+
+// setMenuItemEnabled is a tiny wrapper that maps the bool we cache
+// (enabled? true/false) to the two distinct systray.MenuItem methods.
+func setMenuItemEnabled(item *systray.MenuItem, enabled bool) {
+	if enabled {
+		item.Enable()
+	} else {
+		item.Disable()
+	}
+}
+
+// setExitNodeEnabledCached toggles mExitNode via the shared trayCache
+// so the goroutine spawned by updateExitNodes (re-fired every 2s
+// during a connected session) only pushes Enable/Disable when the
+// desired state actually flipped. Without the cache the unconditional
+// Enable/Disable at the end of updateExitNodes repaints the menu on
+// every tick and steals the user's mouse hover.
+func (s *serviceClient) setExitNodeEnabledCached(enabled bool) {
+	s.trayCache.mu.Lock()
+	defer s.trayCache.mu.Unlock()
+	want := !enabled
+	if !s.trayCache.mExitTouched || s.trayCache.mExitDisabled != want {
+		setMenuItemEnabled(s.mExitNode, enabled)
+		s.trayCache.mExitDisabled = want
+		s.trayCache.mExitTouched = true
+	}
 }
 
 func (s *serviceClient) onTrayReady() {
@@ -1118,9 +1297,30 @@ func protoConfigToConfig(cfg *proto.GetConfigResponse) *profilemanager.Config {
 func (s *serviceClient) applyUpdateStateLocked(us *proto.UpdateState) {
 	s.isUpdateIconActive = us.GetAvailable()
 	v := decideUpdateMenu(runtime.GOOS, us)
-	applyUpdateMenuItem(s.mUpdateStatus, v.statusShown, v.statusTitle, v.statusTooltip)
-	applyUpdateMenuItem(s.mInstallUpdate, v.installShown, v.installTitle, v.installTooltip)
-	applyUpdateMenuItem(s.mDownloadUpdate, v.downloadShown, v.downloadTitle, v.downloadTooltip)
+	s.applyUpdateMenuItemCached("status", s.mUpdateStatus, v.statusShown, v.statusTitle, v.statusTooltip)
+	s.applyUpdateMenuItemCached("install", s.mInstallUpdate, v.installShown, v.installTitle, v.installTooltip)
+	s.applyUpdateMenuItemCached("download", s.mDownloadUpdate, v.downloadShown, v.downloadTitle, v.downloadTooltip)
+}
+
+// applyUpdateMenuItemCached delegates to applyUpdateMenuItem only when
+// the desired (shown/title/tooltip) tuple differs from the last value
+// pushed to that item. Stops the About-submenu update group from
+// flickering on every 2s poll tick (3 items × Hide/Show + SetTitle +
+// SetTooltip per tick = a lot of repaint noise on GTK/X11).
+func (s *serviceClient) applyUpdateMenuItemCached(key string, item *systray.MenuItem, show bool, title, tooltip string) {
+	s.trayCache.mu.Lock()
+	defer s.trayCache.mu.Unlock()
+
+	if s.trayCache.updateItems == nil {
+		s.trayCache.updateItems = make(map[string]updateItemState, 3)
+	}
+	last, seen := s.trayCache.updateItems[key]
+	want := updateItemState{shown: show, title: title, tooltip: tooltip}
+	if seen && last == want {
+		return
+	}
+	applyUpdateMenuItem(item, show, title, tooltip)
+	s.trayCache.updateItems[key] = want
 }
 
 // updateMenuVerdict is the per-platform decision about how the
