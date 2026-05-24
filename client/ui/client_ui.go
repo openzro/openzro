@@ -448,17 +448,11 @@ func (s *serviceClient) updateIcon() {
 	s.setNewIcons()
 	s.updateIndicationLock.Lock()
 	if s.connected {
-		if s.isUpdateIconActive {
-			systray.SetTemplateIcon(iconUpdateConnectedMacOS, s.icUpdateConnected)
-		} else {
-			systray.SetTemplateIcon(iconConnectedMacOS, s.icConnected)
-		}
+		key, b, m := s.connectedIcon()
+		s.setTemplateIconCached(key, m, b)
 	} else {
-		if s.isUpdateIconActive {
-			systray.SetTemplateIcon(iconUpdateDisconnectedMacOS, s.icUpdateDisconnected)
-		} else {
-			systray.SetTemplateIcon(iconDisconnectedMacOS, s.icDisconnected)
-		}
+		key, b, m := s.disconnectedIcon()
+		s.setTemplateIconCached(key, m, b)
 	}
 	s.updateIndicationLock.Unlock()
 }
@@ -687,10 +681,10 @@ func (s *serviceClient) handleSSOLogin(loginResp *proto.LoginResponse, conn prot
 }
 
 func (s *serviceClient) menuUpClick() error {
-	systray.SetTemplateIcon(iconConnectingMacOS, s.icConnecting)
+	s.setTemplateIconCached("connecting", iconConnectingMacOS, s.icConnecting)
 	conn, err := s.getSrvClient(defaultFailTimeout)
 	if err != nil {
-		systray.SetTemplateIcon(iconErrorMacOS, s.icError)
+		s.setTemplateIconCached("error", iconErrorMacOS, s.icError)
 		log.Errorf("get client: %v", err)
 		return err
 	}
@@ -721,7 +715,7 @@ func (s *serviceClient) menuUpClick() error {
 }
 
 func (s *serviceClient) menuDownClick() error {
-	systray.SetTemplateIcon(iconConnectingMacOS, s.icConnecting)
+	s.setTemplateIconCached("connecting", iconConnectingMacOS, s.icConnecting)
 	conn, err := s.getSrvClient(defaultFailTimeout)
 	if err != nil {
 		log.Errorf("get client: %v", err)
@@ -902,6 +896,8 @@ func (s *serviceClient) applyTray(d desiredTrayState) {
 
 	first := !s.trayCache.initialized
 
+	// Icon is inlined here (instead of delegating to
+	// setTemplateIconCached) so we don't double-lock the cache mutex.
 	if first || s.trayCache.iconKey != d.iconKey {
 		systray.SetTemplateIcon(d.iconMacOSBytes, d.iconBytes)
 		s.trayCache.iconKey = d.iconKey
@@ -952,6 +948,28 @@ func setMenuItemEnabled(item *systray.MenuItem, enabled bool) {
 	}
 }
 
+// setTemplateIconCached is the single point of entry for changing the
+// tray icon. Updates trayCache.iconKey so the next applyTray() sees
+// the truth — otherwise direct systray.SetTemplateIcon calls outside
+// applyTray (e.g. menuUpClick's connecting/error icons, updateIcon
+// on theme change) leave the cache stale, and the next periodic
+// applyTray for the SAME logical state would skip the SetTemplateIcon
+// and leave the wrong icon stuck on the tray. Safe to call from any
+// goroutine.
+func (s *serviceClient) setTemplateIconCached(key string, macOSBytes, bytes []byte) {
+	s.trayCache.mu.Lock()
+	defer s.trayCache.mu.Unlock()
+	if s.trayCache.initialized && s.trayCache.iconKey == key {
+		return
+	}
+	systray.SetTemplateIcon(macOSBytes, bytes)
+	s.trayCache.iconKey = key
+	// NOTE: we do NOT flip initialized=true here. applyTray's other
+	// fields (tooltip, statusTitle, etc.) still need their first-apply
+	// pass; setting initialized=true now would make those zero-valued
+	// fields look "already applied" and skip them.
+}
+
 // setExitNodeEnabledCached toggles mExitNode via the shared trayCache
 // so the goroutine spawned by updateExitNodes (re-fired every 2s
 // during a connected session) only pushes Enable/Disable when the
@@ -970,7 +988,10 @@ func (s *serviceClient) setExitNodeEnabledCached(enabled bool) {
 }
 
 func (s *serviceClient) onTrayReady() {
-	systray.SetTemplateIcon(iconDisconnectedMacOS, s.icDisconnected)
+	// Initial icon — route through the cache so the very first
+	// updateStatus tick (which will desire "disconnected") doesn't
+	// re-fire the setter unnecessarily.
+	s.setTemplateIconCached("disconnected", iconDisconnectedMacOS, s.icDisconnected)
 	systray.SetTooltip("Openzro")
 
 	// setup systray menu items
