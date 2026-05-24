@@ -171,7 +171,9 @@ export default function DNSRecordsSection({ zone }: Props) {
             <col className="w-[80px]" />
             <col className="w-[30%]" />
             <col />
-            <col className="w-[100px]" />
+            {/* TTL — 130px fits 5-digit TTL (e.g. 86400) plus the
+                numeric input spinner. 100px clipped the value. */}
+            <col className="w-[130px]" />
             <col className="w-[100px]" />
           </colgroup>
           <thead>
