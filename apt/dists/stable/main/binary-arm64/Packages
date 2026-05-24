@@ -4,13 +4,13 @@ Section:
 Installed-Size: 30976
 Maintainer: openZro <dev@openzro.io>
 Architecture: arm64
-Version: 0.53.1~alpha.80
-Filename: pool/main/o/openzro/openzro_0.53.1-alpha.80_linux_arm64.deb
-Size: 11512262
-MD5sum: df041c47102db8b8b601b929dc66712e
-SHA1: eb7ff32986e5674aafcc42cc41543af9a0c24819
-SHA256: 9786926dcb2c03362bf8eae87d51eaed77318d722a38fd415790b6dee7dffdd0
-SHA512: aca44f9ded5836aac109097b3bb74ecc79bc485796f14ea38738e671fd2df9c786f705a4332465fad07b562cd4362cd0489a044e5b16c4c8bd4ef2aadbb16dc5
+Version: 0.53.1~alpha.81
+Filename: pool/main/o/openzro/openzro_0.53.1-alpha.81_linux_arm64.deb
+Size: 11512266
+MD5sum: 861772c573b862f2bcf72d42fe324e51
+SHA1: 2076b7e29789701286d90a28844439d460925d2a
+SHA256: eaba494bccbae4007a73b95e9f58747a035ffb72de7af49dfe2d05ae70df7642
+SHA512: f554c1422b031ca4fc099c6822b917e799bdbc57613444d89205b92d2dfd621601d45bc1bc6b5ed3daa5266693611488c761e87fc3f422957ecaacb6614474fe
 Description: openZro client (zero-trust mesh networking).
 Homepage: https://openzro.io/
 License: BSD-3-Clause
@@ -21,13 +21,13 @@ Section:
 Installed-Size: 80708
 Maintainer: openZro <dev@openzro.io>
 Architecture: arm64
-Version: 0.53.1~alpha.80
-Filename: pool/main/o/openzro-management/openzro-management_0.53.1-alpha.80_linux_arm64.deb
-Size: 25073678
-MD5sum: e823d07476cc92c6a55c2e1fc69b62f2
-SHA1: 3f900c5873ad1e2cd5528ee974505001ab6d1ca8
-SHA256: 7fca391a8dbd890dc9f6478c2dbaaf0d4dc3acc1c46da5412298be9b65827c23
-SHA512: 91c6e08128b34f71d29b1fe9372500de056e02bb0bc0e407bbc945607477b34a96df6190a1fc6536cfeefbc28839831da7fcaa6c68eab3bbf9de3a96e584f4dc
+Version: 0.53.1~alpha.81
+Filename: pool/main/o/openzro-management/openzro-management_0.53.1-alpha.81_linux_arm64.deb
+Size: 25073682
+MD5sum: c5cd20456d5035523c406937e872bf00
+SHA1: c1720876d72d8d8c6ad6408e05ccec1eab62764a
+SHA256: 8225390c66e2b80aa4b39440afe7a7b717bee9a9157d850c78b216f0ccec77af
+SHA512: 096bfffc3956eb4c060915a90fa36ed2f4522cd39dad84da11abcbcf0d797aa6128656fb70706e1c8ac9f9b5df4e85b1e3795d51e81080b18be8656bcd1712e5
 Description: openZro management server (control plane, IdP integration, peer registry).
 Homepage: https://openzro.io/
 License: BSD-3-Clause
@@ -38,13 +38,13 @@ Section:
 Installed-Size: 20929
 Maintainer: openZro <dev@openzro.io>
 Architecture: arm64
-Version: 0.53.1~alpha.80
-Filename: pool/main/o/openzro-relay/openzro-relay_0.53.1-alpha.80_linux_arm64.deb
-Size: 7370358
-MD5sum: 10dc7c3ded96eaad4652670aefb1ae22
-SHA1: 23285a688b8c9b20c3ac4818889fcadbe216d663
-SHA256: e152067d5602889a5aa88e94f38fdc7ab937c56d3e6d1eb16b2eabca7624dda5
-SHA512: 0c70055e2abea493cd4fd4646b3b05217fbf8a65feb6008dbc32c2b7854f31795a68bd6d673a463f8c8e58dea8703ad2fbc786f4f2b682e296b86991a540aca1
+Version: 0.53.1~alpha.81
+Filename: pool/main/o/openzro-relay/openzro-relay_0.53.1-alpha.81_linux_arm64.deb
+Size: 7370352
+MD5sum: 7be5151376ca365fddbbff27991d39cf
+SHA1: 7a93911773315132ee80884c11b83d53b242cc2a
+SHA256: 26d7ee9a500df196b474843bd0cd8c08a1cf29ee3aa035af1d386e32d9be260e
+SHA512: 9a2e1849648f660d5c4ca255b5acee9dc426d308321ad842da6c981c00e8d3aac4875c23993b57b12403228b71e66630f95b1791ca665b13c2ce60f357c592d2
 Description: openZro relay server (TURN-style fallback for peers behind symmetric NAT).
 Homepage: https://openzro.io/
 License: BSD-3-Clause
@@ -55,13 +55,13 @@ Section:
 Installed-Size: 28545
 Maintainer: openZro <dev@openzro.io>
 Architecture: arm64
-Version: 0.53.1~alpha.80
-Filename: pool/main/o/openzro-signal/openzro-signal_0.53.1-alpha.80_linux_arm64.deb
-Size: 10247424
-MD5sum: 9818197c159b6881a4188943a0a4e591
-SHA1: 9bfa4d3a24657247833aee43ef033a59333cd0bf
-SHA256: d085dc5fbb47234d6cf472a6bbc2be5b3ea8b65da5ebe815216f0953694f6c76
-SHA512: b3d71d35a62f048e03d007830c6dde061b5b2ddfcb8fe7875cb0c084699a870b2caae388fe86ec4f1deb5d8c0ea743e919a098f6983347be91690335f2addebb
+Version: 0.53.1~alpha.81
+Filename: pool/main/o/openzro-signal/openzro-signal_0.53.1-alpha.81_linux_arm64.deb
+Size: 10247414
+MD5sum: 193cbea56663b3b8c253cdb75e46fdc6
+SHA1: cf1480225fbc0a5a4de6fac90c49480b56dbdd65
+SHA256: 920bcbc9c1237c8603da5970209569728ea4a44b058e3f9317d29a20b866165e
+SHA512: 0b2e57c5a66712a33843e05c735093189b89afa56134ffce19faf7dae4f54402b420d5e883872a3b0058b0f09e94bf12139ab769ea9b5b9654bb4a9f64480d19
 Description: openZro signal server (peer rendezvous, stateless).
 Homepage: https://openzro.io/
 License: BSD-3-Clause
