@@ -156,7 +156,7 @@ func (c *ClaimsExtractor) ToUserAuth(token *jwt.Token) (nbcontext.UserAuth, erro
 	//   3. Empty string. Non-Dex IdPs (Auth0, Keycloak, …) emit
 	//      UUID-style subs that don't parse as a Dex protobuf;
 	//      resolveMFAEnforcement then treats the absence as the
-	//      federated branch — same legacy behaviour, no regression
+	//      federated branch — same legacy behavior, no regression
 	//      for those deployments.
 	if fc, ok := claims["federated_claims"].(map[string]any); ok {
 		if cid, ok := fc["connector_id"].(string); ok {
