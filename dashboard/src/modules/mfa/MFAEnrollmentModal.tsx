@@ -141,7 +141,7 @@ export default function MFAEnrollmentModal({
                 intentionally has no horizontal padding so every
                 modal can pick its own — see DnsZoneModal /
                 NameserverModal for the same convention. */}
-            <div className="px-8">
+            <div className="px-8 pb-6">
               <ModalTitle>Set up two-factor authentication</ModalTitle>
               <ModalDescription className="mt-2">
                 Scan the QR code with your authenticator app (Google
@@ -194,7 +194,7 @@ export default function MFAEnrollmentModal({
 
         {stage === "verify" && (
           <>
-            <div className="px-8">
+            <div className="px-8 pb-6">
               <ModalTitle>Verify your authenticator</ModalTitle>
               <ModalDescription className="mt-2">
                 Enter the 6-digit code from your authenticator app to
@@ -238,7 +238,7 @@ export default function MFAEnrollmentModal({
 
         {stage === "backup-codes" && (
           <>
-            <div className="px-8">
+            <div className="px-8 pb-6">
               <ModalTitle className="flex items-center gap-2">
                 <ShieldCheck size={18} className="text-emerald-500" />
                 Save your backup codes
