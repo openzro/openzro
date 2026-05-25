@@ -681,10 +681,10 @@ func (s *serviceClient) handleSSOLogin(loginResp *proto.LoginResponse, conn prot
 }
 
 func (s *serviceClient) menuUpClick() error {
-	s.setTemplateIconCached("connecting", iconConnectingMacOS, s.icConnecting)
+	s.setTemplateIconCached(s.connectingIconKey(), iconConnectingMacOS, s.icConnecting)
 	conn, err := s.getSrvClient(defaultFailTimeout)
 	if err != nil {
-		s.setTemplateIconCached("error", iconErrorMacOS, s.icError)
+		s.setTemplateIconCached(s.errorIconKey(), iconErrorMacOS, s.icError)
 		log.Errorf("get client: %v", err)
 		return err
 	}
@@ -715,7 +715,7 @@ func (s *serviceClient) menuUpClick() error {
 }
 
 func (s *serviceClient) menuDownClick() error {
-	s.setTemplateIconCached("connecting", iconConnectingMacOS, s.icConnecting)
+	s.setTemplateIconCached(s.connectingIconKey(), iconConnectingMacOS, s.icConnecting)
 	conn, err := s.getSrvClient(defaultFailTimeout)
 	if err != nil {
 		log.Errorf("get client: %v", err)
@@ -852,7 +852,7 @@ func (s *serviceClient) setConnectingStatus() {
 	s.connected = false
 	exitDisabled := true
 	s.applyTray(desiredTrayState{
-		iconKey:        "connecting",
+		iconKey:        s.connectingIconKey(),
 		iconBytes:      s.icConnecting,
 		iconMacOSBytes: iconConnectingMacOS,
 		tooltip:        "Openzro (Connecting)",
@@ -869,21 +869,54 @@ func (s *serviceClient) setConnectingStatus() {
 
 // connectedIcon returns the cache key + byte slices for the connected
 // icon, branching on whether an update is currently available.
+// The theme variant is folded into the key so a light↔dark theme
+// switch (which mutates s.icConnected / s.icUpdateConnected via
+// setNewIcons without changing the logical state) invalidates the
+// cache and gets the fresh bitmap pushed to the tray.
 func (s *serviceClient) connectedIcon() (string, []byte, []byte) {
+	suffix := s.themeKeySuffix()
 	if s.isUpdateIconActive {
-		return "connected-update", s.icUpdateConnected, iconUpdateConnectedMacOS
+		return "connected-update" + suffix, s.icUpdateConnected, iconUpdateConnectedMacOS
 	}
-	return "connected", s.icConnected, iconConnectedMacOS
+	return "connected" + suffix, s.icConnected, iconConnectedMacOS
 }
 
 // disconnectedIcon returns the cache key + byte slices for the
 // disconnected icon, branching on whether an update is currently
-// available.
+// available. Theme variant is folded in — see connectedIcon.
 func (s *serviceClient) disconnectedIcon() (string, []byte, []byte) {
+	suffix := s.themeKeySuffix()
 	if s.isUpdateIconActive {
-		return "disconnected-update", s.icUpdateDisconnected, iconUpdateDisconnectedMacOS
+		return "disconnected-update" + suffix, s.icUpdateDisconnected, iconUpdateDisconnectedMacOS
 	}
-	return "disconnected", s.icDisconnected, iconDisconnectedMacOS
+	return "disconnected" + suffix, s.icDisconnected, iconDisconnectedMacOS
+}
+
+// connectingIconKey returns the cache key for the connecting icon
+// (used by menuUpClick / menuDownClick / setConnectingStatus). The
+// connecting bitmap also flips by theme, so the suffix is required.
+func (s *serviceClient) connectingIconKey() string {
+	return "connecting" + s.themeKeySuffix()
+}
+
+// errorIconKey returns the cache key for the error icon (used by
+// menuUpClick on getSrvClient failure). Also theme-variant aware.
+func (s *serviceClient) errorIconKey() string {
+	return "error" + s.themeKeySuffix()
+}
+
+// themeKeySuffix returns ":dark" or ":light" so cache keys for
+// theme-variant icons reflect which bitmap was loaded into the
+// s.ic… fields by setNewIcons. Without this, a theme switch would
+// repaint s.icConnected etc. but leave the cache key unchanged, and
+// the next setTemplateIconCached call would skip the systray
+// repaint — leaving the old theme's bitmap visible until the state
+// itself changes.
+func (s *serviceClient) themeKeySuffix() string {
+	if s.app.Settings().ThemeVariant() == theme.VariantDark {
+		return ":dark"
+	}
+	return ":light"
 }
 
 // applyTray pushes `desired` to the systray, skipping any setter
@@ -989,9 +1022,13 @@ func (s *serviceClient) setExitNodeEnabledCached(enabled bool) {
 
 func (s *serviceClient) onTrayReady() {
 	// Initial icon — route through the cache so the very first
-	// updateStatus tick (which will desire "disconnected") doesn't
-	// re-fire the setter unnecessarily.
-	s.setTemplateIconCached("disconnected", iconDisconnectedMacOS, s.icDisconnected)
+	// updateStatus tick (which will desire the disconnected icon)
+	// doesn't re-fire the setter unnecessarily. The key encodes the
+	// current theme variant so a subsequent theme switch
+	// invalidates the cache. isUpdateIconActive is false at boot,
+	// so disconnectedIcon() yields the non-update variant.
+	key, b, m := s.disconnectedIcon()
+	s.setTemplateIconCached(key, m, b)
 	systray.SetTooltip("Openzro")
 
 	// setup systray menu items
