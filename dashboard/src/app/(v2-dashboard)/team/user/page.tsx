@@ -51,26 +51,43 @@ export default function UserPage() {
   const queryParameter = useSearchParams();
   const userId = queryParameter.get("id");
   const { permission } = usePermissions();
+  const { loggedInUser, isOwnerOrAdmin } = useLoggedInUser();
   const isServiceUser = queryParameter.get("service_user") === "true";
+
+  // Self-profile view doesn't need `users.read`. Restricted accounts
+  // hit this page from the sidebar "Profile Settings" entry so they
+  // can enrol MFA, manage their own PATs, etc. /users would 403 for
+  // them, so rely on loggedInUser (sourced from /users/current, which
+  // has no permission gate) and gate the list fetch on canListUsers
+  // to suppress the request altogether for restricted users.
+  const isSelf = !!loggedInUser && loggedInUser.id === userId;
+  const canListUsers = permission.users.read;
   const { data: users, isLoading } = useFetchApi<User[]>(
     `/users?service_user=${isServiceUser}`,
+    false,
+    true,
+    canListUsers,
   );
-  const { isOwnerOrAdmin } = useLoggedInUser();
 
   const user = useMemo(() => {
+    if (isSelf) return loggedInUser;
     return users?.find((u) => u.id === userId);
-  }, [users, userId]);
+  }, [users, userId, isSelf, loggedInUser]);
 
   useRedirect("/team/users", false, !userId);
 
   const userGroups = useGroupIdsToGroups(user?.auto_groups);
 
-  if (!permission.users.read) {
+  if (!canListUsers && !isSelf) {
     return (
       <div className="space-y-6 p-8">
         <RestrictedAccess page={"User Information"} />
       </div>
     );
+  }
+
+  if (isSelf && user) {
+    return <UserOverview user={user} initialGroups={[]} />;
   }
 
   if (!isOwnerOrAdmin && user && !isLoading) {
