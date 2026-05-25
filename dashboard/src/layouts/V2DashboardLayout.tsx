@@ -527,8 +527,9 @@ function buildSidebarSections(
   // so the sidebar reflects exactly what each landing route will let
   // the operator see. Items with no page-level gate (Overview, Peers,
   // Control Center, Documentation) follow the upstream Navigation.tsx
-  // convention: Peers is hidden for restricted users (peer-only
-  // accounts), the rest stay visible.
+  // convention: Peers and Overview are hidden for restricted users
+  // (peer-only accounts whose only interactive surface is the
+  // PeersBlockedView landing), the rest stay visible.
   const raw: { id: string; label: string; items: sidebarItemSpec[] }[] = [
     {
       id: "workspace",
@@ -540,7 +541,7 @@ function buildSidebarSections(
           icon: NAV_ICONS.home,
           active: matches("/overview"),
           onClick: () => go("/overview"),
-          visible: true,
+          visible: !isRestricted,
         },
         {
           id: "peers",
