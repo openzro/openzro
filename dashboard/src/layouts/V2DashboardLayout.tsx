@@ -571,13 +571,22 @@ function buildSidebarSections(
           label: "DNS",
           icon: NAV_ICONS.dns,
           active: matches("/dns"),
-          // Land on /dns/nameservers — /dns itself just redirects
-          // there, and the DnsTabs sub-nav inside the v2 body will
-          // expose Settings as the second tab.
-          onClick: () => go("/dns/nameservers"),
           // Umbrella entry — visible if any of the three sub-tabs is
-          // accessible. DnsTabs itself hides tabs the user can't
-          // open.
+          // accessible. Pick the first sub-tab the operator can read
+          // as the landing destination so a user with only
+          // dns_zones.read or only dns.read doesn't land on
+          // /dns/nameservers (a route they can't read) and bounce on
+          // RestrictedAccess. DnsTabs itself hides tabs the user
+          // can't open.
+          onClick: () => {
+            if (permission.nameservers.read) {
+              go("/dns/nameservers");
+            } else if (permission.dns_zones.read) {
+              go("/dns/zones");
+            } else {
+              go("/dns/settings");
+            }
+          },
           visible:
             permission.nameservers.read ||
             permission.dns_zones.read ||
@@ -603,8 +612,13 @@ function buildSidebarSections(
           icon: NAV_ICONS.accessGraph,
           active: matches("/control-center"),
           onClick: () => go("/control-center"),
-          // Visualises ACL evaluation — same gate as Access Control.
-          visible: permission.policies.read,
+          // control-center/page.tsx gates on permission.settings.update
+          // (admin-only), NOT policies.read — Control Center exposes
+          // network-wide policy effectiveness + posture-blocked
+          // diagnostics that an operator with policy read-only
+          // shouldn't see. Mirror the page-level gate exactly so the
+          // sidebar doesn't advertise a route the user will bounce on.
+          visible: permission.settings.update,
         },
         {
           id: "posture-checks",
@@ -634,8 +648,18 @@ function buildSidebarSections(
           label: "Users & Groups",
           icon: NAV_ICONS.team,
           active: matches("/team"),
-          onClick: () => go("/team/users"),
-          visible: permission.users.read,
+          // Either tab is enough — TeamTabs hides the one the user
+          // can't read. Land on /team/users when readable, otherwise
+          // fall back to /team/groups so a group-only operator still
+          // has a working entry point.
+          onClick: () => {
+            if (permission.users.read) {
+              go("/team/users");
+            } else {
+              go("/team/groups");
+            }
+          },
+          visible: permission.users.read || permission.groups.read,
         },
         {
           id: "activity",
