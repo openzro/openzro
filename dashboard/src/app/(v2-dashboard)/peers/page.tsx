@@ -1,14 +1,12 @@
 "use client";
 
-import InlineLink from "@components/InlineLink";
-import Paragraph from "@components/Paragraph";
 import { ExternalLinkIcon } from "lucide-react";
 import React from "react";
 import PeersProvider, { usePeers } from "@/contexts/PeersProvider";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { useUsers } from "@/contexts/UsersProvider";
 import PeersTableV2 from "@/modules/peers/v2/PeersTableV2";
-import { SetupModalContent } from "@/modules/setup-openzro-modal/SetupModal";
+import SetupModalV2 from "@/modules/setup-openzro-modal/v2/SetupModalV2";
 
 // Peers — phase-4.2 entry point. The wrapping chrome (OzShell +
 // OzSidebar + OzTopbar) lives in (v2-dashboard)/layout.tsx →
@@ -44,34 +42,59 @@ function PeersView() {
   return <PeersTableV2 peers={peersWithUser} isLoading={isLoading} />;
 }
 
-// PeersBlockedView is intentionally kept on the legacy primitives
-// (Paragraph, InlineLink, SetupModalContent) for this commit — it's
-// an empty-state fallback shown when usePermissions().isRestricted is
-// true, which is rare. Phase 4.3 (or later) re-paints it in v2 once
-// every other Peers surface is migrated.
+// PeersBlockedView — empty-state landing shown to restricted (peer-
+// only) users who hit /peers. Mirrors the v2 paint of SetupModalV2's
+// Hero (gradient icon + heading + intro paragraph) and embeds the
+// same install body inline so a non-admin user can self-serve a
+// device install without needing the admin-only "Add Peer" modal.
 function PeersBlockedView() {
   return (
-    <div className="flex flex-col items-center justify-center">
-      <div className="p-default py-6 max-w-3xl text-center">
-        <h1>Add new device to your network</h1>
-        <Paragraph className="inline">
-          To get started, install Openzro and log in using your email account.
-          After that you should be connected. If you have further questions
+    <div className="mx-auto max-w-[640px] space-y-6 p-8">
+      <header className="text-center">
+        <div
+          className="mx-auto mb-3.5 grid h-11 w-11 place-items-center rounded-[12px] text-white shadow-oz2-acc"
+          style={{
+            background: "linear-gradient(135deg, #8b5cf6 0%, #4c1d95 100%)",
+          }}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width={22}
+            height={22}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2.2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x={3} y={4} width={18} height={14} rx={3} />
+            <path d="M7 10l3 3-3 3" />
+            <path d="M13 16h4" />
+          </svg>
+        </div>
+        <h1 className="text-[24px] font-semibold tracking-tight text-oz2-text">
+          Add a new device to your network
+        </h1>
+        <p className="mx-auto mt-1.5 max-w-[480px] text-[14.5px] leading-[1.5] text-oz2-text-muted">
+          To get started, install{" "}
+          <span className="oz-wordmark">
+            open<span className="oz-z">Z</span>ro
+          </span>{" "}
+          and log in with your email account. If you have further questions
           check out our{" "}
-          <InlineLink
+          <a
             href="https://docs.openzro.io/how-to/getting-started#installation"
             target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-oz2-acc hover:underline"
           >
             Installation Guide
             <ExternalLinkIcon size={12} />
-          </InlineLink>
-        </Paragraph>
-      </div>
-      <div className="px-3 pt-1 pb-8 max-w-3xl w-full">
-        <div className="rounded-md border border-nb-gray-900/70 grid w-full bg-nb-gray-930/40">
-          <SetupModalContent header={false} footer={false} />
-        </div>
-      </div>
+          </a>
+          .
+        </p>
+      </header>
+      <SetupModalV2 inline />
     </div>
   );
 }
