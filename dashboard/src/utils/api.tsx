@@ -36,6 +36,11 @@ type RequestOptions = {
 
 export type Params = Record<string, string | number | boolean>;
 
+// Module-scoped lock so parallel 403s from a single login (users,
+// groups, peers, settings, …) can only trigger ONE MFA navigation —
+// see the comment at the assign() call site in apiRequest.
+let mfaRedirectInFlight = false;
+
 async function apiRequest<T>(
   oidcFetch: (input: RequestInfo, init?: RequestInit) => Promise<Response>,
   method: Method,
@@ -70,6 +75,17 @@ async function apiRequest<T>(
       // dropped (the caller's .catch will fire) — after the user
       // completes MFA, the dashboard reloads naturally and the next
       // request rides the X-MFA-Token header.
+      //
+      // A fresh login fires several useFetchApi calls in parallel
+      // (users, groups, peers, settings, …); each lands a 403 with
+      // an enroll/challenge token, and without the in-flight guard
+      // every response would race window.location.assign, causing
+      // visible flicker as the browser starts then cancels
+      // navigations. The module-level flag clamps to a single
+      // assign per page lifecycle; the full reload that follows
+      // resets it naturally. The pathname check covers the case
+      // where a 403 arrives while the user is already on the
+      // destination page (e.g. polling on /mfa/challenge itself).
       if (res.status === 403 && body?.token) {
         if (body.mfa_required || body.mfa_enrollment_required) {
           setMfaRedirectToken(body.token);
@@ -77,7 +93,20 @@ async function apiRequest<T>(
             const dest = body.mfa_enrollment_required
               ? "/mfa/enroll"
               : "/mfa/challenge";
-            window.location.assign(dest);
+            const onDest = window.location.pathname === dest;
+            if (!mfaRedirectInFlight && !onDest) {
+              mfaRedirectInFlight = true;
+              // Mask the current page synchronously so parallel 403s
+              // that resolve between this assign() and the browser
+              // actually starting the navigation cannot drive
+              // visible re-renders (every other SWR fetch on the
+              // page also lands a 403 right now). Cleared naturally
+              // by the full page load that follows.
+              if (document.body) {
+                document.body.style.visibility = "hidden";
+              }
+              window.location.assign(dest);
+            }
           }
           return Promise.reject({
             code: 403,
