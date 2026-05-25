@@ -44,9 +44,19 @@ interface Props {
   user?: OidcUserInfo;
   setupKey?: string;
   hostname?: string;
+  // inline embeds the install body directly in the page — no
+  // ModalContent wrapper, no Hero — so the caller can provide its
+  // own page header. Used by PeersBlockedView for the restricted-
+  // user landing, which has no Modal popup chrome to live in.
+  inline?: boolean;
 }
 
-export default function SetupModalV2({ user, setupKey, hostname }: Props) {
+export default function SetupModalV2({
+  user,
+  setupKey,
+  hostname,
+  inline = false,
+}: Props) {
   const detected = useOperatingSystem();
   const [os, setOs] = useState<OS>(initialOS(detected));
   const [isFirstRun] = useLocalStorage<boolean>("openzro-first-run", true);
@@ -58,8 +68,19 @@ export default function SetupModalV2({ user, setupKey, hostname }: Props) {
       const name = user?.given_name || "there";
       return `Hello ${name} — let's add your first device`;
     }
-    return setupKey ? "Install Openzro with Setup Key" : "Install Openzro";
+    return setupKey ? "Install openZro with Setup Key" : "Install openZro";
   }, [isFirstRun, isInstallPage, setupKey, user?.given_name]);
+
+  if (inline) {
+    return (
+      <div className="overflow-hidden rounded-[14px] border border-oz2-border bg-oz2-surface">
+        <OSTabs value={os} onChange={setOs} />
+        <PrimarySteps os={os} setupKey={setupKey} hostname={hostname} />
+        <ManualAccordion os={os} setupKey={setupKey} hostname={hostname} />
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <ModalContent
