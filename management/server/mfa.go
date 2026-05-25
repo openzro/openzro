@@ -431,7 +431,10 @@ func (am *DefaultAccountManager) MFAGateForRequest(
 // resolveMFAEnforcement maps (connector_id, settings) to a yes/no
 // enforcement decision. connector_id == "local" follows the
 // MFAEnforceLocal toggle; anything else (federated providers)
-// follows MFAEnforceFederated.
+// follows MFAEnforceFederated. The extractor defaults connector_id
+// to "local" when the JWT carries no federated_claims, so absence
+// of the claim is treated as a staticPasswords login (see
+// extractor.go for the rationale).
 func (am *DefaultAccountManager) resolveMFAEnforcement(connectorID string, settings *types.Settings) bool {
 	if settings == nil {
 		return false

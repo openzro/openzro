@@ -46,14 +46,15 @@ type UserAuth struct {
 	IsPAT bool
 
 	// ConnectorID is the Dex connector that authenticated this JWT,
-	// extracted from `federated_claims.connector_id`. Dex's bundled
-	// staticPasswords connector emits the literal value "local";
-	// federated providers (Okta, Google Workspace, Microsoft Entra,
-	// Authentik, Keycloak, etc.) emit their configured connector id.
-	// Used by the MFA gate (issue #31) to apply MFAEnforceLocal vs.
-	// MFAEnforceFederated. Empty when the JWT didn't carry
-	// federated_claims (PAT auth, legacy tokens, non-Dex IdPs that
-	// don't emit the claim).
+	// extracted from `federated_claims.connector_id`. Federated
+	// providers (Okta, Google Workspace, Microsoft Entra, Authentik,
+	// Keycloak, etc.) emit their configured connector id. Dex's
+	// bundled staticPasswords connector does NOT emit federated_claims
+	// on access tokens, so the extractor defaults to "local" when the
+	// claim is absent — the gate (issue #31) therefore routes
+	// staticPasswords logins to MFAEnforceLocal and external providers
+	// to MFAEnforceFederated. PATs short-circuit the gate via IsPAT
+	// before this value is consulted.
 	ConnectorID string
 }
 

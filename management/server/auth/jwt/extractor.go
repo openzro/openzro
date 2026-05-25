@@ -136,12 +136,22 @@ func (c *ClaimsExtractor) ToUserAuth(token *jwt.Token) (nbcontext.UserAuth, erro
 	// (issue #31) to distinguish "local" (Dex staticPasswords, no
 	// IdP-side MFA, openZro TOTP is the primary second factor) from
 	// federated providers (TOTP is an optional redundancy layer on
-	// top of the IdP's own MFA). Absent on PATs / non-Dex IdPs that
-	// don't emit the claim — Empty string is the natural default and
-	// the gate's resolveMFAEnforcement treats anything-other-than-
-	// "local" as the federated branch.
+	// top of the IdP's own MFA).
+	//
+	// Dex emits federated_claims for *external* connectors (google,
+	// github, oidc, oauth, etc.) but NOT for the bundled staticPasswords
+	// connector — and even when it does, the claim only ships on the
+	// id_token, not the access_token the dashboard sends as Bearer.
+	// Without a fallback, every staticPasswords login would arrive
+	// here with ConnectorID="" and resolveMFAEnforcement would route
+	// it to the federated branch, silently bypassing MFAEnforceLocal.
+	// Default to "local" when the claim is absent so the gate honours
+	// the operator's local-enforcement toggle. PATs are screened by
+	// IsPAT upstream and never reach resolveMFAEnforcement, so this
+	// default has no impact on them.
+	userAuth.ConnectorID = "local"
 	if fc, ok := claims["federated_claims"].(map[string]any); ok {
-		if cid, ok := fc["connector_id"].(string); ok {
+		if cid, ok := fc["connector_id"].(string); ok && cid != "" {
 			userAuth.ConnectorID = cid
 		}
 	}
