@@ -2,6 +2,7 @@ import { useOidc } from "@axa-fr/react-oidc";
 import FullScreenLoading from "@components/ui/FullScreenLoading";
 import useFetchApi from "@utils/api";
 import loadConfig from "@utils/config";
+import { clearMfaSessionToken } from "@utils/mfaSession";
 import React, { useMemo } from "react";
 import { useApplicationContext } from "@/contexts/ApplicationProvider";
 import PermissionsProvider from "@/contexts/PermissionsProvider";
@@ -90,6 +91,17 @@ export const useLoggedInUser = () => {
   const isOwnerOrAdmin = isOwner || isAdmin;
 
   const logout = async () => {
+    // Clear the X-MFA-Token from sessionStorage BEFORE the OIDC
+    // logout redirect. If we leave the stale token in place, a
+    // subsequent login in the same tab would silently re-elevate the
+    // session: the new JWT's hash equals the previous hash often
+    // enough (Dex sometimes short-circuits issuance within its token
+    // lifetime), so MFASessionValid validates an mfa_session_token
+    // bound to a session the operator already left. Bypassing the
+    // re-challenge defeats the per-session model from issue #31.
+    // Always-clear is safe — at worst the operator pays one extra
+    // TOTP entry next login, which is the intended behavior anyway.
+    clearMfaSessionToken();
     return oidcLogout("/", { client_id: config.clientId }).then(() => {
       setGlobalApiParams?.({});
     });

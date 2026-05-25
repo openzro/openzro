@@ -2,6 +2,7 @@ import { useOidc } from "@axa-fr/react-oidc";
 import Button from "@components/Button";
 import Paragraph from "@components/Paragraph";
 import loadConfig from "@utils/config";
+import { clearMfaSessionToken } from "@utils/mfaSession";
 import { LogIn } from "lucide-react";
 import * as React from "react";
 import { useEffect, useRef } from "react";
@@ -23,6 +24,11 @@ export const SessionLost = () => {
   useEffect(() => {
     if (triggered.current) return;
     triggered.current = true;
+    // Clear the stale X-MFA-Token so the re-login flow forces a
+    // fresh TOTP challenge — without this the token in sessionStorage
+    // would silently re-elevate the next session (see logout() in
+    // UsersProvider.tsx for the full rationale).
+    clearMfaSessionToken();
     // Empty post-logout target = the dashboard origin. After Dex
     // logs the user out, the dashboard root re-arms the OIDC flow
     // and pushes them through the login form again.
