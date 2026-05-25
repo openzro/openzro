@@ -86,7 +86,12 @@ export default function UserPage() {
     );
   }
 
-  if (isSelf && user) {
+  // Restricted self-viewers don't have users.read so userGroups never
+  // resolves — fall back to []. Admin/owner self-viewers still need
+  // the resolved userGroups (UserOverview renders the editable
+  // Auto-assigned Groups card for them; an empty initialGroups +
+  // Save would clear auto_groups on the server).
+  if (isSelf && !isOwnerOrAdmin && user) {
     return <UserOverview user={user} initialGroups={[]} />;
   }
 
