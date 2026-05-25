@@ -353,11 +353,11 @@ func (s *serviceClient) updateExitNodes() {
 
 	s.recreateExitNodeMenu(exitNodes)
 
-	if len(s.mExitNodeItems) > 0 {
-		s.mExitNode.Enable()
-	} else {
-		s.mExitNode.Disable()
-	}
+	// Route through the tray-state cache so we don't re-fire
+	// Enable/Disable on every 2s tick (each call generates a repaint
+	// on GTK/X11 that reads as flicker — loses the user's hover/
+	// selection mid-menu).
+	s.setExitNodeEnabledCached(len(s.mExitNodeItems) > 0)
 }
 
 func (s *serviceClient) recreateExitNodeMenu(exitNodes []*proto.Network) {
