@@ -45,15 +45,16 @@ type UserAuth struct {
 	// Indicates whether this user has authenticated with a Personal Access Token
 	IsPAT bool
 
-	// ConnectorID is the Dex connector that authenticated this JWT,
-	// extracted from `federated_claims.connector_id`. Dex's bundled
-	// staticPasswords connector emits the literal value "local";
-	// federated providers (Okta, Google Workspace, Microsoft Entra,
-	// Authentik, Keycloak, etc.) emit their configured connector id.
-	// Used by the MFA gate (issue #31) to apply MFAEnforceLocal vs.
-	// MFAEnforceFederated. Empty when the JWT didn't carry
-	// federated_claims (PAT auth, legacy tokens, non-Dex IdPs that
-	// don't emit the claim).
+	// ConnectorID is the identifier of the connector that
+	// authenticated this JWT. Resolved by the JWT extractor with
+	// `federated_claims.connector_id` first and Dex's `sub` protobuf
+	// as fallback so Dex deployments populate this even though
+	// federated_claims only ships on the id_token. Used by the MFA
+	// gate (issue #31) to apply MFAEnforceLocal vs.
+	// MFAEnforceFederated. Empty for PATs, service users, and
+	// non-Dex IdPs (Auth0, Keycloak, …) whose subs aren't Dex
+	// protobufs — resolveMFAEnforcement treats those as the
+	// federated branch.
 	ConnectorID string
 }
 

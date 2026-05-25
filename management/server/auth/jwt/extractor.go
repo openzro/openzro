@@ -1,12 +1,14 @@
 package jwt
 
 import (
+	"encoding/base64"
 	"errors"
 	"net/url"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/encoding/protowire"
 
 	nbcontext "github.com/openzro/openzro/management/server/context"
 )
@@ -131,22 +133,85 @@ func (c *ClaimsExtractor) ToUserAuth(token *jwt.Token) (nbcontext.UserAuth, erro
 		}
 	}
 
-	// federated_claims.connector_id is the Dex-emitted identifier for
-	// the connector that authenticated this JWT. Used by the MFA gate
-	// (issue #31) to distinguish "local" (Dex staticPasswords, no
-	// IdP-side MFA, openZro TOTP is the primary second factor) from
-	// federated providers (TOTP is an optional redundancy layer on
-	// top of the IdP's own MFA). Absent on PATs / non-Dex IdPs that
-	// don't emit the claim — Empty string is the natural default and
-	// the gate's resolveMFAEnforcement treats anything-other-than-
-	// "local" as the federated branch.
+	// ConnectorID is the identifier of the connector that authenticated
+	// this JWT. Used by the MFA gate (issue #31) to distinguish "local"
+	// (Dex staticPasswords, no IdP-side MFA, openZro TOTP is the
+	// primary second factor) from federated providers (TOTP is an
+	// optional redundancy layer on top of the IdP's own MFA).
+	//
+	// Resolution order:
+	//   1. `federated_claims.connector_id` if present. Standard OIDC
+	//      extension some IdPs emit; kept first so the gate stays
+	//      forward-compatible if Dex (or a future IdP) ever starts
+	//      shipping the claim on access tokens. Today Dex only
+	//      populates federated_claims on id_token and the dashboard
+	//      sends access_token as Bearer, so this branch is effectively
+	//      unused in production.
+	//   2. The `sub` claim parsed as a Dex internal-id protobuf —
+	//      see parseDexSubConnector. Dex encodes the connector id
+	//      directly inside `sub` on every token it issues, so this
+	//      catches both staticPasswords (conn_id="local") and any
+	//      federated connector (conn_id="google", "github", ...)
+	//      without depending on federated_claims.
+	//   3. Empty string. Non-Dex IdPs (Auth0, Keycloak, …) emit
+	//      UUID-style subs that don't parse as a Dex protobuf;
+	//      resolveMFAEnforcement then treats the absence as the
+	//      federated branch — same legacy behavior, no regression
+	//      for those deployments.
 	if fc, ok := claims["federated_claims"].(map[string]any); ok {
 		if cid, ok := fc["connector_id"].(string); ok {
 			userAuth.ConnectorID = cid
 		}
 	}
+	if userAuth.ConnectorID == "" {
+		userAuth.ConnectorID = parseDexSubConnector(userID)
+	}
 
 	return userAuth, nil
+}
+
+// parseDexSubConnector decodes Dex's internal-id protobuf out of the
+// JWT `sub` claim and returns the embedded connector id, or empty
+// string if `sub` is not in that shape.
+//
+// Dex builds every issued token's sub by base64url-encoding a
+// protobuf message with two LEN-typed string fields:
+//
+//	field 1 = user_id   (the connector-local subject)
+//	field 2 = conn_id   (the configured connector identifier)
+//
+// See Dex `internal/server/handlers.go:formatSubject` and the
+// `internalIDProto` schema. The format has been stable since Dex
+// 2.x and is shared across staticPasswords + every federated
+// connector (oauth, oidc, google, github, …).
+//
+// Non-Dex IdPs (Auth0, Keycloak, …) emit UUID-style subs that
+// won't parse as a protobuf with field 2 = string; the consumer
+// gets "" back and falls through to the legacy code path.
+func parseDexSubConnector(sub string) string {
+	if sub == "" {
+		return ""
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(sub)
+	if err != nil {
+		return ""
+	}
+	for len(raw) > 0 {
+		num, typ, n := protowire.ConsumeTag(raw)
+		if n < 0 || typ != protowire.BytesType {
+			return ""
+		}
+		raw = raw[n:]
+		val, n := protowire.ConsumeBytes(raw)
+		if n < 0 {
+			return ""
+		}
+		raw = raw[n:]
+		if num == 2 {
+			return string(val)
+		}
+	}
+	return ""
 }
 
 func (c *ClaimsExtractor) ToGroups(token *jwt.Token, claimName string) []string {
