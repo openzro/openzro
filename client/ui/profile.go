@@ -6,9 +6,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/user"
+	"runtime"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -24,6 +27,36 @@ import (
 	"github.com/openzro/openzro/client/internal/profilemanager"
 	"github.com/openzro/openzro/client/proto"
 )
+
+// trayProfileRestartHint is appended to the success dialogs of create
+// + remove profile when running on a platform where the systray tray
+// is known to ignore dynamic submenu add/remove. KDE Plasma's tray
+// (via the plasma-workspace StatusNotifierItem plasmoid) caches
+// submenu structure after first render and ignores subsequent
+// LayoutUpdated signals — so newly-added per-profile items never
+// appear in the tray. Verified across fyne.io/systray v1.11.0 and
+// v1.12.1. Other Linux DEs (GNOME with AppIndicator, XFCE, Cinnamon,
+// MATE) and macOS / Windows render dynamic additions fine.
+const trayProfileRestartHint = "Restart the openZro UI to see the updated profile list in the tray menu."
+
+// linuxTrayNeedsRestartForProfileChanges reports whether the local
+// systray tray is expected to silently ignore dynamic add/remove of
+// profile submenu items. True only when running on KDE Plasma (any
+// session type — the bug reproduces on Wayland and X11 alike).
+func linuxTrayNeedsRestartForProfileChanges() bool {
+	if runtime.GOOS != "linux" {
+		return false
+	}
+	desktop := strings.ToUpper(os.Getenv("XDG_CURRENT_DESKTOP"))
+	// XDG_CURRENT_DESKTOP is a colon-separated list per the
+	// freedesktop spec; e.g. "KDE", "ubuntu:GNOME", "X-Cinnamon".
+	for _, d := range strings.Split(desktop, ":") {
+		if d == "KDE" {
+			return true
+		}
+	}
+	return false
+}
 
 // showProfilesUI creates and displays the Profiles window with a list of existing profiles,
 // a button to add new profiles, allows removal, and lets the user switch the active profile.
@@ -142,9 +175,13 @@ func (s *serviceClient) showProfilesUI() {
 							dialog.ShowError(fmt.Errorf("failed to remove profile"), s.wProfiles)
 							return
 						}
+						msg := fmt.Sprintf("Profile '%s' removed successfully.", profile.Name)
+						if linuxTrayNeedsRestartForProfileChanges() {
+							msg += "\n\n" + trayProfileRestartHint
+						}
 						dialog.ShowInformation(
 							"Profile Removed",
-							fmt.Sprintf("Profile '%s' removed successfully", profile.Name),
+							msg,
 							s.wProfiles,
 						)
 						// update slice
@@ -194,9 +231,13 @@ func (s *serviceClient) showProfilesUI() {
 					dialog.ShowError(fmt.Errorf("failed to create profile"), s.wProfiles)
 					return
 				}
+				msg := fmt.Sprintf("Profile '%s' created successfully.", name)
+				if linuxTrayNeedsRestartForProfileChanges() {
+					msg += "\n\n" + trayProfileRestartHint
+				}
 				dialog.ShowInformation(
 					"Profile Created",
-					fmt.Sprintf("Profile '%s' created successfully", name),
+					msg,
 					s.wProfiles,
 				)
 				// update slice
@@ -328,6 +369,12 @@ type subItem struct {
 	*systray.MenuItem
 	ctx    context.Context
 	cancel context.CancelFunc
+	// name lets refresh() identify whether an existing item matches a
+	// profile in the freshly-loaded list. Stable items survive
+	// refreshes — destroying + recreating systray subitems corrupts
+	// the internal menu-item ID table on Linux/GTK ("systray error:
+	// no menu item with ID N") and kills subsequent clicks.
+	name string
 }
 
 type profileMenu struct {
@@ -376,10 +423,122 @@ func newProfileMenu(args newProfileMenuArgs) *profileMenu {
 
 	p.emailMenuItem.Disable()
 	p.emailMenuItem.Hide()
+	// Create the "Manage Profiles" subitem ONCE. Stable across refreshes
+	// — refresh() never touches it. Avoids the destroy/recreate cycle
+	// that corrupts the systray's internal menu-item ID table on
+	// Linux/GTK ("systray error: no menu item with ID N") and kills
+	// subsequent clicks on the item.
+	p.setupManageProfilesItem()
+	// First refresh populates the per-profile submenu items from the
+	// current daemon-side list. On macOS/Windows + KDE X11 + most
+	// other DEs, subsequent refreshes also add/remove items
+	// dynamically. On KDE Plasma Wayland the dbusmenu tray caches
+	// submenu structure after first render — dynamic adds/removes go
+	// unrendered. We document the limitation in the Manage Profiles
+	// window dialogs (Linux only) so operators know to restart the UI
+	// to see new profiles in the tray.
 	p.refresh()
 	go p.updateMenu()
 
 	return &p
+}
+
+// setupManageProfilesItem creates the "Manage Profiles" submenu item
+// once and wires its click handler. The item is stable across
+// refresh() calls — its lifetime matches the profileMenu's.
+func (p *profileMenu) setupManageProfilesItem() {
+	ctx, cancel := context.WithCancel(context.Background())
+	manageItem := p.profileMenuItem.AddSubMenuItem("Manage Profiles", "")
+	p.manageProfilesSubItem = &subItem{MenuItem: manageItem, ctx: ctx, cancel: cancel, name: "Manage Profiles"}
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case _, ok := <-manageItem.ClickedCh:
+				if !ok {
+					return
+				}
+				// Spawn the profile-management window subprocess. After it
+				// exits, refresh the per-profile sub-items (a new profile
+				// may have been created) and let the settings page pick up
+				// any changes. p.refresh() no longer touches this item.
+				p.eventHandler.runSelfCommand(p.ctx, "profiles", "true")
+				p.refresh()
+				p.loadSettingsCallback()
+			}
+		}
+	}()
+}
+
+// spawnProfileClickHandler launches the per-item click goroutine for
+// a per-profile subItem. The item's IsActive state is re-checked at
+// click time (against p.profilesState) — captured IsActive would go
+// stale across refreshes. Lives until si.ctx is canceled (i.e. the
+// profile got removed and refresh swept the item).
+func (p *profileMenu) spawnProfileClickHandler(si *subItem, profileName, username string) {
+	go func() {
+		for {
+			select {
+			case <-si.ctx.Done():
+				return
+			case _, ok := <-si.ClickedCh:
+				if !ok {
+					return
+				}
+				p.mu.Lock()
+				alreadyActive := false
+				for _, ps := range p.profilesState {
+					if ps.Name == profileName && ps.IsActive {
+						alreadyActive = true
+						break
+					}
+				}
+				p.mu.Unlock()
+				if alreadyActive {
+					log.Infof("Profile '%s' is already active", profileName)
+					continue
+				}
+				conn, err := p.getSrvClientCallback(defaultFailTimeout)
+				if err != nil {
+					log.Errorf("failed to get daemon client: %v", err)
+					continue
+				}
+				name := profileName
+				usr := username
+				if _, err := conn.SwitchProfile(si.ctx, &proto.SwitchProfileRequest{
+					ProfileName: &name,
+					Username:    &usr,
+				}); err != nil {
+					log.Errorf("failed to switch profile: %v", err)
+					p.app.SendNotification(fyne.NewNotification("Error", "Failed to switch profile"))
+					continue
+				}
+				if err := p.profileManager.SwitchProfile(profileName); err != nil {
+					log.Errorf("failed to switch profile '%s': %v", profileName, err)
+					continue
+				}
+				log.Infof("Switched to profile '%s'", profileName)
+
+				status, err := conn.Status(si.ctx, &proto.StatusRequest{})
+				if err != nil {
+					log.Errorf("failed to get status after switching profile: %v", err)
+					continue
+				}
+				if status.Status == string(internal.StatusConnected) {
+					if err := p.downClickCallback(); err != nil {
+						log.Errorf("failed to handle down click after switching profile: %v", err)
+					}
+				}
+				if err := p.upClickCallback(); err != nil {
+					log.Errorf("failed to handle up click after switching profile: %v", err)
+				}
+				p.refresh()
+				p.loadSettingsCallback()
+			}
+		}
+	}()
 }
 
 func (p *profileMenu) getProfiles() ([]Profile, error) {
@@ -421,9 +580,6 @@ func (p *profileMenu) refresh() {
 		return
 	}
 
-	// Clear existing profile items
-	p.clear(profiles)
-
 	currUser, err := user.Current()
 	if err != nil {
 		log.Errorf("failed to get current user: %v", err)
@@ -453,122 +609,58 @@ func (p *profileMenu) refresh() {
 		}
 	}
 
+	// Diff-aware reconciliation of per-profile submenu items:
+	//   - profile still present → reuse the existing menu item (just
+	//     toggle Check). NEVER destroy+recreate stable items, otherwise
+	//     the systray ID table corrupts on Linux/GTK ("systray error:
+	//     no menu item with ID N") and clicks die.
+	//   - profile gone         → Remove + cancel its click handler.
+	//   - new profile          → AddSubMenuItem + spawn click handler.
+	//     On macOS/Windows + most Linux DEs this renders immediately.
+	//     On KDE Plasma Wayland the new item exists internally but the
+	//     tray panel ignores LayoutUpdated for new children — the
+	//     management window's Linux-only dialog tells the operator to
+	//     restart the UI.
+	existingByName := make(map[string]*subItem, len(p.profileSubItems))
+	for _, si := range p.profileSubItems {
+		existingByName[si.name] = si
+	}
+	keep := make(map[string]struct{}, len(profiles))
+	newItems := make([]*subItem, 0, len(profiles))
 	for _, profile := range profiles {
+		keep[profile.Name] = struct{}{}
+		if reused, ok := existingByName[profile.Name]; ok {
+			if profile.IsActive {
+				reused.Check()
+			} else {
+				reused.Uncheck()
+			}
+			newItems = append(newItems, reused)
+			continue
+		}
 		item := p.profileMenuItem.AddSubMenuItem(profile.Name, "")
 		if profile.IsActive {
 			item.Check()
 		}
-
 		ctx, cancel := context.WithCancel(context.Background())
-		p.profileSubItems = append(p.profileSubItems, &subItem{item, ctx, cancel})
-
-		go func() {
-			for {
-				select {
-				case <-ctx.Done():
-					return // context canceled
-				case _, ok := <-item.ClickedCh:
-					if !ok {
-						return // channel closed
-					}
-
-					// Handle profile selection
-					if profile.IsActive {
-						log.Infof("Profile '%s' is already active", profile.Name)
-						return
-					}
-					conn, err := p.getSrvClientCallback(defaultFailTimeout)
-					if err != nil {
-						log.Errorf("failed to get daemon client: %v", err)
-						return
-					}
-
-					_, err = conn.SwitchProfile(ctx, &proto.SwitchProfileRequest{
-						ProfileName: &profile.Name,
-						Username:    &currUser.Username,
-					})
-					if err != nil {
-						log.Errorf("failed to switch profile: %v", err)
-						// show  notification dialog
-						p.app.SendNotification(fyne.NewNotification("Error", "Failed to switch profile"))
-						return
-					}
-
-					err = p.profileManager.SwitchProfile(profile.Name)
-					if err != nil {
-						log.Errorf("failed to switch profile '%s': %v", profile.Name, err)
-						return
-					}
-
-					log.Infof("Switched to profile '%s'", profile.Name)
-
-					status, err := conn.Status(ctx, &proto.StatusRequest{})
-					if err != nil {
-						log.Errorf("failed to get status after switching profile: %v", err)
-						return
-					}
-
-					if status.Status == string(internal.StatusConnected) {
-						if err := p.downClickCallback(); err != nil {
-							log.Errorf("failed to handle down click after switching profile: %v", err)
-						}
-					}
-
-					if err := p.upClickCallback(); err != nil {
-						log.Errorf("failed to handle up click after switching profile: %v", err)
-					}
-
-					p.refresh()
-					p.loadSettingsCallback()
-				}
-			}
-		}()
-
+		si := &subItem{MenuItem: item, ctx: ctx, cancel: cancel, name: profile.Name}
+		newItems = append(newItems, si)
+		p.spawnProfileClickHandler(si, profile.Name, currUser.Username)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	manageItem := p.profileMenuItem.AddSubMenuItem("Manage Profiles", "")
-	p.manageProfilesSubItem = &subItem{manageItem, ctx, cancel}
-
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return // context canceled
-			case _, ok := <-manageItem.ClickedCh:
-				if !ok {
-					return // channel closed
-				}
-				// Handle manage profiles click
-				p.eventHandler.runSelfCommand(p.ctx, "profiles", "true")
-				p.refresh()
-				p.loadSettingsCallback()
-			}
+	for _, old := range p.profileSubItems {
+		if _, kept := keep[old.name]; !kept {
+			old.Remove()
+			old.cancel()
 		}
-	}()
+	}
+	p.profileSubItems = newItems
+	p.profilesState = profiles
 
 	if activeProf.ProfileName == "default" || activeProf.Username == currUser.Username {
 		p.profileMenuItem.SetTitle(activeProf.ProfileName)
 	} else {
 		p.profileMenuItem.SetTitle(fmt.Sprintf("Profile: %s (User: %s)", activeProf.ProfileName, activeProf.Username))
 		p.emailMenuItem.Hide()
-	}
-
-}
-
-func (p *profileMenu) clear(profiles []Profile) {
-	// Clear existing profile items
-	for _, item := range p.profileSubItems {
-		item.Remove()
-		item.cancel()
-	}
-	p.profileSubItems = make([]*subItem, 0, len(profiles))
-	p.profilesState = profiles
-
-	if p.manageProfilesSubItem != nil {
-		// Remove the manage profiles item if it exists
-		p.manageProfilesSubItem.Remove()
-		p.manageProfilesSubItem.cancel()
-		p.manageProfilesSubItem = nil
 	}
 }
 

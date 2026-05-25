@@ -34,7 +34,7 @@ require (
 	cloud.google.com/go/auth v0.19.0
 	cloud.google.com/go/storage v1.62.1
 	fyne.io/fyne/v2 v2.5.3
-	fyne.io/systray v1.11.0
+	fyne.io/systray v1.12.1
 	github.com/TheJumpCloud/jcapi-go v3.0.0+incompatible
 	github.com/aws/aws-sdk-go-v2 v1.36.3
 	github.com/aws/aws-sdk-go-v2/config v1.29.14
