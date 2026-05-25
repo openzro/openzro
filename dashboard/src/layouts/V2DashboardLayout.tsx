@@ -30,6 +30,7 @@ import GroupsProvider from "@/contexts/GroupsProvider";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import UsersProvider, { useLoggedInUser } from "@/contexts/UsersProvider";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import type { Permissions } from "@/interfaces/Permission";
 import { GlobalSearchModal } from "@/modules/search/GlobalSearchModal";
 
 // Slot context for the v2 topbar's right side. Pages call
@@ -130,7 +131,19 @@ function V2DashboardChrome({ children }: { children: React.ReactNode }) {
   const currentTheme: "light" | "dark" =
     mounted && resolvedTheme === "dark" ? "dark" : "light";
 
-  const sections = buildSidebarSections(pathname, (href) => router.push(href));
+  // Gate sidebar items by the operator's per-module permissions so
+  // restricted / non-admin users don't see admin-only sections and
+  // then hit 403 on click. Mirrors the upstream Navigation.tsx
+  // pattern (per-item `visible={permission.<module>.read}`) but
+  // operates on our data-driven OzSidebar sections — see
+  // buildSidebarSections for the per-item mapping.
+  const { permission, isRestricted } = usePermissions();
+  const sections = buildSidebarSections(
+    pathname,
+    (href) => router.push(href),
+    permission,
+    isRestricted,
+  );
   const breadcrumb = breadcrumbForPath(pathname);
 
   // Stabilize the context value — wrapping in an object literal at
@@ -491,14 +504,32 @@ const NAV_ICONS = {
 // included even though /overview returns 404 today — the ADR explicitly
 // accepts that 404 as no-worse than legacy (where the route also doesn't
 // exist) until the Overview screen ships post-migration.
+// itemSpec extends OzSidebarItem with a `visible` flag that
+// buildSidebarSections uses to filter — kept local so the public
+// OzSidebar API stays a pure data renderer.
+type sidebarItemSpec = OzSidebarSection["items"][number] & {
+  visible: boolean;
+};
+
 function buildSidebarSections(
   pathname: string | null,
   go: (href: string) => void,
+  permission: Permissions["modules"],
+  isRestricted: boolean,
 ): OzSidebarSection[] {
   const matches = (...prefixes: string[]) =>
     !!pathname &&
     prefixes.some((p) => pathname === p || pathname.startsWith(p + "/"));
-  return [
+
+  // Per-item visibility mirrors the per-route gates applied by each
+  // page.tsx via <RestrictedAccess>. Mapping derived by grepping
+  // permission.<module>.read across src/app/(v2-dashboard)/**/page.tsx
+  // so the sidebar reflects exactly what each landing route will let
+  // the operator see. Items with no page-level gate (Overview, Peers,
+  // Control Center, Documentation) follow the upstream Navigation.tsx
+  // convention: Peers is hidden for restricted users (peer-only
+  // accounts), the rest stay visible.
+  const raw: { id: string; label: string; items: sidebarItemSpec[] }[] = [
     {
       id: "workspace",
       label: "Workspace",
@@ -509,6 +540,7 @@ function buildSidebarSections(
           icon: NAV_ICONS.home,
           active: matches("/overview"),
           onClick: () => go("/overview"),
+          visible: true,
         },
         {
           id: "peers",
@@ -516,6 +548,7 @@ function buildSidebarSections(
           icon: NAV_ICONS.peer,
           active: matches("/peers"),
           onClick: () => go("/peers"),
+          visible: !isRestricted,
         },
         {
           id: "networks",
@@ -523,6 +556,7 @@ function buildSidebarSections(
           icon: NAV_ICONS.network,
           active: matches("/networks", "/network"),
           onClick: () => go("/networks"),
+          visible: permission.networks.read,
         },
         {
           id: "network-routes",
@@ -530,16 +564,33 @@ function buildSidebarSections(
           icon: NAV_ICONS.networkRoutes,
           active: matches("/network-routes"),
           onClick: () => go("/network-routes"),
+          visible: permission.routes.read,
         },
         {
           id: "dns",
           label: "DNS",
           icon: NAV_ICONS.dns,
           active: matches("/dns"),
-          // Land on /dns/nameservers — /dns itself just redirects
-          // there, and the DnsTabs sub-nav inside the v2 body will
-          // expose Settings as the second tab.
-          onClick: () => go("/dns/nameservers"),
+          // Umbrella entry — visible if any of the three sub-tabs is
+          // accessible. Pick the first sub-tab the operator can read
+          // as the landing destination so a user with only
+          // dns_zones.read or only dns.read doesn't land on
+          // /dns/nameservers (a route they can't read) and bounce on
+          // RestrictedAccess. DnsTabs itself hides tabs the user
+          // can't open.
+          onClick: () => {
+            if (permission.nameservers.read) {
+              go("/dns/nameservers");
+            } else if (permission.dns_zones.read) {
+              go("/dns/zones");
+            } else {
+              go("/dns/settings");
+            }
+          },
+          visible:
+            permission.nameservers.read ||
+            permission.dns_zones.read ||
+            permission.dns.read,
         },
       ],
     },
@@ -553,6 +604,7 @@ function buildSidebarSections(
           icon: NAV_ICONS.shield,
           active: matches("/access-control"),
           onClick: () => go("/access-control"),
+          visible: permission.policies.read,
         },
         {
           id: "control-center",
@@ -560,6 +612,13 @@ function buildSidebarSections(
           icon: NAV_ICONS.accessGraph,
           active: matches("/control-center"),
           onClick: () => go("/control-center"),
+          // control-center/page.tsx gates on permission.settings.update
+          // (admin-only), NOT policies.read — Control Center exposes
+          // network-wide policy effectiveness + posture-blocked
+          // diagnostics that an operator with policy read-only
+          // shouldn't see. Mirror the page-level gate exactly so the
+          // sidebar doesn't advertise a route the user will bounce on.
+          visible: permission.settings.update,
         },
         {
           id: "posture-checks",
@@ -567,6 +626,8 @@ function buildSidebarSections(
           icon: NAV_ICONS.shieldCheck,
           active: matches("/posture-checks"),
           onClick: () => go("/posture-checks"),
+          // posture-checks/page.tsx gates on permission.policies.read.
+          visible: permission.policies.read,
         },
         {
           id: "keys",
@@ -574,6 +635,7 @@ function buildSidebarSections(
           icon: NAV_ICONS.key,
           active: matches("/setup-keys"),
           onClick: () => go("/setup-keys"),
+          visible: permission.setup_keys.read,
         },
       ],
     },
@@ -586,7 +648,18 @@ function buildSidebarSections(
           label: "Users & Groups",
           icon: NAV_ICONS.team,
           active: matches("/team"),
-          onClick: () => go("/team/users"),
+          // Either tab is enough — TeamTabs hides the one the user
+          // can't read. Land on /team/users when readable, otherwise
+          // fall back to /team/groups so a group-only operator still
+          // has a working entry point.
+          onClick: () => {
+            if (permission.users.read) {
+              go("/team/users");
+            } else {
+              go("/team/groups");
+            }
+          },
+          visible: permission.users.read || permission.groups.read,
         },
         {
           id: "activity",
@@ -601,6 +674,7 @@ function buildSidebarSections(
             !!pathname &&
             (pathname === "/events" || pathname === "/events/audit"),
           onClick: () => go("/events/audit"),
+          visible: permission.events.read,
         },
         {
           id: "flow-traffic",
@@ -608,6 +682,7 @@ function buildSidebarSections(
           icon: NAV_ICONS.flowTraffic,
           active: matches("/events/network-traffic"),
           onClick: () => go("/events/network-traffic"),
+          visible: permission.events.read,
         },
       ],
     },
@@ -621,6 +696,8 @@ function buildSidebarSections(
           icon: NAV_ICONS.integrations,
           active: matches("/integrations"),
           onClick: () => go("/integrations"),
+          // integrations/page.tsx gates on permission.settings.read.
+          visible: permission.settings.read,
         },
         {
           id: "settings",
@@ -628,6 +705,7 @@ function buildSidebarSections(
           icon: NAV_ICONS.settings,
           active: matches("/settings"),
           onClick: () => go("/settings"),
+          visible: permission.settings.read,
         },
         {
           id: "documentation",
@@ -636,12 +714,24 @@ function buildSidebarSections(
           active: false,
           // External — docs.openzro.io is its own site (the /docs
           // repo). Click opens a new tab, matching the legacy
-          // sidebar "Documentation" affordance.
+          // sidebar "Documentation" affordance. Always visible.
           onClick: () => window.open("https://docs.openzro.io", "_blank"),
+          visible: true,
         },
       ],
     },
   ];
+
+  // Filter out invisible items and any section that ends up empty.
+  return raw
+    .map((section) => ({
+      id: section.id,
+      label: section.label,
+      items: section.items
+        .filter((it) => it.visible)
+        .map(({ visible: _omit, ...rest }) => rest),
+    }))
+    .filter((section) => section.items.length > 0);
 }
 
 // UserFooter — sidebar bottom card matching the Claude Design handoff
