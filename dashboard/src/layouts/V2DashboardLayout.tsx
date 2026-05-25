@@ -781,7 +781,6 @@ function UserFooter({ collapsed = false }: { collapsed?: boolean }) {
   const router = useRouter();
   const { loggedInUser, logout } = useLoggedInUser();
   const { user } = useApplicationContext();
-  const { isRestricted } = usePermissions();
 
   const display = loggedInUser?.name || loggedInUser?.email || "—";
   const role = loggedInUser?.role || "user";
@@ -807,7 +806,6 @@ function UserFooter({ collapsed = false }: { collapsed?: boolean }) {
         <UserMenuContent
           loggedInUser={loggedInUser}
           user={user}
-          isRestricted={isRestricted}
           onClose={() => setOpen(false)}
           logout={logout}
           router={router}
@@ -863,7 +861,6 @@ function UserFooter({ collapsed = false }: { collapsed?: boolean }) {
         <UserMenuContent
           loggedInUser={loggedInUser}
           user={user}
-          isRestricted={isRestricted}
           onClose={() => setOpen(false)}
           logout={logout}
           router={router}
@@ -877,14 +874,12 @@ function UserFooter({ collapsed = false }: { collapsed?: boolean }) {
 function UserMenuContent({
   loggedInUser,
   user,
-  isRestricted,
   onClose,
   logout,
   router,
 }: {
   loggedInUser: ReturnType<typeof useLoggedInUser>["loggedInUser"];
   user: ReturnType<typeof useApplicationContext>["user"];
-  isRestricted: boolean;
   onClose: () => void;
   logout: () => Promise<void>;
   router: ReturnType<typeof useRouter>;
@@ -908,7 +903,7 @@ function UserMenuContent({
         </div>
       </DropdownMenuLabel>
       <DropdownMenuSeparator />
-      {!isRestricted && loggedInUser && (
+      {loggedInUser && (
         <DropdownMenuItem
           onClick={() => {
             onClose();
