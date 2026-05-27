@@ -3,8 +3,6 @@ package cluster
 import (
 	"context"
 	"errors"
-	"os"
-	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -109,23 +107,6 @@ func startForwarderPair(t *testing.T, ownsA, ownsB []messages.PeerID) (
 	string, string,
 ) {
 	t.Helper()
-
-	// Every cross-pod forwarder test goes through here, which Dials a
-	// bidirectional inter-pod TCP HELLO handshake on loopback. The
-	// accept side bounds the HELLO read by the production const
-	// helloTimeout (3s, transport.go) — not overridable from a test.
-	// The macOS CI runner is contended enough that a loopback HELLO
-	// read intermittently exceeds 3s, the connection is dropped, the
-	// peer never registers, and the test fails with "peer not
-	// connected anywhere" / read HELLO i/o timeout. This is a
-	// non-hermetic timing dependency on a slow shared runner, not a
-	// forwarder bug — the logic is OS-agnostic and fully covered on
-	// Linux CI + locally. Skip on darwin CI only (mirrors the
-	// TestServiceLifecycle FreeBSD-CI precedent); proper hardening of
-	// the handshake budget is tracked separately.
-	if runtime.GOOS == "darwin" && os.Getenv("CI") == "true" {
-		t.Skip("non-hermetic on macOS CI: contended runner exceeds the 3s loopback HELLO budget — covered on Linux")
-	}
 
 	dispA := newFakeDispatcher(ownsA...)
 	dispB := newFakeDispatcher(ownsB...)
