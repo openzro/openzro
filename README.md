@@ -24,6 +24,29 @@ It is a fork of [`netbirdio/netbird@v0.52.2`](https://github.com/netbirdio/netbi
 core components to AGPLv3 in August 2025), continued under BSD-3-Clause for
 self-hosted deployments that want a freely-licensed, fully-featured baseline.
 
+## Project status
+
+**In production today.** openZro is already running real production
+deployments — full control plane (management + signal + relay +
+dashboard) on Kubernetes, with peers signing in through Dex and the
+operator surface exercised daily.
+
+**Still being built.** The codebase moves fast. Feature work and the
+near-term plan live in [docs/ROADMAP.md](docs/ROADMAP.md) and the
+[open issues](https://github.com/openzro/openzro/issues); chart
+values and config formats may shift between releases until the
+project stabilizes.
+
+**Documentation is catching up.** A few pages still mirror the
+upstream NetBird wording verbatim and are being refreshed as the
+[docs parity audit](https://github.com/openzro/docs/issues/7) closes.
+Where the docs and the code disagree, the code is authoritative.
+
+**Try it and tell us what breaks.** Open an
+[issue](https://github.com/openzro/openzro/issues/new/choose) or a
+[discussion](https://github.com/openzro/openzro/discussions) — every
+report from a real deployment helps shape what ships next.
+
 ## Why openZro and not upstream NetBird?
 
 | | NetBird ≥ v0.53 | **openZro** |
