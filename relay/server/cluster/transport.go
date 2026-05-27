@@ -115,9 +115,18 @@ func (s *Stream) readLoop(handler FrameHandler) {
 
 // helloTimeout caps how long an accepted connection has to send
 // its HELLO frame before we drop it. Real intra-cluster handshakes
-// finish in microseconds; 3 s leaves plenty of room for slow CNI
-// startup without enabling a long-tail DoS via half-open conns.
-const helloTimeout = 3 * time.Second
+// finish in microseconds, but contended macOS CI runners have been
+// observed taking >3 s on loopback (issue #116). 10 s holds enough
+// headroom for the slowest hosts we've measured without enabling a
+// long-tail DoS via half-open conns — the relay's connection caps
+// and rate limits enforce the actual anti-abuse budget; this value
+// only governs how long ONE half-open conn is allowed to dangle.
+//
+// Declared as `var` (not `const`) so transport_test.go can shrink
+// it locally to keep TestTransport_AcceptedConnWithoutHelloTimesOut
+// fast — restored by t.Cleanup, no shared-state leakage between
+// tests in the package.
+var helloTimeout = 10 * time.Second
 
 // classifyHelloReject maps a DecodeHello failure to a metric label.
 // Pattern-matching on the error text keeps the cluster package

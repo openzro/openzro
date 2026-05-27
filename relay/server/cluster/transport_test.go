@@ -187,6 +187,14 @@ func TestTransport_AcceptedConnWithoutHelloIsDropped(t *testing.T) {
 func TestTransport_AcceptedConnWithoutHelloTimesOut(t *testing.T) {
 	// A dialer that opens the conn and never sends anything must
 	// be reaped by the helloTimeout, not held forever.
+	//
+	// Shrink the production budget locally so the test waits ~400ms
+	// instead of ~10s; the path under test (deadline fires → conn
+	// dropped → no stream registered) is value-independent.
+	orig := helloTimeout
+	helloTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { helloTimeout = orig })
+
 	srvHandler := newCaptureHandler()
 	srv, addr := startTransport(t, srvHandler)
 
