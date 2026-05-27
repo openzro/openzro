@@ -181,10 +181,20 @@ func TestNewManagerPeerDisconnected(t *testing.T) {
 }
 
 func TestCleanupSchedulingBehaviorIsBatched(t *testing.T) {
+	// testCleanupWindow needs to be wide enough that the loop below
+	// stages every OnPeerDisconnected BEFORE the first cleanup timer
+	// fires. The original 100ms window left ~1s of margin, which a
+	// contended Linux CI runner could still eat (scheduler starves
+	// the test goroutine, peer-N lands AFTER cleanup #1 finishes,
+	// peer-N triggers a new timer → cleanup #2 → BufferUpdate==2).
+	// 1s window × 3s lifetime gives ~3s of headroom after the loop
+	// completes — more than enough for any GH-Actions Linux runner
+	// we measure. Test runtime grows ~3s; the alternative is the
+	// recurring flake observed on the v0.53.1-alpha.83 tag push.
 	const (
 		ephemeralPeers    = 10
-		testLifeTime      = 1 * time.Second
-		testCleanupWindow = 100 * time.Millisecond
+		testLifeTime      = 3 * time.Second
+		testCleanupWindow = 1 * time.Second
 	)
 	mockStore := &MockStore{}
 	mockAM := &MockAccountManager{
