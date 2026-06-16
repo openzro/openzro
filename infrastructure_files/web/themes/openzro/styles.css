@@ -150,7 +150,7 @@ body.theme-body::before {
  */
 .theme-form-row > a {
   display: block;
-  text-deacmetion: none;
+  text-decoration: none;
 }
 
 .theme-btn-provider {
@@ -369,11 +369,11 @@ body.theme-body::before {
 
 .theme-link-back a {
   color: var(--oz-primary);
-  text-deacmetion: none;
+  text-decoration: none;
 }
 .theme-link-back a:hover {
   color: var(--oz-primary-hover);
-  text-deacmetion: underline;
+  text-decoration: underline;
 }
 
 .theme-remember-me {

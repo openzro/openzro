@@ -23,7 +23,7 @@ export default function CopyToClipboardText({
   return (
     <div
       className={cn(
-        "flex gap-2 items-center group cursor-pointer transition-all hover:underline underline-offset-4 deacmetion-dashed deacmetion-nb-gray-600",
+        "flex gap-2 items-center group cursor-pointer transition-all hover:underline underline-offset-4 decoration-dashed decoration-nb-gray-600",
         !copied && "hover:opacity-90",
         className,
       )}

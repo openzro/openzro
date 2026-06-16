@@ -109,7 +109,7 @@ export default function OzEmptyState({
   );
 }
 
-// Dotted radial grid behind the mesh. Pure deacmetion — sits absolutely
+// Dotted radial grid behind the mesh. Pure decoration — sits absolutely
 // inside the card and fades out toward the edges via a radial mask so
 // it never reaches the card border.
 function DottedGridBackdrop() {

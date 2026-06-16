@@ -153,7 +153,7 @@ If you create reusable components, name them with the `Oz` prefix
 </a>
 ```
 ```css
-.oz-lockup { display: inline-flex; align-items: center; gap: 10px; text-deacmetion: none; }
+.oz-lockup { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; }
 .oz-lockup .oz-wordmark { font-size: 20px; }
 ```
 
