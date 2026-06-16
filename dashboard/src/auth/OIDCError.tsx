@@ -32,6 +32,26 @@ export const OIDCError = () => {
     }
   }, [accessDenied, title]);
 
+  // Scrub the stale ?code= / ?state= that the failed token exchange
+  // left in the address bar. Without this the Logout button below
+  // (and the OidcSecure auto-retry from SecureProvider) re-enters
+  // /auth?code=..., axa-fr re-attempts the same dead code, this same
+  // error renders, and the user is stuck in a loop that only a manual
+  // URL edit breaks. We keep `error` / `error_description` because
+  // the rendering below reads them.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("code") && !url.searchParams.has("state")) {
+      return;
+    }
+    url.searchParams.delete("code");
+    url.searchParams.delete("state");
+    url.searchParams.delete("session_state");
+    url.searchParams.delete("iss");
+    window.history.replaceState(null, "", url.pathname + url.search);
+  }, []);
+
   return (
     <div
       className={
