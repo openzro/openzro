@@ -38,13 +38,13 @@ body.oz-body {
   overflow-x: hidden;
   min-height: 100vh;
 }
-a { color: inherit; text-deacmetion: none; }
+a { color: inherit; text-decoration: none; }
 button { font: inherit; cursor: pointer; border: 0; background: transparent; color: inherit; }
 
 /* Backdrop scene — three radial-gradient orbs + a 64×64 grid masked
  * to a centered ellipse. Fixed positioning so it tiles the viewport
  * regardless of card height. Pointer-events disabled because it's
- * pure deacmetion. */
+ * pure decoration. */
 .scene {
   position: fixed;
   inset: 0;
