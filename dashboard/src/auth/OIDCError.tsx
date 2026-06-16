@@ -18,7 +18,7 @@ export const OIDCError = () => {
   const invalidRequest = errorParam === "invalid_request";
   const [title, setTitle] = useState(params.get("error_description"));
   const errorDescription = params.get("error_description");
-  const { logout, login } = useOidc();
+  const { logout } = useOidc();
 
   useEffect(() => {
     if (accessDenied) {
@@ -31,6 +31,59 @@ export const OIDCError = () => {
       setTitle("Oops, something went wrong");
     }
   }, [accessDenied, title]);
+
+  // Scrub the stale code/state the failed token exchange left in the
+  // address bar. Without this the Logout button below (and the
+  // OidcSecure auto-retry from SecureProvider) re-enters the
+  // callback route, axa-fr re-attempts the same dead code, this
+  // same error renders, and the user is stuck in a loop that only
+  // a manual URL edit breaks. `error` / `error_description` stay
+  // because the rendering below reads them.
+  //
+  // Two URL shapes to handle:
+  //   - search-string callbacks   /auth?code=…&state=…
+  //   - hash-string callbacks     /#callback?code=…&state=…
+  //                               (the loadConfig fallback when the
+  //                                deployment didn't set
+  //                                AUTH_REDIRECT_URI). The OIDC
+  //                                library parses params inside the
+  //                                hash too, so leaving them in
+  //                                place keeps the loop alive on
+  //                                hash-style deployments.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stale = ["code", "state", "session_state", "iss"];
+    let dirty = false;
+
+    const url = new URL(window.location.href);
+    for (const key of stale) {
+      if (url.searchParams.has(key)) {
+        url.searchParams.delete(key);
+        dirty = true;
+      }
+    }
+
+    let hash = url.hash;
+    if (hash.startsWith("#")) {
+      const qIdx = hash.indexOf("?");
+      if (qIdx !== -1) {
+        const hashPath = hash.slice(0, qIdx);
+        const hashParams = new URLSearchParams(hash.slice(qIdx + 1));
+        for (const key of stale) {
+          if (hashParams.has(key)) {
+            hashParams.delete(key);
+            dirty = true;
+          }
+        }
+        const remaining = hashParams.toString();
+        hash = remaining ? `${hashPath}?${remaining}` : hashPath;
+      }
+    }
+
+    if (!dirty) return;
+    const rebuilt = url.pathname + url.search + hash;
+    window.history.replaceState(null, "", rebuilt);
+  }, []);
 
   return (
     <div
