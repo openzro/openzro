@@ -60,6 +60,7 @@ func newPeerID(seed byte) messages.PeerID {
 // other so they form a 2-pod cluster for the test.
 func startPair(t *testing.T, ownsA, ownsB []messages.PeerID) (*PeerLocator, *PeerLocator, string, string) {
 	t.Helper()
+	skipOnDarwinCI(t)
 
 	ownerA := newFakeOwner(ownsA...)
 	ownerB := newFakeOwner(ownsB...)

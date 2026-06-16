@@ -107,6 +107,7 @@ func startForwarderPair(t *testing.T, ownsA, ownsB []messages.PeerID) (
 	string, string,
 ) {
 	t.Helper()
+	skipOnDarwinCI(t)
 
 	dispA := newFakeDispatcher(ownsA...)
 	dispB := newFakeDispatcher(ownsB...)
