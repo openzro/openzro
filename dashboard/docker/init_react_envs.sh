@@ -53,6 +53,12 @@ export AUTH_REDIRECT_URI=${AUTH_REDIRECT_URI}
 export AUTH_SILENT_REDIRECT_URI=${AUTH_SILENT_REDIRECT_URI}
 export USE_AUTH0=${USE_AUTH0:-true}
 export AUTH_SUPPORTED_SCOPES=${AUTH_SUPPORTED_SCOPES:-openid profile email api offline_access email_verified}
+# Optional comma-separated extra IdP origins/prefixes the service worker
+# trusts for token interception, on top of AUTH_AUTHORITY. Needed when
+# the IdP serves authorize/token/userinfo from a different path or host
+# than the discovery authority (e.g. Microsoft Entra ID). Consumed by
+# OidcTrustedDomains.js.tmpl. Empty by default → no behaviour change.
+export AUTH_EXTRA_OIDC_DOMAINS=${AUTH_EXTRA_OIDC_DOMAINS}
 
 export OPENZRO_MGMT_API_ENDPOINT=$(echo $OPENZRO_MGMT_API_ENDPOINT | sed -E 's/(:80|:443)$//')
 export OPENZRO_MGMT_GRPC_API_ENDPOINT=${OPENZRO_MGMT_GRPC_API_ENDPOINT}
@@ -66,7 +72,7 @@ echo "Openzro latest version: ${OPENZRO_LATEST_VERSION}"
 # placeholders were dropped along with the third-party tracker
 # scripts — see dashboard/src/contexts/AnalyticsProvider.tsx for the
 # rationale.
-ENV_STR="\$\$USE_AUTH0 \$\$AUTH_AUDIENCE \$\$AUTH_AUTHORITY \$\$AUTH_CLIENT_ID \$\$AUTH_CLIENT_SECRET \$\$AUTH_SUPPORTED_SCOPES \$\$OPENZRO_MGMT_API_ENDPOINT \$\$OPENZRO_MGMT_GRPC_API_ENDPOINT \$\$AUTH_REDIRECT_URI \$\$AUTH_SILENT_REDIRECT_URI \$\$OPENZRO_TOKEN_SOURCE \$\$OPENZRO_DRAG_QUERY_PARAMS"
+ENV_STR="\$\$USE_AUTH0 \$\$AUTH_AUDIENCE \$\$AUTH_AUTHORITY \$\$AUTH_CLIENT_ID \$\$AUTH_CLIENT_SECRET \$\$AUTH_SUPPORTED_SCOPES \$\$AUTH_EXTRA_OIDC_DOMAINS \$\$OPENZRO_MGMT_API_ENDPOINT \$\$OPENZRO_MGMT_GRPC_API_ENDPOINT \$\$AUTH_REDIRECT_URI \$\$AUTH_SILENT_REDIRECT_URI \$\$OPENZRO_TOKEN_SOURCE \$\$OPENZRO_DRAG_QUERY_PARAMS"
 
 OIDC_TRUSTED_DOMAINS="/usr/share/nginx/html/OidcTrustedDomains.js"
 envsubst "$ENV_STR" < "$OIDC_TRUSTED_DOMAINS".tmpl > "$OIDC_TRUSTED_DOMAINS"
