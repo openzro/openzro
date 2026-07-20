@@ -382,6 +382,8 @@ if [ -f "$WORK/downloads/openzro_${VER_NOV}_windows_amd64.msi" ]; then
     echo "Staged windows/openzro.msi → $VERSION"
 else
     echo "WARN: windows MSI for $VERSION missing — skipping stable URL."
+    [ -n "${GITHUB_ACTIONS:-}" ] && \
+        echo "::warning title=Missing release asset::windows MSI for $VERSION not found — /windows/openzro.msi kept at its previous version"
 fi
 
 if [ -f "$WORK/downloads/openzro_${VER_NOV}_darwin_universal.pkg" ]; then
@@ -390,12 +392,18 @@ if [ -f "$WORK/downloads/openzro_${VER_NOV}_darwin_universal.pkg" ]; then
     echo "Staged macos/openzro.pkg → $VERSION"
 else
     echo "WARN: macOS PKG for $VERSION missing — skipping stable URL."
+    [ -n "${GITHUB_ACTIONS:-}" ] && \
+        echo "::warning title=Missing release asset::macOS PKG for $VERSION not found — /macos/openzro.pkg kept at its previous version"
 fi
 
 if [ -f "$WORK/downloads/openzro-ui_${VER_NOV}_darwin_universal.tar.gz" ]; then
     cp "$WORK/downloads/openzro-ui_${VER_NOV}_darwin_universal.tar.gz" \
         "$WORK/repo/macos/openzro-ui.tar.gz"
     echo "Staged macos/openzro-ui.tar.gz → $VERSION"
+else
+    echo "WARN: macOS UI tarball for $VERSION missing — skipping stable URL."
+    [ -n "${GITHUB_ACTIONS:-}" ] && \
+        echo "::warning title=Missing release asset::macOS UI tarball for $VERSION not found — /macos/openzro-ui.tar.gz kept at its previous version"
 fi
 
 # Also drop a tiny latest.json so the dashboard can show
