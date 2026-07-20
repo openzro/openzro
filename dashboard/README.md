@@ -92,6 +92,7 @@ takes the following environment variables:
 | `AUTH_SUPPORTED_SCOPES` | Space-separated scope list. Default: `openid profile email offline_access api`. |
 | `AUTH_REDIRECT_URI` | Public dashboard URL + `/auth`. |
 | `AUTH_SILENT_REDIRECT_URI` | Public dashboard URL + `/silent-auth`. |
+| `AUTH_EXTRA_OIDC_DOMAINS` | Optional, comma-separated. Extra IdP origins/prefixes the service worker trusts for token interception, in addition to `AUTH_AUTHORITY`. Needed when the IdP serves authorize/token/userinfo from a different path or host than the discovery authority. Microsoft Entra ID: `https://login.microsoftonline.com/<tenant-id>,https://graph.microsoft.com`. |
 | `USE_AUTH0` | `"true"` only when your issuer is literally Auth0 (forces the Auth0-specific token shape). `"false"` otherwise. |
 | `OPENZRO_MGMT_API_ENDPOINT` | REST URL for the Management service, e.g. `https://api.openzro.example.com`. |
 | `OPENZRO_MGMT_GRPC_API_ENDPOINT` | gRPC URL for the Management service, e.g. `https://api.openzro.example.com:443`. |

@@ -54,6 +54,29 @@ const _hostBoundary = "(?:$|/)";
 // injected on the way out.
 const _idpRegex = new RegExp("^" + _esc(_idpAuthority) + _hostBoundary);
 
+// Extra IdP origins/prefixes to trust for token interception, beyond
+// AUTH_AUTHORITY. Some IdPs serve authorize / token / userinfo from
+// paths or hosts that are NOT under the discovery authority, so
+// `_idpRegex` alone never intercepts them. Microsoft Entra ID is the
+// canonical case: authority is
+// `https://login.microsoftonline.com/<tenant>/v2.0`, but authorize /
+// token / logout live under `.../oauth2/v2.0/` (a sibling path, not a
+// child of the authority) and userinfo on a different host entirely,
+// `https://graph.microsoft.com`.
+//
+// AUTH_EXTRA_OIDC_DOMAINS is an optional comma-separated list of
+// origins or URL prefixes. Each entry is trailing-slash-normalized,
+// regex-escaped and host-boundary-anchored exactly like _idpAuthority,
+// so the same anti-subdomain hardening applies: an entry
+// "https://login.microsoftonline.com/<tenant>" matches that origin and
+// its sub-paths but NOT "https://login.microsoftonline.com.evil.test".
+// Empty / unset yields no extra domains (default behaviour unchanged).
+const _extraOidcRegexes = "$AUTH_EXTRA_OIDC_DOMAINS"
+  .split(",")
+  .map((s) => s.trim())
+  .filter((s) => s.length > 0)
+  .map((s) => new RegExp("^" + _esc(_stripTrailingSlash(s)) + _hostBoundary));
+
 // Mgmt API URLs that get the OIDC bearer injected. Negative lookahead
 // `(?!mfa/)` after `/api/` lets all paths through EXCEPT the MFA
 // token-bearer endpoints (/api/mfa/challenge, /api/mfa/enroll/start,
@@ -63,13 +86,13 @@ const _apiRegex = new RegExp("^" + _esc(_mgmtApiOrigin) + "/api/(?!mfa/)");
 
 const trustedDomains = {
   default: {
-    oidcDomains: [_idpRegex],
+    oidcDomains: [_idpRegex, ..._extraOidcRegexes],
     accessTokenDomains: [_apiRegex],
     showAccessToken: false,
     allowMultiTabLogin: false,
   },
   auth0: {
-    oidcDomains: [_idpRegex],
+    oidcDomains: [_idpRegex, ..._extraOidcRegexes],
     accessTokenDomains: [_apiRegex],
     showAccessToken: false,
     allowMultiTabLogin: false,
