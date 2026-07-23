@@ -30,6 +30,16 @@ func (s *MockStore) GetAllEphemeralPeers(_ context.Context, _ store.LockingStren
 	return peers, nil
 }
 
+func (s *MockStore) GetPeersByIDs(_ context.Context, _ store.LockingStrength, _ string, peerIDs []string) (map[string]*nbpeer.Peer, error) {
+	res := make(map[string]*nbpeer.Peer)
+	for _, id := range peerIDs {
+		if p, ok := s.account.Peers[id]; ok {
+			res[id] = p
+		}
+	}
+	return res, nil
+}
+
 type MockAccountManager struct {
 	mu sync.Mutex
 	nbAccount.Manager
@@ -177,6 +187,59 @@ func TestNewManagerPeerDisconnected(t *testing.T) {
 	expected := numberOfPeers + numberOfEphemeralPeers - 1
 	if len(store.account.Peers) != expected {
 		t.Errorf("failed to cleanup ephemeral peers, expected: %d, result: %d", expected, len(store.account.Peers))
+	}
+}
+
+// TestCleanupSkipsClusterConnectedPeer is the regression test for the
+// multi-replica ephemeral-peer bug: a replica that does NOT own a peer's
+// Sync stream still loads that peer at startup and schedules its cleanup.
+// Before the fix, that non-owning replica hard-deleted the peer from the
+// shared store ~lifeTime after its own start, even though the peer was
+// continuously connected on another replica. cleanup must now re-check the
+// cluster-shared Status.Connected flag (written by the stream-owning
+// replica) and skip the delete while the peer is connected anywhere.
+func TestCleanupSkipsClusterConnectedPeer(t *testing.T) {
+	t.Cleanup(func() {
+		timeNow = time.Now
+	})
+	startTime := time.Now()
+	timeNow = func() time.Time {
+		return startTime
+	}
+
+	store := &MockStore{}
+	am := MockAccountManager{
+		store: store,
+	}
+
+	store.account = newAccountWithId(context.Background(), "account", "", "", false)
+	// connected is owned by another replica's Sync stream — its shared
+	// status says Connected=true, so this replica must not delete it.
+	connected := &nbpeer.Peer{
+		ID: "ephemeral_connected", AccountID: store.account.Id, Ephemeral: true,
+		Status: &nbpeer.PeerStatus{Connected: true, OwnerStreamID: "stream-on-replica-a"},
+	}
+	// disconnected is genuinely gone — it must still be cleaned up.
+	disconnected := &nbpeer.Peer{
+		ID: "ephemeral_disconnected", AccountID: store.account.Id, Ephemeral: true,
+		Status: &nbpeer.PeerStatus{Connected: false},
+	}
+	store.account.Peers[connected.ID] = connected
+	store.account.Peers[disconnected.ID] = disconnected
+
+	mgr := NewEphemeralManager(store, &am)
+	mgr.loadEphemeralPeers(context.Background())
+	startTime = startTime.Add(ephemeralLifeTime + 1)
+	mgr.cleanup(context.Background())
+
+	if _, ok := store.account.Peers[connected.ID]; !ok {
+		t.Errorf("cluster-connected ephemeral peer must not be deleted by a non-owning replica")
+	}
+	if _, ok := store.account.Peers[disconnected.ID]; ok {
+		t.Errorf("disconnected ephemeral peer should have been cleaned up")
+	}
+	if calls := am.GetDeletePeerCalls(); calls != 1 {
+		t.Errorf("expected exactly 1 DeletePeer call, got %d", calls)
 	}
 }
 
