@@ -180,6 +180,23 @@ func (e *EphemeralManager) cleanup(ctx context.Context) {
 
 	e.peersLock.Unlock()
 
+	// Cluster-wide liveness gate. This manager keeps per-process, in-memory
+	// state, but the store is shared across every management replica. A
+	// replica that does not own a peer's Sync stream still loaded that peer
+	// at startup and scheduled its cleanup here — deleting it now would rip
+	// a peer that is continuously connected on another replica out of the
+	// shared store. Before deleting, re-read the authoritative Connected
+	// flag (written by the stream-owning replica and guarded against stale
+	// disconnects, see updatePeerStatusAndLocation) and skip any peer that
+	// is connected anywhere in the cluster. The owning replica deletes it
+	// once the peer actually disconnects.
+	//
+	// The read is one bulk query per account (not one per peer): cleanup is
+	// a batched, low-frequency path and the delete it guards is far heavier,
+	// but a peer storm that expires many peers at once should still not fan
+	// out into N individual SELECTs.
+	e.dropStillConnected(ctx, deletePeers)
+
 	bufferAccountCall := make(map[string]struct{})
 
 	for id, p := range deletePeers {
@@ -193,6 +210,45 @@ func (e *EphemeralManager) cleanup(ctx context.Context) {
 	}
 	for accountID := range bufferAccountCall {
 		e.accountManager.BufferUpdateAccountPeers(ctx, accountID)
+	}
+}
+
+// dropStillConnected removes from the delete set every peer that must not
+// be hard-deleted: peers still connected somewhere in the cluster, peers
+// already gone from the store, and — on a store read error — every peer of
+// the affected account (never delete on an unverified state; a peer that is
+// really stale is re-loaded and re-scheduled on the next LoadInitialPeers).
+// It groups the staged peers by account so the shared store is hit once per
+// account instead of once per peer.
+func (e *EphemeralManager) dropStillConnected(ctx context.Context, deletePeers map[string]*ephemeralPeer) {
+	idsByAccount := make(map[string][]string)
+	for id, p := range deletePeers {
+		idsByAccount[p.accountID] = append(idsByAccount[p.accountID], id)
+	}
+
+	for accountID, ids := range idsByAccount {
+		current, err := e.store.GetPeersByIDs(ctx, store.LockingStrengthShare, accountID, ids)
+		if err != nil {
+			log.WithContext(ctx).Warnf("skip ephemeral cleanup for account %s: cannot verify connection state: %s", accountID, err)
+			for _, id := range ids {
+				delete(deletePeers, id)
+			}
+			continue
+		}
+
+		for _, id := range ids {
+			peer, ok := current[id]
+			if !ok {
+				// Already removed from the store (e.g. deleted via API) —
+				// nothing left to delete.
+				delete(deletePeers, id)
+				continue
+			}
+			if peer.Status != nil && peer.Status.Connected {
+				log.WithContext(ctx).Debugf("skip ephemeral cleanup for peer %s: still connected on the cluster", id)
+				delete(deletePeers, id)
+			}
+		}
 	}
 }
 
