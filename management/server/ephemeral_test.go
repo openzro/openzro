@@ -18,6 +18,9 @@ import (
 type MockStore struct {
 	store.Store
 	account *types.Account
+	// failGetPeersByIDs makes the next N GetPeersByIDs calls return an
+	// error, simulating a transient store outage during cleanup.
+	failGetPeersByIDs int
 }
 
 func (s *MockStore) GetAllEphemeralPeers(_ context.Context, _ store.LockingStrength) ([]*nbpeer.Peer, error) {
@@ -31,6 +34,10 @@ func (s *MockStore) GetAllEphemeralPeers(_ context.Context, _ store.LockingStren
 }
 
 func (s *MockStore) GetPeersByIDs(_ context.Context, _ store.LockingStrength, _ string, peerIDs []string) (map[string]*nbpeer.Peer, error) {
+	if s.failGetPeersByIDs > 0 {
+		s.failGetPeersByIDs--
+		return nil, fmt.Errorf("simulated store outage")
+	}
 	res := make(map[string]*nbpeer.Peer)
 	for _, id := range peerIDs {
 		if p, ok := s.account.Peers[id]; ok {
@@ -240,6 +247,69 @@ func TestCleanupSkipsClusterConnectedPeer(t *testing.T) {
 	}
 	if calls := am.GetDeletePeerCalls(); calls != 1 {
 		t.Errorf("expected exactly 1 DeletePeer call, got %d", calls)
+	}
+}
+
+// TestCleanupRequeuesPeersOnStoreError is the regression test for the
+// follow-up to #137: cleanup pops expired peers off the in-memory list
+// before it verifies their connection state, and LoadInitialPeers runs only
+// once at startup. So if the store read fails, the peers must be re-tracked
+// in process — otherwise a transient DB blip during cleanup would orphan a
+// batch of ephemeral peers until the next restart. The first cleanup hits a
+// simulated store outage (nothing deleted, peer re-tracked); a later cleanup
+// with the store healthy then deletes it, proving the retry happened without
+// a restart.
+func TestCleanupRequeuesPeersOnStoreError(t *testing.T) {
+	t.Cleanup(func() {
+		timeNow = time.Now
+	})
+	startTime := time.Now()
+	timeNow = func() time.Time {
+		return startTime
+	}
+
+	store := &MockStore{}
+	am := MockAccountManager{
+		store: store,
+	}
+
+	store.account = newAccountWithId(context.Background(), "account", "", "", false)
+	peer := &nbpeer.Peer{
+		ID: "ephemeral_offline", AccountID: store.account.Id, Ephemeral: true,
+		Status: &nbpeer.PeerStatus{Connected: false},
+	}
+	store.account.Peers[peer.ID] = peer
+
+	mgr := NewEphemeralManager(store, &am)
+	t.Cleanup(mgr.Stop)
+	mgr.loadEphemeralPeers(context.Background())
+
+	// First cleanup: the store read fails, so nothing is deleted and the
+	// peer must be re-tracked in process for a later retry.
+	store.failGetPeersByIDs = 1
+	startTime = startTime.Add(ephemeralLifeTime + 1)
+	mgr.cleanup(context.Background())
+
+	if _, ok := store.account.Peers[peer.ID]; !ok {
+		t.Fatalf("peer must not be deleted when its state could not be verified")
+	}
+	if calls := am.GetDeletePeerCalls(); calls != 0 {
+		t.Fatalf("expected 0 DeletePeer calls on store error, got %d", calls)
+	}
+	if !mgr.isPeerOnList(peer.ID) {
+		t.Fatalf("peer must be re-tracked in process after a store error, not forgotten until restart")
+	}
+
+	// Second cleanup with the store healthy: the re-tracked peer is now
+	// verified (offline) and cleaned up — no process restart needed.
+	startTime = startTime.Add(ephemeralLifeTime + ephemeralLifeTime)
+	mgr.cleanup(context.Background())
+
+	if _, ok := store.account.Peers[peer.ID]; ok {
+		t.Errorf("re-tracked offline peer should have been cleaned up on retry")
+	}
+	if calls := am.GetDeletePeerCalls(); calls != 1 {
+		t.Errorf("expected exactly 1 DeletePeer call after retry, got %d", calls)
 	}
 }
 
