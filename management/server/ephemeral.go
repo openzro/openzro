@@ -195,7 +195,16 @@ func (e *EphemeralManager) cleanup(ctx context.Context) {
 	// a batched, low-frequency path and the delete it guards is far heavier,
 	// but a peer storm that expires many peers at once should still not fan
 	// out into N individual SELECTs.
-	e.dropStillConnected(ctx, deletePeers)
+	//
+	// Peers whose state could not be verified (a transient store error) are
+	// returned rather than deleted, and re-tracked below so a running
+	// instance retries them — the expired peers were already popped off the
+	// in-memory list above, and LoadInitialPeers only runs once at startup,
+	// so without this they would be orphaned until the process restarts.
+	requeue := e.dropStillConnected(ctx, deletePeers)
+	if len(requeue) > 0 {
+		e.rescheduleAfterError(ctx, requeue)
+	}
 
 	bufferAccountCall := make(map[string]struct{})
 
@@ -214,23 +223,29 @@ func (e *EphemeralManager) cleanup(ctx context.Context) {
 }
 
 // dropStillConnected removes from the delete set every peer that must not
-// be hard-deleted: peers still connected somewhere in the cluster, peers
-// already gone from the store, and — on a store read error — every peer of
-// the affected account (never delete on an unverified state; a peer that is
-// really stale is re-loaded and re-scheduled on the next LoadInitialPeers).
+// be hard-deleted and returns the peers that need to be re-tracked in
+// process. Three cases are dropped from the set: peers still connected
+// somewhere in the cluster and peers already gone from the store (both
+// drop-and-forget — the owning replica handles the connected one, the gone
+// one needs nothing), and — on a store read error — every peer of the
+// affected account (never delete on an unverified state). Only the last
+// case is returned: those peers could not be verified, so a running
+// instance must retry them rather than forget them until a restart.
 // It groups the staged peers by account so the shared store is hit once per
 // account instead of once per peer.
-func (e *EphemeralManager) dropStillConnected(ctx context.Context, deletePeers map[string]*ephemeralPeer) {
+func (e *EphemeralManager) dropStillConnected(ctx context.Context, deletePeers map[string]*ephemeralPeer) []*ephemeralPeer {
 	idsByAccount := make(map[string][]string)
 	for id, p := range deletePeers {
 		idsByAccount[p.accountID] = append(idsByAccount[p.accountID], id)
 	}
 
+	var requeue []*ephemeralPeer
 	for accountID, ids := range idsByAccount {
 		current, err := e.store.GetPeersByIDs(ctx, store.LockingStrengthShare, accountID, ids)
 		if err != nil {
-			log.WithContext(ctx).Warnf("skip ephemeral cleanup for account %s: cannot verify connection state: %s", accountID, err)
+			log.WithContext(ctx).Warnf("defer ephemeral cleanup for account %s: cannot verify connection state: %s", accountID, err)
 			for _, id := range ids {
+				requeue = append(requeue, deletePeers[id])
 				delete(deletePeers, id)
 			}
 			continue
@@ -249,6 +264,32 @@ func (e *EphemeralManager) dropStillConnected(ctx context.Context, deletePeers m
 				delete(deletePeers, id)
 			}
 		}
+	}
+	return requeue
+}
+
+// rescheduleAfterError re-tracks peers whose connection state could not be
+// verified during cleanup (a transient store error) and re-arms the cleanup
+// timer if it is idle, so a running instance retries them after another
+// lifeTime rather than forgetting them until the next restart. A fresh
+// deadline is used deliberately: the retry is a backstop for a transient
+// store blip, not a tight spin.
+func (e *EphemeralManager) rescheduleAfterError(ctx context.Context, peers []*ephemeralPeer) {
+	e.peersLock.Lock()
+	defer e.peersLock.Unlock()
+
+	for _, p := range peers {
+		e.addPeer(p.accountID, p.id, e.newDeadLine())
+	}
+
+	if e.timer == nil && e.headPeer != nil {
+		delay := e.headPeer.deadline.Sub(timeNow()) + e.cleanupWindow
+		if delay < 0 {
+			delay = 0
+		}
+		e.timer = time.AfterFunc(delay, func() {
+			e.cleanup(ctx)
+		})
 	}
 }
 
