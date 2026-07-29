@@ -489,6 +489,48 @@ visible once the pool existed, both covered by regression tests:
   against a synthetic group covering just that zone; per-source status keeps
   coming from the sources themselves.
 
+### The opt-in surface as built (D8)
+
+D8 leaves the choice between a CLI flag and a config file open. v1 ships the
+config file alone: `Config.DNSSelectionPolicy` in the client's persisted
+configuration, threaded `config → EngineConfig → DefaultServer → resolverPool`.
+
+A flag would have to travel through the daemon's IPC to reach the same field,
+which means a `client/proto` change and a regenerated `daemon.pb.go` — a
+protoc-version risk taken for an opt-in that hardly anyone sets, and one that can
+be added later without touching anything below it. The field is not part of
+`ConfigInput` for the same reason: nothing would write it yet, and the flag commit
+would add both together. `DisableIPv6Discovery` is configured the same way today.
+
+Empty means "not configured" and keeps a nil policy, so the mobile constructors —
+which have no client config field to read — stay exactly as they are.
+
+An unknown policy name is **warned about and ignored**, not fatal: refusing to
+resolve DNS at all because a preference is misspelled is the worse failure, and
+the warning names the value that was dropped. Strict validation belongs to the
+flag, where a typo can be rejected while the operator is still watching.
+
+### Two examples in the Decision and Verification sections that drifted
+
+D4's example warning line, `ambiguous: N private answers for <name> from X,Y —
+picked X`, was illustrative and is not what shipped. The actual line
+(`pool.go`, logged at most once per five minutes per the throttling in "Where
+the implementation refines D4" above) is:
+
+    nameserver groups of <zone> disagree on the internal address for
+    domain=<name> (answered: <sources>), serving the answer from <source>.
+    Check the zone's nameserver configuration.
+
+The Verification section's `go test -run` pattern predates the zone-hook and
+ranking regression tests added since and does not select them (no alternative
+in the regex matches `TestServer_Pooled...` or `TestRanking`). The command that
+actually covers everything this ADR claims is regression-tested:
+
+    go test -race -timeout 5m -count=1 ./client/internal/dns/...
+
+Running the whole package is also simpler to keep accurate than maintaining a
+name filter against tests that get renamed or added.
+
 ## References
 
 - Proposal & maintainer greenlight: [openzro/openzro#140](https://github.com/openzro/openzro/issues/140).
