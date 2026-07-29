@@ -97,9 +97,36 @@ func (u *upstreamResolverBase) MatchSubdomains() bool {
 	return true
 }
 
+// source returns a stable identifier for this group's upstream servers. It is
+// used as the deterministic tiebreak key when several groups serve one zone, and
+// in log lines: server addresses are identifiers, not secrets.
+func (u *upstreamResolverBase) source() string {
+	servers := slices.Clone(u.upstreamServers)
+	slices.Sort(servers)
+	return strings.Join(servers, ",")
+}
+
+// setCallbacks installs the deactivate/reactivate health hooks. Not allowed to
+// call reactivate before deactivate.
+func (u *upstreamResolverBase) setCallbacks(deactivate func(error), reactivate func()) {
+	u.deactivate, u.reactivate = deactivate, reactivate
+}
+
 func (u *upstreamResolverBase) Stop() {
 	log.Debugf("stopping serving DNS for upstreams %s", u.upstreamServers)
 	u.cancel()
+}
+
+// stopped reports whether this resolver has been stopped and will not answer
+// again, so a caller can leave it out instead of paying a failing exchange per
+// upstream server — and the log lines that come with it.
+func (u *upstreamResolverBase) stopped() bool {
+	select {
+	case <-u.ctx.Done():
+		return true
+	default:
+		return false
+	}
 }
 
 // ServeDNS handles a DNS request
@@ -116,12 +143,39 @@ func (u *upstreamResolverBase) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 		r.MsgHdr.AuthenticatedData = true
 	}
 
-	select {
-	case <-u.ctx.Done():
+	if u.stopped() {
 		logger.Tracef("%s has been stopped", u)
 		return
-	default:
 	}
+
+	var rm *dns.Msg
+	if rm, err = u.queryUpstreams(logger, r); rm == nil {
+		logger.Errorf("all queries to the %s failed for question domain=%s", u, r.Question[0].Name)
+
+		m := new(dns.Msg)
+		m.SetRcode(r, dns.RcodeServerFailure)
+		if err := w.WriteMsg(m); err != nil {
+			logger.Errorf("failed to write error response for %s for question domain=%s: %s", u, r.Question[0].Name, err)
+		}
+		return
+	}
+
+	if err = w.WriteMsg(rm); err != nil {
+		logger.Errorf("failed to write DNS response for question domain=%s: %s", r.Question[0].Name, err)
+	}
+}
+
+// queryUpstreams asks this group's upstream servers in order and returns the
+// first reply, or nil when none of them answered, together with the last error
+// seen. It keeps the group's fail and success counters up to date; deciding what
+// to write, and whether the group is still healthy (checkUpstreamFails), is left
+// to the caller — so a resolver pool can gather several groups' replies before
+// any of them is written.
+//
+// Cancellation comes from u.ctx through the per-exchange context: once the
+// resolver is stopped every exchange fails immediately.
+func (u *upstreamResolverBase) queryUpstreams(logger *log.Entry, r *dns.Msg) (*dns.Msg, error) {
+	var err error
 
 	for _, upstream := range u.upstreamServers {
 		var rm *dns.Msg
@@ -149,22 +203,13 @@ func (u *upstreamResolverBase) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 
 		u.successCount.Add(1)
 		logger.Tracef("took %s to query the upstream %s for question domain=%s", t, upstream, r.Question[0].Name)
-
-		if err = w.WriteMsg(rm); err != nil {
-			logger.Errorf("failed to write DNS response for question domain=%s: %s", r.Question[0].Name, err)
-		}
 		// count the fails only if they happen sequentially
 		u.failsCount.Store(0)
-		return
+		return rm, nil
 	}
-	u.failsCount.Add(1)
-	logger.Errorf("all queries to the %s failed for question domain=%s", u, r.Question[0].Name)
 
-	m := new(dns.Msg)
-	m.SetRcode(r, dns.RcodeServerFailure)
-	if err := w.WriteMsg(m); err != nil {
-		logger.Errorf("failed to write error response for %s for question domain=%s: %s", u, r.Question[0].Name, err)
-	}
+	u.failsCount.Add(1)
+	return nil, err
 }
 
 // checkUpstreamFails counts fails and disables or enables upstream resolving
