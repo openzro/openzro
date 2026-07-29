@@ -116,7 +116,9 @@ type handlerWrapper struct {
 
 type registeredHandlerMap map[types.HandlerID]handlerWrapper
 
-// NewDefaultServer returns a new dns server
+// NewDefaultServer returns a new dns server. selectionPolicy names the response
+// selection policy to use for zones served by more than one nameserver group; an
+// empty name keeps the pre-existing behavior.
 func NewDefaultServer(
 	ctx context.Context,
 	wgInterface WGIface,
@@ -124,6 +126,7 @@ func NewDefaultServer(
 	statusRecorder *peer.Status,
 	stateManager *statemanager.Manager,
 	disableSys bool,
+	selectionPolicy string,
 ) (*DefaultServer, error) {
 	var addrPort *netip.AddrPort
 	if customAddress != "" {
@@ -141,7 +144,7 @@ func NewDefaultServer(
 		dnsService = newServiceViaListener(wgInterface, addrPort)
 	}
 
-	return newDefaultServer(ctx, wgInterface, dnsService, statusRecorder, stateManager, disableSys), nil
+	return newDefaultServer(ctx, wgInterface, dnsService, statusRecorder, stateManager, disableSys, selectionPolicy), nil
 }
 
 // NewDefaultServerPermanentUpstream returns a new dns server. It optimized for mobile systems
@@ -155,7 +158,9 @@ func NewDefaultServerPermanentUpstream(
 	disableSys bool,
 ) *DefaultServer {
 	log.Debugf("host dns address list is: %v", hostsDnsList)
-	ds := newDefaultServer(ctx, wgInterface, NewServiceViaMemory(wgInterface), statusRecorder, nil, disableSys)
+	// No selection policy: the mobile clients do not carry the client config field
+	// that opts into one.
+	ds := newDefaultServer(ctx, wgInterface, NewServiceViaMemory(wgInterface), statusRecorder, nil, disableSys, "")
 	ds.hostsDNSHolder.set(hostsDnsList)
 	ds.permanent = true
 	ds.addHostRootZone()
@@ -174,7 +179,7 @@ func NewDefaultServerIos(
 	statusRecorder *peer.Status,
 	disableSys bool,
 ) *DefaultServer {
-	ds := newDefaultServer(ctx, wgInterface, NewServiceViaMemory(wgInterface), statusRecorder, nil, disableSys)
+	ds := newDefaultServer(ctx, wgInterface, NewServiceViaMemory(wgInterface), statusRecorder, nil, disableSys, "")
 	ds.iosDnsManager = iosDnsManager
 	return ds
 }
@@ -186,23 +191,25 @@ func newDefaultServer(
 	statusRecorder *peer.Status,
 	stateManager *statemanager.Manager,
 	disableSys bool,
+	selectionPolicy string,
 ) *DefaultServer {
 	handlerChain := NewHandlerChain()
 	ctx, stop := context.WithCancel(ctx)
 	defaultServer := &DefaultServer{
-		ctx:            ctx,
-		ctxCancel:      stop,
-		disableSys:     disableSys,
-		service:        dnsService,
-		handlerChain:   handlerChain,
-		extraDomains:   make(map[domain.Domain]int),
-		dnsMuxMap:      make(registeredHandlerMap),
-		localResolver:  local.NewResolver(),
-		wgInterface:    wgInterface,
-		statusRecorder: statusRecorder,
-		stateManager:   stateManager,
-		hostsDNSHolder: newHostsDNSHolder(),
-		hostManager:    &noopHostConfigurator{},
+		ctx:             ctx,
+		ctxCancel:       stop,
+		disableSys:      disableSys,
+		service:         dnsService,
+		handlerChain:    handlerChain,
+		extraDomains:    make(map[domain.Domain]int),
+		dnsMuxMap:       make(registeredHandlerMap),
+		localResolver:   local.NewResolver(),
+		wgInterface:     wgInterface,
+		statusRecorder:  statusRecorder,
+		stateManager:    stateManager,
+		hostsDNSHolder:  newHostsDNSHolder(),
+		hostManager:     &noopHostConfigurator{},
+		selectionPolicy: resolveSelectionPolicy(selectionPolicy),
 	}
 
 	// register with root zone, handler chain takes care of the routing

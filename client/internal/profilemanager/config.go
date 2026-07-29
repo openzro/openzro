@@ -133,6 +133,21 @@ type Config struct {
 
 	// DNSRouteInterval is the interval in which the DNS routes are updated
 	DNSRouteInterval time.Duration
+
+	// DNSSelectionPolicy opts into a response-selection policy for zones that are
+	// served by more than one nameserver group (ADR-0023). Empty — the default —
+	// keeps the pre-existing behavior, where the highest-priority group answers
+	// alone. "prefer_private" prefers the answer that points into the mesh or a
+	// private network, which is what split-horizon deployments want. An unknown
+	// name is logged and ignored rather than fatal. There is no command line flag
+	// yet: that needs a daemon IPC field, so v1 is configured here.
+	// The preference is best-effort: it classifies the addresses in each
+	// candidate's answer, so a compromised or misconfigured nameserver group
+	// could still name a spoofed private address — this trades a narrower
+	// window for a real usability gain, it does not add authentication of the
+	// source.
+	DNSSelectionPolicy string
+
 	// Path to a certificate used for mTLS authentication
 	ClientCertPath string
 

@@ -468,6 +468,7 @@ func createEngineConfig(key wgtypes.Key, config *profilemanager.Config, peerConf
 		RosenpassPermissive:  config.RosenpassPermissive,
 		ServerSSHAllowed:     util.ReturnBoolWithDefaultTrue(config.ServerSSHAllowed),
 		DNSRouteInterval:     config.DNSRouteInterval,
+		DNSSelectionPolicy:   config.DNSSelectionPolicy,
 
 		DisableClientRoutes: config.DisableClientRoutes,
 		DisableServerRoutes: config.DisableServerRoutes || config.BlockInbound,

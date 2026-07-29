@@ -3,6 +3,13 @@ package internal
 import (
 	"net"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
+
+	"github.com/openzro/openzro/client/internal/profilemanager"
+	mgmProto "github.com/openzro/openzro/management/proto"
 )
 
 func Test_freePort(t *testing.T) {
@@ -66,6 +73,27 @@ func Test_freePort(t *testing.T) {
 		})
 
 	}
+}
+
+// TestCreateEngineConfig_CarriesDNSSelectionPolicy pins the seam between the
+// persisted client config and the engine: the DNS response-selection policy
+// (ADR-0023 D8) is opt-in through config.json only, so if this mapping is missing
+// the DNS server never learns about it and the whole opt-in is dead.
+func TestCreateEngineConfig_CarriesDNSSelectionPolicy(t *testing.T) {
+	key, err := wgtypes.GeneratePrivateKey()
+	require.NoError(t, err)
+
+	engineConfig, err := createEngineConfig(
+		key,
+		&profilemanager.Config{DNSSelectionPolicy: "prefer_private"},
+		&mgmProto.PeerConfig{Address: "100.64.0.1/16"},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, "prefer_private", engineConfig.DNSSelectionPolicy)
+
+	engineConfig, err = createEngineConfig(key, &profilemanager.Config{}, &mgmProto.PeerConfig{Address: "100.64.0.1/16"})
+	require.NoError(t, err)
+	assert.Empty(t, engineConfig.DNSSelectionPolicy, "an unconfigured policy stays empty")
 }
 
 // TestConnectClient_PersistState_NilSafe pins the openZro #5128

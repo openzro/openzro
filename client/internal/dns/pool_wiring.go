@@ -6,16 +6,55 @@ package dns
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/openzro/openzro/client/internal/dns/selection"
 	nbdns "github.com/openzro/openzro/dns"
 )
+
+// resolveSelectionPolicy turns a configured policy name into the policy the
+// server uses. Case and surrounding space are ignored: the only way to set this
+// today is by hand in the client's configuration file, so the likeliest mistake
+// is "Prefer_Private" or a stray space, and neither deserves to be treated as a
+// different policy. A name we still do not know is only warned about — a
+// misspelled preference must not stop the client from resolving — and the
+// warning echoes what was configured so the typo is recognizable.
+//
+// An empty name means the operator did not opt in and yields no policy at all,
+// deliberately not selection.DefaultPolicy: "nothing configured" stays a state
+// the server can represent. Whether a policy actually pools a zone is decided
+// at the handler, by selection.Ranking.
+func resolveSelectionPolicy(configured string) selection.Policy {
+	name := strings.ToLower(strings.TrimSpace(configured))
+	if name == "" {
+		return nil
+	}
+
+	policy, ok := selection.Get(name)
+	if !ok {
+		log.Warnf("ignoring unknown DNS selection policy %q, keeping the default behavior", configured)
+		return nil
+	}
+
+	log.Infof("DNS selection policy is %s", policy.Name())
+	return policy
+}
 
 // createPooledHandler builds the one handler that serves a zone from all of its
 // nameserver groups at once. It replaces the per-group handlers at descending
 // priorities, of which only the highest would ever be consulted.
 func (s *DefaultServer) createPooledHandler(domainGroup nsGroupsByDomain, basePriority int) ([]handlerWrapper, error) {
+	// A pool ranks candidates against each other, so it dereferences its policy on
+	// every query. Establish that here, where the pool is built, instead of
+	// nil-checking each use: the caller only pools for a ranking policy, and if
+	// that ever changes this fails loudly rather than panicking on a query.
+	if !selection.Ranking(s.selectionPolicy) {
+		return nil, fmt.Errorf("pooling zone %s needs a ranking selection policy", domainGroup.domain)
+	}
+
 	handlers := make([]upstreamGroupHandler, 0, len(domainGroup.groups))
 	groups := make([]*nbdns.NameServerGroup, 0, len(domainGroup.groups))
 
