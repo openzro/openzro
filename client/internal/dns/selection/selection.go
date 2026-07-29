@@ -62,6 +62,13 @@ type Result struct {
 type Policy interface {
 	// Name is the stable config identifier, e.g. "prefer_private".
 	Name() string
+	// Ranks reports whether this policy compares candidates against each other,
+	// and so needs its caller to gather every resolver's reply before asking. A
+	// policy that does not rank forwards whichever reply came back first — what a
+	// plain sequential resolver already does, and without the arrival-order
+	// dependence a fan-out would add. It sits in the interface so that a new
+	// policy cannot be added without answering it.
+	Ranks() bool
 	// Select returns the chosen Result and true, or (zero, false) when no
 	// candidate is usable — in which case the caller returns SERVFAIL.
 	Select(q dns.Question, cands []Candidate) (Result, bool)
@@ -94,12 +101,16 @@ type firstSuccess struct{}
 // Name implements Policy.
 func (firstSuccess) Name() string { return "first_success" }
 
+// Ranks implements Policy: forwarding the first reply needs no comparison, so
+// gathering for it would only add an arrival-order dependence.
+func (firstSuccess) Ranks() bool { return false }
+
 // Select returns the first candidate that produced a response, in the order
 // given — the resolver's pre-existing sequential behavior 1:1: any response wins
 // (including SERVFAIL), only a non-answering upstream (nil) is skipped.
 func (firstSuccess) Select(_ dns.Question, cands []Candidate) (Result, bool) {
 	for _, c := range cands {
-		if responded(c.Resp) {
+		if Responded(c.Resp) {
 			return Result{Resp: c.Resp, Source: c.Source}, true
 		}
 	}
@@ -110,6 +121,9 @@ type preferPrivate struct{}
 
 // Name implements Policy.
 func (preferPrivate) Name() string { return "prefer_private" }
+
+// Ranks implements Policy: private beats public, which needs every candidate.
+func (preferPrivate) Ranks() bool { return true }
 
 // Select ranks A/AAAA answers by refining the shared base ladder: a private/CGNAT
 // address beats a public one, and within a tier the lowest Source wins, so the
@@ -139,7 +153,7 @@ func (preferPrivate) Select(q dns.Question, cands []Candidate) (Result, bool) {
 	// Non-address query: no address notion — return a responded answer
 	// deterministically by lowest Source.
 	best, top := pickBest(cands, func(c Candidate) int {
-		if responded(c.Resp) {
+		if Responded(c.Resp) {
 			return 1
 		}
 		return 0
@@ -176,7 +190,7 @@ func pickBest(cands []Candidate, score func(Candidate) int) (best Candidate, top
 // A CNAME accompanying an NXDOMAIN is not a referral (the alias resolves to
 // nothing), so it stays NXDOMAIN.
 func baseTier(resp *dns.Msg, q dns.Question, atype uint16) int {
-	if !responded(resp) {
+	if !Responded(resp) {
 		return tierNone
 	}
 	// An EDNS extended rcode (≥16, RFC 6891) lives in the OPT record, not in the
@@ -290,9 +304,11 @@ func aliasesQuestion(resp *dns.Msg, q dns.Question) bool {
 	return false
 }
 
-// responded reports whether the upstream returned a DNS reply at all (any
-// rcode). A nil Resp means it did not answer (transport error / timeout).
-func responded(resp *dns.Msg) bool {
+// Responded reports whether an upstream returned a DNS reply at all (any rcode) —
+// whether a Candidate carries something a policy can rank. Exported so a caller
+// gathering candidates tests it the same way the policies do; see the
+// Candidate.Resp contract.
+func Responded(resp *dns.Msg) bool {
 	return resp != nil && resp.Response
 }
 
@@ -421,6 +437,13 @@ var cgnatPrefix = netip.MustParsePrefix("100.64.0.0/10")
 func isPrivateAddr(addr netip.Addr) bool {
 	addr = addr.Unmap()
 	return addr.IsPrivate() || cgnatPrefix.Contains(addr)
+}
+
+// Ranking reports whether p needs its caller to gather every resolver's reply
+// before asking it — see Policy.Ranks. It is the nil-safe form callers use: a nil
+// policy means nothing was configured, so the caller keeps its unpooled path.
+func Ranking(p Policy) bool {
+	return p != nil && p.Ranks()
 }
 
 // Get returns the policy for name. An empty name resolves to DefaultPolicy; the

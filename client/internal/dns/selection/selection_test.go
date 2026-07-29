@@ -447,3 +447,39 @@ func TestGetPolicy(t *testing.T) {
 		t.Fatalf("unknown policy should return ok=false")
 	}
 }
+
+// TestRanking pins which policies a caller must gather candidates for.
+func TestRanking(t *testing.T) {
+	// The nil case carries the whole opt-in: nothing configured must never be
+	// gathered for. It is the only one live in production until the config knob
+	// lands, and it is why Ranking exists next to Policy.Ranks.
+	if Ranking(nil) {
+		t.Error("a nil policy must not rank")
+	}
+
+	// One row per name Get resolves. A new policy has to answer Ranks() to
+	// compile at all; this table is where the answer is stated out loud.
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{name: "", want: false}, // resolves to DefaultPolicy
+		{name: "first_success", want: false},
+		{name: "prefer_private", want: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p, ok := Get(tc.name)
+			if !ok {
+				t.Fatalf("policy %q does not resolve", tc.name)
+			}
+			if got := p.Ranks(); got != tc.want {
+				t.Errorf("%s.Ranks() = %v, want %v", p.Name(), got, tc.want)
+			}
+			if got := Ranking(p); got != tc.want {
+				t.Errorf("Ranking(%s) = %v, want %v", p.Name(), got, tc.want)
+			}
+		})
+	}
+}

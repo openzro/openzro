@@ -16,6 +16,7 @@ import (
 
 	"github.com/openzro/openzro/client/iface/netstack"
 	"github.com/openzro/openzro/client/internal/dns/local"
+	"github.com/openzro/openzro/client/internal/dns/selection"
 	"github.com/openzro/openzro/client/internal/dns/types"
 	"github.com/openzro/openzro/client/internal/listener"
 	"github.com/openzro/openzro/client/internal/peer"
@@ -23,6 +24,11 @@ import (
 	nbdns "github.com/openzro/openzro/dns"
 	"github.com/openzro/openzro/management/domain"
 )
+
+// errNoUsableNameserver marks a nameserver group this peer cannot resolve
+// through: it carries no nameserver of a supported type. Callers skip such a
+// group instead of failing the whole configuration.
+var errNoUsableNameserver = errors.New("nameserver group has no usable nameserver")
 
 // ReadyListener is a notification mechanism what indicate the server is ready to handle host dns address changes
 type ReadyListener interface {
@@ -87,6 +93,12 @@ type DefaultServer struct {
 
 	statusRecorder *peer.Status
 	stateManager   *statemanager.Manager
+
+	// selectionPolicy decides which answer wins when a zone is served by more
+	// than one nameserver group: the groups are then pooled behind a single
+	// handler and all of them are asked. nil — the default — keeps the
+	// pre-existing behavior, where the highest-priority group answers alone.
+	selectionPolicy selection.Policy
 }
 
 type handlerWithStop interface {
@@ -664,6 +676,14 @@ func (s *DefaultServer) buildUpstreamHandlerUpdate(nameServerGroups []*nbdns.Nam
 }
 
 func (s *DefaultServer) createHandlersForDomainGroup(domainGroup nsGroupsByDomain, basePriority int) ([]handlerWrapper, error) {
+	// With a ranking selection policy the groups of a zone are pooled behind one
+	// handler and all of them are asked, instead of only the highest-priority
+	// one. Whether a policy ranks — and so needs the pool — is the selection
+	// package's call, not ours.
+	if selection.Ranking(s.selectionPolicy) && len(domainGroup.groups) > 1 {
+		return s.createPooledHandler(domainGroup, basePriority)
+	}
+
 	var muxUpdates []handlerWrapper
 
 	for i, nsGroup := range domainGroup.groups {
@@ -676,32 +696,12 @@ func (s *DefaultServer) createHandlersForDomainGroup(domainGroup nsGroupsByDomai
 		}
 
 		log.Debugf("creating handler for domain=%s with priority=%d", domainGroup.domain, priority)
-		handler, err := newUpstreamResolver(
-			s.ctx,
-			s.wgInterface.Name(),
-			s.wgInterface.Address().IP,
-			s.wgInterface.Address().Network,
-			s.statusRecorder,
-			s.hostsDNSHolder,
-			domainGroup.domain,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("create upstream resolver: %v", err)
-		}
-
-		for _, ns := range nsGroup.NameServers {
-			if ns.NSType != nbdns.UDPNameServerType {
-				log.Warnf("skipping nameserver %s with type %s, this peer supports only %s",
-					ns.IP.String(), ns.NSType.String(), nbdns.UDPNameServerType.String())
-				continue
-			}
-			handler.upstreamServers = append(handler.upstreamServers, getNSHostPort(ns))
-		}
-
-		if len(handler.upstreamServers) == 0 {
-			handler.Stop()
-			log.Errorf("received a nameserver group with an invalid nameserver list")
+		handler, err := s.newGroupResolver(nsGroup, domainGroup.domain)
+		if errors.Is(err, errNoUsableNameserver) {
 			continue
+		}
+		if err != nil {
+			return nil, err
 		}
 
 		// when upstream fails to resolve domain several times over all it servers
@@ -712,7 +712,7 @@ func (s *DefaultServer) createHandlersForDomainGroup(domainGroup nsGroupsByDomai
 		// after some period defined by upstream it tries to reactivate self by calling this hook
 		// everything we need here is just to re-apply current configuration because it already
 		// contains this upstream settings (temporal deactivation not removed it)
-		handler.deactivate, handler.reactivate = s.upstreamCallbacks(nsGroup, handler, priority)
+		handler.setCallbacks(s.upstreamCallbacks(nsGroup, handler, priority))
 
 		muxUpdates = append(muxUpdates, handlerWrapper{
 			domain:   domainGroup.domain,
@@ -722,6 +722,40 @@ func (s *DefaultServer) createHandlersForDomainGroup(domainGroup nsGroupsByDomai
 	}
 
 	return muxUpdates, nil
+}
+
+// newGroupResolver builds the resolver for a single nameserver group. It returns
+// errNoUsableNameserver when the group carries no nameserver this peer can use.
+func (s *DefaultServer) newGroupResolver(nsGroup *nbdns.NameServerGroup, domain string) (upstreamGroupHandler, error) {
+	handler, err := newUpstreamResolver(
+		s.ctx,
+		s.wgInterface.Name(),
+		s.wgInterface.Address().IP,
+		s.wgInterface.Address().Network,
+		s.statusRecorder,
+		s.hostsDNSHolder,
+		domain,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create upstream resolver: %w", err)
+	}
+
+	for _, ns := range nsGroup.NameServers {
+		if ns.NSType != nbdns.UDPNameServerType {
+			log.Warnf("skipping nameserver %s with type %s, this peer supports only %s",
+				ns.IP.String(), ns.NSType.String(), nbdns.UDPNameServerType.String())
+			continue
+		}
+		handler.upstreamServers = append(handler.upstreamServers, getNSHostPort(ns))
+	}
+
+	if len(handler.upstreamServers) == 0 {
+		handler.Stop()
+		log.Errorf("received a nameserver group with an invalid nameserver list")
+		return nil, errNoUsableNameserver
+	}
+
+	return handler, nil
 }
 
 func (s *DefaultServer) leaksPriority(domainGroup nsGroupsByDomain, basePriority int, priority int) bool {
@@ -795,7 +829,7 @@ func (s *DefaultServer) upstreamCallbacks(
 		s.mux.Lock()
 		defer s.mux.Unlock()
 
-		l := log.WithField("nameservers", nsGroup.NameServers)
+		l := nsGroupLogger(nsGroup)
 		l.Info("Temporarily deactivating nameservers group due to timeout")
 
 		removeIndex = make(map[string]int)
@@ -843,7 +877,7 @@ func (s *DefaultServer) upstreamCallbacks(
 			s.registerHandler([]string{domain}, handler, priority)
 		}
 
-		l := log.WithField("nameservers", nsGroup.NameServers)
+		l := nsGroupLogger(nsGroup)
 		l.Debug("reactivate temporary disabled nameserver group")
 
 		if nsGroup.Primary {
@@ -912,16 +946,27 @@ func (s *DefaultServer) updateNSGroupStates(groups []*nbdns.NameServerGroup) {
 }
 
 func (s *DefaultServer) updateNSState(nsGroup *nbdns.NameServerGroup, err error, enabled bool) {
-	states := s.statusRecorder.GetDNSStates()
-	id := generateGroupKey(nsGroup)
-	for i, state := range states {
-		if state.ID == id {
-			states[i].Enabled = enabled
-			states[i].Error = err
-			break
-		}
+	// A group without nameservers is a synthetic one standing for a pooled zone,
+	// not something updateNSGroupStates ever created a state for. Its members
+	// report their own state, so there is nothing to look up here.
+	if len(nsGroup.NameServers) == 0 {
+		return
 	}
-	s.statusRecorder.UpdateDNSStates(states)
+
+	// Updating the single group is atomic, where reading every state, editing one
+	// and writing them all back is not — pooled groups report their health
+	// without holding the server lock, so two of them can flip at once.
+	s.statusRecorder.UpdateDNSState(generateGroupKey(nsGroup), err, enabled)
+}
+
+// nsGroupLogger returns a logger naming both the group's servers and the domains
+// it serves. The domains matter for a pooled zone, where the zone-level events
+// come from a synthetic group that has no servers to name.
+func nsGroupLogger(nsGroup *nbdns.NameServerGroup) *log.Entry {
+	return log.WithFields(log.Fields{
+		"nameservers": nsGroup.NameServers,
+		"domains":     nsGroup.Domains,
+	})
 }
 
 func generateGroupKey(nsGroup *nbdns.NameServerGroup) string {
