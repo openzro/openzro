@@ -84,7 +84,7 @@ type Policy interface {
 // was asked for, in which case it must not be read as an answer to it.
 const (
 	tierNone     = iota // no reply at all (nil): transport error / timeout — nothing to return
-	tierErrored         // an error-rcode reply (SERVFAIL/REFUSED/…); may carry an RFC 8914 EDE diagnostic
+	tierErrored         // an error-rcode reply (SERVFAIL/REFUSED/…); may carry an RFC 8914 extended-error diagnostic
 	tierNXDOMAIN        // the name does not exist (definitive)
 	tierNODATA          // the name exists but has no record of the queried type
 	tierOffTopic        // carries records, but none of them is about the queried name
