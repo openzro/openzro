@@ -451,6 +451,13 @@ func (g *BundleGenerator) addCommonConfigFields(configContent *strings.Builder) 
 
 	configContent.WriteString(fmt.Sprintf("DNSRouteInterval: %s\n", g.internalConfig.DNSRouteInterval))
 
+	// Written unconditionally, and as the configured string rather than the policy
+	// that was resolved from it: for a feature whose support question is "which
+	// answer won, and why", an absent line must not be ambiguous between "not
+	// configured" and "client too old to know the field", and an ignored typo has
+	// to stay visible.
+	configContent.WriteString(fmt.Sprintf("DNSSelectionPolicy: %s\n", g.internalConfig.DNSSelectionPolicy))
+
 	if g.internalConfig.ClientCertPath != "" {
 		configContent.WriteString(fmt.Sprintf("ClientCertPath: %s\n", g.internalConfig.ClientCertPath))
 	}

@@ -788,6 +788,24 @@ func (d *Status) UpdateDNSStates(dnsStates []NSGroupState) {
 	d.nsGroupStates = dnsStates
 }
 
+// UpdateDNSState updates the health of a single nameserver group, identified by
+// its ID. Unknown IDs are ignored. Doing it here keeps the update atomic, which
+// GetDNSStates followed by UpdateDNSStates is not: two groups whose health
+// changes at the same time would each write back a slice that predates the
+// other's change, and one of the two updates would be lost.
+func (d *Status) UpdateDNSState(id string, err error, enabled bool) {
+	d.mux.Lock()
+	defer d.mux.Unlock()
+
+	for i := range d.nsGroupStates {
+		if d.nsGroupStates[i].ID == id {
+			d.nsGroupStates[i].Enabled = enabled
+			d.nsGroupStates[i].Error = err
+			return
+		}
+	}
+}
+
 func (d *Status) UpdateResolvedDomainsStates(originalDomain domain.Domain, resolvedDomain domain.Domain, prefixes []netip.Prefix, resourceId route.ResID) {
 	d.mux.Lock()
 	defer d.mux.Unlock()

@@ -105,6 +105,34 @@ func TestExtraIFaceBlackList(t *testing.T) {
 	assert.Contains(t, readConf.(*Config).IFaceBlackList, "eth1")
 }
 
+// TestDNSSelectionPolicySurvivesUpdate pins the opt-in mechanism of the DNS
+// response-selection policy (ADR-0023 D8): it is a persisted config field with no
+// command line flag of its own, so an operator writes it into config.json and
+// every later config update — which rewrites the whole file — has to leave it
+// alone. Defaulting to empty keeps the pre-existing resolver behavior.
+func TestDNSSelectionPolicySurvivesUpdate(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	config, err := UpdateOrCreateConfig(ConfigInput{ConfigPath: path})
+	require.NoError(t, err)
+	require.Empty(t, config.DNSSelectionPolicy, "no selection policy by default")
+
+	config.DNSSelectionPolicy = "prefer_private"
+	require.NoError(t, WriteOutConfig(path, config))
+
+	// An unrelated change re-persists the file, which is where a field the input
+	// does not carry would be lost.
+	updated, err := UpdateConfig(ConfigInput{
+		ConfigPath:    path,
+		ManagementURL: "https://mgm.example.com:443",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "prefer_private", updated.DNSSelectionPolicy)
+
+	reread, err := GetConfig(path)
+	require.NoError(t, err)
+	assert.Equal(t, "prefer_private", reread.DNSSelectionPolicy)
+}
+
 func TestHiddenPreSharedKey(t *testing.T) {
 	hidden := "**********"
 	samplePreSharedKey := "mysecretpresharedkey"

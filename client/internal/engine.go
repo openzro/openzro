@@ -117,6 +117,11 @@ type EngineConfig struct {
 
 	DNSRouteInterval time.Duration
 
+	// DNSSelectionPolicy names the policy that picks the answer when a zone is
+	// served by more than one nameserver group. Empty keeps the pre-existing
+	// behavior. See profilemanager.Config.DNSSelectionPolicy.
+	DNSSelectionPolicy string
+
 	DisableClientRoutes bool
 	DisableServerRoutes bool
 	DisableDNS          bool
@@ -1661,7 +1666,15 @@ func (e *Engine) newDnsServer(dnsConfig *nbdns.Config) (dns.Server, error) {
 		return dnsServer, nil
 
 	default:
-		dnsServer, err := dns.NewDefaultServer(e.ctx, e.wgInterface, e.config.CustomDNSAddress, e.statusRecorder, e.stateManager, e.config.DisableDNS)
+		dnsServer, err := dns.NewDefaultServer(
+			e.ctx,
+			e.wgInterface,
+			e.config.CustomDNSAddress,
+			e.statusRecorder,
+			e.stateManager,
+			e.config.DisableDNS,
+			e.config.DNSSelectionPolicy,
+		)
 		if err != nil {
 			return nil, err
 		}

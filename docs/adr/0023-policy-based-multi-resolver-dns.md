@@ -277,6 +277,260 @@ answer from the slower group; assert the private answer is returned) and stays
 in the tree. Pre-PR: working-tree test image (`Dockerfile.testbuild` →
 `hri4711/openzrotest`), smoke-tested on a peer with two NS-groups for one zone.
 
+## Implementation notes
+
+Append-only. Added while implementing the decisions above; the sections before
+this one are left as they were accepted.
+
+### Two components, not three (D1)
+
+D1 draws the pipeline as resolver pool → `ResponseSelector` → `SelectionPolicy`.
+The code has no `ResponseSelector` type: the pool hands the gathered candidates
+straight to the policy. A separate selector would have been a shell doing nothing
+but forwarding, while the part that is genuinely shared between policies — the
+quality ladder and the ranking spine with its deterministic tiebreak — lives in
+the selection package as internal helpers every policy reuses.
+
+The boundary D1 exists for is unchanged and is what the seam is worth: the
+resolver never learns about policies, and a policy never does I/O and never logs.
+Both are enforced by construction — the policies are pure functions of the
+candidate list, which is why they are exhaustively table-tested without a network.
+
+`CandidateResponse.Latency`, which D1 prints as part of the struct, is not
+carried: no policy uses it, and adding a field later is source-compatible for
+callers that construct candidates by field name. The struct's documented purpose
+of taking further signals (D11) is unaffected.
+
+### The response ladder (D3)
+
+D3 orders four classes: private > public > negative > none. The implementation
+splits that into a **policy-independent ladder** plus a **policy refinement**,
+because "negative" turned out to be several different things whose order the ADR
+does not decide:
+
+    no reply < error reply < NXDOMAIN < NODATA < off-topic < referral < answer
+
+- **No reply < error reply.** A SERVFAIL or REFUSED *reply* is content — it can
+  carry an RFC 8914 extended DNS error. Forwarding the upstream's own failure
+  beats synthesizing a bare SERVFAIL, so a real error reply outranks a resolver
+  that never answered.
+- **Error reply < NXDOMAIN.** A definitive "this name does not exist" beats a
+  server failure.
+- **NXDOMAIN < NODATA.** The name exists but carries no record of the queried
+  type — often it has the *other* address family. Answering NXDOMAIN when another
+  resolver said the name exists would be wrong.
+- **NODATA < off-topic.** Every other rung grades a response's *content*; this one
+  grades its *relevance*. A reply whose answer section carries records but never
+  the queried name says nothing about that name, so nothing in it may decide what
+  that name resolves to — a private address belonging to some unrelated name must
+  not make the reply the internal answer. It still outranks the negatives, because
+  it is a reply that was received and is served when nothing better exists: ranking
+  it below them would mean a false positive of this very check suppresses a
+  legitimate answer in favour of another resolver's NXDOMAIN. That it therefore
+  outranks another resolver's NXDOMAIN is deliberate and costs availability only,
+  never a redirect. An **empty** answer section is not off-topic — that is the
+  ordinary NODATA reply, and there is nothing in it that could be about a name.
+  Owner names are compared in canonical form, because DNS 0x20 case randomization
+  makes a resolver echo the name in mixed case. A reply that does mention the
+  queried name but gives no address for it — a TXT, say — lands on NODATA, which is
+  what it is: the name exists and has no address here.
+- **Off-topic < referral.** A NOERROR CNAME/DNAME with no address resolved is a
+  pointer to follow, which is more than a negative answer, and it is about the
+  queried name. An NXDOMAIN that happens to carry a CNAME stays NXDOMAIN — the
+  alias resolves to nothing.
+- **Referral < answer**, and a ranking policy refines only that top tier:
+  `prefer_private` splits it into public < private.
+
+Two details worth recording. EDNS extended rcodes (≥ 16, RFC 6891) live in the
+OPT record, not in the 4-bit header field, so they are read from OPT before
+anything else — otherwise BADVERS (16, header nibble 0) would look like NOERROR
+and BADMODE (19, nibble 3) like NXDOMAIN. And because the ladder is shared, the
+`prefer_routed` idea of D11 becomes a different refinement of the top tier alone,
+with the ordering of everything below it decided once, here.
+
+### An answer is internal only if all of it is (D3)
+
+D3's private/public split reads naturally as "the answer holds a private address".
+The implementation requires **every** address of the queried type to be private
+instead. A message that also hands out a public address does not resolve the name
+into the internal network, and unlike "holds one" — which is decided by whichever
+record was appended last — a property of the whole set cannot be won by adding
+records to the message.
+
+Which addresses *are* the answer is decided by membership, not by resolving the
+chain. The set of names this reply presents as aliases of the question is the
+question's own name plus every CNAME target reachable from it, and an address
+counts when its owner is in that set, sits in the question's class, and is not
+itself aliased. Nothing else in the answer section belongs to this question.
+
+That is deliberately not a chain walk, and it needs none of the rulings one would
+require. A cycle is harmless because adding to a set is idempotent; a name aliased
+twice contributes both targets; there is no hop limit to pick, since every round
+either adds a name or ends the loop and the only candidates are CNAME targets of
+this answer, bounding it at the number of records. Order does not matter because
+each round rescans the section. The motivating shape works unchanged: a two-step
+Azure chain ending in a private address is a set of one private address.
+
+Three rules that look like details and are not:
+
+- **Only CNAME extends the set.** A DNAME aliases a subtree, not a name — its
+  owner is a proper ancestor of the queried name, and it reaches an answer through
+  the synthesized CNAME RFC 6672 requires alongside it. Letting a DNAME extend the
+  set, or count as a referral, would let an unrelated one decide this question.
+  Without the synthesized CNAME the set does not grow and the ladder settles lower,
+  which is the safe direction.
+- **Only CNAME makes a name non-terminal.** An address at a name that carries a
+  CNAME of its own is not this reply's answer: RFC 1034 §3.6.2 forbids a CNAME
+  owner from holding other data, so a reply doing both is malformed and a client
+  following the alias ends up elsewhere than the address suggests. The test asks
+  about CNAMEs only — a DNAME owner may legitimately carry an address, and
+  excluding those would silently drop a legitimate preference.
+- **Class is part of a record's identity.** A record in a class other than the
+  question's answers a different question; the client matches on (name, class,
+  type) and discards it, so counting it would let a discarded record decide.
+
+One accepted consequence: a reply that pads its answer section with unrelated
+**public** records loses its preference. Only a careless upstream can trigger that,
+and only for its own answer — nobody can enrich another resolver's reply. Note that
+"loses its preference" can mean the *other* group's public view is served, if that
+group wins the tiebreak: for a dual-homed service published with both an internal
+and a public address in one answer, `prefer_private` then has no effect for that
+name. The selected source is logged at debug level, which is where that shows up.
+
+Because "internal" is a property of the whole answer, the ambiguity warning below
+compares only candidates that are internal answers: a mixed reply is not one, so it
+cannot disagree about an internal address. The same restricted address set feeds the
+ranking, the signature comparison and the warning, so they cannot drift apart.
+
+### Which zones are pooled (D5)
+
+The pool is built per zone from the groups serving it, and a nameserver group
+marked *primary* serves the root zone. Two primary groups therefore pool `.`, so
+every A/AAAA query fans out and pays the settle window — not only the split-horizon
+zones D5 has in mind. That is the correct reading of "a zone served by more than one
+resolver", and with classification tied to the queried name such a zone is no less
+safe than any other, but the cost is worth knowing before enabling the policy on a
+peer whose default resolvers are two primary groups.
+
+### Where the implementation refines D4
+
+D4 says a name with two or more private answers is logged as ambiguous. The
+implementation narrows and throttles that:
+
+- The flag (`selection.Result.Ambiguous`) is raised only when the private
+  answers **differ** — two resolvers naming *different* private endpoints for
+  one name. Identical private answers from redundant resolvers are normal HA,
+  not a topology problem, and warning about them would be noise.
+- The selector stays a pure function and does not log; it sets the flag and the
+  pool warns, **at most once per five minutes**. A misconfigured zone is a
+  standing condition an operator has to fix, not a per-query event, and the
+  warning sits on the query path.
+
+The choice itself is deterministic either way, so this only changes what gets
+logged, never what gets answered.
+
+### Deferred: a determinism-preserving early exit
+
+D5 permits an early return only when the outstanding resolvers cannot change the
+outcome, and defines that as "a private answer is in hand *and* every other
+resolver has already responded" — which is the all-answers-in condition. The
+implementation therefore always waits for every resolver or the window, so a
+single slow resolver costs up to the window on every pooled A/AAAA query.
+
+There is a strictly stronger exit condition that still cannot change the result,
+and it is worth recording for a later increment:
+
+> Return as soon as the best candidate holds the **maximum possible score** and
+> every resolver still outstanding sorts to a **higher stable key** than that
+> candidate.
+
+It is exact, not heuristic: the maximum score cannot be beaten, and the tiebreak
+picks the lowest key, so an outstanding resolver with a higher key can at best
+tie and lose. One with a lower key can still win and must be waited for.
+
+Cost: the pool cannot evaluate this itself — it knows neither the policy's
+scoring nor what its maximum is — so `SelectionPolicy` would grow a second
+method along the lines of `Decided(q, candidates, pending) bool`, which every
+policy then has to implement. The only thing lost is the ambiguity flag above,
+since a second private answer may go unseen; that is a diagnostic, not an answer
+path. The gain is bounded by how much slower the slowest resolver is than the
+fastest, so it pays off exactly in the case the window exists for.
+
+### What the grace window does and does not bound (D5)
+
+D5 calls the window "a ceiling on how long the pool waits". It is a ceiling on the
+**added** wait: the clock starts with the first reply a policy could rank, as the
+implementation note in D5 recommends, so the pool is at most one window slower
+than its fastest resolver.
+
+It is deliberately **not** armed by a resolver that failed outright. A zone whose
+first resolver fails fast and whose second is slow therefore waits for the second
+one, bounded only by that resolver's own `UpstreamTimeout` — where today, with
+only the first resolver ever consulted, the client would get an immediate
+SERVFAIL. Arming on a failure instead would cap that wait, but at the price of
+sometimes returning SERVFAIL while discarding the answer the pool exists to
+fetch. Getting the answer wins; the wait stays bounded per resolver, and a
+resolver that keeps failing is deactivated out of the fan-out by the health model
+after `failsTillDeact` attempts.
+
+### Health scope of a pooled zone (D6)
+
+D6 keeps the per-source `deactivate`/`reactivate` model. Two details only became
+visible once the pool existed, both covered by regression tests:
+
+- The zone-level hooks must be derived **once per pool**, not per source. They
+  close over the index `reactivate` needs to undo what `deactivate` did, so
+  per-source pairs let whichever source returns first reactivate through an
+  empty index — leaving the zone deregistered until the next configuration push,
+  depending on which backoff won.
+- They must be scoped to the **pooled zone alone**. A nameserver group may serve
+  further domains, each pooled separately with its own health, so deactivating
+  one zone must not deregister the others. The zone-level hook therefore runs
+  against a synthetic group covering just that zone; per-source status keeps
+  coming from the sources themselves.
+
+### The opt-in surface as built (D8)
+
+D8 leaves the choice between a CLI flag and a config file open. v1 ships the
+config file alone: `Config.DNSSelectionPolicy` in the client's persisted
+configuration, threaded `config → EngineConfig → DefaultServer → resolverPool`.
+
+A flag would have to travel through the daemon's IPC to reach the same field,
+which means a `client/proto` change and a regenerated `daemon.pb.go` — a
+protoc-version risk taken for an opt-in that hardly anyone sets, and one that can
+be added later without touching anything below it. The field is not part of
+`ConfigInput` for the same reason: nothing would write it yet, and the flag commit
+would add both together. `DisableIPv6Discovery` is configured the same way today.
+
+Empty means "not configured" and keeps a nil policy, so the mobile constructors —
+which have no client config field to read — stay exactly as they are.
+
+An unknown policy name is **warned about and ignored**, not fatal: refusing to
+resolve DNS at all because a preference is misspelled is the worse failure, and
+the warning names the value that was dropped. Strict validation belongs to the
+flag, where a typo can be rejected while the operator is still watching.
+
+### Two examples in the Decision and Verification sections that drifted
+
+D4's example warning line, `ambiguous: N private answers for <name> from X,Y —
+picked X`, was illustrative and is not what shipped. The actual line
+(`pool.go`, logged at most once per five minutes per the throttling in "Where
+the implementation refines D4" above) is:
+
+    nameserver groups of <zone> disagree on the internal address for
+    domain=<name> (answered: <sources>), serving the answer from <source>.
+    Check the zone's nameserver configuration.
+
+The Verification section's `go test -run` pattern predates the zone-hook and
+ranking regression tests added since and does not select them (no alternative
+in the regex matches `TestServer_Pooled...` or `TestRanking`). The command that
+actually covers everything this ADR claims is regression-tested:
+
+    go test -race -timeout 5m -count=1 ./client/internal/dns/...
+
+Running the whole package is also simpler to keep accurate than maintaining a
+name filter against tests that get renamed or added.
+
 ## References
 
 - Proposal & maintainer greenlight: [openzro/openzro#140](https://github.com/openzro/openzro/issues/140).
