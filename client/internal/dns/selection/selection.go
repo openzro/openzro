@@ -329,12 +329,12 @@ func addrType(qtype uint16) (uint16, bool) {
 // internal network, and unlike "carries one", a property of the whole set cannot be
 // won by adding records to the message.
 //
-// Which of the addresses belong to the queried name is deliberately not determined.
-// That would mean following the answer's alias chain, with the cycles, forks and hop
-// limits such a walk has to rule on. Judging the set as a whole needs none of that
-// and still lets a chain ending in an internal address count — at the price of a
-// reply that pads its answer with unrelated public records losing its preference
-// (ADR-0023 implementation notes).
+// The set is restricted to addrsOf's closure: the queried name plus every CNAME
+// target transitively reachable from it. An address whose owner falls outside that
+// closure — an unrelated off-name record, or padding — never enters the set, so it
+// cannot decide this question, and a chain ending in an internal address still
+// counts — at the price of a reply that pads its answer with unrelated public
+// records losing its own preference (ADR-0023 implementation notes).
 func allAddrsPrivate(resp *dns.Msg, q dns.Question, atype uint16) bool {
 	addrs := addrsOf(resp, q, atype)
 	if len(addrs) == 0 {
