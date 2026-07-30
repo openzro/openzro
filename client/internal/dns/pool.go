@@ -244,10 +244,13 @@ func (p *resolverPool) serveSelected(
 func (p *resolverPool) gather(r *dns.Msg, members []*poolMember, logger *log.Entry) []selection.Candidate {
 	replies := make(chan selection.Candidate, len(members))
 	for _, m := range members {
+		// Each group gets its own copy of the request, taken here rather than
+		// inside the goroutine: they pack it concurrently, a shared message
+		// would be a data race, and copying before the worker starts means no
+		// worker ever reads r after ServeDNS has returned it.
+		req := r.Copy()
 		go func() {
-			// Each group gets its own copy of the request: they pack it
-			// concurrently, and a shared message would be a data race.
-			resp, err := m.resolver.queryUpstreams(logger, r.Copy())
+			resp, err := m.resolver.queryUpstreams(logger, req)
 			m.resolver.checkUpstreamFails(err)
 			replies <- selection.Candidate{Resp: resp, Source: m.resolver.source()}
 		}()
