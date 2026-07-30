@@ -59,6 +59,14 @@ func rrAAt(owner, ip string) dns.RR {
 	return &dns.A{Hdr: hdr(owner, dns.TypeA), A: net.ParseIP(ip)}
 }
 
+// rrAAAAAt builds a raw AAAA record, unlike msg()/cand(), which route a
+// v4-mapped literal (::ffff:a.b.c.d) to an A record because net.IP.To4()
+// treats it as IPv4 — this is what lets a test put such a literal in an
+// actual AAAA RRset.
+func rrAAAAAt(owner, ip string) dns.RR {
+	return &dns.AAAA{Hdr: hdr(owner, dns.TypeAAAA), AAAA: net.ParseIP(ip)}
+}
+
 func rrCNAMEAt(owner, target string) dns.RR {
 	return &dns.CNAME{Hdr: hdr(owner, dns.TypeCNAME), Target: dns.Fqdn(target)}
 }
@@ -195,6 +203,16 @@ func TestPreferPrivate_Select(t *testing.T) {
 			wantIdx: 0, wantOK: true,
 		},
 		{
+			// The mirror of the padding shape above: a genuinely private answer at the
+			// queried name must stay private when an unrelated PUBLIC record is padded
+			// in elsewhere. The exact case the stale allAddrsPrivate comment (finding
+			// #1, corrected above) would have gotten wrong had anyone trusted it and
+			// "simplified" the function back to scanning the whole message.
+			name:    "a private answer stays private despite an unrelated public record elsewhere",
+			cands:   []Candidate{cand("a", dns.RcodeSuccess, "203.0.113.10"), candRR("z", rrA("10.0.0.5"), rrAAt("pad.other.example.", "203.0.113.66"))},
+			wantIdx: 1, wantOK: true,
+		},
+		{
 			// Nothing in it is about the name we asked for, so it is no answer to that
 			// question — but it is still a reply that was received, and it is served if
 			// nothing better exists. Hence above the negatives, not below them.
@@ -317,9 +335,60 @@ func TestPreferPrivate_Select(t *testing.T) {
 			wantIdx: 1, wantOK: true,
 		},
 		{
+			name:    "100.63.255.255 (just below the CGNAT block) is public",
+			cands:   []Candidate{cand("a", dns.RcodeSuccess, "100.63.255.255"), cand("b", dns.RcodeSuccess, "10.0.0.1")},
+			wantIdx: 1, wantOK: true,
+		},
+		{
+			name:    "100.127.255.255 (the CGNAT block's top address) is private",
+			cands:   []Candidate{cand("a", dns.RcodeSuccess, "203.0.113.10"), cand("b", dns.RcodeSuccess, "100.127.255.255")},
+			wantIdx: 1, wantOK: true,
+		},
+		{
+			name:    "100.128.0.1 (just above the CGNAT block) is public",
+			cands:   []Candidate{cand("a", dns.RcodeSuccess, "100.128.0.1"), cand("b", dns.RcodeSuccess, "10.0.0.1")},
+			wantIdx: 1, wantOK: true,
+		},
+		{
+			// IsPrivate() covers RFC1918/ULA only; link-local and the unspecified
+			// address are neither of those, so they must not out-rank or tie with a
+			// genuinely private answer.
+			name:    "0.0.0.0 (unspecified) is public",
+			cands:   []Candidate{cand("a", dns.RcodeSuccess, "0.0.0.0"), cand("b", dns.RcodeSuccess, "10.0.0.1")},
+			wantIdx: 1, wantOK: true,
+		},
+		{
+			name:    "169.254.1.1 (IPv4 link-local) is public",
+			cands:   []Candidate{cand("a", dns.RcodeSuccess, "169.254.1.1"), cand("b", dns.RcodeSuccess, "10.0.0.1")},
+			wantIdx: 1, wantOK: true,
+		},
+		{
+			name:    ":: and IPv6 link-local are public (AAAA query)",
+			qtype:   dns.TypeAAAA,
+			cands:   []Candidate{cand("a", dns.RcodeSuccess, "::"), cand("b", dns.RcodeSuccess, "fd00::1")},
+			wantIdx: 1, wantOK: true,
+		},
+		{
+			name:    "fe80::1 (IPv6 link-local) is public",
+			qtype:   dns.TypeAAAA,
+			cands:   []Candidate{cand("a", dns.RcodeSuccess, "fe80::1"), cand("b", dns.RcodeSuccess, "fd00::1")},
+			wantIdx: 1, wantOK: true,
+		},
+		{
 			name:    "IPv6 ULA private beats public v6 (AAAA query)",
 			qtype:   dns.TypeAAAA,
 			cands:   []Candidate{cand("a", dns.RcodeSuccess, "2606:4700::1111"), cand("b", dns.RcodeSuccess, "fd00::1")},
+			wantIdx: 1, wantOK: true,
+		},
+		{
+			// RFC 4291 §2.5.5.2: this IS 100.64.0.1, only IPv6-dressed. isPrivateAddr
+			// unmaps before classifying, so it counts as CGNAT-private like the plain
+			// IPv4 form would — a real AAAA record almost never carries one of these,
+			// but if it does, treating it as anything other than its real address
+			// would be the surprising choice.
+			name:    "v4-mapped IPv6 (::ffff:100.64.0.1) unmaps to CGNAT and counts as private",
+			qtype:   dns.TypeAAAA,
+			cands:   []Candidate{candRR("a", rrAAAAAt(zone, "2606:4700::1111")), candRR("b", rrAAAAAt(zone, "::ffff:100.64.0.1"))},
 			wantIdx: 1, wantOK: true,
 		},
 		{
