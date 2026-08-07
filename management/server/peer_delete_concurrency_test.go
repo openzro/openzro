@@ -102,3 +102,94 @@ func TestDeletePeer_ConcurrentAccountWrite_NoDeadlock(t *testing.T) {
 	_, err = manager.GetPeer(ctx, accountID, peerID, adminUser)
 	require.Error(t, err, "peer should be gone after a successful delete")
 }
+
+// TestDeletePeer_ConcurrentPeerWrite_NoDeadlock guards the other half of
+// the ordering: DeletePeer must still take the peer row before the
+// account row.
+//
+// Peer-scoped writes reach the two rows in that order — UpdatePeer locks
+// the peer with GetPeerByID and only then reads account settings under a
+// shared lock. A DeletePeer that grabbed the account row first would
+// invert this and produce a fresh cycle: one transaction holding the
+// account row and waiting on the peer, the other holding the peer and
+// waiting on the account.
+//
+// The competing goroutine mirrors UpdatePeer's order and holds the peer
+// lock across the window, so the inversion is deterministic. Together
+// with TestDeletePeer_ConcurrentAccountWrite_NoDeadlock this pins
+// DeletePeer to exactly one position: peer first, account before any
+// shared read of it.
+func TestDeletePeer_ConcurrentPeerWrite_NoDeadlock(t *testing.T) {
+	t.Setenv("OPENZRO_STORE_ENGINE", string(types.PostgresStoreEngine))
+
+	manager, err := createManager(t)
+	require.NoError(t, err)
+
+	const (
+		accountID = "test_account"
+		adminUser = "account_creator"
+		peerID    = "peer1"
+	)
+
+	ctx := context.Background()
+	account := newAccountWithId(ctx, accountID, adminUser, "", false)
+	account.Peers = map[string]*nbpeer.Peer{
+		peerID: {
+			ID:        peerID,
+			AccountID: accountID,
+			IP:        net.IP{1, 1, 1, 1},
+			DNSLabel:  peerID + ".test",
+		},
+	}
+	account.Groups["group1"] = &types.Group{
+		ID:        "group1",
+		AccountID: accountID,
+		Name:      "Group1",
+		Peers:     []string{peerID},
+	}
+	require.NoError(t, manager.Store.SaveAccount(ctx, account))
+
+	const holdPeer = 2 * time.Second
+
+	var wg sync.WaitGroup
+	var competingErr, deleteErr error
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// Same order as UpdatePeer: peer row first, account row after.
+		//
+		// The peer row is held under a SHARED lock on purpose. DeletePeer
+		// resolves the account with a shared read of that row before it
+		// opens its transaction; an exclusive lock here would simply park
+		// DeletePeer on that pre-transaction read, so it would never hold
+		// the account row while waiting for the peer and no cycle could
+		// form. A shared lock lets that read through and leaves the
+		// ordering itself as the only thing under test.
+		competingErr = manager.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
+			if _, err := tx.GetPeerByID(ctx, store.LockingStrengthShare, accountID, peerID); err != nil {
+				return err
+			}
+			time.Sleep(holdPeer)
+			_, err := tx.GetAccountSettings(ctx, store.LockingStrengthShare, accountID)
+			return err
+		})
+	}()
+
+	// Let the competing transaction take the peer lock first.
+	time.Sleep(200 * time.Millisecond)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		deleteErr = manager.DeletePeer(ctx, accountID, peerID, adminUser)
+	}()
+
+	wg.Wait()
+
+	require.NoError(t, deleteErr, "DeletePeer must queue behind a concurrent peer write, not deadlock")
+	require.NoError(t, competingErr, "the concurrent peer write must not be the deadlock victim either")
+
+	_, err = manager.GetPeer(ctx, accountID, peerID, adminUser)
+	require.Error(t, err, "peer should be gone after a successful delete")
+}

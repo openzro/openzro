@@ -444,34 +444,42 @@ func (am *DefaultAccountManager) DeletePeer(ctx context.Context, accountID, peer
 	var eventsToStore []func()
 
 	err = am.Store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
-		// Take the exclusive lock on the account row up front. This
-		// transaction is going to write that row anyway, and several of
-		// the reads below (isPeerInActiveGroup, and the settings/network
-		// lookups in deletePeers) take a SHARED lock on the very same
-		// row. Acquiring the shared lock first and upgrading later
-		// deadlocks as soon as a second account-scoped write overlaps:
-		// both transactions hold the shared lock, both then ask for the
-		// exclusive one, and the database kills one of them (Postgres
-		// SQLSTATE 40P01), which reaches the API caller as a 500.
+		peer, err = transaction.GetPeerByID(ctx, store.LockingStrengthUpdate, accountID, peerID)
+		if err != nil {
+			return err
+		}
+
+		// Touches network_routers, not the account row.
+		if err = am.validatePeerDelete(ctx, transaction, accountID, peerID); err != nil {
+			return err
+		}
+
+		// Take the exclusive lock on the account row here, before the
+		// first shared read of it. This transaction is going to write
+		// that row anyway, and the reads that follow (isPeerInActiveGroup
+		// and the settings/network lookups in deletePeers) take a SHARED
+		// lock on the very same row. Acquiring the shared lock first and
+		// upgrading later deadlocks as soon as a second account-scoped
+		// write overlaps: both transactions hold the shared lock, both
+		// then ask for the exclusive one, and the database kills one of
+		// them (Postgres SQLSTATE 40P01), which reaches the API caller as
+		// a 500.
 		//
 		// AcquireWriteLockByUID above does not prevent this — it is a
 		// process-local mutex, so with more than one management replica
 		// the overlapping transaction simply runs elsewhere. The account
 		// row itself is the only lock every replica shares.
 		//
+		// It has to stay *after* GetPeerByID: peer-scoped writes reach
+		// the two rows peer-first (UpdatePeer locks the peer, then reads
+		// account settings under a shared lock). Hoisting this to the top
+		// of the transaction would invert that and trade one deadlock for
+		// another.
+		//
 		// Ordering only: the serial is incremented inside the same
 		// transaction as before, so a later validation failure still
 		// rolls it back.
 		if err = transaction.IncrementNetworkSerial(ctx, store.LockingStrengthUpdate, accountID); err != nil {
-			return err
-		}
-
-		peer, err = transaction.GetPeerByID(ctx, store.LockingStrengthUpdate, accountID, peerID)
-		if err != nil {
-			return err
-		}
-
-		if err = am.validatePeerDelete(ctx, transaction, accountID, peerID); err != nil {
 			return err
 		}
 
