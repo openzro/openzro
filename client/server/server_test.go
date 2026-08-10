@@ -151,8 +151,19 @@ func TestServer_Up(t *testing.T) {
 
 	profName := "default"
 
+	// Start() kicks off `go connectWithRetryRuns` unless auto-connect is
+	// disabled, and that goroutine moves the status off Idle. Up refuses
+	// to run when the status is not Idle, so leaving auto-connect on made
+	// this test a race between the goroutine and the Up call below, with
+	// no synchronization between them: whichever got there first decided
+	// the outcome. Disabling auto-connect removes the second connection
+	// attempt entirely, which is what this test wants anyway — it is
+	// asserting how Up behaves against an unreachable management URL, not
+	// how the daemon auto-connects.
+	disableAutoConnect := true
 	ic := profilemanager.ConfigInput{
-		ConfigPath: filepath.Join(tempDir, profName+".json"),
+		ConfigPath:         filepath.Join(tempDir, profName+".json"),
+		DisableAutoConnect: &disableAutoConnect,
 	}
 
 	_, err = profilemanager.UpdateOrCreateConfig(ic)
