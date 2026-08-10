@@ -131,9 +131,7 @@ func (p *PeersUpdateManager) SendUpdate(ctx context.Context, peerID string, upda
 	start := time.Now()
 	var found, dropped bool
 
-	p.channelsMux.RLock()
-	channel, isLocal := p.peerChannels[peerID]
-	p.channelsMux.RUnlock()
+	var queued int
 
 	defer func() {
 		if p.metrics != nil {
@@ -141,19 +139,44 @@ func (p *PeersUpdateManager) SendUpdate(ctx context.Context, peerID string, upda
 		}
 	}()
 
+	// The lookup and the send are one critical section on purpose. Every
+	// close of a peer channel — CloseChannel, CloseChannels, and
+	// CreateChannel replacing a channel on reconnect — happens under the
+	// write lock, so holding the read lock across the send is what makes
+	// send-on-closed-channel impossible here. Reading the channel out and
+	// releasing first, as this used to do, leaves a window a few
+	// instructions wide in which a close lands and the send panics,
+	// taking the process down: this runs on the broadcast fan-out
+	// goroutine (see UpdateAccountPeers) where nothing recovers.
+	//
+	// Safe to hold the lock only because the send is non-blocking — the
+	// default branch below is load-bearing, not a convenience. Anything
+	// that can block stays out: no logging, no metrics, no cluster I/O.
+	p.channelsMux.RLock()
+	channel, isLocal := p.peerChannels[peerID]
 	if isLocal {
 		found = true
 		select {
 		case channel <- update:
-			log.WithContext(ctx).Debugf("update was sent to channel for peer %s", peerID)
 		default:
+			dropped = true
+			// Captured under the lock: after releasing, the channel may
+			// be closed or replaced and the number would be misleading.
+			queued = len(channel)
+		}
+	}
+	p.channelsMux.RUnlock()
+
+	if isLocal {
+		if dropped {
 			// A drop here means the peer will miss this update entirely —
 			// the next snapshot will reconcile state, but until then the
 			// peer's view is stale. Log loudly so operators can see this
 			// and either investigate the slow consumer or raise
 			// OPENZRO_PEER_UPDATE_CHANNEL_BUFFER_SIZE.
-			dropped = true
-			log.WithContext(ctx).Errorf("dropped update for peer %s: channel full (%d/%d)", peerID, len(channel), channelBufferSize)
+			log.WithContext(ctx).Errorf("dropped update for peer %s: channel full (%d/%d)", peerID, queued, channelBufferSize)
+		} else {
+			log.WithContext(ctx).Debugf("update was sent to channel for peer %s", peerID)
 		}
 		return
 	}
@@ -241,19 +264,37 @@ func (p *PeersUpdateManager) forwardClusterEvents(peerID string, channel chan *U
 			log.Errorf("cluster forward for peer %s: bad proto: %v", peerID, err)
 			continue
 		}
-		// We re-check that the channel still exists and is the one we
-		// were spawned for. If a CloseChannel raced with a delivery, we
-		// drop instead of panicking on send-on-closed-channel.
+		// Re-check that the channel still exists and is the one we were
+		// spawned for, then send — both under the same read lock. The
+		// check used to release the lock before the send, which narrowed
+		// the window without closing it: a CloseChannel landing in
+		// between still closed the channel under us and the send panicked.
+		// Closers hold the write lock, so keeping it for the send is what
+		// actually makes that impossible.
+		//
+		// As in SendUpdate, this is only safe because the send is
+		// non-blocking; nothing that can block belongs in here.
+		var dropped bool
+		var queued int
+
 		p.channelsMux.RLock()
 		current, ok := p.peerChannels[peerID]
+		stale := !ok || current != channel
+		if !stale {
+			select {
+			case channel <- &UpdateMessage{Update: sync}:
+			default:
+				dropped = true
+				queued = len(channel)
+			}
+		}
 		p.channelsMux.RUnlock()
-		if !ok || current != channel {
+
+		if stale {
 			return
 		}
-		select {
-		case channel <- &UpdateMessage{Update: sync}:
-		default:
-			log.Errorf("dropped cluster-forwarded update for peer %s: channel full (%d/%d)", peerID, len(channel), channelBufferSize)
+		if dropped {
+			log.Errorf("dropped cluster-forwarded update for peer %s: channel full (%d/%d)", peerID, queued, channelBufferSize)
 		}
 	}
 }
