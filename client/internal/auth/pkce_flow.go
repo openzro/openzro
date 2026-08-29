@@ -31,6 +31,10 @@ const (
 	queryError                = "error"
 	queryErrorDesc            = "error_description"
 	defaultPKCETimeoutSeconds = 300
+
+	// tokenExchangeTimeout bounds the back-channel token request, matching the
+	// budget the device flow gives its own HTTP client.
+	tokenExchangeTimeout = 10 * time.Second
 )
 
 // PKCEAuthorizationFlow implements the OAuthFlow interface for
@@ -40,6 +44,10 @@ type PKCEAuthorizationFlow struct {
 	state          string
 	codeVerifier   string
 	oAuthConfig    *oauth2.Config
+	// tokenHTTPClient carries the client certificate on the back-channel token
+	// exchange. It is nil when the profile configures no certificate, which
+	// leaves the oauth2 default client in place.
+	tokenHTTPClient *http.Client
 }
 
 // NewPKCEAuthorizationFlow returns new PKCE authorization code flow.
@@ -70,9 +78,38 @@ func NewPKCEAuthorizationFlow(config internal.PKCEAuthProviderConfig) (*PKCEAuth
 	}
 
 	return &PKCEAuthorizationFlow{
-		providerConfig: config,
-		oAuthConfig:    cfg,
+		providerConfig:  config,
+		oAuthConfig:     cfg,
+		tokenHTTPClient: newTokenExchangeClient(config.ClientCertPair),
 	}, nil
+}
+
+// newTokenExchangeClient returns the HTTP client the token exchange has to use
+// when the profile carries a client certificate.
+//
+// PKCE has two legs against the IdP: the browser drives the authorize leg and
+// presents its own certificate, while the token leg is a back-channel POST made
+// by the client itself. A gate that requires a client certificate on every path
+// rejects that POST unless the certificate is attached here too.
+//
+// The transport is cloned from http.DefaultTransport so proxy settings, the
+// system root pool and the default dial timeouts survive; only the client
+// certificate is added. It returns nil when no certificate is configured.
+func newTokenExchangeClient(cert *tls.Certificate) *http.Client {
+	if cert == nil {
+		return nil
+	}
+
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = &tls.Config{
+		MinVersion:   tls.VersionTLS12,
+		Certificates: []tls.Certificate{*cert},
+	}
+
+	return &http.Client{
+		Timeout:   tokenExchangeTimeout,
+		Transport: transport,
+	}
 }
 
 // GetClientID returns the provider client id
@@ -155,18 +192,6 @@ func (p *PKCEAuthorizationFlow) WaitToken(ctx context.Context, _ AuthFlowInfo) (
 func (p *PKCEAuthorizationFlow) startServer(server *http.Server, tokenChan chan<- *oauth2.Token, errChan chan<- error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-		cert := p.providerConfig.ClientCertPair
-		if cert != nil {
-			tr := &http.Transport{
-				TLSClientConfig: &tls.Config{
-					Certificates: []tls.Certificate{*cert},
-				},
-			}
-			sslClient := &http.Client{Transport: tr}
-			ctx := context.WithValue(req.Context(), oauth2.HTTPClient, sslClient)
-			req = req.WithContext(ctx)
-		}
-
 		token, err := p.handleRequest(req)
 		if err != nil {
 			renderPKCEFlowTmpl(w, err)
@@ -202,8 +227,13 @@ func (p *PKCEAuthorizationFlow) handleRequest(req *http.Request) (*oauth2.Token,
 		return nil, fmt.Errorf("missing code")
 	}
 
+	ctx := req.Context()
+	if p.tokenHTTPClient != nil {
+		ctx = context.WithValue(ctx, oauth2.HTTPClient, p.tokenHTTPClient)
+	}
+
 	return p.oAuthConfig.Exchange(
-		req.Context(),
+		ctx,
 		code,
 		oauth2.SetAuthURLParam("code_verifier", p.codeVerifier),
 	)
