@@ -485,15 +485,7 @@ func (config *Config) apply(input ConfigInput) (updated bool, err error) {
 		updated = true
 	}
 
-	if config.ClientCertPath != "" && config.ClientCertKeyPath != "" {
-		cert, err := tls.LoadX509KeyPair(config.ClientCertPath, config.ClientCertKeyPath)
-		if err != nil {
-			log.Error("Failed to load mTLS cert/key pair: ", err)
-		} else {
-			config.ClientCertKeyPair = &cert
-			log.Info("Loaded client mTLS cert/key pair")
-		}
-	}
+	config.loadClientCertPair()
 
 	if input.DNSLabels != nil && !slices.Equal(config.DNSLabels, input.DNSLabels) {
 		log.Infof("updating DNS labels [ %s ] (old value: [ %s ])",
@@ -510,6 +502,28 @@ func (config *Config) apply(input ConfigInput) (updated bool, err error) {
 	}
 
 	return updated, nil
+}
+
+// loadClientCertPair loads the configured client mTLS certificate/key pair into
+// ClientCertKeyPair. The pair is not serialized with the profile, so every
+// loader has to call this — the PKCE flow reads the certificate it presents on
+// the token exchange from here.
+//
+// It is a no-op when either path is unset, and a load failure is logged and
+// leaves the pair nil, so deployments without an mTLS gate are unaffected.
+func (config *Config) loadClientCertPair() {
+	if config.ClientCertPath == "" || config.ClientCertKeyPath == "" {
+		return
+	}
+
+	cert, err := tls.LoadX509KeyPair(config.ClientCertPath, config.ClientCertKeyPath)
+	if err != nil {
+		log.Errorf("failed to load client mTLS cert/key pair: %v", err)
+		return
+	}
+
+	config.ClientCertKeyPair = &cert
+	log.Info("Loaded client mTLS cert/key pair")
 }
 
 // parseURL parses and validates a service URL
@@ -618,6 +632,7 @@ func GetConfig(configPath string) (*Config, error) {
 	if _, err := util.ReadJson(configPath, config); err != nil {
 		return nil, fmt.Errorf("failed to read config file %s: %w", configPath, err)
 	}
+	config.loadClientCertPair()
 
 	return config, nil
 }
