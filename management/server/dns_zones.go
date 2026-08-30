@@ -95,7 +95,15 @@ func (am *DefaultAccountManager) CreateDNSZone(ctx context.Context, accountID, u
 		if err != nil {
 			return err
 		}
-		if err := validateDNSZone(ctx, tx, accountID, zone, dnsDomain, true); err != nil {
+		// Unchanged ordering on purpose: this path still reads the account
+		// row before it writes it, so it still carries the deadlock #143
+		// describes. Fixing it needs a serialization point that survives the
+		// isolation-level difference between Postgres and MySQL, which is
+		// tracked separately — see the note on the pull request.
+		if err := validateDNSZone(ctx, tx, accountID, zone, true); err != nil {
+			return err
+		}
+		if err := validateDNSZonePeerOverlap(zone, dnsDomain); err != nil {
 			return err
 		}
 		// A new zone has no records yet (records arrive via
@@ -141,10 +149,23 @@ func (am *DefaultAccountManager) SaveDNSZone(ctx context.Context, accountID, use
 	var saved *types.DNSZone
 	var updateAccountPeers bool
 	err := am.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
-		dnsDomain, err := am.resolvePeerDNSDomainTx(ctx, tx, accountID)
-		if err != nil {
-			return err
-		}
+		// Zone and group reads come before the exclusive account lock, and the
+		// account read comes after it. Two constraints meet here:
+		//
+		//   - The record mutations in this file take the zone row first and
+		//     the account row second (DeleteDNSRecord: GetDNSZoneByID at
+		//     LockingStrengthUpdate, then IncrementNetworkSerial). Locking the
+		//     account up front would invert that and trade one deadlock for
+		//     another — the mistake #148 caught on DeletePeer.
+		//   - resolvePeerDNSDomainTx reads the account row under a SHARED
+		//     lock. Doing that before IncrementNetworkSerial makes this
+		//     transaction upgrade shared to exclusive on the same row, which
+		//     deadlocks against any other account-scoped write doing the same.
+		//
+		// So: zone and group reads, then the exclusive account lock, then the
+		// shared read it now safely covers. Nothing here depends on seeing a
+		// concurrent writer's rows — the domain is immutable on save, so no
+		// overlap can be introduced by this path.
 		existing, err := tx.GetDNSZoneByID(ctx, store.LockingStrengthUpdate, accountID, zoneToSave.ID)
 		if err != nil {
 			if errors.Is(err, store.ErrDNSZoneNotFound) {
@@ -166,14 +187,21 @@ func (am *DefaultAccountManager) SaveDNSZone(ctx context.Context, accountID, use
 		// is on disk regardless of what the caller passed.
 		zoneToSave.Records = existing.Records
 
-		if err := validateDNSZone(ctx, tx, accountID, zoneToSave, dnsDomain, false); err != nil {
+		if err := validateDNSZone(ctx, tx, accountID, zoneToSave, false); err != nil {
 			return err
 		}
 		updateAccountPeers, err = areDNSZoneChangesAffectPeers(ctx, tx, accountID, zoneToSave, existing)
 		if err != nil {
 			return err
 		}
-		if err := tx.IncrementNetworkSerial(ctx, store.LockingStrengthUpdate, accountID); err != nil {
+		if err = tx.IncrementNetworkSerial(ctx, store.LockingStrengthUpdate, accountID); err != nil {
+			return err
+		}
+		dnsDomain, err := am.resolvePeerDNSDomainTx(ctx, tx, accountID)
+		if err != nil {
+			return err
+		}
+		if err := validateDNSZonePeerOverlap(zoneToSave, dnsDomain); err != nil {
 			return err
 		}
 		if err := tx.SaveDNSZone(ctx, store.LockingStrengthUpdate, zoneToSave); err != nil {
@@ -490,13 +518,31 @@ func (am *DefaultAccountManager) resolvePeerDNSDomainTx(ctx context.Context, tx 
 	return am.GetDNSDomain(settings), nil
 }
 
-// validateDNSZone enforces ADR-0022 D5 invariants: FQDN syntax,
-// bidirectional peer-DNS overlap rejection, ≥1 distribution group
+// validateDNSZonePeerOverlap rejects a zone whose domain collides with the
+// peer DNS namespace. The peer zone is rooted at peerDNSDomain and its apex
+// carries one A record per peer, so a label-aligned suffix in either direction
+// is a collision.
+//
+// Split out of validateDNSZone because resolving peerDNSDomain reads the
+// account row under a shared lock, and SaveDNSZone has to defer that read
+// until after it holds the row exclusively. Call it with a normalized domain:
+// validateDNSZone lowercases and strips the trailing dot, and must run first.
+func validateDNSZonePeerOverlap(zone *types.DNSZone, peerDNSDomain string) error {
+	if peerDNSDomain != "" && dnsZoneOverlap(zone.Domain, peerDNSDomain) {
+		return status.Errorf(status.InvalidArgument,
+			"dns zone domain %q overlaps with the peer DNS domain %q; pick a non-overlapping namespace",
+			zone.Domain, peerDNSDomain)
+	}
+	return nil
+}
+
+// validateDNSZone enforces the ADR-0022 D5 invariants that need no account
+// read: FQDN syntax, >=1 distribution group
 // (deduplicated), group existence in the account, cross-zone overlap
 // rejection against OTHER user-managed zones in the same account
 // (excluding the zone being saved). Called inside the same
 // transaction as the upsert so reads are consistent with the write.
-func validateDNSZone(ctx context.Context, tx store.Store, accountID string, zone *types.DNSZone, peerDNSDomain string, isCreate bool) error {
+func validateDNSZone(ctx context.Context, tx store.Store, accountID string, zone *types.DNSZone, isCreate bool) error {
 	zone.Domain = strings.TrimSuffix(strings.ToLower(zone.Domain), ".")
 	if zone.Domain == "" {
 		return status.Errorf(status.InvalidArgument, "dns zone domain is required")
@@ -506,15 +552,6 @@ func validateDNSZone(ctx context.Context, tx store.Store, accountID string, zone
 	}
 	if l := len(zone.Name); l < 1 || l > 255 {
 		return status.Errorf(status.InvalidArgument, "dns zone name length must be in [1, 255]")
-	}
-
-	// Bidirectional peer-DNS overlap. The peer zone is rooted at
-	// `peerDNSDomain` and the apex carries one A record per peer.
-	// Reject if either domain is a label-aligned suffix of the other.
-	if peerDNSDomain != "" && dnsZoneOverlap(zone.Domain, peerDNSDomain) {
-		return status.Errorf(status.InvalidArgument,
-			"dns zone domain %q overlaps with the peer DNS domain %q; pick a non-overlapping namespace",
-			zone.Domain, peerDNSDomain)
 	}
 
 	// Cross-zone overlap rejection against OTHER user-managed zones
