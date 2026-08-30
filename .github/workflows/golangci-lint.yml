@@ -17,7 +17,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: codespell
-        uses: codespell-project/actions-codespell@v2
+        # Pinned to a commit rather than the floating v2 tag. At v2.2 — where
+        # v2 currently points — requirements.txt asks for
+        # codespell[toml]>=2.2.4 and the Dockerfile installs it unpinned, so
+        # every run resolves to whatever is newest on PyPI. That is how this
+        # job went red with no commit behind it: 2.4.1 in August, 2.4.3 later,
+        # and the newer dictionary folds pre-selected into preselected.
+        # This commit pins codespell==2.4.2 under --require-hashes and the
+        # python base image by digest, so a dictionary release can no longer
+        # arrive unannounced. Bumping it is a deliberate, reviewable act.
+        uses: codespell-project/actions-codespell@3c04c03694eb927ff908b8b5abfe9c58b239b0ae # codespell 2.4.2
         with:
           # ignore_words_list collects:
           #   - upstream NetBird false positives carried over (erro, clienta,
