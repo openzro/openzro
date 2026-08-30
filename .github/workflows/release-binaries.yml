@@ -1144,6 +1144,18 @@ jobs:
     # sha256sums for the PKGBUILD).
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: [release]
+    # AUR is a third-party service we do not control, and it is the only
+    # publication target in this pipeline that is not ours. When it is down —
+    # as it was for v0.53.1-alpha.87, mid-maintenance — this job fails and
+    # takes the whole release run red with it, even though the GitHub Release,
+    # ghcr.io, pkg.openzro.io, the macOS PKG and the Windows MSI all published
+    # correctly from earlier jobs.
+    #
+    # A red release that actually shipped everything teaches people to skim
+    # past red. Degrade instead: the job still runs and its failure is still
+    # visible on the job itself, it just no longer fails the run. Arch users
+    # get the package on the next release, or on a rerun once AUR is back.
+    continue-on-error: true
     environment: production
 
     steps:
@@ -1257,6 +1269,18 @@ jobs:
     runs-on: ubuntu-22.04
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: [release_ui]
+    # AUR is a third-party service we do not control, and it is the only
+    # publication target in this pipeline that is not ours. When it is down —
+    # as it was for v0.53.1-alpha.87, mid-maintenance — this job fails and
+    # takes the whole release run red with it, even though the GitHub Release,
+    # ghcr.io, pkg.openzro.io, the macOS PKG and the Windows MSI all published
+    # correctly from earlier jobs.
+    #
+    # A red release that actually shipped everything teaches people to skim
+    # past red. Degrade instead: the job still runs and its failure is still
+    # visible on the job itself, it just no longer fails the run. Arch users
+    # get the package on the next release, or on a rerun once AUR is back.
+    continue-on-error: true
     environment: production
 
     steps:
