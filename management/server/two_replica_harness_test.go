@@ -39,7 +39,7 @@ import (
 // instances, with independent lock maps, against one physical database, so a
 // test can drive the real manager methods on both sides.
 //
-// It is infrastructure only. No production behaviour changes here, and no
+// It is infrastructure only. No production behavior changes here, and no
 // invariant is fixed — the point is to be able to demonstrate the failures
 // first, so each fix can land red-to-green instead of by argument.
 
