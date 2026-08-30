@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v4
       - name: codespell
         # Pinned to a commit rather than the floating v2 tag. At v2.2 — where
-        # v2 currently points — requirements.txt asks for
+        # v2 pointed when this was investigated — requirements.txt asks for
         # codespell[toml]>=2.2.4 and the Dockerfile installs it unpinned, so
         # every run resolves to whatever is newest on PyPI. That is how this
         # job went red with no commit behind it: 2.4.1 in August, 2.4.3 later,
