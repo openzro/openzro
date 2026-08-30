@@ -2,10 +2,18 @@ package profilemanager
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"errors"
+	"math/big"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -228,4 +236,99 @@ func TestUpdateOldManagementURL(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestGetConfigLoadsClientCertKeyPair guards the daemon's profile load path.
+// ClientCertKeyPair is a `json:"-"` field, so every path that hands a Config to
+// the PKCE flow has to load the pair from disk — otherwise the back-channel
+// token exchange goes out without a client certificate and an mTLS gate rejects
+// it.
+func TestGetConfigLoadsClientCertKeyPair(t *testing.T) {
+	dir := t.TempDir()
+	certPath, keyPath := writeTestCertPair(t, dir)
+
+	tt := []struct {
+		name       string
+		certPath   string
+		keyPath    string
+		expectPair bool
+	}{
+		{
+			name:       "cert and key configured",
+			certPath:   certPath,
+			keyPath:    keyPath,
+			expectPair: true,
+		},
+		{
+			name: "no mTLS configured",
+		},
+		{
+			name:     "cert without key",
+			certPath: certPath,
+		},
+		{
+			name:    "key without cert",
+			keyPath: keyPath,
+		},
+		{
+			name:     "pair missing on disk",
+			certPath: filepath.Join(dir, "absent.crt"),
+			keyPath:  filepath.Join(dir, "absent.key"),
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			configPath := filepath.Join(t.TempDir(), "config.json")
+			require.NoError(t, WriteOutConfig(configPath, &Config{
+				ClientCertPath:    tc.certPath,
+				ClientCertKeyPath: tc.keyPath,
+			}))
+
+			config, err := GetConfig(configPath)
+			require.NoError(t, err)
+
+			if !tc.expectPair {
+				assert.Nil(t, config.ClientCertKeyPair)
+				return
+			}
+
+			require.NotNil(t, config.ClientCertKeyPair)
+			assert.NotEmpty(t, config.ClientCertKeyPair.Certificate)
+		})
+	}
+}
+
+// writeTestCertPair writes a throwaway self-signed client certificate and its
+// private key into dir and returns the two paths.
+func writeTestCertPair(t *testing.T, dir string) (certPath, keyPath string) {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "openzro-test-client"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	require.NoError(t, err)
+
+	keyDER, err := x509.MarshalECPrivateKey(key)
+	require.NoError(t, err)
+
+	certPath = filepath.Join(dir, "client.crt")
+	keyPath = filepath.Join(dir, "client.key")
+
+	require.NoError(t, os.WriteFile(certPath,
+		pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o600))
+	require.NoError(t, os.WriteFile(keyPath,
+		pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}), 0o600))
+
+	return certPath, keyPath
 }
