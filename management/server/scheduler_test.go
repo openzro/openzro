@@ -15,7 +15,7 @@ import (
 // schedulerJobIDs returns the scheduled job IDs under the scheduler's own
 // mutex. The assertions below used to read DefaultScheduler.jobs directly,
 // which races the scheduler goroutine deleting from that same map as jobs
-// finish or are cancelled.
+// finish or are canceled.
 func schedulerJobIDs(s *DefaultScheduler) []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
