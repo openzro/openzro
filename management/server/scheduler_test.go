@@ -12,6 +12,21 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// schedulerJobIDs returns the scheduled job IDs under the scheduler's own
+// mutex. The assertions below used to read DefaultScheduler.jobs directly,
+// which races the scheduler goroutine deleting from that same map as jobs
+// finish or are cancelled.
+func schedulerJobIDs(s *DefaultScheduler) []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	ids := make([]string, 0, len(s.jobs))
+	for id := range s.jobs {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 func TestScheduler_Performance(t *testing.T) {
 	scheduler := NewDefaultScheduler()
 	n := 500
@@ -38,7 +53,7 @@ func TestScheduler_Performance(t *testing.T) {
 		t.Fatal("timed out while waiting for test to finish")
 		return
 	}
-	assert.Len(t, scheduler.jobs, 0)
+	assert.Len(t, schedulerJobIDs(scheduler), 0)
 }
 
 func TestScheduler_Cancel(t *testing.T) {
@@ -46,7 +61,6 @@ func TestScheduler_Cancel(t *testing.T) {
 	jobID2 := "test-scheduler-job-2"
 	scheduler := NewDefaultScheduler()
 	tChan := make(chan struct{})
-	p := []string{jobID1, jobID2}
 	scheduletime := 2 * time.Millisecond
 	sleepTime := 4 * time.Millisecond
 	if runtime.GOOS == "windows" {
@@ -55,9 +69,7 @@ func TestScheduler_Cancel(t *testing.T) {
 	}
 
 	scheduler.Schedule(context.Background(), scheduletime, jobID1, func() (nextRunIn time.Duration, reschedule bool) {
-		tt := p[0]
 		<-tChan
-		t.Logf("job %s", tt)
 		return scheduletime, true
 	})
 	scheduler.Schedule(context.Background(), scheduletime, jobID2, func() (nextRunIn time.Duration, reschedule bool) {
@@ -66,13 +78,12 @@ func TestScheduler_Cancel(t *testing.T) {
 	defer scheduler.Cancel(context.Background(), []string{jobID2})
 
 	time.Sleep(sleepTime)
-	assert.Len(t, scheduler.jobs, 2)
+	assert.Len(t, schedulerJobIDs(scheduler), 2)
 	scheduler.Cancel(context.Background(), []string{jobID1})
 	close(tChan)
-	p = []string{}
 	time.Sleep(sleepTime)
-	assert.Len(t, scheduler.jobs, 1)
-	assert.NotNil(t, scheduler.jobs[jobID2])
+	assert.Len(t, schedulerJobIDs(scheduler), 1)
+	assert.Contains(t, schedulerJobIDs(scheduler), jobID2)
 }
 
 func TestScheduler_CancelAll(t *testing.T) {
@@ -80,7 +91,6 @@ func TestScheduler_CancelAll(t *testing.T) {
 	jobID2 := "test-scheduler-job-2"
 	scheduler := NewDefaultScheduler()
 	tChan := make(chan struct{})
-	p := []string{jobID1, jobID2}
 	scheduletime := 2 * time.Millisecond
 	sleepTime := 4 * time.Millisecond
 	if runtime.GOOS == "windows" {
@@ -89,9 +99,7 @@ func TestScheduler_CancelAll(t *testing.T) {
 	}
 
 	scheduler.Schedule(context.Background(), scheduletime, jobID1, func() (nextRunIn time.Duration, reschedule bool) {
-		tt := p[0]
 		<-tChan
-		t.Logf("job %s", tt)
 		return scheduletime, true
 	})
 	scheduler.Schedule(context.Background(), scheduletime, jobID2, func() (nextRunIn time.Duration, reschedule bool) {
@@ -99,12 +107,11 @@ func TestScheduler_CancelAll(t *testing.T) {
 	})
 
 	time.Sleep(sleepTime)
-	assert.Len(t, scheduler.jobs, 2)
+	assert.Len(t, schedulerJobIDs(scheduler), 2)
 	scheduler.CancelAll(context.Background())
 	close(tChan)
-	p = []string{}
 	time.Sleep(sleepTime)
-	assert.Len(t, scheduler.jobs, 0)
+	assert.Len(t, schedulerJobIDs(scheduler), 0)
 }
 
 func TestScheduler_Schedule(t *testing.T) {
