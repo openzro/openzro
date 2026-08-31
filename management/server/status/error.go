@@ -164,6 +164,15 @@ func NewGroupNotFoundError(groupID string) error {
 	return Errorf(NotFound, "group: %s not found", groupID)
 }
 
+// NewResourceNameAlreadyExistsError creates a new Error for a network resource
+// name already taken in the account. Returned both by the manager's own check
+// and by the store when the unique index refuses the write, so the loser of a
+// cross-replica race gets the same answer as someone who simply picked a name
+// that was already in use.
+func NewResourceNameAlreadyExistsError(name string) error {
+	return Errorf(InvalidArgument, "resource with name %s already exists", name)
+}
+
 // NewPostureChecksNotFoundError creates a new Error with NotFound type for a missing posture checks
 func NewPostureChecksNotFoundError(postureChecksID string) error {
 	return Errorf(NotFound, "posture checks: %s not found", postureChecksID)

@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +16,7 @@ import (
 	networkTypes "github.com/openzro/openzro/management/server/networks/types"
 	"github.com/openzro/openzro/management/server/permissions"
 	"github.com/openzro/openzro/management/server/store"
+	"github.com/openzro/openzro/management/server/types"
 )
 
 // CreateResource rejects a name already taken in the account. It proves that
@@ -93,7 +96,15 @@ func TestNetworkResource_ConcurrentCreateAcrossReplicas(t *testing.T) {
 			return nil
 		})
 	}()
-	<-blockerReady
+	select {
+	case <-blockerReady:
+	case err := <-blockerDone:
+		// The blocker failed before it could signal. Without this the test
+		// would sit on blockerReady until the package timeout, naming nothing.
+		t.Fatalf("blocking transaction failed before taking the network row: %v", err)
+	case <-time.After(30 * time.Second):
+		t.Fatal("blocking transaction never took the network row")
+	}
 
 	b := newBarrier()
 	create := func(mgr resources.Manager) <-chan error {
@@ -152,4 +163,19 @@ func TestNetworkResource_ConcurrentCreateAcrossReplicas(t *testing.T) {
 	require.Equal(t, 1, named,
 		"the account holds %d resources named %q; CreateResource accepted %d of 2 concurrent creates (A=%v, B=%v)",
 		named, resourceName, accepted, resultA, resultB)
+	require.Equal(t, 1, accepted, "exactly one create must be accepted")
+
+	// The loser's error is engine-specific, so assert it where it is
+	// deterministic. On Postgres the insert reaches the unique index and the
+	// store maps the violation to the same answer the pre-check gives. On
+	// MySQL the gap lock fires first and the loser sees a 1213 deadlock
+	// instead — see the note at the top of this file.
+	if types.Engine(strings.ToLower(os.Getenv("OPENZRO_STORE_ENGINE"))) == types.PostgresStoreEngine {
+		loser := resultA
+		if loser == nil {
+			loser = resultB
+		}
+		require.ErrorContains(t, loser, "already exists",
+			"the losing create must be reported as a taken name, not an internal error")
+	}
 }

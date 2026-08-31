@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
+	"unicode/utf8"
 
 	"github.com/openzro/openzro/management/server/account"
 	"github.com/openzro/openzro/management/server/activity"
@@ -59,23 +59,17 @@ func NewManager(store store.Store, permissionsManager permissions.Manager, group
 // (activity_exporters, flow_exports).
 const MaxResourceNameLength = 128
 
-// isUniqueConstraintError reports whether err is the database refusing a
-// duplicate. Mirrors the helper in the server package, which cannot be imported
-// from here.
-func isUniqueConstraintError(err error) bool {
-	msg := err.Error()
-	return strings.Contains(msg, "(SQLSTATE 23505)") ||
-		strings.Contains(msg, "Error 1062 (23000)") ||
-		strings.Contains(msg, "UNIQUE constraint failed")
-}
-
 // validateResourceName rejects a name the unique index could not hold, so the
 // caller gets a validation error naming the limit rather than a database error
 // from the write.
 func validateResourceName(name string) error {
-	if len(name) > MaxResourceNameLength {
+	// Counted in runes, not bytes: the column is varchar(128), which both
+	// engines size in characters. len() would reject a 100-character name
+	// carrying accents that the database would have accepted, and the message
+	// would be wrong about what it counted.
+	if n := utf8.RuneCountInString(name); n > MaxResourceNameLength {
 		return status.Errorf(status.InvalidArgument,
-			"resource name is %d characters; the maximum is %d", len(name), MaxResourceNameLength)
+			"resource name is %d characters; the maximum is %d", n, MaxResourceNameLength)
 	}
 	return nil
 }
@@ -161,15 +155,11 @@ func (m *managerImpl) CreateResource(ctx context.Context, userID string, resourc
 
 		err = transaction.SaveNetworkResource(ctx, store.LockingStrengthUpdate, resource)
 		if err != nil {
-			// The unique index is what actually holds this invariant across
-			// replicas; the name check earlier only fails fast on the common
-			// case. Report the loser of a genuine race the same way, rather
-			// than letting a constraint violation surface as an internal
-			// error.
-			if isUniqueConstraintError(err) {
-				return status.Errorf(status.InvalidArgument, "resource with name %s already exists", resource.Name)
-			}
-			return fmt.Errorf("failed to save network resource: %w", err)
+			// The store classifies a unique-index violation for us and returns
+			// the same error the name check above produces, so the loser of a
+			// cross-replica race is reported as a taken name rather than an
+			// internal fault. Passed through unwrapped so the type survives.
+			return err
 		}
 
 		event := func() {
@@ -283,15 +273,11 @@ func (m *managerImpl) UpdateResource(ctx context.Context, userID string, resourc
 
 		err = transaction.SaveNetworkResource(ctx, store.LockingStrengthUpdate, resource)
 		if err != nil {
-			// The unique index is what actually holds this invariant across
-			// replicas; the name check earlier only fails fast on the common
-			// case. Report the loser of a genuine race the same way, rather
-			// than letting a constraint violation surface as an internal
-			// error.
-			if isUniqueConstraintError(err) {
-				return status.Errorf(status.InvalidArgument, "resource with name %s already exists", resource.Name)
-			}
-			return fmt.Errorf("failed to save network resource: %w", err)
+			// The store classifies a unique-index violation for us and returns
+			// the same error the name check above produces, so the loser of a
+			// cross-replica race is reported as a taken name rather than an
+			// internal fault. Passed through unwrapped so the type survives.
+			return err
 		}
 
 		events, err := m.updateResourceGroups(ctx, transaction, userID, resource, oldResource)

@@ -2753,10 +2753,27 @@ func (s *SqlStore) SaveNetworkResource(ctx context.Context, lockStrength Locking
 	result := s.db.Clauses(clause.Locking{Strength: string(lockStrength)}).Save(resource)
 	if result.Error != nil {
 		log.WithContext(ctx).Errorf("failed to save network resource to store: %v", result.Error)
+		// idx_network_resources_account_name is what holds the per-account
+		// name invariant across replicas, so a violation here is the loser of
+		// a real race, not an internal fault. Classified here because this is
+		// the only layer that sees the driver error — callers get a generic
+		// message, by design, so the driver text does not reach the API.
+		if isUniqueConstraintViolation(result.Error) {
+			return status.NewResourceNameAlreadyExistsError(resource.Name)
+		}
 		return status.Errorf(status.Internal, "failed to save network resource to store")
 	}
 
 	return nil
+}
+
+// isUniqueConstraintViolation reports whether err is the database refusing a
+// duplicate, across the three engines this store supports.
+func isUniqueConstraintViolation(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "(SQLSTATE 23505)") || // postgres
+		strings.Contains(msg, "Error 1062 (23000)") || // mysql
+		strings.Contains(msg, "UNIQUE constraint failed") // sqlite
 }
 
 func (s *SqlStore) DeleteNetworkResource(ctx context.Context, lockStrength LockingStrength, accountID, resourceID string) error {
