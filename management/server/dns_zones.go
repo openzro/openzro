@@ -91,16 +91,26 @@ func (am *DefaultAccountManager) CreateDNSZone(ctx context.Context, accountID, u
 
 	var updateAccountPeers bool
 	err := am.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
-		dnsDomain, err := am.resolvePeerDNSDomainTx(ctx, tx, accountID)
-		if err != nil {
+		// Same shape as SaveDNSZone (#156): the zone reads, then the
+		// exclusive account row, then the shared account read it now safely
+		// covers. Taking the account row any earlier would invert the order
+		// against every other writer here, which take a zone row first.
+		if err := validateDNSZone(ctx, tx, accountID, zone, true); err != nil {
 			return err
 		}
-		// Unchanged ordering on purpose: this path still reads the account
-		// row before it writes it, so it still carries the deadlock #143
-		// describes. Fixing it needs a serialization point that survives the
-		// isolation-level difference between Postgres and MySQL, which is
-		// tracked separately — see the note on the pull request.
-		if err := validateDNSZone(ctx, tx, accountID, zone, true); err != nil {
+		if err := tx.IncrementNetworkSerial(ctx, store.LockingStrengthUpdate, accountID); err != nil {
+			return err
+		}
+		// The validation above proves nothing on its own: it reads before the
+		// account row is held, so a create on another replica can commit an
+		// overlapping zone in between. The account row is the only lock both
+		// replicas share, so the answer only counts once it is held. Without
+		// locks, for the reason in checkDNSZoneSiblingOverlap.
+		if err := checkDNSZoneSiblingOverlap(ctx, tx, store.LockingStrengthNone, accountID, zone); err != nil {
+			return err
+		}
+		dnsDomain, err := am.resolvePeerDNSDomainTx(ctx, tx, accountID)
+		if err != nil {
 			return err
 		}
 		if err := validateDNSZonePeerOverlap(zone, dnsDomain); err != nil {
@@ -112,9 +122,6 @@ func (am *DefaultAccountManager) CreateDNSZone(ctx context.Context, accountID, u
 		// other mutations and to keep the wiring uniform.
 		updateAccountPeers, err = areDNSZoneChangesAffectPeers(ctx, tx, accountID, zone, nil)
 		if err != nil {
-			return err
-		}
-		if err := tx.IncrementNetworkSerial(ctx, store.LockingStrengthUpdate, accountID); err != nil {
 			return err
 		}
 		return tx.SaveDNSZone(ctx, store.LockingStrengthUpdate, zone)
@@ -542,6 +549,37 @@ func validateDNSZonePeerOverlap(zone *types.DNSZone, peerDNSDomain string) error
 // rejection against OTHER user-managed zones in the same account
 // (excluding the zone being saved). Called inside the same
 // transaction as the upsert so reads are consistent with the write.
+// checkDNSZoneSiblingOverlap rejects a zone whose domain is a label-aligned
+// suffix of another zone in the account, or the other way round.
+//
+// The lock strength is the caller's because this runs twice on the create
+// path, and the two reads want different things. The first is part of
+// validation and shares the zone rows like every other read there. The second
+// is the re-check under the exclusive account row, and it must not take zone
+// locks at all: by then the transaction holds the account row, and every other
+// writer in this file takes a zone row before the account row, so locking a
+// zone here would invert the order and deadlock against them.
+func checkDNSZoneSiblingOverlap(ctx context.Context, tx store.Store, lockStrength store.LockingStrength, accountID string, zone *types.DNSZone) error {
+	siblings, err := tx.GetAccountDNSZones(ctx, lockStrength, accountID)
+	if err != nil {
+		return fmt.Errorf("load sibling dns zones: %w", err)
+	}
+	for _, s := range siblings {
+		if s.ID == zone.ID {
+			// Excludes the zone being updated from the overlap check
+			// against itself; on create, zone.ID is the freshly-minted
+			// xid which never matches an existing row.
+			continue
+		}
+		if dnsZoneOverlap(zone.Domain, s.Domain) {
+			return status.Errorf(status.InvalidArgument,
+				"dns zone domain %q overlaps with existing zone %q; pick a non-overlapping namespace",
+				zone.Domain, s.Domain)
+		}
+	}
+	return nil
+}
+
 func validateDNSZone(ctx context.Context, tx store.Store, accountID string, zone *types.DNSZone, isCreate bool) error {
 	zone.Domain = strings.TrimSuffix(strings.ToLower(zone.Domain), ".")
 	if zone.Domain == "" {
@@ -562,22 +600,8 @@ func validateDNSZone(ctx context.Context, tx store.Store, accountID string, zone
 	// D1's "NXDOMAIN authoritative for the more-specific zone"
 	// property. Bidirectional suffix overlap is the same primitive
 	// used for the peer-DNS check above.
-	siblings, err := tx.GetAccountDNSZones(ctx, store.LockingStrengthShare, accountID)
-	if err != nil {
-		return fmt.Errorf("load sibling dns zones: %w", err)
-	}
-	for _, s := range siblings {
-		if s.ID == zone.ID {
-			// Excludes the zone being updated from the overlap check
-			// against itself; on create, zone.ID is the freshly-minted
-			// xid which never matches an existing row.
-			continue
-		}
-		if dnsZoneOverlap(zone.Domain, s.Domain) {
-			return status.Errorf(status.InvalidArgument,
-				"dns zone domain %q overlaps with existing zone %q; pick a non-overlapping namespace",
-				zone.Domain, s.Domain)
-		}
+	if err := checkDNSZoneSiblingOverlap(ctx, tx, store.LockingStrengthShare, accountID, zone); err != nil {
+		return err
 	}
 
 	// Distribution-group constraint: ≥1, all in-account, no
