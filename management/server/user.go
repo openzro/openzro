@@ -820,6 +820,9 @@ func (am *DefaultAccountManager) GetOrCreateAccountByUser(ctx context.Context, u
 			if err != nil {
 				return nil, err
 			}
+			// After the save, not inside newAccount: an account.create for an
+			// account that failed to store is a false audit record.
+			am.StoreEvent(ctx, userID, account.Id, account.Id, activity.AccountCreated, nil)
 		} else {
 			// other error
 			return nil, err

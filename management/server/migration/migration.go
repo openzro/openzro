@@ -440,3 +440,107 @@ func CreateIndexIfNotExists[T any](ctx context.Context, db *gorm.DB, indexName s
 	log.WithContext(ctx).Infof("successfully created index %s on table %s", indexName, tableName)
 	return nil
 }
+
+// PrimaryPrivateDomainIndex is the name of the unique index that keeps a
+// private domain primary on at most one account. Exported so callers can tell
+// a violation of this rule apart from any other unique constraint the accounts
+// table may grow.
+const PrimaryPrivateDomainIndex = "idx_accounts_primary_private_domain"
+
+// primaryPrivateDomainColumn is the generated column MySQL needs to express
+// that index; the other engines use a partial index and add no column.
+const primaryPrivateDomainColumn = "primary_private_domain"
+
+// CreatePrimaryPrivateDomainUniqueIndexIfNotExists enforces, in the database,
+// that at most one account holds a given private domain as primary.
+//
+// The rule is the one GetAccountIDByPrivateDomain reads:
+//
+//	domain = ? AND is_domain_primary_account = true AND domain_category = 'private'
+//
+// It is keyed on LOWER(domain) rather than the column, deliberately. The lookup
+// lowercases what it searches for (sql_store.go), and the signup path stores a
+// lowercased domain — but the third writer does not:
+// updateAccountDomainAttributesIfNotUpToDate rewrites whatever the account
+// already had unless an admin is changing it. Indexing the raw column would let
+// "Foo.com" and "foo.com" both be primary while the lookup, searching in lower
+// case, would only ever find one of them.
+//
+// Deliberately not folded into CreateIndexIfNotExists: this needs a different
+// statement per dialect, and a general conditional-index helper is more
+// machinery than one invariant justifies.
+//
+// It fails when the data already violates the rule. That is the point — the
+// operator has to decide which account keeps the domain. See the pull request
+// for the query that finds them.
+func CreatePrimaryPrivateDomainUniqueIndexIfNotExists[T any](ctx context.Context, db *gorm.DB) error {
+	var account T
+	if !db.Migrator().HasTable(&account) {
+		log.WithContext(ctx).Debugf("table for %T does not exist, no migration needed", account)
+		return nil
+	}
+	if db.Migrator().HasIndex(&account, PrimaryPrivateDomainIndex) {
+		log.WithContext(ctx).Infof("index %s already exists", PrimaryPrivateDomainIndex)
+		return nil
+	}
+
+	stmt := &gorm.Statement{DB: db}
+	if err := stmt.Parse(&account); err != nil {
+		return fmt.Errorf("parse model schema: %w", err)
+	}
+	table := stmt.Schema.Table
+
+	switch dialect := db.Dialector.Name(); dialect {
+	case "postgres":
+		// is_domain_primary_account is boolean here, so it stands alone.
+		return execIndex(ctx, db, fmt.Sprintf(
+			`CREATE UNIQUE INDEX IF NOT EXISTS %s ON %s (LOWER(domain))
+			 WHERE is_domain_primary_account AND domain_category = 'private'`,
+			PrimaryPrivateDomainIndex, table))
+
+	case "sqlite":
+		// Partial indexes exist here too, but the flag is stored as an
+		// integer, so it has to be compared explicitly.
+		return execIndex(ctx, db, fmt.Sprintf(
+			`CREATE UNIQUE INDEX IF NOT EXISTS %s ON %s (LOWER(domain))
+			 WHERE is_domain_primary_account = 1 AND domain_category = 'private'`,
+			PrimaryPrivateDomainIndex, table))
+
+	case "mysql":
+		// No filtered indexes. A stored generated column carries the domain
+		// only for rows inside the predicate and NULL for the rest, and NULLs
+		// repeat freely in a unique index. varchar(191) matches the domain
+		// column's own width.
+		//
+		// The column is intentionally absent from types.Account: it is a
+		// physical detail of expressing this index on MySQL, not a property of
+		// the domain model, and GORM's AutoMigrate leaves unknown columns
+		// alone.
+		if !db.Migrator().HasColumn(&account, primaryPrivateDomainColumn) {
+			if err := db.Exec(fmt.Sprintf(
+				`ALTER TABLE %s ADD COLUMN %s VARCHAR(191)
+				 GENERATED ALWAYS AS (
+				   CASE WHEN is_domain_primary_account = 1 AND domain_category = 'private'
+				        THEN LOWER(domain) ELSE NULL END
+				 ) STORED`, table, primaryPrivateDomainColumn)).Error; err != nil {
+				return fmt.Errorf("add %s column: %w", primaryPrivateDomainColumn, err)
+			}
+			log.WithContext(ctx).Infof("added generated column %s", primaryPrivateDomainColumn)
+		}
+		return execIndex(ctx, db, fmt.Sprintf(
+			"CREATE UNIQUE INDEX %s ON %s (%s)",
+			PrimaryPrivateDomainIndex, table, primaryPrivateDomainColumn))
+
+	default:
+		return fmt.Errorf("unsupported dialect %q for %s", dialect, PrimaryPrivateDomainIndex)
+	}
+}
+
+func execIndex(ctx context.Context, db *gorm.DB, stmt string) error {
+	log.WithContext(ctx).Infof("executing index creation: %s", stmt)
+	if err := db.Exec(stmt).Error; err != nil {
+		return fmt.Errorf("create %s: %w", PrimaryPrivateDomainIndex, err)
+	}
+	log.WithContext(ctx).Infof("successfully created index %s", PrimaryPrivateDomainIndex)
+	return nil
+}

@@ -24,6 +24,7 @@ import (
 	"gorm.io/gorm/logger"
 
 	nbdns "github.com/openzro/openzro/dns"
+	"github.com/openzro/openzro/management/server/migration"
 	resourceTypes "github.com/openzro/openzro/management/server/networks/resources/types"
 	routerTypes "github.com/openzro/openzro/management/server/networks/routers/types"
 	networkTypes "github.com/openzro/openzro/management/server/networks/types"
@@ -178,6 +179,37 @@ func (s *SqlStore) AcquireReadLockByUID(ctx context.Context, uniqueID string) (u
 	return unlock
 }
 
+// CreateAccount inserts a brand new account, and fails if anything already in
+// the database refuses it.
+//
+// Deliberately not SaveAccount. That one carries
+// clause.OnConflict{UpdateAll: true}, which Postgres renders with the primary
+// key as its conflict target — so a violation of any other unique index still
+// surfaces — while MySQL renders ON DUPLICATE KEY UPDATE, which has no target
+// and absorbs *every* unique key. A SaveAccount that collides with
+// idx_accounts_primary_private_domain on MySQL therefore returns nil while
+// creating nothing, and the caller is handed an account id for a row that does
+// not exist.
+//
+// Creation paths that can collide on that index have to insert plainly instead,
+// so losing the race is reported rather than swallowed. SaveAccount is left as
+// it is for the paths that genuinely mean "write this account, whatever is
+// there" — see #143.
+func (s *SqlStore) CreateAccount(ctx context.Context, account *types.Account) error {
+	generateAccountSQLTypes(account)
+
+	err := s.db.Session(&gorm.Session{FullSaveAssociations: true}).Create(account).Error
+	if err != nil {
+		log.WithContext(ctx).Errorf("failed to create account in store: %v", err)
+		if isPrimaryPrivateDomainViolation(err) {
+			return status.NewPrimaryPrivateDomainExistsError(account.Domain)
+		}
+		return status.Errorf(status.Internal, "failed to create account in store")
+	}
+
+	return nil
+}
+
 func (s *SqlStore) SaveAccount(ctx context.Context, account *types.Account) error {
 	start := time.Now()
 	defer func() {
@@ -223,6 +255,10 @@ func (s *SqlStore) SaveAccount(ctx context.Context, account *types.Account) erro
 		s.metrics.StoreMetrics().CountPersistenceDuration(took)
 	}
 	log.WithContext(ctx).Debugf("took %d ms to persist an account to the store", took.Milliseconds())
+
+	if isPrimaryPrivateDomainViolation(err) {
+		return status.NewPrimaryPrivateDomainExistsError(account.Domain)
+	}
 
 	return err
 }
@@ -383,6 +419,9 @@ func (s *SqlStore) UpdateAccountDomainAttributes(ctx context.Context, accountID 
 		Where(idQueryCondition, accountID).
 		Updates(&accountCopy)
 	if result.Error != nil {
+		if isPrimaryPrivateDomainViolation(result.Error) {
+			return status.NewPrimaryPrivateDomainExistsError(domain)
+		}
 		return status.Errorf(status.Internal, "failed to update account domain attributes to store: %v", result.Error)
 	}
 
@@ -510,9 +549,14 @@ func (s *SqlStore) GetAccountIDByPrivateDomain(ctx context.Context, lockStrength
 		tx = tx.Clauses(clause.Locking{Strength: string(lockStrength)})
 	}
 
+	// LOWER(domain), not the column: idx_accounts_primary_private_domain is
+	// keyed that way, so a row stored as "MixedCase.Example" owns the
+	// "mixedcase.example" slot in the index. Comparing the raw column would not
+	// find that row on Postgres or SQLite, where = is case sensitive, and the
+	// caller would conclude a domain that has an owner is free.
 	var accountID string
 	result := tx.Model(&types.Account{}).Select("id").
-		Where("domain = ? and is_domain_primary_account = ? and domain_category = ?",
+		Where("LOWER(domain) = ? and is_domain_primary_account = ? and domain_category = ?",
 			strings.ToLower(domain), true, types.PrivateCategory,
 		).First(&accountID)
 	if result.Error != nil {
@@ -2783,6 +2827,21 @@ func (s *SqlStore) SaveNetworkResource(ctx context.Context, lockStrength Locking
 	return nil
 }
 
+// isPrimaryPrivateDomainViolation reports whether err is the database refusing
+// a second account claiming the same private domain as primary.
+//
+// Matched on the index name rather than on "some unique violation": the
+// accounts table may grow other unique constraints, and attributing all of
+// them to the domain would report the wrong thing. The engines each name the
+// offending index in their message — Postgres and MySQL directly, SQLite as
+// "index 'name'".
+func isPrimaryPrivateDomainViolation(err error) bool {
+	if err == nil || !isUniqueConstraintViolation(err) {
+		return false
+	}
+	return strings.Contains(err.Error(), migration.PrimaryPrivateDomainIndex)
+}
+
 // isUniqueConstraintViolation reports whether err is the database refusing a
 // duplicate, across the three engines this store supports.
 func isUniqueConstraintViolation(err error) bool {
@@ -2955,8 +3014,11 @@ func (s *SqlStore) GetPeerIdByLabel(ctx context.Context, lockStrength LockingStr
 
 func (s *SqlStore) CountAccountsByPrivateDomain(ctx context.Context, domain string) (int64, error) {
 	var count int64
+	// Same normalization as GetAccountIDByPrivateDomain and the index; see
+	// there. A count that disagrees with the lookup would report a domain as
+	// unused while an account holds it.
 	result := s.db.Model(&types.Account{}).
-		Where("domain = ? AND domain_category = ?",
+		Where("LOWER(domain) = ? AND domain_category = ?",
 			strings.ToLower(domain), types.PrivateCategory,
 		).Count(&count)
 	if result.Error != nil {

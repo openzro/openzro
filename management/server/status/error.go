@@ -164,6 +164,14 @@ func NewGroupNotFoundError(groupID string) error {
 	return Errorf(NotFound, "group: %s not found", groupID)
 }
 
+// NewPrimaryPrivateDomainExistsError creates a new Error for a private domain
+// already held as primary by another account. Returned by the store when
+// idx_accounts_primary_private_domain refuses the write, which is how a
+// concurrent first login from the same organization loses the race.
+func NewPrimaryPrivateDomainExistsError(domain string) error {
+	return Errorf(AlreadyExists, "another account is already primary for domain %s", domain)
+}
+
 // NewPostureCheckNameAlreadyExistsError creates a new Error for a posture check
 // name already taken in the account. Returned both by the manager's own check
 // and by the store when the unique index refuses the write, so the loser of a
