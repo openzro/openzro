@@ -416,7 +416,7 @@ func getMigrationsPostAuto(ctx context.Context) []migrationFunc {
 		// enforced on create, and only by a read-then-write that holds inside
 		// one process. This makes the documented contract true, including on
 		// update — see the pull request, which calls that out as a deliberate
-		// behaviour change rather than a side effect.
+		// behavior change rather than a side effect.
 		//
 		// Fails on a database already carrying a duplicate, by design: the
 		// operator has to see it and choose which row survives.

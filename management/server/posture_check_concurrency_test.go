@@ -140,7 +140,7 @@ func TestPostureChecks_ConcurrentCreateAcrossReplicas(t *testing.T) {
 	}
 }
 
-// TestPostureChecks_UpdateToTakenNameIsRejected pins the behaviour change that
+// TestPostureChecks_UpdateToTakenNameIsRejected pins the behavior change that
 // comes with idx_posture_checks_account_name.
 //
 // Before it, validatePostureChecks returned early for anything carrying an ID:
@@ -151,7 +151,7 @@ func TestPostureChecks_ConcurrentCreateAcrossReplicas(t *testing.T) {
 // update, and the early return arrived with the refactor to store methods.
 //
 // This is the assertion that makes the documented contract true, and it is a
-// deliberate behaviour change: a rename that used to be accepted now returns a
+// deliberate behavior change: a rename that used to be accepted now returns a
 // validation error.
 func TestPostureChecks_UpdateToTakenNameIsRejected(t *testing.T) {
 	const (
