@@ -2758,6 +2758,14 @@ func (s *SqlStore) SaveNetworkResource(ctx context.Context, lockStrength Locking
 		// a real race, not an internal fault. Classified here because this is
 		// the only layer that sees the driver error — callers get a generic
 		// message, by design, so the driver text does not reach the API.
+		//
+		// This attributes any unique violation on this table to the name,
+		// which is true while that index and the primary key are the only
+		// ones. If a second unique index is ever added to network_resources,
+		// this has to start distinguishing them — the three engines each name
+		// the offending constraint differently (Postgres and MySQL give the
+		// index name, SQLite gives the columns), so it would mean per-engine
+		// parsing rather than one more string match.
 		if isUniqueConstraintViolation(result.Error) {
 			return status.NewResourceNameAlreadyExistsError(resource.Name)
 		}
