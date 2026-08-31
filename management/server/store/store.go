@@ -418,8 +418,14 @@ func getMigrationsPostAuto(ctx context.Context) []migrationFunc {
 		// update — see the pull request, which calls that out as a deliberate
 		// behavior change rather than a side effect.
 		//
-		// Fails on a database already carrying a duplicate, by design: the
+		// Fails on a database already carrying duplicate names, by design: the
 		// operator has to see it and choose which row survives.
+		//
+		// Duplicates only. A single empty name passes — this index constrains
+		// duplication, not emptiness, and there is no NOT NULL or CHECK here.
+		// What keeps names non-empty is Validate() on the way in
+		// (posture/checks.go:373). Duplicate empty strings do collide, which
+		// is what the fixtures in this tree were producing.
 		func(db *gorm.DB) error {
 			return migration.CreateIndexIfNotExists[posture.Checks](ctx, db,
 				"idx_posture_checks_account_name", "account_id", "name")
