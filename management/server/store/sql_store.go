@@ -549,9 +549,14 @@ func (s *SqlStore) GetAccountIDByPrivateDomain(ctx context.Context, lockStrength
 		tx = tx.Clauses(clause.Locking{Strength: string(lockStrength)})
 	}
 
+	// LOWER(domain), not the column: idx_accounts_primary_private_domain is
+	// keyed that way, so a row stored as "MixedCase.Example" owns the
+	// "mixedcase.example" slot in the index. Comparing the raw column would not
+	// find that row on Postgres or SQLite, where = is case sensitive, and the
+	// caller would conclude a domain that has an owner is free.
 	var accountID string
 	result := tx.Model(&types.Account{}).Select("id").
-		Where("domain = ? and is_domain_primary_account = ? and domain_category = ?",
+		Where("LOWER(domain) = ? and is_domain_primary_account = ? and domain_category = ?",
 			strings.ToLower(domain), true, types.PrivateCategory,
 		).First(&accountID)
 	if result.Error != nil {
@@ -3009,8 +3014,11 @@ func (s *SqlStore) GetPeerIdByLabel(ctx context.Context, lockStrength LockingStr
 
 func (s *SqlStore) CountAccountsByPrivateDomain(ctx context.Context, domain string) (int64, error) {
 	var count int64
+	// Same normalization as GetAccountIDByPrivateDomain and the index; see
+	// there. A count that disagrees with the lookup would report a domain as
+	// unused while an account holds it.
 	result := s.db.Model(&types.Account{}).
-		Where("domain = ? AND domain_category = ?",
+		Where("LOWER(domain) = ? AND domain_category = ?",
 			strings.ToLower(domain), types.PrivateCategory,
 		).Count(&count)
 	if result.Error != nil {

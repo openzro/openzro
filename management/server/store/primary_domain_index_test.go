@@ -128,3 +128,48 @@ func TestCreateAccountReportsPrimaryDomainConflict(t *testing.T) {
 	_, err = store.GetAccount(ctx, loser.Id)
 	require.Error(t, err, "the refused account must not have been created")
 }
+
+// The index normalizes with LOWER(domain); the lookups have to agree.
+//
+// A row stored as "MixedCase.Example" occupies the lowercase slot in the
+// index, so the database counts it as the primary account for
+// "mixedcase.example". If GetAccountIDByPrivateDomain compares the raw column
+// it will not find that row on Postgres or SQLite, where = is case sensitive,
+// and the caller concludes the domain is free. It then writes, the index
+// refuses it, and the retry looks for a winner that the lookup still cannot
+// see — turning a domain that has an owner into a failed login.
+//
+// Mixed case reaches the column from data written before the domain was
+// normalized on the way in, not from a live writer: signup lowercases, and
+// updateAccountDomainAttributesIfNotUpToDate lowercases what it sets. It
+// carries forward whatever the account already had, which is how an old row
+// survives every later login.
+func TestPrivateDomainLookupsMatchTheIndex(t *testing.T) {
+	ctx := context.Background()
+
+	store, cleanup, err := NewTestStoreFromSQL(ctx, "", t.TempDir())
+	t.Cleanup(cleanup)
+	require.NoError(t, err)
+
+	mixed := "MixedCase.Example"
+	account := &types.Account{
+		Id:                     xid.New().String(),
+		Domain:                 mixed,
+		DomainCategory:         types.PrivateCategory,
+		IsDomainPrimaryAccount: true,
+		Network:                types.NewNetwork(),
+	}
+	require.NoError(t, store.CreateAccount(ctx, account))
+
+	t.Run("GetAccountIDByPrivateDomain finds it", func(t *testing.T) {
+		id, err := store.GetAccountIDByPrivateDomain(ctx, LockingStrengthNone, "mixedcase.example")
+		require.NoError(t, err, "the index owns this domain but the lookup cannot see the owner")
+		require.Equal(t, account.Id, id)
+	})
+
+	t.Run("CountAccountsByPrivateDomain counts it", func(t *testing.T) {
+		count, err := store.CountAccountsByPrivateDomain(ctx, "mixedcase.example")
+		require.NoError(t, err)
+		require.EqualValues(t, 1, count)
+	})
+}
