@@ -88,6 +88,9 @@ type Store interface {
 	GetAccountDNSSettings(ctx context.Context, lockStrength LockingStrength, accountID string) (*types.DNSSettings, error)
 	GetAccountCreatedBy(ctx context.Context, lockStrength LockingStrength, accountID string) (string, error)
 	SaveAccount(ctx context.Context, account *types.Account) error
+	// CreateAccount inserts a new account without upsert semantics, so a
+	// unique-index violation is reported instead of silently absorbed.
+	CreateAccount(ctx context.Context, account *types.Account) error
 	DeleteAccount(ctx context.Context, account *types.Account) error
 	UpdateAccountDomainAttributes(ctx context.Context, accountID string, domain string, category string, isPrimaryDomain bool) error
 	SaveDNSSettings(ctx context.Context, lockStrength LockingStrength, accountID string, settings *types.DNSSettings) error
@@ -429,6 +432,15 @@ func getMigrationsPostAuto(ctx context.Context) []migrationFunc {
 		func(db *gorm.DB) error {
 			return migration.CreateIndexIfNotExists[posture.Checks](ctx, db,
 				"idx_posture_checks_account_name", "account_id", "name")
+		},
+		// At most one account may hold a private domain as primary. Enforced
+		// only by a read-then-write until now, under a global lock that is a
+		// mutex inside one process — so two replicas could both claim a domain
+		// on the first login from an organization. Needs its own migration
+		// rather than CreateIndexIfNotExists: the rule is conditional, and the
+		// three engines express that differently.
+		func(db *gorm.DB) error {
+			return migration.CreatePrimaryPrivateDomainUniqueIndexIfNotExists[types.Account](ctx, db)
 		},
 	}
 }
