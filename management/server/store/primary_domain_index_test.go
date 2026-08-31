@@ -161,15 +161,21 @@ func TestPrivateDomainLookupsMatchTheIndex(t *testing.T) {
 	}
 	require.NoError(t, store.CreateAccount(ctx, account))
 
-	t.Run("GetAccountIDByPrivateDomain finds it", func(t *testing.T) {
-		id, err := store.GetAccountIDByPrivateDomain(ctx, LockingStrengthNone, "mixedcase.example")
-		require.NoError(t, err, "the index owns this domain but the lookup cannot see the owner")
-		require.Equal(t, account.Id, id)
-	})
+	// Both spellings, because two different normalizations have to agree: the
+	// caller's argument is lowercased in Go, and the column is lowercased in
+	// SQL. Searching only in lower case would exercise the second and leave
+	// the first unproven.
+	for _, searched := range []string{"mixedcase.example", "MIXEDCASE.EXAMPLE", "MixedCase.Example"} {
+		t.Run("GetAccountIDByPrivateDomain finds it, searching "+searched, func(t *testing.T) {
+			id, err := store.GetAccountIDByPrivateDomain(ctx, LockingStrengthNone, searched)
+			require.NoError(t, err, "the index owns this domain but the lookup cannot see the owner")
+			require.Equal(t, account.Id, id)
+		})
 
-	t.Run("CountAccountsByPrivateDomain counts it", func(t *testing.T) {
-		count, err := store.CountAccountsByPrivateDomain(ctx, "mixedcase.example")
-		require.NoError(t, err)
-		require.EqualValues(t, 1, count)
-	})
+		t.Run("CountAccountsByPrivateDomain counts it, searching "+searched, func(t *testing.T) {
+			count, err := store.CountAccountsByPrivateDomain(ctx, searched)
+			require.NoError(t, err)
+			require.EqualValues(t, 1, count)
+		})
+	}
 }

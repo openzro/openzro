@@ -112,10 +112,21 @@ func TestWaitForPrimaryDomainWinner(t *testing.T) {
 
 		am := &DefaultAccountManager{Store: s}
 
+		var budget time.Duration
+		for _, d := range primaryDomainWinnerBackoff {
+			budget += d
+		}
+		require.Less(t, budget, time.Second, "the backoff schedule must stay under a second in total")
+
 		start := time.Now()
 		_, err = am.waitForPrimaryDomainWinner(ctx, "nobody-owns-this.example")
+		elapsed := time.Since(start)
 		require.Error(t, err, "no account holds the domain; the caller has to report its original failure")
-		require.Less(t, time.Since(start), time.Second, "the wait must stay under a second in total")
+		// Derived from the schedule rather than a wall-clock ceiling: asserting
+		// it finished "within a second" would measure the machine, and the
+		// budget itself is checked above. This checks it actually waited out
+		// every attempt instead of giving up early.
+		require.GreaterOrEqual(t, elapsed, budget, "gave up before exhausting the backoff")
 	})
 
 	t.Run("gives up on the caller's context", func(t *testing.T) {
