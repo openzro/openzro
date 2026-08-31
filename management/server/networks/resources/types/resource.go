@@ -33,7 +33,7 @@ type NetworkResource struct {
 	ID          string `gorm:"primaryKey"`
 	NetworkID   string `gorm:"index"`
 	AccountID   string `gorm:"index"`
-	Name        string
+	Name        string `gorm:"size:128"`
 	Description string
 	Type        NetworkResourceType
 	Address     string   `gorm:"-"`

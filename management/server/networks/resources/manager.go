@@ -48,6 +48,27 @@ func NewManager(store store.Store, permissionsManager permissions.Manager, group
 	}
 }
 
+// MaxResourceNameLength bounds the resource name. The limit exists so the
+// column can carry a unique index: without a size the MySQL driver maps the
+// field to longtext, which InnoDB cannot index without a prefix length, and a
+// prefix index would collide two different names sharing their first bytes —
+// trading one correctness bug for another.
+//
+// 128 follows the sizes already used for name columns elsewhere in the tree
+// (activity_exporters, flow_exports).
+const MaxResourceNameLength = 128
+
+// validateResourceName rejects a name the unique index could not hold, so the
+// caller gets a validation error naming the limit rather than a database error
+// from the write.
+func validateResourceName(name string) error {
+	if len(name) > MaxResourceNameLength {
+		return status.Errorf(status.InvalidArgument,
+			"resource name is %d characters; the maximum is %d", len(name), MaxResourceNameLength)
+	}
+	return nil
+}
+
 func (m *managerImpl) GetAllResourcesInNetwork(ctx context.Context, accountID, userID, networkID string) ([]*types.NetworkResource, error) {
 	ok, err := m.permissionsManager.ValidateUserPermissions(ctx, accountID, userID, modules.Networks, operations.Read)
 	if err != nil {
@@ -112,6 +133,10 @@ func (m *managerImpl) CreateResource(ctx context.Context, userID string, resourc
 	defer unlock()
 
 	var eventsToStore []func()
+	if err := validateResourceName(resource.Name); err != nil {
+		return nil, err
+	}
+
 	err = m.store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
 		_, err = transaction.GetNetworkResourceByName(ctx, store.LockingStrengthShare, resource.AccountID, resource.Name)
 		if err == nil {
@@ -193,6 +218,10 @@ func (m *managerImpl) UpdateResource(ctx context.Context, userID string, resourc
 	}
 	if !ok {
 		return nil, status.NewPermissionDeniedError()
+	}
+
+	if err := validateResourceName(resource.Name); err != nil {
+		return nil, err
 	}
 
 	resourceType, domain, prefix, err := types.GetResourceType(resource.Address)
