@@ -1688,6 +1688,7 @@ func TestSqlStore_SavePostureChecks(t *testing.T) {
 
 	postureChecks := &posture.Checks{
 		ID:        "posture-checks-id",
+		Name:      "posture-checks-id-name",
 		AccountID: accountID,
 		Checks: posture.ChecksDefinition{
 			NBVersionCheck: &posture.NBVersionCheck{
@@ -1741,6 +1742,7 @@ func TestSqlStore_GetAllPostureChecks(t *testing.T) {
 	seed := []*posture.Checks{
 		{
 			ID:        "pc-acctA-schedule",
+			Name:      "pc-acctA-schedule-name",
 			AccountID: accountA,
 			Checks: posture.ChecksDefinition{
 				ScheduleCheck: &posture.ScheduleCheck{
@@ -1751,6 +1753,7 @@ func TestSqlStore_GetAllPostureChecks(t *testing.T) {
 		},
 		{
 			ID:        "pc-acctA-nbversion",
+			Name:      "pc-acctA-nbversion-name",
 			AccountID: accountA,
 			Checks: posture.ChecksDefinition{
 				NBVersionCheck: &posture.NBVersionCheck{MinVersion: "0.31.0"},
@@ -1758,6 +1761,7 @@ func TestSqlStore_GetAllPostureChecks(t *testing.T) {
 		},
 		{
 			ID:        "pc-acctB-schedule",
+			Name:      "pc-acctB-schedule-name",
 			AccountID: accountB,
 			Checks: posture.ChecksDefinition{
 				ScheduleCheck: &posture.ScheduleCheck{

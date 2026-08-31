@@ -1182,6 +1182,7 @@ components:
         name:
           description: Posture check unique name identifier
           type: string
+          maxLength: 128
           example: Default
         description:
           description: Posture check friendly description
@@ -1463,8 +1464,9 @@ components:
       type: object
       properties:
         name:
-          description: Posture check name identifier
+          description: Posture check name identifier. Unique within the account.
           type: string
+          maxLength: 128
           example: Default
         description:
           description: Posture check friendly description
