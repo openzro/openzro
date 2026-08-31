@@ -845,9 +845,13 @@ func (am *DefaultAccountManager) newAccount(ctx context.Context, userID, domain 
 			log.WithContext(ctx).Warnf("an account with ID already exists, retrying...")
 			continue
 		case statusErr.Type() == status.NotFound:
-			newAccount := newAccountWithId(ctx, accountId, userID, domain, am.disableDefaultPolicy)
-			am.StoreEvent(ctx, userID, newAccount.Id, accountId, activity.AccountCreated, nil)
-			return newAccount, nil
+			// No AccountCreated event here. This only builds the account; the
+			// callers store it, and one of them can now lose the account to
+			// idx_accounts_primary_private_domain and join somebody else's
+			// instead. Announcing the creation at construction time would put
+			// account.create in the audit trail for an account ID that never
+			// reached the database.
+			return newAccountWithId(ctx, accountId, userID, domain, am.disableDefaultPolicy), nil
 		default:
 			return nil, err
 		}
@@ -1450,6 +1454,10 @@ func (am *DefaultAccountManager) addNewPrivateAccount(ctx context.Context, domai
 		log.WithContext(ctx).Infof("account for domain %s was created concurrently; joining %s", lowerDomain, winnerID)
 		return am.addNewUserToDomainAccount(ctx, winnerID, userAuth)
 	}
+
+	// Announced only now: the account is in the database, so the audit trail
+	// describes something that exists.
+	am.StoreEvent(ctx, userAuth.UserId, newAccount.Id, newAccount.Id, activity.AccountCreated, nil)
 
 	err = am.addAccountIDToIDPAppMeta(ctx, userAuth.UserId, newAccount.Id)
 	if err != nil {
