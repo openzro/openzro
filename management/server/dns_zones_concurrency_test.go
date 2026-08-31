@@ -91,13 +91,13 @@ func TestDNSZones_CreateAgainstZoneFirstWriter_NoDeadlock(t *testing.T) {
 	am, zoneID := initDNSZoneTestAccountWithZone(t)
 	ctx := context.Background()
 
-	var wg sync.WaitGroup
-	var competingErr, createErr error
-
-	wg.Add(1)
+	// Deadlines rather than a WaitGroup, because the failure this test exists
+	// to catch is one side never returning. A regression that blocks without
+	// the database killing either transaction would hang here until the
+	// package timeout and report as a timeout somewhere else entirely.
+	competingCh := make(chan error, 1)
 	go func() {
-		defer wg.Done()
-		competingErr = am.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
+		competingCh <- am.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
 			// The order SaveDNSZone and DeleteDNSRecord take: zone row first.
 			if _, err := tx.GetDNSZoneByID(ctx, store.LockingStrengthUpdate, dnsZoneTestAccountID, zoneID); err != nil {
 				return err
@@ -110,18 +110,29 @@ func TestDNSZones_CreateAgainstZoneFirstWriter_NoDeadlock(t *testing.T) {
 	// Let the competing transaction take the zone row first.
 	time.Sleep(200 * time.Millisecond)
 
-	wg.Add(1)
+	createCh := make(chan error, 1)
 	go func() {
-		defer wg.Done()
-		_, createErr = am.CreateDNSZone(ctx, dnsZoneTestAccountID, dnsZoneTestUserID, &types.DNSZone{
+		_, err := am.CreateDNSZone(ctx, dnsZoneTestAccountID, dnsZoneTestUserID, &types.DNSZone{
 			Name:               "second-zone",
 			Domain:             "other.example",
 			Enabled:            true,
 			DistributionGroups: []types.DNSZoneGroup{{GroupID: dnsZoneTestGroupID}},
 		})
+		createCh <- err
 	}()
 
-	wg.Wait()
+	join := func(name string, ch <-chan error) error {
+		t.Helper()
+		select {
+		case err := <-ch:
+			return err
+		case <-time.After(30 * time.Second):
+			t.Fatalf("%s never returned; it is blocked, which is the failure this test watches for", name)
+			return nil
+		}
+	}
+	createErr := join("CreateDNSZone", createCh)
+	competingErr := join("the zone-first writer", competingCh)
 
 	require.NoError(t, createErr, "CreateDNSZone must queue behind a zone-first writer, not deadlock")
 	require.NoError(t, competingErr, "the zone-first writer must not be the deadlock victim either")
