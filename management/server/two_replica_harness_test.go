@@ -189,6 +189,10 @@ func buildHarnessManager(t *testing.T, s store.Store) *DefaultAccountManager {
 	return am
 }
 
+// barrierTimeout bounds how long one side waits for the other. It only has to
+// outlast a transaction reaching its critical point, not any real work.
+const barrierTimeout = 10 * time.Second
+
 // barrier aligns two goroutines at a chosen point. Both call wait; neither
 // returns until both have arrived, so a test can put two transactions in the
 // same window without sleeping and hoping.
@@ -204,7 +208,23 @@ func newBarrier() *barrier {
 	return b
 }
 
-func (b *barrier) wait() {
+// wait blocks until both sides arrive, or fails the test if the other side
+// never does.
+//
+// The deadline matters more here than it looks. These tests drive transactions
+// that are meant to contend, so one side failing early — a query erroring, an
+// assertion tripping — is a normal outcome to want reported. Without a
+// deadline the surviving side blocks forever and the package dies on the global
+// go test timeout, which names no test and explains nothing. A harness for
+// deadlock tests should not be able to deadlock the suite.
+//
+// Errorf rather than Fatalf on purpose: wait is called from goroutines the test
+// spawned, and Fatalf outside the test goroutine is not safe — it would exit
+// that goroutine and leave the test to hang or report the wrong thing. Errorf
+// marks the failure and lets this side return so everything unwinds.
+func (b *barrier) wait(t *testing.T) {
+	t.Helper()
+
 	b.wg.Done()
 	b.once.Do(func() {
 		go func() {
@@ -212,7 +232,12 @@ func (b *barrier) wait() {
 			close(b.ch)
 		}()
 	})
-	<-b.ch
+
+	select {
+	case <-b.ch:
+	case <-time.After(barrierTimeout):
+		t.Errorf("barrier: the other side never arrived within %s; it most likely failed before reaching the barrier", barrierTimeout)
+	}
 }
 
 // TestTwoReplicaHarness_LocksAreIndependent is the sentinel.
@@ -262,28 +287,32 @@ func TestTwoReplicaHarness_SharesOneDatabase(t *testing.T) {
 
 // TestTwoReplicaHarness_BarrierAligns exercises the barrier itself. It is the
 // piece the concurrency tests will lean on to put two transactions in the same
-// window without sleeping, so it should not be the one thing here that nothing
-// checks.
+// window, so it should not be the one thing here that nothing checks.
 func TestTwoReplicaHarness_BarrierAligns(t *testing.T) {
 	b := newBarrier()
 
-	var first, second time.Time
-	var wg sync.WaitGroup
-
-	wg.Add(1)
+	released := make(chan struct{})
 	go func() {
-		defer wg.Done()
-		b.wait()
-		first = time.Now()
+		b.wait(t)
+		close(released)
 	}()
 
-	// Arrive late on purpose: the early side must still be waiting.
-	time.Sleep(300 * time.Millisecond)
-	b.wait()
-	second = time.Now()
+	// The early side must still be held while the late one has not arrived.
+	// This is the one place a wall-clock window is unavoidable — there is no
+	// way to observe "has not happened yet" without letting some time pass —
+	// but it is a negative check, so a slow scheduler makes it pass spuriously
+	// rather than fail spuriously.
+	select {
+	case <-released:
+		t.Fatal("barrier released the first side before the second arrived")
+	case <-time.After(100 * time.Millisecond):
+	}
 
-	wg.Wait()
+	b.wait(t)
 
-	require.WithinDuration(t, second, first, 100*time.Millisecond,
-		"both sides must leave the barrier together; the early one returned before the late one arrived")
+	select {
+	case <-released:
+	case <-time.After(barrierTimeout):
+		t.Fatal("barrier did not release after both sides arrived")
+	}
 }
