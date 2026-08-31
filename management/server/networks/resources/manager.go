@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"unicode/utf8"
 
 	"github.com/openzro/openzro/management/server/account"
 	"github.com/openzro/openzro/management/server/activity"
@@ -46,6 +47,31 @@ func NewManager(store store.Store, permissionsManager permissions.Manager, group
 		groupsManager:      groupsManager,
 		accountManager:     accountManager,
 	}
+}
+
+// MaxResourceNameLength bounds the resource name. The limit exists so the
+// column can carry a unique index: without a size the MySQL driver maps the
+// field to longtext, which InnoDB cannot index without a prefix length, and a
+// prefix index would collide two different names sharing their first bytes —
+// trading one correctness bug for another.
+//
+// 128 follows the sizes already used for name columns elsewhere in the tree
+// (activity_exporters, flow_exports).
+const MaxResourceNameLength = 128
+
+// validateResourceName rejects a name the unique index could not hold, so the
+// caller gets a validation error naming the limit rather than a database error
+// from the write.
+func validateResourceName(name string) error {
+	// Counted in runes, not bytes: the column is varchar(128), which both
+	// engines size in characters. len() would reject a 100-character name
+	// carrying accents that the database would have accepted, and the message
+	// would be wrong about what it counted.
+	if n := utf8.RuneCountInString(name); n > MaxResourceNameLength {
+		return status.Errorf(status.InvalidArgument,
+			"resource name is %d characters; the maximum is %d", n, MaxResourceNameLength)
+	}
+	return nil
 }
 
 func (m *managerImpl) GetAllResourcesInNetwork(ctx context.Context, accountID, userID, networkID string) ([]*types.NetworkResource, error) {
@@ -112,6 +138,10 @@ func (m *managerImpl) CreateResource(ctx context.Context, userID string, resourc
 	defer unlock()
 
 	var eventsToStore []func()
+	if err := validateResourceName(resource.Name); err != nil {
+		return nil, err
+	}
+
 	err = m.store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
 		_, err = transaction.GetNetworkResourceByName(ctx, store.LockingStrengthShare, resource.AccountID, resource.Name)
 		if err == nil {
@@ -125,7 +155,11 @@ func (m *managerImpl) CreateResource(ctx context.Context, userID string, resourc
 
 		err = transaction.SaveNetworkResource(ctx, store.LockingStrengthUpdate, resource)
 		if err != nil {
-			return fmt.Errorf("failed to save network resource: %w", err)
+			// The store classifies a unique-index violation for us and returns
+			// the same error the name check above produces, so the loser of a
+			// cross-replica race is reported as a taken name rather than an
+			// internal fault. Passed through unwrapped so the type survives.
+			return err
 		}
 
 		event := func() {
@@ -195,6 +229,10 @@ func (m *managerImpl) UpdateResource(ctx context.Context, userID string, resourc
 		return nil, status.NewPermissionDeniedError()
 	}
 
+	if err := validateResourceName(resource.Name); err != nil {
+		return nil, err
+	}
+
 	resourceType, domain, prefix, err := types.GetResourceType(resource.Address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resource type: %w", err)
@@ -235,7 +273,11 @@ func (m *managerImpl) UpdateResource(ctx context.Context, userID string, resourc
 
 		err = transaction.SaveNetworkResource(ctx, store.LockingStrengthUpdate, resource)
 		if err != nil {
-			return fmt.Errorf("failed to save network resource: %w", err)
+			// The store classifies a unique-index violation for us and returns
+			// the same error the name check above produces, so the loser of a
+			// cross-replica race is reported as a taken name rather than an
+			// internal fault. Passed through unwrapped so the type survives.
+			return err
 		}
 
 		events, err := m.updateResourceGroups(ctx, transaction, userID, resource, oldResource)

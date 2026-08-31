@@ -1643,8 +1643,9 @@ components:
       type: object
       properties:
         name:
-          description: Network resource name
+          description: Network resource name. Unique within the account.
           type: string
+          maxLength: 128
           example: Remote Resource 1
         description:
           description: Network resource description
