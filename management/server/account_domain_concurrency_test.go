@@ -45,9 +45,11 @@ func TestAccountDomain_ConcurrentFirstLoginAcrossReplicas(t *testing.T) {
 		accountID string
 		err       error
 	}
+	align := newBarrier()
 	login := func(am *DefaultAccountManager, userID string) <-chan loginResult {
 		resCh := make(chan loginResult, 1)
 		go func() {
+			align.wait(t)
 			b := userAuthFor(userID, domain)
 			b.UserId = userID
 			accountID, _, err := am.GetAccountIDFromUserAuth(ctx, b)
@@ -156,9 +158,11 @@ func TestAccountDomain_ConcurrentExistingLoginAcrossReplicas(t *testing.T) {
 		require.NoError(t, r.A.Store.SaveAccount(ctx, account))
 	}
 
+	align := newBarrier()
 	login := func(am *DefaultAccountManager, userID string) <-chan error {
 		errCh := make(chan error, 1)
 		go func() {
+			align.wait(t)
 			_, _, err := am.GetAccountIDFromUserAuth(ctx, userAuthFor(userID, domain))
 			errCh <- err
 		}()
