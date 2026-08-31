@@ -34,6 +34,21 @@ import (
 //
 // This is the demonstration half of #143 step 3: the duplicate has to be shown
 // before it is fixed, so the fix lands red to green rather than by argument.
+//
+// The two engines do not fail the same way, and running this on the wrong one
+// would look like proof it does not need fixing. Measured before the unique
+// index existed:
+//
+//	Postgres   FAIL — two rows with the same name. No gap locks; predicate
+//	           locking only exists at SERIALIZABLE, so the shared-lock read
+//	           locks the rows that exist, and there are none.
+//	MySQL      pass — InnoDB's gap locks under REPEATABLE READ hold the
+//	           position the row would occupy and refuse the second insert.
+//	           The loser sees a 1213 deadlock rather than a name conflict.
+//
+// So the red is Postgres-only, and the assertion below is what both engines
+// must satisfy afterwards: exactly one row survives, whichever way the database
+// got there.
 func TestNetworkResource_ConcurrentCreateAcrossReplicas(t *testing.T) {
 	const (
 		accountID    = "resource-race-account"
