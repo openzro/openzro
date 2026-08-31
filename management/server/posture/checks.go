@@ -40,8 +40,14 @@ type Checks struct {
 	// ID of the posture checks
 	ID string `gorm:"primaryKey"`
 
-	// Name of the posture checks
-	Name string
+	// Name of the posture checks. Unique within the account — enforced by
+	// idx_posture_checks_account_name, not only by the manager's check.
+	//
+	// The size is what lets that index exist: without it the MySQL driver maps
+	// the field to longtext, which InnoDB cannot index without a prefix
+	// length, and a prefix index would treat two different names sharing their
+	// first bytes as equal.
+	Name string `gorm:"size:128"`
 
 	// Description of the posture checks visible in the UI
 	Description string

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"unicode/utf8"
 
 	"github.com/rs/xid"
 	"golang.org/x/exp/maps"
@@ -195,10 +196,22 @@ func arePostureCheckChangesAffectPeers(ctx context.Context, transaction store.St
 	return false, nil
 }
 
+// MaxPostureCheckNameLength bounds the posture check name so the column can
+// carry a unique index; see the note on posture.Checks.Name. 128 follows the
+// size used for name columns elsewhere in the tree.
+const MaxPostureCheckNameLength = 128
+
 // validatePostureChecks validates the posture checks.
 func validatePostureChecks(ctx context.Context, transaction store.Store, accountID string, postureChecks *posture.Checks) error {
 	if err := postureChecks.Validate(); err != nil {
 		return status.Errorf(status.InvalidArgument, "%s", err.Error())
+	}
+
+	// Counted in runes: the column is varchar(128), which both engines size in
+	// characters, so len() would reject an accented name the database accepts.
+	if n := utf8.RuneCountInString(postureChecks.Name); n > MaxPostureCheckNameLength {
+		return status.Errorf(status.InvalidArgument,
+			"posture check name is %d characters; the maximum is %d", n, MaxPostureCheckNameLength)
 	}
 
 	// If the posture check already has an ID, verify its existence in the store.

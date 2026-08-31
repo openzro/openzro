@@ -44,6 +44,7 @@ func TestScheduleLoader_AccountsWithActiveSchedules(t *testing.T) {
 	seed := []*posture.Checks{
 		{
 			ID:        "pc-1",
+			Name:      "pc-1-name",
 			AccountID: accountSched1,
 			Checks: posture.ChecksDefinition{
 				ScheduleCheck: &posture.ScheduleCheck{
@@ -56,6 +57,7 @@ func TestScheduleLoader_AccountsWithActiveSchedules(t *testing.T) {
 			// Second schedule-bearing check for the SAME account —
 			// must not produce a duplicate account ID.
 			ID:        "pc-2",
+			Name:      "pc-2-name",
 			AccountID: accountSched1,
 			Checks: posture.ChecksDefinition{
 				ScheduleCheck: &posture.ScheduleCheck{
@@ -66,6 +68,7 @@ func TestScheduleLoader_AccountsWithActiveSchedules(t *testing.T) {
 		},
 		{
 			ID:        "pc-3",
+			Name:      "pc-3-name",
 			AccountID: accountSched2,
 			Checks: posture.ChecksDefinition{
 				ScheduleCheck: &posture.ScheduleCheck{
@@ -77,6 +80,7 @@ func TestScheduleLoader_AccountsWithActiveSchedules(t *testing.T) {
 		{
 			// No ScheduleCheck → account must NOT appear.
 			ID:        "pc-4",
+			Name:      "pc-4-name",
 			AccountID: accountNoSched,
 			Checks: posture.ChecksDefinition{
 				NBVersionCheck: &posture.NBVersionCheck{MinVersion: "0.31.0"},
@@ -117,6 +121,7 @@ func TestScheduleLoader_LoadActiveSchedules(t *testing.T) {
 	seedAccount(t, st, accountID)
 	require.NoError(t, st.SavePostureChecks(ctx, store.LockingStrengthUpdate, &posture.Checks{
 		ID:        "pc-sched",
+		Name:      "pc-sched-name",
 		AccountID: accountID,
 		Checks: posture.ChecksDefinition{
 			ScheduleCheck: &posture.ScheduleCheck{
@@ -127,6 +132,7 @@ func TestScheduleLoader_LoadActiveSchedules(t *testing.T) {
 	}))
 	require.NoError(t, st.SavePostureChecks(ctx, store.LockingStrengthUpdate, &posture.Checks{
 		ID:        "pc-nbver",
+		Name:      "pc-nbver-name",
 		AccountID: accountID,
 		Checks: posture.ChecksDefinition{
 			NBVersionCheck: &posture.NBVersionCheck{MinVersion: "0.31.0"},

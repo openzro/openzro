@@ -139,3 +139,59 @@ func TestPostureChecks_ConcurrentCreateAcrossReplicas(t *testing.T) {
 			"the losing create must be reported as a taken name, not an internal error")
 	}
 }
+
+// TestPostureChecks_UpdateToTakenNameIsRejected pins the behaviour change that
+// comes with idx_posture_checks_account_name.
+//
+// Before it, validatePostureChecks returned early for anything carrying an ID:
+// it confirmed the row existed and skipped the duplicate-name check entirely,
+// so renaming a posture check onto another one's name was accepted. That was a
+// gap rather than a decision — the OpenAPI has described the field as "Posture
+// check unique name identifier" since it was introduced, with no exception for
+// update, and the early return arrived with the refactor to store methods.
+//
+// This is the assertion that makes the documented contract true, and it is a
+// deliberate behaviour change: a rename that used to be accepted now returns a
+// validation error.
+func TestPostureChecks_UpdateToTakenNameIsRejected(t *testing.T) {
+	const (
+		accountID = "posture-rename-account"
+		userID    = "posture-rename-user"
+		takenName = "already-taken"
+	)
+
+	r := newTwoReplicas(t)
+	ctx := context.Background()
+
+	account := newAccountWithId(ctx, accountID, userID, "", false)
+	require.NoError(t, r.A.Store.SaveAccount(ctx, account))
+
+	newCheck := func(name string) *posture.Checks {
+		return &posture.Checks{
+			Name:   name,
+			Checks: posture.ChecksDefinition{NBVersionCheck: &posture.NBVersionCheck{MinVersion: "0.26.0"}},
+		}
+	}
+
+	_, err := r.A.SavePostureChecks(ctx, accountID, userID, newCheck(takenName), true)
+	require.NoError(t, err)
+
+	other, err := r.A.SavePostureChecks(ctx, accountID, userID, newCheck("some-other-name"), true)
+	require.NoError(t, err)
+
+	other.Name = takenName
+	_, err = r.A.SavePostureChecks(ctx, accountID, userID, other, false)
+	require.ErrorContains(t, err, "already exists",
+		"renaming a posture check onto a name already in use must be rejected")
+
+	// And the rename left nothing behind: still one row under that name.
+	stored, err := r.B.Store.GetAccountPostureChecks(ctx, store.LockingStrengthNone, accountID)
+	require.NoError(t, err)
+	named := 0
+	for _, check := range stored {
+		if check.Name == takenName {
+			named++
+		}
+	}
+	require.Equal(t, 1, named, "the rejected rename must not have written a second row named %q", takenName)
+}

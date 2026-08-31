@@ -2085,6 +2085,14 @@ func (s *SqlStore) SavePostureChecks(ctx context.Context, lockStrength LockingSt
 	result := s.db.Clauses(clause.Locking{Strength: string(lockStrength)}).Save(postureCheck)
 	if result.Error != nil {
 		log.WithContext(ctx).Errorf("failed to save posture checks to store: %s", result.Error)
+		// Same reasoning as SaveNetworkResource: idx_posture_checks_account_name
+		// is what holds the per-account name invariant across replicas, and
+		// this is the only layer that sees the driver error. Attributing any
+		// unique violation on this table to the name holds while that index and
+		// the primary key are the only ones.
+		if isUniqueConstraintViolation(result.Error) {
+			return status.NewPostureCheckNameAlreadyExistsError(postureCheck.Name)
+		}
 		return status.Errorf(status.Internal, "failed to save posture checks to store")
 	}
 
