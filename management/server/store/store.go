@@ -398,6 +398,19 @@ func getMigrationsPostAuto(ctx context.Context) []migrationFunc {
 		func(db *gorm.DB) error {
 			return migration.CreateIndexIfNotExists[nbpeer.Peer](ctx, db, "idx_account_dnslabel", "account_id", "dns_label")
 		},
+		// Resource names are unique per account, and were only ever enforced
+		// by a read-then-write in the resources manager. That holds inside one
+		// process and not across replicas, where two can both find the name
+		// free and both insert. The database is the only place the guarantee
+		// survives — see #143.
+		//
+		// This fails on a database that already carries a duplicate from that
+		// race. That is deliberate: the operator has to see that it happened
+		// and choose which row survives. Picking a winner here would hide it.
+		func(db *gorm.DB) error {
+			return migration.CreateIndexIfNotExists[resourceTypes.NetworkResource](ctx, db,
+				"idx_network_resources_account_name", "account_id", "name")
+		},
 	}
 }
 

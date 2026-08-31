@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/openzro/openzro/management/server/account"
 	"github.com/openzro/openzro/management/server/activity"
@@ -57,6 +58,16 @@ func NewManager(store store.Store, permissionsManager permissions.Manager, group
 // 128 follows the sizes already used for name columns elsewhere in the tree
 // (activity_exporters, flow_exports).
 const MaxResourceNameLength = 128
+
+// isUniqueConstraintError reports whether err is the database refusing a
+// duplicate. Mirrors the helper in the server package, which cannot be imported
+// from here.
+func isUniqueConstraintError(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "(SQLSTATE 23505)") ||
+		strings.Contains(msg, "Error 1062 (23000)") ||
+		strings.Contains(msg, "UNIQUE constraint failed")
+}
 
 // validateResourceName rejects a name the unique index could not hold, so the
 // caller gets a validation error naming the limit rather than a database error
@@ -150,6 +161,14 @@ func (m *managerImpl) CreateResource(ctx context.Context, userID string, resourc
 
 		err = transaction.SaveNetworkResource(ctx, store.LockingStrengthUpdate, resource)
 		if err != nil {
+			// The unique index is what actually holds this invariant across
+			// replicas; the name check earlier only fails fast on the common
+			// case. Report the loser of a genuine race the same way, rather
+			// than letting a constraint violation surface as an internal
+			// error.
+			if isUniqueConstraintError(err) {
+				return status.Errorf(status.InvalidArgument, "resource with name %s already exists", resource.Name)
+			}
 			return fmt.Errorf("failed to save network resource: %w", err)
 		}
 
@@ -264,6 +283,14 @@ func (m *managerImpl) UpdateResource(ctx context.Context, userID string, resourc
 
 		err = transaction.SaveNetworkResource(ctx, store.LockingStrengthUpdate, resource)
 		if err != nil {
+			// The unique index is what actually holds this invariant across
+			// replicas; the name check earlier only fails fast on the common
+			// case. Report the loser of a genuine race the same way, rather
+			// than letting a constraint violation surface as an internal
+			// error.
+			if isUniqueConstraintError(err) {
+				return status.Errorf(status.InvalidArgument, "resource with name %s already exists", resource.Name)
+			}
 			return fmt.Errorf("failed to save network resource: %w", err)
 		}
 
