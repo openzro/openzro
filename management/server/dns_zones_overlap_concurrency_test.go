@@ -118,7 +118,17 @@ func TestDNSZones_ConcurrentOverlappingCreateAcrossReplicas(t *testing.T) {
 		// is one the caller cannot act on. Aligning MySQL to READ COMMITTED is
 		// #157, and this assertion is what should flip when it lands.
 		if isRepeatableReadEngine() {
-			require.Error(t, err, "replica %s", name)
+			// Asserted as precisely as the Postgres arm, just against a
+			// different mechanism. Accepting any error would let this pass on
+			// a permission failure, a broken fixture, or some later regression
+			// that happened to leave one zone standing — and the claim being
+			// made is specific: the loser dies at IncrementNetworkSerial,
+			// which is where it was measured.
+			require.ErrorContains(t, err, "failed to increment network serial count",
+				"replica %s must lose at the account row, which is what holds this invariant on MySQL today; it got %v", name, err)
+			s, ok := status.FromError(err)
+			require.True(t, ok && s.Type() == status.Internal,
+				"replica %s must lose with the store's internal error, got %v", name, err)
 			continue
 		}
 		require.ErrorContains(t, err, "overlaps with existing zone",

@@ -543,12 +543,6 @@ func validateDNSZonePeerOverlap(zone *types.DNSZone, peerDNSDomain string) error
 	return nil
 }
 
-// validateDNSZone enforces the ADR-0022 D5 invariants that need no account
-// read: FQDN syntax, >=1 distribution group
-// (deduplicated), group existence in the account, cross-zone overlap
-// rejection against OTHER user-managed zones in the same account
-// (excluding the zone being saved). Called inside the same
-// transaction as the upsert so reads are consistent with the write.
 // checkDNSZoneSiblingOverlap rejects a zone whose domain is a label-aligned
 // suffix of another zone in the account, or the other way round.
 //
@@ -580,6 +574,14 @@ func checkDNSZoneSiblingOverlap(ctx context.Context, tx store.Store, lockStrengt
 	return nil
 }
 
+// validateDNSZone enforces the ADR-0022 D5 invariants that need no account
+// read: FQDN syntax, >=1 distribution group (deduplicated), group existence in
+// the account, cross-zone overlap rejection against OTHER user-managed zones in
+// the same account (excluding the zone being saved). Called inside the same
+// transaction as the upsert so reads are consistent with the write.
+//
+// The overlap check here is not the one that decides on the create path — see
+// checkDNSZoneSiblingOverlap and the re-check in CreateDNSZone.
 func validateDNSZone(ctx context.Context, tx store.Store, accountID string, zone *types.DNSZone, isCreate bool) error {
 	zone.Domain = strings.TrimSuffix(strings.ToLower(zone.Domain), ".")
 	if zone.Domain == "" {
