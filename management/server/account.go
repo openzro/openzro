@@ -195,6 +195,75 @@ func (am *DefaultAccountManager) SetFlowPolicyIndex(idx FlowPolicyIndex) {
 	am.flowPolicyIndex = idx
 }
 
+// primaryDomainWinnerBackoff is how long the signup path waits for the account
+// that won a contested domain to become visible. Total under a second.
+var primaryDomainWinnerBackoff = []time.Duration{
+	10 * time.Millisecond,
+	25 * time.Millisecond,
+	50 * time.Millisecond,
+	100 * time.Millisecond,
+	200 * time.Millisecond,
+}
+
+// waitForPrimaryDomainWinner looks up the account that claimed domain as
+// primary, retrying briefly while it becomes visible.
+//
+// This is not a retry policy and should not grow into one — that belongs to
+// #157. It resolves one known race, at one call site: the database has already
+// picked a winner for idx_accounts_primary_private_domain, and on MySQL the
+// loser is told so through a gap-lock deadlock raised before the winner has
+// finished committing. There is nothing to decide, only something to wait for,
+// and without the wait the loser's login fails for a conflict that has already
+// been resolved in its favor by joining.
+//
+// Gives up on the caller's context, and returns the lookup error when no
+// winner appears within the budget so the caller can report the original
+// failure instead.
+func (am *DefaultAccountManager) waitForPrimaryDomainWinner(ctx context.Context, domain string) (string, error) {
+	var err error
+	for attempt := 0; ; attempt++ {
+		var winnerID string
+		winnerID, err = am.Store.GetAccountIDByPrivateDomain(ctx, store.LockingStrengthNone, domain)
+		if err == nil {
+			return winnerID, nil
+		}
+		if attempt >= len(primaryDomainWinnerBackoff) {
+			return "", err
+		}
+		select {
+		case <-time.After(primaryDomainWinnerBackoff[attempt]):
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
+}
+
+// lostPrimaryDomainRace reports whether err is how a database tells us another
+// account claimed this private domain first.
+//
+// Two shapes, because the engines refuse the second write at different moments.
+// Postgres has no gap locks, so the insert reaches
+// idx_accounts_primary_private_domain and comes back as a unique violation,
+// which the store classifies. MySQL under REPEATABLE READ takes a gap lock on
+// the position the row would occupy, so the two writers deadlock before either
+// insert lands and the loser sees 1213 instead — the same race, reported
+// earlier.
+//
+// Neither error is the answer on its own: what decides is the lookup the caller
+// does next. If no account holds the domain, the caller propagates the original
+// error rather than inventing a winner.
+func lostPrimaryDomainRace(err error) bool {
+	if err == nil {
+		return false
+	}
+	if s, ok := status.FromError(err); ok && s.Type() == status.AlreadyExists {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "Error 1213 (40001)") || // mysql
+		strings.Contains(msg, "SQLSTATE 40P01") // postgres
+}
+
 func isUniqueConstraintError(err error) bool {
 	switch {
 	case strings.Contains(err.Error(), "(SQLSTATE 23505)"),
@@ -1273,7 +1342,25 @@ func (am *DefaultAccountManager) updateAccountDomainAttributesIfNotUpToDate(ctx 
 		newCategoty = userAuth.DomainCategory
 	}
 
-	return am.Store.UpdateAccountDomainAttributes(ctx, accountID, newDomain, newCategoty, primaryDomain)
+	err = am.Store.UpdateAccountDomainAttributes(ctx, accountID, newDomain, newCategoty, primaryDomain)
+	if err != nil {
+		// Another account claimed the domain as primary while this login was
+		// deciding it could. The user stays where they are — this account
+		// simply is not the primary one, which is exactly what the caller
+		// would have written had the lookup seen the winner (#143).
+		if lostPrimaryDomainRace(err) {
+			winnerID, lookupErr := am.Store.GetAccountIDByPrivateDomain(ctx, store.LockingStrengthNone, newDomain)
+			if lookupErr != nil {
+				log.WithContext(ctx).Errorf("primary domain conflict for %s but no primary account found: %v", newDomain, lookupErr)
+				return err
+			}
+			log.WithContext(ctx).Infof("domain %s became primary on account %s concurrently; keeping %s non-primary", newDomain, winnerID, accountID)
+			return am.Store.UpdateAccountDomainAttributes(ctx, accountID, newDomain, newCategoty, false)
+		}
+		return err
+	}
+
+	return nil
 }
 
 // handleExistingUserAccount handles existing User accounts and update its domain attributes.
@@ -1321,9 +1408,29 @@ func (am *DefaultAccountManager) addNewPrivateAccount(ctx context.Context, domai
 	newAccount.DomainCategory = userAuth.DomainCategory
 	newAccount.IsDomainPrimaryAccount = true
 
-	err = am.Store.SaveAccount(ctx, newAccount)
-	if err != nil {
-		return "", err
+	// Another replica can claim this domain between the lookup that sent us
+	// here and this write. getPrivateDomainWithGlobalLock cannot prevent it —
+	// its lock is a mutex inside one process — so the database decides, and
+	// losing is a normal outcome of two people from the same organization
+	// signing in at once. It must not surface as a failed login (#143).
+	// CreateAccount, not SaveAccount: the latter's upsert absorbs the index
+	// violation on MySQL and reports success without writing anything. See the
+	// note on CreateAccount.
+	if err = am.Store.CreateAccount(ctx, newAccount); err != nil {
+		if !lostPrimaryDomainRace(err) {
+			return "", err
+		}
+
+		winnerID, waitErr := am.waitForPrimaryDomainWinner(ctx, lowerDomain)
+		if waitErr != nil {
+			// A conflict with no winner to join is not the race we expect.
+			// Report the original failure rather than inventing an outcome.
+			log.WithContext(ctx).Errorf("primary domain conflict for %s but no primary account appeared: %v", lowerDomain, waitErr)
+			return "", err
+		}
+
+		log.WithContext(ctx).Infof("account for domain %s was created concurrently; joining %s", lowerDomain, winnerID)
+		return am.addNewUserToDomainAccount(ctx, winnerID, userAuth)
 	}
 
 	err = am.addAccountIDToIDPAppMeta(ctx, userAuth.UserId, newAccount.Id)
@@ -2198,14 +2305,28 @@ func (am *DefaultAccountManager) UpdateToPrimaryAccount(ctx context.Context, acc
 			return status.Errorf(status.Internal, "cannot update account to primary")
 		}
 
-		account.IsDomainPrimaryAccount = true
-
-		if err := transaction.SaveAccount(ctx, account); err != nil {
+		// A narrow attribute update rather than SaveAccount: only the flag
+		// changes here, and SaveAccount's upsert would absorb the index
+		// violation on MySQL instead of reporting it.
+		if err := transaction.UpdateAccountDomainAttributes(ctx, accountId,
+			account.Domain, account.DomainCategory, true); err != nil {
+			// Losing the race here means the same thing the pre-check above
+			// reports: another account is already primary for this domain.
+			// Deliberately no retry — unlike the login paths, this is an
+			// explicit promotion, and refusing it is the correct answer
+			// rather than something to work around (#143).
+			if lostPrimaryDomainRace(err) {
+				log.WithContext(ctx).WithFields(log.Fields{
+					"accountId": accountId,
+				}).Infof("cannot update account to primary: another account claimed domain %s concurrently", account.Domain)
+				return err
+			}
 			log.WithContext(ctx).WithFields(log.Fields{
 				"accountId": accountId,
 			}).Errorf("failed to update account to primary: %v", err)
 			return status.Errorf(status.Internal, "failed to update account to primary")
 		}
+		account.IsDomainPrimaryAccount = true
 
 		return nil
 	})
