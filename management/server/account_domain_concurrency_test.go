@@ -2,12 +2,14 @@ package server
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	nbcontext "github.com/openzro/openzro/management/server/context"
+	"github.com/openzro/openzro/management/server/store"
 	"github.com/openzro/openzro/management/server/types"
 )
 
@@ -39,15 +41,19 @@ func TestAccountDomain_ConcurrentFirstLoginAcrossReplicas(t *testing.T) {
 	r := newTwoReplicas(t)
 	ctx := context.Background()
 
-	login := func(am *DefaultAccountManager, userID string) <-chan error {
-		errCh := make(chan error, 1)
+	type loginResult struct {
+		accountID string
+		err       error
+	}
+	login := func(am *DefaultAccountManager, userID string) <-chan loginResult {
+		resCh := make(chan loginResult, 1)
 		go func() {
 			b := userAuthFor(userID, domain)
 			b.UserId = userID
-			_, _, err := am.GetAccountIDFromUserAuth(ctx, b)
-			errCh <- err
+			accountID, _, err := am.GetAccountIDFromUserAuth(ctx, b)
+			resCh <- loginResult{accountID: accountID, err: err}
 		}()
-		return errCh
+		return resCh
 	}
 
 	// Warm each replica first: the barrier aligns the calls, not the moment
@@ -60,32 +66,46 @@ func TestAccountDomain_ConcurrentFirstLoginAcrossReplicas(t *testing.T) {
 
 	errA, errB := login(r.A, "user-a"), login(r.B, "user-b")
 
-	join := func(name string, ch <-chan error) error {
+	join := func(name string, ch <-chan loginResult) loginResult {
 		t.Helper()
 		select {
-		case err := <-ch:
-			return err
+		case res := <-ch:
+			return res
 		case <-time.After(30 * time.Second):
 			t.Fatalf("replica %s never returned from GetAccountIDFromUserAuth", name)
-			return nil
+			return loginResult{}
 		}
 	}
 	resultA, resultB := join("A", errA), join("B", errB)
 
 	// Neither user may be turned away: losing the race is not a login failure.
-	require.NoError(t, resultA, "first login on replica A must succeed")
-	require.NoError(t, resultB, "first login on replica B must succeed")
+	require.NoError(t, resultA.err, "first login on replica A must succeed")
+	require.NoError(t, resultB.err, "first login on replica B must succeed")
 
 	// Measured from committed state through the other replica's store.
 	accounts := r.B.Store.GetAllAccounts(ctx)
-	primary := 0
+	var primaryIDs []string
 	for _, acc := range accounts {
-		if acc.Domain == domain && acc.IsDomainPrimaryAccount && acc.DomainCategory == types.PrivateCategory {
-			primary++
+		if strings.EqualFold(acc.Domain, domain) && acc.IsDomainPrimaryAccount && acc.DomainCategory == types.PrivateCategory {
+			primaryIDs = append(primaryIDs, acc.Id)
 		}
 	}
-	require.Equal(t, 1, primary,
-		"the domain %q is primary on %d accounts; exactly one may hold it", domain, primary)
+	require.Len(t, primaryIDs, 1,
+		"the domain %q is primary on %d accounts %v; exactly one may hold it", domain, len(primaryIDs), primaryIDs)
+
+	// Counting primaries is not enough on its own. The failure mode measured
+	// on MySQL (#161) is a save that reports success and writes nothing: the
+	// loser is told it has an account, one primary row exists, and the count
+	// above is satisfied while that user has in fact been dropped. What
+	// separates the two is where each caller was sent.
+	require.Equal(t, primaryIDs[0], resultA.accountID, "replica A was sent to an account that does not hold the domain")
+	require.Equal(t, primaryIDs[0], resultB.accountID, "replica B was sent to an account that does not hold the domain")
+
+	for _, userID := range []string{"user-a", "user-b"} {
+		user, err := r.B.Store.GetUserByUserID(ctx, store.LockingStrengthNone, userID)
+		require.NoError(t, err, "%s has no user row; the losing login returned an account it was never added to", userID)
+		require.Equal(t, primaryIDs[0], user.AccountID, "%s landed outside the account that holds the domain", userID)
+	}
 }
 
 // userAuthFor builds the claims a first login carries for a private domain.
