@@ -244,10 +244,15 @@ func (am *DefaultAccountManager) waitForPrimaryDomainWinner(ctx context.Context,
 // Two shapes, because the engines refuse the second write at different moments.
 // Postgres has no gap locks, so the insert reaches
 // idx_accounts_primary_private_domain and comes back as a unique violation,
-// which the store classifies. MySQL under REPEATABLE READ takes a gap lock on
-// the position the row would occupy, so the two writers deadlock before either
-// insert lands and the loser sees 1213 instead — the same race, reported
-// earlier.
+// which the store classifies into a typed AlreadyExists. MySQL under
+// REPEATABLE READ takes a gap lock on the position the row would occupy, so
+// the two writers deadlock before either insert lands and the loser sees 1213
+// instead — the same race, reported earlier.
+//
+// Deliberately narrow. Postgres deadlocks (SQLSTATE 40P01) are not read here:
+// nothing on this path produces one, and a deadlock raised by unrelated work
+// in the same transaction would otherwise be reclassified as having lost this
+// race — silently joining another account instead of surfacing it.
 //
 // Neither error is the answer on its own: what decides is the lookup the caller
 // does next. If no account holds the domain, the caller propagates the original
@@ -259,9 +264,9 @@ func lostPrimaryDomainRace(err error) bool {
 	if s, ok := status.FromError(err); ok && s.Type() == status.AlreadyExists {
 		return true
 	}
-	msg := err.Error()
-	return strings.Contains(msg, "Error 1213 (40001)") || // mysql
-		strings.Contains(msg, "SQLSTATE 40P01") // postgres
+	// MySQL raises the deadlock before the insert reaches the index, so there
+	// is no typed error to match on.
+	return strings.Contains(err.Error(), "Error 1213 (40001)")
 }
 
 func isUniqueConstraintError(err error) bool {
