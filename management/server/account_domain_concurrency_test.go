@@ -192,13 +192,44 @@ func TestAccountDomain_ConcurrentExistingLoginAcrossReplicas(t *testing.T) {
 	require.NoError(t, resultA, "an existing user's login must not fail because it lost the primary-domain race")
 	require.NoError(t, resultB, "an existing user's login must not fail because it lost the primary-domain race")
 
-	accounts := r.B.Store.GetAllAccounts(ctx)
+	// Measured from committed state through the other replica's store.
+	seeded := map[string]*types.Account{}
 	primary := 0
-	for _, acc := range accounts {
-		if acc.Domain == domain && acc.IsDomainPrimaryAccount && acc.DomainCategory == types.PrivateCategory {
+	for _, acc := range r.B.Store.GetAllAccounts(ctx) {
+		if strings.EqualFold(acc.Domain, domain) && acc.IsDomainPrimaryAccount && acc.DomainCategory == types.PrivateCategory {
 			primary++
+		}
+		if acc.Id == "existing-account-a" || acc.Id == "existing-account-b" {
+			seeded[acc.Id] = acc
 		}
 	}
 	require.Equal(t, 1, primary,
 		"the domain %q is primary on %d accounts; exactly one may hold it", domain, primary)
+
+	// The count alone would be satisfied by outcomes this path must not
+	// produce: an account losing its domain, a user being moved, or the loser
+	// left unclassified. Unlike signup, nobody joins anybody here — each user
+	// stays where it was and only the primary flag is decided.
+	require.Len(t, seeded, 2, "both seeded accounts must still exist")
+
+	loser := 0
+	for id, acc := range seeded {
+		require.True(t, strings.EqualFold(domain, acc.Domain), "account %s lost the domain", id)
+		require.Equal(t, types.PrivateCategory, acc.DomainCategory,
+			"account %s was left unclassified; the login is what classifies it", id)
+		if !acc.IsDomainPrimaryAccount {
+			loser++
+		}
+	}
+	require.Equal(t, 1, loser, "exactly one of the two accounts must have been written non-primary")
+
+	for userID, accountID := range map[string]string{
+		"existing-user-a": "existing-account-a",
+		"existing-user-b": "existing-account-b",
+	} {
+		user, err := r.B.Store.GetUserByUserID(ctx, store.LockingStrengthNone, userID)
+		require.NoError(t, err)
+		require.Equal(t, accountID, user.AccountID,
+			"%s was moved out of its own account; losing the domain race must not relocate a user", userID)
+	}
 }
