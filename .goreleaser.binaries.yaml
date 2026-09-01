@@ -50,8 +50,31 @@ builds:
   - id: openzro-mgmt
     dir: management
     binary: openzro-mgmt
+    env:
+      - CGO_ENABLED=1
+      - >-
+        {{- if eq .Runtime.Goos "linux" }}
+          {{- if eq .Arch "arm64"}}CC=aarch64-linux-gnu-gcc{{- end }}
+        {{- end }}
+    goos: [linux]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X github.com/openzro/openzro/version.version={{.Version}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    # archive_duckdb pulls in github.com/marcboeker/go-duckdb (CGo) so
+    # the published Linux management binary can query Parquet cold
+    # archives after OPENZRO_FLOW_RETENTION has purged the hot DB. The
+    # release workflow installs the arm64 cross compiler before running
+    # GoReleaser. Darwin keeps the CGo-free build below until that path
+    # has its own smoke test.
+    tags:
+      - archive_duckdb
+
+  - id: openzro-mgmt-darwin
+    dir: management
+    binary: openzro-mgmt
     env: [CGO_ENABLED=0]
-    goos: [linux, darwin]
+    goos: [darwin]
     goarch: [amd64, arm64]
     ldflags:
       - -s -w -X github.com/openzro/openzro/version.version={{.Version}}
@@ -108,7 +131,7 @@ archives:
         format: zip
 
   - id: openzro-mgmt
-    builds: [openzro-mgmt]
+    builds: [openzro-mgmt, openzro-mgmt-darwin]
     name_template: >-
       openzro-mgmt_{{ .Version }}_{{ .Os }}_{{ .Arch }}
 

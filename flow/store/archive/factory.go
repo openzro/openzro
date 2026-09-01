@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/openzro/openzro/flow/store"
 )
 
@@ -48,8 +50,10 @@ const (
 //     built with `archive_duckdb` AND the format is "parquet".
 //   - (nil, nil) when the bucket is not configured at all (operator
 //     opted out — federated falls back to hot-only).
-//   - (nil, nil) when the format is "ndjson" (read path doesn't
-//     support that yet — log it and operate as if no archive).
+//   - (nil, nil) when the format is empty, "ndjson", or otherwise not
+//     "parquet" (the sink defaults those values to NDJSON, and the read
+//     path doesn't support NDJSON yet — log it and operate as if no
+//     archive).
 //   - (nil, ErrUnavailable) when the binary was built without
 //     archive_duckdb. Caller should fall back to hot-only with a
 //     warning rather than fail.
@@ -60,18 +64,22 @@ const (
 // In practice an operator picks one, so the precedence rarely
 // matters.
 func NewFromEnv() (store.Store, error) {
-	format := os.Getenv(envFormat)
-	if format != "" && format != "parquet" {
-		// NDJSON archives exist but the read path does not target
-		// them yet. Treat as "no archive" so the federated wrapper
-		// stays on hot-only and the operator gets a clear log line
-		// rather than a spurious error during boot.
-		return nil, nil
-	}
-
 	cfg, ok := configFromEnv()
 	if !ok {
 		// No bucket configured → operator opted out, not a failure.
+		return nil, nil
+	}
+
+	format := os.Getenv(envFormat)
+	if format != "parquet" {
+		// NDJSON archives exist but the read path does not target them
+		// yet. Treat as "no archive" so the federated wrapper stays on
+		// hot-only; enabling the DuckDB store here would query
+		// *.parquet while the sink is writing *.ndjson.gz.
+		log.Warnf(
+			"flow archive: bucket configured but %s=%q resolves to ndjson; "+
+				"dashboard archive reads require %s=parquet, so older events remain hot-store only",
+			envFormat, format, envFormat)
 		return nil, nil
 	}
 
