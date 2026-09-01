@@ -275,6 +275,14 @@ func (s *SqlStore) SaveAccount(ctx context.Context, account *types.Account) erro
 
 // generateAccountSQLTypes generates the GORM compatible types for the account
 func generateAccountSQLTypes(account *types.Account) {
+	account.SetupKeysG = account.SetupKeysG[:0]
+	account.PeersG = account.PeersG[:0]
+	account.UsersG = account.UsersG[:0]
+	account.GroupsG = account.GroupsG[:0]
+	account.RoutesG = account.RoutesG[:0]
+	account.NameServerGroupsG = account.NameServerGroupsG[:0]
+	account.DNSZonesG = account.DNSZonesG[:0]
+
 	for _, key := range account.SetupKeys {
 		account.SetupKeysG = append(account.SetupKeysG, *key)
 	}
@@ -290,6 +298,7 @@ func generateAccountSQLTypes(account *types.Account) {
 
 	for id, user := range account.Users {
 		user.Id = id
+		user.PATsG = user.PATsG[:0]
 		for id, pat := range user.PATs {
 			pat.ID = id
 			user.PATsG = append(user.PATsG, *pat)

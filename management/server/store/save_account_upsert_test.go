@@ -3,14 +3,17 @@ package store
 import (
 	"context"
 	"net"
+	"net/netip"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
+	nbdns "github.com/openzro/openzro/dns"
 	nbpeer "github.com/openzro/openzro/management/server/peer"
 	"github.com/openzro/openzro/management/server/status"
 	"github.com/openzro/openzro/management/server/types"
+	nbroute "github.com/openzro/openzro/route"
 )
 
 // SaveAccount used to end in a Create carrying
@@ -119,24 +122,25 @@ func TestSaveAccountCreatesAndReplaces(t *testing.T) {
 // same pointer again when the owner's domain has to be written (user.go:819
 // and user.go:836).
 //
-// generateAccountSQLTypes projects the maps into the *G slices with append and
-// no reset, so the second call leaves every child in there twice — measured,
-// 1 then 2 then 3 across three saves of one object (#165).
-//
-// The worry was that removing the parent's upsert turns each duplicate into a
-// plain insert of a key that already exists. It does not, and this test
-// catches nothing today: the database ends correct on all three engines
-// because GORM upserts the associations itself under FullSaveAssociations,
-// independently of whatever clause the parent Create carries.
-//
-// It is here because that correctness rests on GORM behavior nobody chose to
-// depend on. If association handling changes, this fails rather than
-// GetOrCreateAccountByUser does.
+// The same-pointer path used to leave duplicate rows in the in-memory *G
+// projections (#165). The database still ended correct because GORM upserts
+// associations under FullSaveAssociations, but the object no longer described
+// what was being saved and every subsequent save sent more duplicate work.
 func TestSaveAccountTwiceWithTheSameObject(t *testing.T) {
 	runTestForAllEngines(t, "", func(t *testing.T, store Store) {
 		ctx := context.Background()
 
 		account := newAccountWithId(ctx, "resave-acc", "owner-user", "")
+		account.Users["owner-user"].PATs = map[string]*types.PersonalAccessToken{
+			"pat-a": {
+				ID:          "pat-a",
+				UserID:      "owner-user",
+				Name:        "pat a",
+				HashedToken: "hash-a",
+				CreatedBy:   "owner-user",
+				CreatedAt:   time.Now().UTC(),
+			},
+		}
 		key, _ := types.GenerateDefaultSetupKey()
 		account.SetupKeys[key.Key] = key
 		account.Peers["peer-a"] = &nbpeer.Peer{
@@ -154,12 +158,58 @@ func TestSaveAccountTwiceWithTheSameObject(t *testing.T) {
 		require.NoError(t, store.SaveAccount(ctx, account),
 			"saving the same account object twice must not fail")
 
+		require.Len(t, account.PeersG, len(account.Peers), "generated peers must be rebuilt, not accumulated")
+		require.Len(t, account.UsersG, len(account.Users), "generated users must be rebuilt, not accumulated")
+		require.Len(t, account.SetupKeysG, len(account.SetupKeys), "generated setup keys must be rebuilt, not accumulated")
+		require.Len(t, account.GroupsG, len(account.Groups), "generated groups must be rebuilt, not accumulated")
+		require.Len(t, account.Users["owner-user"].PATsG, 1, "nested PAT projections must be rebuilt too")
+
 		stored, err := store.GetAccount(ctx, account.Id)
 		require.NoError(t, err)
 		require.Equal(t, "resaved.example", stored.Domain)
-		require.Len(t, stored.Peers, 1, "the peer was written twice")
-		require.Len(t, stored.Users, 1, "the user was written twice")
-		require.Len(t, stored.SetupKeys, 1, "the setup key was written twice")
-		require.Len(t, stored.Groups, len(account.Groups), "the groups were written twice")
+		require.Len(t, stored.Peers, 1, "the peer must remain single in the database")
+		require.Len(t, stored.Users, 1, "the user must remain single in the database")
+		require.Len(t, stored.SetupKeys, 1, "the setup key must remain single in the database")
+		require.Len(t, stored.Groups, len(account.Groups), "the groups must remain single in the database")
+		require.Len(t, stored.Users["owner-user"].PATs, 1, "the PAT must remain single in the database")
 	})
+}
+
+func TestGenerateAccountSQLTypesRebuildsEveryProjection(t *testing.T) {
+	ctx := context.Background()
+	account := newAccountWithId(ctx, "projection-acc", "projection-user", "")
+	account.DNSZones = map[string]*types.DNSZone{
+		"zone-a": {AccountID: account.Id, Name: "zone a", Domain: "zone.example"},
+	}
+	account.NameServerGroups["ns-a"] = &nbdns.NameServerGroup{AccountID: account.Id, Name: "ns a"}
+	account.Routes["route-a"] = &nbroute.Route{
+		AccountID:   account.Id,
+		Network:     netip.MustParsePrefix("10.10.0.0/24"),
+		NetworkType: nbroute.IPv4Network,
+	}
+	account.Users["projection-user"].PATs = map[string]*types.PersonalAccessToken{
+		"pat-a": {UserID: "projection-user", Name: "pat a", HashedToken: "hash-a"},
+	}
+	key, _ := types.GenerateDefaultSetupKey()
+	account.SetupKeys[key.Key] = key
+	account.Peers["peer-a"] = &nbpeer.Peer{
+		Key:    "projection-peer-key",
+		IP:     net.IP{127, 0, 0, 4},
+		Meta:   nbpeer.PeerSystemMeta{},
+		Name:   "peer a",
+		Status: &nbpeer.PeerStatus{Connected: true, LastSeen: time.Now().UTC()},
+	}
+
+	for range 3 {
+		generateAccountSQLTypes(account)
+	}
+
+	require.Len(t, account.SetupKeysG, len(account.SetupKeys))
+	require.Len(t, account.PeersG, len(account.Peers))
+	require.Len(t, account.UsersG, len(account.Users))
+	require.Len(t, account.GroupsG, len(account.Groups))
+	require.Len(t, account.RoutesG, len(account.Routes))
+	require.Len(t, account.NameServerGroupsG, len(account.NameServerGroups))
+	require.Len(t, account.DNSZonesG, len(account.DNSZones))
+	require.Len(t, account.Users["projection-user"].PATsG, len(account.Users["projection-user"].PATs))
 }
