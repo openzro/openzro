@@ -1942,6 +1942,25 @@ func (s *SqlStore) GetGroupByName(ctx context.Context, lockStrength LockingStren
 	return &group, nil
 }
 
+// GetGroupIDsByNameAndIssued retrieves group IDs matching an account, display
+// name, and source.
+func (s *SqlStore) GetGroupIDsByNameAndIssued(ctx context.Context, lockStrength LockingStrength, accountID, groupName, issued string) ([]string, error) {
+	tx := s.db
+	if lockStrength != LockingStrengthNone {
+		tx = tx.Clauses(clause.Locking{Strength: string(lockStrength)})
+	}
+
+	var groupIDs []string
+	result := tx.Model(&types.Group{}).
+		Where("account_id = ? AND name = ? AND issued = ?", accountID, groupName, issued).
+		Pluck("id", &groupIDs)
+	if result.Error != nil {
+		log.WithContext(ctx).Errorf("failed to get group IDs by name and issued from store: %v", result.Error)
+		return nil, status.Errorf(status.Internal, "failed to get group IDs by name and issued from store")
+	}
+	return groupIDs, nil
+}
+
 // GetGroupsByIDs retrieves groups by their IDs and account ID.
 func (s *SqlStore) GetGroupsByIDs(ctx context.Context, lockStrength LockingStrength, accountID string, groupIDs []string) (map[string]*types.Group, error) {
 	tx := s.db

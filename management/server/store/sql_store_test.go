@@ -1281,6 +1281,22 @@ func TestSqlite_GetGroupByName(t *testing.T) {
 	require.True(t, group.IsGroupAll())
 }
 
+func TestSqlStore_GetGroupIDsByNameAndIssued(t *testing.T) {
+	runTestForAllEngines(t, "../testdata/extended-store.sql", func(t *testing.T, store Store) {
+		accountID := "bf1c8084-ba50-4ce7-9439-34653001fc3b"
+		groups := []*types.Group{
+			{ID: "api-shared", AccountID: accountID, Name: "Shared", Issued: types.GroupIssuedAPI},
+			{ID: "scim-shared", AccountID: accountID, Name: "Shared", Issued: types.GroupIssuedIntegration},
+			{ID: "scim-other", AccountID: accountID, Name: "Other", Issued: types.GroupIssuedIntegration},
+		}
+		require.NoError(t, store.SaveGroups(context.Background(), LockingStrengthUpdate, accountID, groups))
+
+		groupIDs, err := store.GetGroupIDsByNameAndIssued(context.Background(), LockingStrengthShare, accountID, "Shared", types.GroupIssuedIntegration)
+		require.NoError(t, err)
+		require.Equal(t, []string{"scim-shared"}, groupIDs)
+	})
+}
+
 func Test_DeleteSetupKeySuccessfully(t *testing.T) {
 	t.Setenv("OPENZRO_STORE_ENGINE", string(types.SqliteStoreEngine))
 	store, cleanup, err := NewTestStoreFromSQL(context.Background(), "../testdata/extended-store.sql", t.TempDir())
