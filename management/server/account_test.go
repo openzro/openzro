@@ -3805,7 +3805,7 @@ func requireSCIMGroupResult(t *testing.T, call func() (*types.Group, error)) (*t
 		return result.group, result.err
 	case <-time.After(10 * time.Second):
 		t.Fatal("SCIM group call never returned; it may be blocked on a re-entered account lock")
-		return nil, nil
+		return nil, assert.AnError
 	}
 }
 
