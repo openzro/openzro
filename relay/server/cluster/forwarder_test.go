@@ -101,7 +101,7 @@ func makeTransportMsg(t *testing.T, dst messages.PeerID, payload string) []byte 
 // locator, and forwarder. The dispatch handler routes inbound
 // frames through both the locator and the forwarder so a single
 // FrameHandler can serve everything.
-func startForwarderPair(t *testing.T, ownsA, ownsB []messages.PeerID) (
+func startForwarderPair(t *testing.T, ownsA, ownsB []messages.PeerID, opts ...PeerLocatorOption) (
 	*Forwarder, *fakeDispatcher,
 	*Forwarder, *fakeDispatcher,
 	string, string,
@@ -115,8 +115,8 @@ func startForwarderPair(t *testing.T, ownsA, ownsB []messages.PeerID) (
 	transA := NewTransport("127.0.0.1:0", "", nil)
 	transB := NewTransport("127.0.0.1:0", "", nil)
 
-	locA := NewPeerLocator(transA, dispA)
-	locB := NewPeerLocator(transB, dispB)
+	locA := NewPeerLocator(transA, dispA, opts...)
+	locB := NewPeerLocator(transB, dispB, opts...)
 
 	fwdA, err := NewForwarder(transA, locA, dispA)
 	require.NoError(t, err)
@@ -185,6 +185,7 @@ func TestForwarder_RemoteDispatchAcrossPods(t *testing.T) {
 	fwdA, _, _, dispB, _, _ := startForwarderPair(t,
 		nil,
 		[]messages.PeerID{peer}, // B owns the peer
+		WithLookupTimeout(testLookupTimeout),
 	)
 
 	msg := makeTransportMsg(t, peer, "across the fabric")
@@ -268,6 +269,7 @@ func TestForwarder_RemoteDispatchPreservesSrcStamp(t *testing.T) {
 	fwdA, _, _, dispB, _, _ := startForwarderPair(t,
 		nil, // src not on A in this scenario; only matters that dst is on B
 		[]messages.PeerID{dst},
+		WithLookupTimeout(testLookupTimeout),
 	)
 
 	// Seed: build msg as if it came from peer A (slot=dst at this

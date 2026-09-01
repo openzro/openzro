@@ -12,11 +12,11 @@ import (
 	"github.com/openzro/openzro/relay/messages"
 )
 
-// LookupTimeout caps how long a single Lookup waits for I_HAVE
-// answers from peer pods. Inter-pod RTT in a healthy cluster is
-// sub-ms; 200 ms is generous and still keeps the relay's hot path
-// responsive when the target peer isn't connected anywhere (every
-// pod stays silent and the lookup times out cleanly into "miss").
+// LookupTimeout is the default cap for how long a single Lookup waits for
+// I_HAVE answers from peer pods. Inter-pod RTT in a healthy cluster is sub-ms;
+// 200 ms keeps the relay's hot path responsive when the target peer isn't
+// connected anywhere. Deployments whose tail latency is dominated by CPU
+// scheduling rather than RTT can raise this per locator.
 const LookupTimeout = 200 * time.Millisecond
 
 // CacheTTL bounds how long a (peer → pod) mapping is trusted
@@ -28,10 +28,10 @@ const LookupTimeout = 200 * time.Millisecond
 // Lookup re-broadcasts.
 const CacheTTL = 5 * time.Minute
 
-// ErrLookupNoOwner is returned when no pod claims the peer within
-// LookupTimeout. The caller should treat this exactly like a
-// single-pod "peer not found" — fail the OpenConn back to the
-// client with the existing error, no retry.
+// ErrLookupNoOwner is returned when no pod claims the peer within the
+// locator's lookup timeout. The caller should treat this exactly like a
+// single-pod "peer not found" — fail the OpenConn back to the client with the
+// existing error, no retry.
 var ErrLookupNoOwner = errors.New("cluster locator: no pod owns this peer")
 
 // LocalOwnership tells the locator which peers this pod owns
@@ -67,6 +67,8 @@ type PeerLocator struct {
 
 	clock   func() time.Time
 	metrics *Metrics
+
+	lookupTimeout time.Duration
 }
 
 type locatorEntry struct {
@@ -82,18 +84,42 @@ type locatorWait struct {
 	done      chan struct{}
 }
 
+// PeerLocatorOption customizes a PeerLocator at construction.
+type PeerLocatorOption func(*PeerLocator)
+
+// WithLookupTimeout sets how long a cache-miss Lookup waits for peer-pod
+// answers. Zero and negative values keep the default.
+func WithLookupTimeout(timeout time.Duration) PeerLocatorOption {
+	return func(pl *PeerLocator) {
+		if timeout > 0 {
+			pl.lookupTimeout = timeout
+		}
+	}
+}
+
+// LookupTimeoutValue returns the effective miss timeout. It is exposed for
+// bootstrap tests and operator diagnostics; callers should still use Lookup.
+func (pl *PeerLocator) LookupTimeoutValue() time.Duration {
+	return pl.lookupTimeout
+}
+
 // NewPeerLocator builds a locator wired to the given transport.
 // `local` answers whether this pod owns a peer (the relay's local
 // peer store). `transport` provides the inter-pod fabric the
 // locator broadcasts on.
-func NewPeerLocator(transport *Transport, local LocalOwnership) *PeerLocator {
-	return &PeerLocator{
-		transport: transport,
-		local:     local,
-		cache:     make(map[messages.PeerID]locatorEntry),
-		waiters:   make(map[messages.PeerID]*locatorWait),
-		clock:     time.Now,
+func NewPeerLocator(transport *Transport, local LocalOwnership, opts ...PeerLocatorOption) *PeerLocator {
+	pl := &PeerLocator{
+		transport:     transport,
+		local:         local,
+		cache:         make(map[messages.PeerID]locatorEntry),
+		waiters:       make(map[messages.PeerID]*locatorWait),
+		clock:         time.Now,
+		lookupTimeout: LookupTimeout,
 	}
+	for _, opt := range opts {
+		opt(pl)
+	}
+	return pl
 }
 
 // SetMetrics installs the cluster metrics handle. Safe to call
@@ -114,7 +140,7 @@ func (pl *PeerLocator) LocalSeqno() uint32 {
 // Lookup resolves the peer to the pod address that currently owns
 // it. Returns the pod's host:port and ok=true on success, or
 // ("", false, ErrLookupNoOwner) if no pod responded within
-// LookupTimeout.
+// the locator's lookup timeout.
 //
 // Cache hits return immediately; misses broadcast WHO_HAS and
 // wait for I_HAVE answers.
@@ -149,7 +175,7 @@ func (pl *PeerLocator) Lookup(ctx context.Context, peer messages.PeerID) (string
 		}
 	}
 
-	timeout := time.NewTimer(LookupTimeout)
+	timeout := time.NewTimer(pl.lookupTimeout)
 	defer timeout.Stop()
 
 	for {

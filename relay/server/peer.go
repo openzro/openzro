@@ -245,9 +245,9 @@ func (p *Peer) handleTransportMsg(msg []byte) {
 	}
 
 	if p.crossPodFwd != nil {
-		// 5 s mirrors the cluster locator's broadcast deadline; a
-		// real K8s in-cluster RTT is sub-millisecond. Anything
-		// slower than 5 s is a partition we'd rather drop on.
+		// 5 s caps the cluster forwarding path even when an operator raises
+		// the locator miss timeout for CPU-throttled or noisy clusters.
+		// Anything slower than this is a partition we'd rather drop on.
 		ctx, cancel := context.WithTimeout(context.Background(), clusterForwardTimeout)
 		defer cancel()
 		if err := p.crossPodFwd.Forward(ctx, *peerID, msg); err != nil {

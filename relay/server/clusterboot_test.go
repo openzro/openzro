@@ -22,6 +22,7 @@ func TestStartCluster_RejectsBadConfig(t *testing.T) {
 		{"missing pod ip", ClusterBootstrapConfig{Headless: "x"}},
 		{"negative port", ClusterBootstrapConfig{Headless: "x", PodIP: "10.0.0.1", Port: -1}},
 		{"port too high", ClusterBootstrapConfig{Headless: "x", PodIP: "10.0.0.1", Port: 70000}},
+		{"negative lookup timeout", ClusterBootstrapConfig{Headless: "x", PodIP: "10.0.0.1", LookupTimeout: -time.Second}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -48,10 +49,11 @@ func TestStartCluster_SmokeListensAndStops(t *testing.T) {
 	st := store.NewStore()
 
 	cb, err := StartCluster(context.Background(), st, ClusterBootstrapConfig{
-		Headless: "nope.invalid",
-		Port:     freePort(t),
-		PodIP:    "127.0.0.1",
-		Interval: 50 * time.Millisecond,
+		Headless:      "nope.invalid",
+		Port:          freePort(t),
+		PodIP:         "127.0.0.1",
+		Interval:      50 * time.Millisecond,
+		LookupTimeout: 750 * time.Millisecond,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, cb)
@@ -59,6 +61,7 @@ func TestStartCluster_SmokeListensAndStops(t *testing.T) {
 	require.NotNil(t, cb.Locator)
 	require.NotNil(t, cb.Forwarder)
 	require.NotNil(t, cb.Discovery)
+	require.Equal(t, 750*time.Millisecond, cb.Locator.LookupTimeoutValue())
 
 	// Confirm Stop is idempotent and nil-safe.
 	cb.Stop()
