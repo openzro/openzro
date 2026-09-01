@@ -208,20 +208,17 @@ var primaryDomainWinnerBackoff = []time.Duration{
 // waitForPrimaryDomainWinner looks up the account that claimed domain as
 // primary, retrying briefly while it becomes visible.
 //
-// This is not a retry policy and should not grow into one — that belongs to
-// #157. It resolves one known race: the database has already picked a winner
-// for idx_accounts_primary_private_domain, and on MySQL the loser can be told
-// so through a gap-lock deadlock raised before the winner has finished
-// committing. There is nothing to decide, only something to wait for, and
-// without the wait the loser's login fails for a conflict that has already
-// been resolved in its favor.
+// This is not a retry policy and should not grow into one. It resolves one
+// known race: the database has already picked a winner for
+// idx_accounts_primary_private_domain, and the loser needs the winner's account
+// ID to finish login without creating a competing account. There is nothing to
+// decide, only something to wait for, and without the wait the loser's login
+// fails for a conflict that has already been resolved in its favor.
 //
 // Both login paths use it, and must: signup joins the winner it returns, while
 // the existing-login path only needs to know the domain has an owner before
-// writing itself non-primary. Waiting in one and not the other would leave the
-// UPDATE path — where gap locks are most likely — failing on a winner that
-// exists but has not yet committed. UpdateToPrimaryAccount deliberately does
-// not wait: an explicit promotion that lost should be refused, not retried.
+// writing itself non-primary. UpdateToPrimaryAccount deliberately does not
+// wait: an explicit promotion that lost should be refused, not retried.
 //
 // Gives up on the caller's context, and returns the lookup error when no
 // winner appears within the budget so the caller can report the original
@@ -248,32 +245,20 @@ func (am *DefaultAccountManager) waitForPrimaryDomainWinner(ctx context.Context,
 // lostPrimaryDomainRace reports whether err is how a database tells us another
 // account claimed this private domain first.
 //
-// Two shapes, because the engines refuse the second write at different moments.
-// Postgres has no gap locks, so the insert reaches
-// idx_accounts_primary_private_domain and comes back as a unique violation,
-// which the store classifies into a typed AlreadyExists. MySQL under
-// REPEATABLE READ takes a gap lock on the position the row would occupy, so
-// the two writers deadlock before either insert lands and the loser sees 1213
-// instead — the same race, reported earlier.
+// One shape: the store classifies idx_accounts_primary_private_domain into a
+// typed AlreadyExists. Broader database errors are deliberately not treated as
+// this race, because doing so could send a user into another account after an
+// unrelated failure.
 //
-// Deliberately narrow. Postgres deadlocks (SQLSTATE 40P01) are not read here:
-// nothing on this path produces one, and a deadlock raised by unrelated work
-// in the same transaction would otherwise be reclassified as having lost this
-// race — silently joining another account instead of surfacing it.
-//
-// Neither error is the answer on its own: what decides is the lookup the caller
+// The error is not the answer on its own: what decides is the lookup the caller
 // does next. If no account holds the domain, the caller propagates the original
 // error rather than inventing a winner.
 func lostPrimaryDomainRace(err error) bool {
 	if err == nil {
 		return false
 	}
-	if s, ok := status.FromError(err); ok && s.Type() == status.AlreadyExists {
-		return true
-	}
-	// MySQL raises the deadlock before the insert reaches the index, so there
-	// is no typed error to match on.
-	return strings.Contains(err.Error(), "Error 1213 (40001)")
+	s, ok := status.FromError(err)
+	return ok && s.Type() == status.AlreadyExists
 }
 
 func isUniqueConstraintError(err error) bool {
@@ -1365,12 +1350,6 @@ func (am *DefaultAccountManager) updateAccountDomainAttributesIfNotUpToDate(ctx 
 		// simply is not the primary one, which is exactly what the caller
 		// would have written had the lookup seen the winner (#143).
 		if lostPrimaryDomainRace(err) {
-			// The same wait the signup path uses, for the same reason. This is
-			// an UPDATE moving a row into the index range, which is where
-			// InnoDB gap locks are most likely to raise 1213 — and 1213 is the
-			// one shape that reports before the winner has committed, so an
-			// immediate lookup can miss a winner that exists and turn this
-			// into a failed login.
 			winnerID, lookupErr := am.waitForPrimaryDomainWinner(ctx, newDomain)
 			if lookupErr != nil {
 				log.WithContext(ctx).Errorf("primary domain conflict for %s but no primary account found: %v", newDomain, lookupErr)

@@ -2,8 +2,6 @@ package server
 
 import (
 	"context"
-	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -16,7 +14,6 @@ import (
 	networkTypes "github.com/openzro/openzro/management/server/networks/types"
 	"github.com/openzro/openzro/management/server/permissions"
 	"github.com/openzro/openzro/management/server/store"
-	"github.com/openzro/openzro/management/server/types"
 )
 
 // CreateResource rejects a name already taken in the account. It proves that
@@ -38,9 +35,9 @@ import (
 // This is the demonstration half of #143 step 3: the duplicate has to be shown
 // before it is fixed, so the fix lands red to green rather than by argument.
 //
-// The two engines do not fail the same way, and running this on the wrong one
-// would look like proof it does not need fixing. Measured before the unique
-// index existed:
+// The two engines did not fail the same way before #157, and running this on
+// the wrong one used to look like proof it did not need fixing. Measured before
+// the unique index existed:
 //
 //	Postgres   FAIL — two rows with the same name. No gap locks; predicate
 //	           locking only exists at SERIALIZABLE, so the shared-lock read
@@ -49,9 +46,9 @@ import (
 //	           position the row would occupy and refuse the second insert.
 //	           The loser sees a 1213 deadlock rather than a name conflict.
 //
-// So the red is Postgres-only, and the assertion below is what both engines
-// must satisfy afterwards: exactly one row survives, whichever way the database
-// got there.
+// After #157, MySQL also reaches the unique index and the loser is reported as
+// a taken name. The assertion below is what both engines must satisfy: exactly
+// one row survives, and exactly one create is accepted.
 func TestNetworkResource_ConcurrentCreateAcrossReplicas(t *testing.T) {
 	const (
 		accountID    = "resource-race-account"
@@ -165,17 +162,10 @@ func TestNetworkResource_ConcurrentCreateAcrossReplicas(t *testing.T) {
 		named, resourceName, accepted, resultA, resultB)
 	require.Equal(t, 1, accepted, "exactly one create must be accepted")
 
-	// The loser's error is engine-specific, so assert it where it is
-	// deterministic. On Postgres the insert reaches the unique index and the
-	// store maps the violation to the same answer the pre-check gives. On
-	// MySQL the gap lock fires first and the loser sees a 1213 deadlock
-	// instead — see the note at the top of this file.
-	if types.Engine(strings.ToLower(os.Getenv("OPENZRO_STORE_ENGINE"))) == types.PostgresStoreEngine {
-		loser := resultA
-		if loser == nil {
-			loser = resultB
-		}
-		require.ErrorContains(t, loser, "already exists",
-			"the losing create must be reported as a taken name, not an internal error")
+	loser := resultA
+	if loser == nil {
+		loser = resultB
 	}
+	require.ErrorContains(t, loser, "already exists",
+		"the losing create must be reported as a taken name, not an internal error")
 }

@@ -2,8 +2,6 @@ package server
 
 import (
 	"context"
-	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -11,7 +9,6 @@ import (
 
 	"github.com/openzro/openzro/management/server/posture"
 	"github.com/openzro/openzro/management/server/store"
-	"github.com/openzro/openzro/management/server/types"
 )
 
 // SavePostureChecks rejects a name already taken in the account. It proves that
@@ -39,14 +36,16 @@ import (
 // exactly that reason. The warm-up below removes the offset; without it, a
 // green run means nothing.
 //
-// The engines do not fail this the same way, and running it on MySQL alone
-// would look like proof the invariant is fine:
+// The engines did not fail this the same way before #157, and running it on
+// MySQL alone used to look like proof the invariant was fine:
 //
 //	Postgres   two rows with the same name
 //	MySQL      the second insert is refused by InnoDB's gap locks under
 //	           REPEATABLE READ, and the loser sees a 1213 deadlock
 //
-// The assertion below is what both must satisfy: exactly one row survives.
+// After #157, MySQL also reaches the unique index and the loser is reported as
+// a taken name. The assertion below is what both must satisfy: exactly one row
+// survives, and exactly one create is accepted.
 func TestPostureChecks_ConcurrentCreateAcrossReplicas(t *testing.T) {
 	const (
 		accountID = "posture-race-account"
@@ -128,16 +127,12 @@ func TestPostureChecks_ConcurrentCreateAcrossReplicas(t *testing.T) {
 		named, checkName, accepted, resultA, resultB)
 	require.Equal(t, 1, accepted, "exactly one create must be accepted")
 
-	// The loser's error is engine-specific; assert it where it is
-	// deterministic. See the note at the top of this file.
-	if types.Engine(strings.ToLower(os.Getenv("OPENZRO_STORE_ENGINE"))) == types.PostgresStoreEngine {
-		loser := resultA
-		if loser == nil {
-			loser = resultB
-		}
-		require.ErrorContains(t, loser, "already exists",
-			"the losing create must be reported as a taken name, not an internal error")
+	loser := resultA
+	if loser == nil {
+		loser = resultB
 	}
+	require.ErrorContains(t, loser, "already exists",
+		"the losing create must be reported as a taken name, not an internal error")
 }
 
 // TestPostureChecks_UpdateToTakenNameIsRejected pins the behavior change that

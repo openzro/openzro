@@ -153,7 +153,7 @@ func (m *managerImpl) CreateResource(ctx context.Context, userID string, resourc
 			return fmt.Errorf("failed to get network: %w", err)
 		}
 
-		err = transaction.SaveNetworkResource(ctx, store.LockingStrengthUpdate, resource)
+		err = transaction.CreateNetworkResource(ctx, store.LockingStrengthUpdate, resource)
 		if err != nil {
 			// The store classifies a unique-index violation for us and returns
 			// the same error the name check above produces, so the loser of a

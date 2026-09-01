@@ -14,17 +14,12 @@ import (
 	"github.com/openzro/openzro/management/server/types"
 )
 
-// The concurrent paths reach lostPrimaryDomainRace through whichever shape the
-// engine happens to raise, and after the signup path moved to CreateAccount
-// every measured conflict — both engines, both paths — arrives as the typed
-// AlreadyExists. A plain INSERT blocks until the winner commits and then
-// reports a duplicate key; the upsert it replaced deadlocked instead.
-//
-// So the MySQL deadlock branch is a contingency that the cross-replica tests no
-// longer exercise. It is kept because InnoDB gap locks under REPEATABLE READ
-// are a real mechanism for this predicate and were observed on this path
-// earlier in this work, but a branch no test reaches is a branch nobody can
-// trust. This pins it directly.
+// The concurrent login paths reach lostPrimaryDomainRace when the database
+// reports that another account already owns the primary private domain. Under
+// READ COMMITTED the create/update waits for the winner and then returns the
+// typed unique-index violation; broader deadlock strings are deliberately not
+// classified as this race, because that could send a user into the wrong
+// account after an unrelated failure.
 func TestLostPrimaryDomainRace(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -42,14 +37,11 @@ func TestLostPrimaryDomainRace(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "the mysql gap-lock deadlock, which arrives untyped",
+			name: "a mysql deadlock, which is not specific enough to move a user into another account",
 			err:  errors.New("Error 1213 (40001): Deadlock found when trying to get lock; try restarting transaction"),
-			want: true,
+			want: false,
 		},
 		{
-			// Postgres has no gap locks on this path, so a deadlock here comes
-			// from unrelated work in the same transaction. Reading it as a lost
-			// domain race would silently send the caller into another account.
 			name: "a postgres deadlock, which is not this race",
 			err:  errors.New("ERROR: deadlock detected (SQLSTATE 40P01)"),
 			want: false,
@@ -71,11 +63,9 @@ func TestLostPrimaryDomainRace(t *testing.T) {
 	}
 }
 
-// waitForPrimaryDomainWinner exists for the deadlock shape above: it is the
-// only one that tells the loser it lost before the winner has committed, so an
-// immediate lookup finds nothing. With CreateAccount the winner is always
-// already visible and the loop returns on its first attempt, which is what the
-// cross-replica runs measure. This drives the other case.
+// waitForPrimaryDomainWinner is intentionally bounded. A typed conflict should
+// usually arrive after the winner commits, but the caller still must not invent
+// a winner if the lookup cannot find one.
 func TestWaitForPrimaryDomainWinner(t *testing.T) {
 	ctx := context.Background()
 	const domain = "late-winner.example"

@@ -32,9 +32,9 @@ import (
 // replicas. What they get is two primary accounts for one domain, and from
 // then on which one a user lands in depends on which row the lookup returns.
 //
-// The engines differ as in #159 and #160: Postgres persists both, MySQL's gap
-// locks under REPEATABLE READ refuse the second insert. The assertion is what
-// both must satisfy — one account, and both users inside it.
+// Before the primary-domain index, Postgres persisted both accounts while
+// MySQL refused the second write through gap-lock behavior. The assertion is
+// what both engines must satisfy now — one account, and both users inside it.
 func TestAccountDomain_ConcurrentFirstLoginAcrossReplicas(t *testing.T) {
 	const domain = "contested-company.example"
 

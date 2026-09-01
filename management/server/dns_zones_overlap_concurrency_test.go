@@ -2,8 +2,6 @@ package server
 
 import (
 	"context"
-	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -101,36 +99,6 @@ func TestDNSZones_ConcurrentOverlappingCreateAcrossReplicas(t *testing.T) {
 		}
 		losers++
 
-		// How the loser is told differs by engine, and the difference is the
-		// whole of #157.
-		//
-		// Postgres runs READ COMMITTED and has no gap locks, so the re-check
-		// under the exclusive account row sees the winner's committed zone and
-		// answers with the rejection the caller can act on.
-		//
-		// MySQL runs REPEATABLE READ. The re-check cannot be a locking read —
-		// that would take zone locks after the account row and deadlock
-		// against every writer in this file, which take a zone row first — and
-		// a non-locking read is served from a snapshot established before the
-		// account row was held, so it cannot see the winner. What holds the
-		// invariant there instead is InnoDB's gap lock on the sibling read: the
-		// two creates deadlock and one dies. The invariant survives; the error
-		// is one the caller cannot act on. Aligning MySQL to READ COMMITTED is
-		// #157, and this assertion is what should flip when it lands.
-		if isRepeatableReadEngine() {
-			// Asserted as precisely as the Postgres arm, just against a
-			// different mechanism. Accepting any error would let this pass on
-			// a permission failure, a broken fixture, or some later regression
-			// that happened to leave one zone standing — and the claim being
-			// made is specific: the loser dies at IncrementNetworkSerial,
-			// which is where it was measured.
-			require.ErrorContains(t, err, "failed to increment network serial count",
-				"replica %s must lose at the account row, which is what holds this invariant on MySQL today; it got %v", name, err)
-			s, ok := status.FromError(err)
-			require.True(t, ok && s.Type() == status.Internal,
-				"replica %s must lose with the store's internal error, got %v", name, err)
-			continue
-		}
 		require.ErrorContains(t, err, "overlaps with existing zone",
 			"replica %s lost, but not by being told the domain overlaps; it got %v", name, err)
 		s, ok := status.FromError(err)
@@ -138,10 +106,4 @@ func TestDNSZones_ConcurrentOverlappingCreateAcrossReplicas(t *testing.T) {
 			"replica %s must lose with a rejection the caller can act on, got %v", name, err)
 	}
 	require.Equal(t, 1, losers, "exactly one create must be rejected (A=%v, B=%v)", resultA, resultB)
-}
-
-// isRepeatableReadEngine reports whether the store under test defaults to
-// REPEATABLE READ. Only MySQL does; Postgres and SQLite do not.
-func isRepeatableReadEngine() bool {
-	return types.Engine(strings.ToLower(os.Getenv("OPENZRO_STORE_ENGINE"))) == types.MysqlStoreEngine
 }
