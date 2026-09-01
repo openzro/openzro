@@ -544,3 +544,68 @@ func execIndex(ctx context.Context, db *gorm.DB, stmt string) error {
 	log.WithContext(ctx).Infof("successfully created index %s", PrimaryPrivateDomainIndex)
 	return nil
 }
+
+// MaxNameLength is the bound RefuseOversizedColumn checks against. It matches
+// the gorm size:128 tag on the columns it guards.
+const MaxNameLength = 128
+
+// RefuseOversizedColumn stops the upgrade when a column already holds values
+// longer than the width the model is about to narrow it to.
+//
+// This exists because AutoMigrate's narrowing is not safe on every engine, and
+// the unsafe one is silent. Measured on both affected tables (#166):
+//
+//	postgres  AutoMigrate succeeds, the value is cut to the new width
+//	mysql     AutoMigrate fails with 1406, the value is untouched
+//
+// PostgreSQL truncates because the change is applied as an explicit cast to
+// varchar(n), and an explicit cast truncates where an assignment would raise
+// "value too long". So the operator gets a successful upgrade, a running
+// service, and no indication that a name is now a different name.
+//
+// Refusing here makes both engines behave like the safer one. It reads before
+// anything is altered, and it is deliberately a hard failure rather than a
+// warning: a warning in a startup log is not a decision the operator made.
+func RefuseOversizedColumn[T any](ctx context.Context, db *gorm.DB, column string, maxLen int) error {
+	var model T
+	if !db.Migrator().HasTable(&model) {
+		log.WithContext(ctx).Debugf("table for %T does not exist, nothing to check", model)
+		return nil
+	}
+
+	stmt := &gorm.Statement{DB: db}
+	if err := stmt.Parse(&model); err != nil {
+		return fmt.Errorf("parse model schema: %w", err)
+	}
+	table := stmt.Schema.Table
+
+	// LENGTH counts characters on SQLite and bytes on MySQL; CHAR_LENGTH
+	// counts characters on both MySQL and PostgreSQL. The bound is in
+	// characters, so a name with non-Latin text must not be refused for
+	// taking more bytes than it has characters.
+	lengthFn := "CHAR_LENGTH"
+	if db.Dialector.Name() == "sqlite" {
+		lengthFn = "LENGTH"
+	}
+
+	var offenders []string
+	err := db.Raw(fmt.Sprintf("SELECT id FROM %s WHERE %s(%s) > ?", table, lengthFn, column), maxLen).
+		Scan(&offenders).Error
+	if err != nil {
+		return fmt.Errorf("check %s.%s length: %w", table, column, err)
+	}
+	if len(offenders) == 0 {
+		return nil
+	}
+
+	shown := offenders
+	if len(shown) > 10 {
+		shown = shown[:10]
+	}
+	return fmt.Errorf(
+		"%s.%s: %d row(s) exceed the %d character limit this version introduces, "+
+			"and upgrading would shorten them without telling you on PostgreSQL. "+
+			"Rename them and start again. Offending ids (first %d): %v. "+
+			"See docs/operator/upgrade-notes.md for the queries that list them all",
+		table, column, len(offenders), maxLen, len(shown), shown)
+}

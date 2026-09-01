@@ -346,6 +346,17 @@ func migratePreAuto(ctx context.Context, db *gorm.DB) error {
 
 func getMigrationsPreAuto(ctx context.Context) []migrationFunc {
 	return []migrationFunc{
+		// Before anything narrows a column. AutoMigrate applies the size:128
+		// tags on these two names, and on PostgreSQL that silently cuts any
+		// value already longer than the new width — the upgrade succeeds and
+		// the name is quietly a different name (#166). Refusing here makes
+		// every engine behave like MySQL, which fails loudly.
+		func(db *gorm.DB) error {
+			return migration.RefuseOversizedColumn[resourceTypes.NetworkResource](ctx, db, "name", migration.MaxNameLength)
+		},
+		func(db *gorm.DB) error {
+			return migration.RefuseOversizedColumn[posture.Checks](ctx, db, "name", migration.MaxNameLength)
+		},
 		func(db *gorm.DB) error {
 			return migration.MigrateFieldFromGobToJSON[types.Account, net.IPNet](ctx, db, "network_net")
 		},
