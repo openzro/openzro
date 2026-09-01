@@ -926,6 +926,7 @@ func TestAccountManager_DeleteAccount(t *testing.T) {
 
 	expectedId := "test_account"
 	userId := "account_creator"
+	serviceUser2ID := "service-user-2"
 	account, err := createAccount(manager, expectedId, userId, "")
 	if err != nil {
 		t.Fatal(err)
@@ -946,16 +947,16 @@ func TestAccountManager_DeleteAccount(t *testing.T) {
 			},
 		},
 	}
-	account.Users[userId] = &types.User{
-		Id:            "service-user-2",
+	account.Users[serviceUser2ID] = &types.User{
+		Id:            serviceUser2ID,
 		Role:          types.UserRoleUser,
 		IsServiceUser: true,
 		Issued:        types.UserIssuedAPI,
 		PATs: map[string]*types.PersonalAccessToken{
 			"pat-2": {
 				ID:          "pat-2",
-				UserID:      userId,
-				Name:        userId,
+				UserID:      serviceUser2ID,
+				Name:        serviceUser2ID,
 				HashedToken: "hashedToken",
 				CreatedAt:   time.Now(),
 			},
@@ -981,7 +982,7 @@ func TestAccountManager_DeleteAccount(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, pats, 0)
 
-	pats, err = manager.Store.GetUserPATs(context.Background(), store.LockingStrengthShare, userId)
+	pats, err = manager.Store.GetUserPATs(context.Background(), store.LockingStrengthShare, serviceUser2ID)
 	require.NoError(t, err)
 	assert.Len(t, pats, 0)
 }
