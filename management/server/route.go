@@ -34,12 +34,12 @@ func (am *DefaultAccountManager) GetRoute(ctx context.Context, accountID string,
 }
 
 // checkRoutePrefixOrDomainsExistForPeers checks if a route with a given prefix exists for a single peer or multiple peer groups.
-func checkRoutePrefixOrDomainsExistForPeers(ctx context.Context, transaction store.Store, accountID string, checkRoute *route.Route, groupsMap map[string]*types.Group) error {
+func checkRoutePrefixOrDomainsExistForPeers(ctx context.Context, transaction store.Store, lockStrength store.LockingStrength, accountID string, checkRoute *route.Route, groupsMap map[string]*types.Group) error {
 	// routes can have both peer and peer_groups
 	prefix := checkRoute.Network
 	domains := checkRoute.Domains
 
-	routesWithPrefix, err := getRoutesByPrefixOrDomains(ctx, transaction, accountID, prefix, domains)
+	routesWithPrefix, err := getRoutesByPrefixOrDomains(ctx, transaction, lockStrength, accountID, prefix, domains)
 	if err != nil {
 		return err
 	}
@@ -56,10 +56,10 @@ func checkRoutePrefixOrDomainsExistForPeers(ctx context.Context, transaction sto
 		}
 
 		if prefixRoute.Peer != "" {
-			seenPeers[string(prefixRoute.ID)] = true
+			seenPeers[prefixRoute.Peer] = true
 		}
 
-		peerGroupsMap, err := transaction.GetGroupsByIDs(ctx, store.LockingStrengthShare, accountID, prefixRoute.PeerGroups)
+		peerGroupsMap, err := transaction.GetGroupsByIDs(ctx, lockStrength, accountID, prefixRoute.PeerGroups)
 		if err != nil {
 			return err
 		}
@@ -83,7 +83,7 @@ func checkRoutePrefixOrDomainsExistForPeers(ctx context.Context, transaction sto
 
 	if peerID := checkRoute.Peer; peerID != "" {
 		// check that peerID exists and is not in any route as single peer or part of the group
-		_, err = transaction.GetPeerByID(context.Background(), store.LockingStrengthShare, accountID, peerID)
+		_, err = transaction.GetPeerByID(context.Background(), lockStrength, accountID, peerID)
 		if err != nil {
 			return status.Errorf(status.InvalidArgument, "peer with ID %s not found", peerID)
 		}
@@ -104,7 +104,7 @@ func checkRoutePrefixOrDomainsExistForPeers(ctx context.Context, transaction sto
 		}
 
 		// check that the peers from peerGroupIDs groups are not the same peers we saw in routesWithPrefix
-		peersMap, err := transaction.GetPeersByIDs(ctx, store.LockingStrengthShare, accountID, group.Peers)
+		peersMap, err := transaction.GetPeersByIDs(ctx, lockStrength, accountID, group.Peers)
 		if err != nil {
 			return err
 		}
@@ -172,7 +172,8 @@ func (am *DefaultAccountManager) CreateRoute(ctx context.Context, accountID stri
 			AccessControlGroups: accessControlGroupIDs,
 		}
 
-		if err = validateRoute(ctx, transaction, accountID, newRoute); err != nil {
+		groupsMap, err := validateRouteFieldsAndRefs(ctx, transaction, accountID, newRoute)
+		if err != nil {
 			return err
 		}
 
@@ -182,6 +183,13 @@ func (am *DefaultAccountManager) CreateRoute(ctx context.Context, accountID stri
 		}
 
 		if err = transaction.IncrementNetworkSerial(ctx, store.LockingStrengthUpdate, accountID); err != nil {
+			return err
+		}
+
+		// The route conflict read is deliberately inside the account-row
+		// serialization point, but non-locking: taking route locks after the
+		// account row would invert against route-first writers.
+		if err = checkRoutePrefixOrDomainsExistForPeers(ctx, transaction, store.LockingStrengthNone, accountID, newRoute, groupsMap); err != nil {
 			return err
 		}
 
@@ -218,7 +226,8 @@ func (am *DefaultAccountManager) SaveRoute(ctx context.Context, accountID, userI
 	var newRouteAffectsPeers bool
 
 	err = am.Store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
-		if err = validateRoute(ctx, transaction, accountID, routeToSave); err != nil {
+		groupsMap, err := validateRouteFieldsAndRefs(ctx, transaction, accountID, routeToSave)
+		if err != nil {
 			return err
 		}
 
@@ -239,6 +248,12 @@ func (am *DefaultAccountManager) SaveRoute(ctx context.Context, accountID, userI
 		routeToSave.AccountID = accountID
 
 		if err = transaction.IncrementNetworkSerial(ctx, store.LockingStrengthUpdate, accountID); err != nil {
+			return err
+		}
+
+		// See CreateRoute: the conflict check belongs under the account-row
+		// serialization point, and must not take route locks after it.
+		if err = checkRoutePrefixOrDomainsExistForPeers(ctx, transaction, store.LockingStrengthNone, accountID, routeToSave, groupsMap); err != nil {
 			return err
 		}
 
@@ -313,25 +328,25 @@ func (am *DefaultAccountManager) ListRoutes(ctx context.Context, accountID, user
 	return am.Store.GetAccountRoutes(ctx, store.LockingStrengthShare, accountID)
 }
 
-func validateRoute(ctx context.Context, transaction store.Store, accountID string, routeToSave *route.Route) error {
+func validateRouteFieldsAndRefs(ctx context.Context, transaction store.Store, accountID string, routeToSave *route.Route) (map[string]*types.Group, error) {
 	if routeToSave == nil {
-		return status.Errorf(status.InvalidArgument, "route provided is nil")
+		return nil, status.Errorf(status.InvalidArgument, "route provided is nil")
 	}
 
 	if routeToSave.Metric < route.MinMetric || routeToSave.Metric > route.MaxMetric {
-		return status.Errorf(status.InvalidArgument, "metric should be between %d and %d", route.MinMetric, route.MaxMetric)
+		return nil, status.Errorf(status.InvalidArgument, "metric should be between %d and %d", route.MinMetric, route.MaxMetric)
 	}
 
 	if utf8.RuneCountInString(string(routeToSave.NetID)) > route.MaxNetIDChar || routeToSave.NetID == "" {
-		return status.Errorf(status.InvalidArgument, "identifier should be between 1 and %d", route.MaxNetIDChar)
+		return nil, status.Errorf(status.InvalidArgument, "identifier should be between 1 and %d", route.MaxNetIDChar)
 	}
 
 	if len(routeToSave.Domains) > 0 && routeToSave.Network.IsValid() {
-		return status.Errorf(status.InvalidArgument, "domains and network should not be provided at the same time")
+		return nil, status.Errorf(status.InvalidArgument, "domains and network should not be provided at the same time")
 	}
 
 	if len(routeToSave.Domains) == 0 && !routeToSave.Network.IsValid() {
-		return status.Errorf(status.InvalidArgument, "invalid Prefix")
+		return nil, status.Errorf(status.InvalidArgument, "invalid Prefix")
 	}
 
 	if len(routeToSave.Domains) > 0 {
@@ -339,15 +354,22 @@ func validateRoute(ctx context.Context, transaction store.Store, accountID strin
 	}
 
 	if routeToSave.Peer != "" && len(routeToSave.PeerGroups) != 0 {
-		return status.Errorf(status.InvalidArgument, "peer with ID and peer groups should not be provided at the same time")
+		return nil, status.Errorf(status.InvalidArgument, "peer with ID and peer groups should not be provided at the same time")
 	}
 
 	groupsMap, err := validateRouteGroups(ctx, transaction, accountID, routeToSave)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return checkRoutePrefixOrDomainsExistForPeers(ctx, transaction, accountID, routeToSave, groupsMap)
+	if routeToSave.Peer != "" {
+		_, err = transaction.GetPeerByID(ctx, store.LockingStrengthShare, accountID, routeToSave.Peer)
+		if err != nil {
+			return nil, status.Errorf(status.InvalidArgument, "peer with ID %s not found", routeToSave.Peer)
+		}
+	}
+
+	return groupsMap, nil
 }
 
 // validateRouteGroups validates the route groups and returns the validated groups map.
@@ -493,8 +515,8 @@ func areRouteChangesAffectPeers(ctx context.Context, transaction store.Store, ro
 }
 
 // GetRoutesByPrefixOrDomains return list of routes by account and route prefix
-func getRoutesByPrefixOrDomains(ctx context.Context, transaction store.Store, accountID string, prefix netip.Prefix, domains domain.List) ([]*route.Route, error) {
-	accountRoutes, err := transaction.GetAccountRoutes(ctx, store.LockingStrengthShare, accountID)
+func getRoutesByPrefixOrDomains(ctx context.Context, transaction store.Store, lockStrength store.LockingStrength, accountID string, prefix netip.Prefix, domains domain.List) ([]*route.Route, error) {
+	accountRoutes, err := transaction.GetAccountRoutes(ctx, lockStrength, accountID)
 	if err != nil {
 		return nil, err
 	}

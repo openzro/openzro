@@ -17,9 +17,29 @@ import (
 	"github.com/openzro/openzro/route"
 )
 
-// A peer may only receive one route for a prefix. The check reads existing
-// routes and then writes on the strength of that absence. AcquireWriteLockByUID
-// makes that safe inside one process, but not across replicas.
+func TestRoute_CreateRejectsDuplicatePeerRoute(t *testing.T) {
+	am, err := createRouterManager(t)
+	require.NoError(t, err)
+
+	account, err := initTestRouteAccount(t, am)
+	require.NoError(t, err)
+
+	prefix := netip.MustParsePrefix("10.78.0.0/24")
+	_, err = am.CreateRoute(context.Background(), account.Id, prefix, route.IPv4Network, nil, peer1ID, nil,
+		"first peer route", "first-peer-route", false, 1000, []string{routeGroup1}, nil, true, userID, false)
+	require.NoError(t, err)
+
+	_, err = am.CreateRoute(context.Background(), account.Id, prefix, route.IPv4Network, nil, peer1ID, nil,
+		"duplicate peer route", "duplicate-peer-route", false, 1000, []string{routeGroup1}, nil, true, userID, false)
+	require.ErrorContains(t, err, "already has this route")
+	s, ok := status.FromError(err)
+	require.True(t, ok && s.Type() == status.AlreadyExists, "duplicate peer route must be an actionable conflict, got %v", err)
+}
+
+// A peer group may only receive one route for a prefix. The check reads
+// existing routes and then writes on the strength of that absence.
+// AcquireWriteLockByUID makes that safe inside one process, but not across
+// replicas.
 func TestRoute_ConcurrentCreateAcrossReplicas(t *testing.T) {
 	const (
 		accountID = "route-race-account"
@@ -34,14 +54,14 @@ func TestRoute_ConcurrentCreateAcrossReplicas(t *testing.T) {
 
 	account := newAccountWithId(ctx, accountID, userID, "route-race.example", false)
 	account.Peers[peerID] = &nbpeer.Peer{
-		ID:       peerID,
+		ID:        peerID,
 		AccountID: accountID,
-		Key:      peerKey,
-		IP:       net.ParseIP("100.64.0.10"),
-		Name:     "route-race-peer",
-		DNSLabel: "route-race-peer",
-		UserID:   userID,
-		Status:   &nbpeer.PeerStatus{LastSeen: time.Now().UTC(), Connected: true},
+		Key:       peerKey,
+		IP:        net.ParseIP("100.64.0.10"),
+		Name:      "route-race-peer",
+		DNSLabel:  "route-race-peer",
+		UserID:    userID,
+		Status:    &nbpeer.PeerStatus{LastSeen: time.Now().UTC(), Connected: true},
 	}
 	account.Groups[groupID] = &types.Group{
 		ID:    groupID,
@@ -104,14 +124,8 @@ func TestRoute_ConcurrentCreateAcrossReplicas(t *testing.T) {
 			continue
 		}
 		losers++
-		if isRepeatableReadEngine() {
-			require.ErrorContains(t, err, "failed to increment network serial count",
-				"replica %s must lose at the account row, which is what holds this invariant on MySQL today; it got %v", name, err)
-			s, ok := status.FromError(err)
-			require.True(t, ok && s.Type() == status.Internal,
-				"replica %s must lose with the store's internal error, got %v", name, err)
-			continue
-		}
+		require.ErrorContains(t, err, "already has this route",
+			"replica %s must lose with an actionable route conflict, got %v", name, err)
 		s, ok := status.FromError(err)
 		require.True(t, ok && s.Type() == status.AlreadyExists,
 			"replica %s must lose with an actionable route conflict, got %v", name, err)

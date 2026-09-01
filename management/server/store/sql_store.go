@@ -2171,9 +2171,13 @@ func (s *SqlStore) DeletePostureChecks(ctx context.Context, lockStrength Locking
 
 // GetAccountRoutes retrieves network routes for an account.
 func (s *SqlStore) GetAccountRoutes(ctx context.Context, lockStrength LockingStrength, accountID string) ([]*route.Route, error) {
+	tx := s.db
+	if lockStrength != LockingStrengthNone {
+		tx = tx.Clauses(clause.Locking{Strength: string(lockStrength)})
+	}
+
 	var routes []*route.Route
-	result := s.db.Clauses(clause.Locking{Strength: string(lockStrength)}).
-		Find(&routes, accountIDCondition, accountID)
+	result := tx.Find(&routes, accountIDCondition, accountID)
 	if err := result.Error; err != nil {
 		log.WithContext(ctx).Errorf("failed to get routes from the store: %s", err)
 		return nil, status.Errorf(status.Internal, "failed to get routes from store")
