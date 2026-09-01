@@ -38,6 +38,13 @@ No pre-upgrade action is required for the route validation change.
 
 ### After upgrading
 
+- **MySQL management transactions now run at READ COMMITTED.** This
+  aligns MySQL with PostgreSQL for the store transactions opened by the
+  management service. Concurrent conflicts that previously relied on
+  InnoDB gap locks can now reach the explicit validation or unique
+  constraint that explains them. For the known cases fixed so far, the
+  loser gets an actionable conflict or validation error instead of a
+  deadlock/internal error.
 - **Editing a route can now expose duplicate direct-peer routes created
   by older versions.** Older releases could allow two routes in the
   same account with the same prefix or domain and the same direct peer.
@@ -176,22 +183,6 @@ one. Often, not always. Confirm rather than assume.
 
 ## Known limitations
 
-### MySQL: some concurrent conflicts report an unusable error
-
-**PostgreSQL deployments are not affected.**
-
-MySQL runs at REPEATABLE READ, where InnoDB's gap locks refuse certain
-concurrent writes before the constraint that would explain them is
-reached. The invariant holds — nothing incorrect is written — but the
-loser receives a deadlock error rather than a message describing the
-conflict.
-
-Known cases: concurrent creation of overlapping DNS zones, and
-concurrent writes competing for the same primary private domain.
-
-Aligning MySQL's isolation level is tracked in
-[#157](https://github.com/openzro/openzro/issues/157).
-
 ### Multi-replica: one known invariant is still enforced only in-process
 
 A management deployment running **more than one replica** can still
@@ -201,10 +192,8 @@ followed by a write protected by a lock that lives inside one process:
 - group names issued through the API
 
 DNS zone overlap is **not** in that list. It is enforced on both
-engines: on PostgreSQL by the validation added in this release, and on
-MySQL by InnoDB's gap lock, which refuses the second write. What MySQL
-still lacks there is a usable error, which is the limitation above, not
-a duplication risk.
+engines by validation under the account-row serialization point, and a
+concurrent loser receives an actionable overlap error.
 
 Single-replica deployments are unaffected by any of this — the
 in-process lock is sufficient there. Progress is tracked in
