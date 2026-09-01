@@ -100,7 +100,7 @@ func init() {
 	rootCmd.PersistentFlags().IntVar(&cobraConfig.ClusterPort, "cluster-port", 0, "inter-pod TCP port (defaults to 7090). Same value on every pod.")
 	rootCmd.PersistentFlags().StringVar(&cobraConfig.PodIP, "pod-ip", "", "this pod's IP, set from the K8s downward API. Required when --cluster-headless is set.")
 	rootCmd.PersistentFlags().StringVar(&cobraConfig.ClusterAuthSecret, "cluster-auth-secret", "", "shared HMAC secret authenticating inter-pod HELLO frames. Same value on every relay pod. Empty = unsigned HELLO (legacy; requires NetworkPolicy isolation).")
-	rootCmd.PersistentFlags().DurationVar(&cobraConfig.ClusterLookupTimeout, "cluster-lookup-timeout", 0, "how long a cluster lookup miss waits for peer-pod answers (defaults to 200ms). Increase when CPU throttling or noisy nodes cause false peer-not-found results.")
+	rootCmd.PersistentFlags().DurationVar(&cobraConfig.ClusterLookupTimeout, "cluster-lookup-timeout", 0, "how long a cluster lookup miss waits for peer-pod answers (defaults to 200ms). Increase when CPU throttling or noisy nodes cause false peer-not-found results; high values make genuine misses wait that long.")
 
 	setFlagsFromEnvVars(rootCmd)
 }
