@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Group } from "@/interfaces/Group";
+import { groupIssuerNameKey } from "@/modules/groups/groupIdentity";
 
 const useSortedDropdownOptions = (
   dropdownOptions: Group[],
@@ -16,7 +17,7 @@ const useSortedDropdownOptions = (
       JSON.stringify(values) !== JSON.stringify(prevValuesRef.current)
     ) {
       sortOrderRef.current = new Map(
-        values.map((group, index) => [group.name, index]),
+        values.map((group, index) => [groupIssuerNameKey(group), index]),
       );
       prevValuesRef.current = values;
     }
@@ -26,8 +27,8 @@ const useSortedDropdownOptions = (
   return useMemo(() => {
     const sortOrder = sortOrderRef.current;
     return [...dropdownOptions].sort((a, b) => {
-      const indexA = sortOrder.get(a.name) ?? Infinity;
-      const indexB = sortOrder.get(b.name) ?? Infinity;
+      const indexA = sortOrder.get(groupIssuerNameKey(a)) ?? Infinity;
+      const indexB = sortOrder.get(groupIssuerNameKey(b)) ?? Infinity;
       return indexA - indexB;
     });
   }, [dropdownOptions, sortOrderRef.current]);

@@ -1,11 +1,13 @@
 "use client";
 
 import { GroupBadgeIcon } from "@components/ui/GroupBadgeIcon";
+import GroupOriginBadge from "@components/ui/GroupOriginBadge";
 import TruncatedText from "@components/ui/TruncatedText";
 import classNames from "classnames";
 import { XIcon } from "lucide-react";
 import * as React from "react";
 import { Group } from "@/interfaces/Group";
+import { groupIdentityKey } from "@/modules/groups/groupIdentity";
 
 // v2 paint of GroupBadge — uses oz2 tokens for surface/border/text
 // instead of the legacy `Badge variant="gray-ghost"`. The
@@ -36,7 +38,7 @@ export default function OzGroupBadge({
 }: Readonly<Props>) {
   return (
     <div
-      key={group.id ?? group.name}
+      key={groupIdentityKey(group)}
       data-cy="group-badge"
       onClick={(e) => {
         e.preventDefault();
@@ -46,7 +48,9 @@ export default function OzGroupBadge({
         "group inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-[3px]",
         "border-oz2-border bg-oz2-surface text-oz2-text-2 text-[12px] font-medium",
         "transition-colors",
-        onClick ? "cursor-pointer hover:bg-oz2-hover hover:border-oz2-border-strong" : "",
+        onClick
+          ? "cursor-pointer hover:bg-oz2-hover hover:border-oz2-border-strong"
+          : "",
         className,
       )}
     >
@@ -57,6 +61,7 @@ export default function OzGroupBadge({
         maxWidth={maxWidth}
         hideTooltip={hideTooltip}
       />
+      <GroupOriginBadge issued={group?.issued} />
       {children}
       {showX && (
         <XIcon

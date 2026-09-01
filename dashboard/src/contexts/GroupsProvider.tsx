@@ -4,6 +4,10 @@ import React, { useEffect, useState } from "react";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { Group, GroupResource } from "@/interfaces/Group";
 import { Peer } from "@/interfaces/Peer";
+import {
+  groupIssuerNameKey,
+  sameGroupIdentity,
+} from "@/modules/groups/groupIdentity";
 
 type Props = {
   children: React.ReactNode;
@@ -19,7 +23,7 @@ const GroupContext = React.createContext(
     isLoading: boolean;
     createOrUpdate: (group: Group) => Promise<Group>;
     reset: () => void;
-    updateGroupDropdown: (oldGroupName: string, newGroup: Group) => void;
+    updateGroupDropdown: (oldGroup: Group, newGroup: Group) => void;
   },
 );
 
@@ -62,20 +66,20 @@ export function GroupsProviderContent({
 
   const addDropdownOptions = (options: Group[]) => {
     setDropdownOptions((prev) => {
-      let union = unionBy(options, prev, "name");
+      let union = unionBy(options, prev, groupIssuerNameKey);
       return sortBy(
         union.map((item) =>
-          merge({}, prev.find((p) => p.name === item.name) || {}, item),
+          merge({}, prev.find((p) => sameGroupIdentity(p, item)) || {}, item),
         ),
         "name",
       );
     });
   };
 
-  const updateGroupDropdown = (oldGroupName: string, newGroup: Group) => {
+  const updateGroupDropdown = (oldGroup: Group, newGroup: Group) => {
     setDropdownOptions((prev) => {
       let updated = prev.map((g) => {
-        if (g.name === oldGroupName) {
+        if (sameGroupIdentity(g, oldGroup)) {
           return newGroup;
         }
         return g;
@@ -89,7 +93,7 @@ export function GroupsProviderContent({
     if (!groups) return;
     const sortedGroups = sortBy([...groups], "name");
     const dropdownGroups = dropdownOptions.filter((g) => g.keepClientState);
-    const union = unionBy(dropdownGroups, sortedGroups, "name");
+    const union = unionBy(dropdownGroups, sortedGroups, groupIssuerNameKey);
     addDropdownOptions(union);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groups]);
@@ -112,7 +116,9 @@ export function GroupsProviderContent({
     if (group.name === "All") return Promise.resolve(group);
 
     const groupID =
-      group?.id ?? groups?.find((g) => g.name === group.name)?.id ?? undefined;
+      group?.id ??
+      groups?.find((g) => sameGroupIdentity(g, group))?.id ??
+      undefined;
 
     if (groupID) {
       return groupRequest.put(
@@ -121,7 +127,7 @@ export function GroupsProviderContent({
           peers: peers,
           resources: resources,
         },
-        `/${group.id}`,
+        `/${groupID}`,
       );
     } else {
       return groupRequest.post({

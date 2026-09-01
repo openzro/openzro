@@ -20,6 +20,7 @@ import OzLabel, { OzHelpText } from "@/components/v2/OzLabel";
 import { useRoutes } from "@/contexts/RoutesProvider";
 import { Peer } from "@/interfaces/Peer";
 import { GroupedRoute, Route } from "@/interfaces/Route";
+import { resolveGroupID } from "@/modules/groups/groupIdentity";
 import useGroupHelper from "@/modules/groups/useGroupHelper";
 
 type Props = {
@@ -96,7 +97,7 @@ function Content({ onSuccess, groupedRoute, peer }: ModalProps) {
     // Create groups that do not exist
     const g2 = getGroupsToUpdate();
     const g3 = getAccessControlGroupsToUpdate();
-    const createOrUpdateGroups = uniqBy([...g2, ...g3], "name").map(
+    const createOrUpdateGroups = uniqBy([...g2, ...g3], "key").map(
       (g) => g.promise,
     );
     const createdGroups = await Promise.all(
@@ -105,8 +106,7 @@ function Content({ onSuccess, groupedRoute, peer }: ModalProps) {
     // Get distribution group ids
     const groupIds = groups
       .map((g) => {
-        const find = createdGroups.find((group) => group.name === g.name);
-        return find?.id;
+        return resolveGroupID(g, createdGroups);
       })
       .filter((g) => g !== undefined) as string[];
 
@@ -114,8 +114,7 @@ function Content({ onSuccess, groupedRoute, peer }: ModalProps) {
     if (accessControlGroups.length > 0) {
       accessControlGroupIds = accessControlGroups
         .map((g) => {
-          const find = createdGroups.find((group) => group.name === g.name);
-          return find?.id;
+          return resolveGroupID(g, createdGroups);
         })
         .filter((g) => g !== undefined) as string[];
     }

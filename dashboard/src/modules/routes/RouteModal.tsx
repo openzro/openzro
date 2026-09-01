@@ -55,6 +55,7 @@ import { OperatingSystem } from "@/interfaces/OperatingSystem";
 import { Peer } from "@/interfaces/Peer";
 import { Policy } from "@/interfaces/Policy";
 import { Route } from "@/interfaces/Route";
+import { resolveGroupID } from "@/modules/groups/groupIdentity";
 import useGroupHelper from "@/modules/groups/useGroupHelper";
 import { RoutingPeerMasqueradeSwitch } from "@/modules/networks/routing-peers/RoutingPeerMasqueradeSwitch";
 
@@ -245,7 +246,7 @@ export function RouteModalContent({
     const g1 = getAllRoutingGroupsToUpdate();
     const g2 = getGroupsToUpdate();
     const g3 = getAccessControlGroupsToUpdate();
-    const createOrUpdateGroups = uniqBy([...g1, ...g2, ...g3], "name").map(
+    const createOrUpdateGroups = uniqBy([...g1, ...g2, ...g3], "key").map(
       (g) => g.promise,
     );
     const createdGroups = await Promise.all(
@@ -260,8 +261,7 @@ export function RouteModalContent({
     if (!useSinglePeer) {
       peerGroups = routingPeerGroups
         .map((g) => {
-          const find = createdGroups.find((group) => group.name === g.name);
-          return find?.id;
+          return resolveGroupID(g, createdGroups);
         })
         .filter((g) => g !== undefined) as string[];
     }
@@ -269,8 +269,7 @@ export function RouteModalContent({
     // Get distribution group ids
     const groupIds = groups
       .map((g) => {
-        const find = createdGroups.find((group) => group.name === g.name);
-        return find?.id;
+        return resolveGroupID(g, createdGroups);
       })
       .filter((g) => g !== undefined) as string[];
 
@@ -278,8 +277,7 @@ export function RouteModalContent({
     if (accessControlGroups.length > 0) {
       accessControlGroupIds = accessControlGroups
         .map((g) => {
-          const find = createdGroups.find((group) => group.name === g.name);
-          return find?.id;
+          return resolveGroupID(g, createdGroups);
         })
         .filter((g) => g !== undefined) as string[];
     }

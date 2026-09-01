@@ -6,6 +6,10 @@ import { useGroups } from "@/contexts/GroupsProvider";
 import { usePeerGroups } from "@/contexts/PeerProvider";
 import { type Group, type GroupPeer } from "@/interfaces/Group";
 import { type Peer } from "@/interfaces/Peer";
+import {
+  groupIssuerNameKey,
+  sameGroupIdentity,
+} from "@/modules/groups/groupIdentity";
 
 type Props = {
   initial?: Group[] | string[];
@@ -67,7 +71,8 @@ export default function useGroupHelper({ initial = [], peer }: Props) {
     });
     return groupsToUpdate.map((group) => {
       return {
-        name: group.name,
+        key: groupIssuerNameKey(group),
+        group,
         promise: () => updateOrCreateGroup(group),
       };
     });
@@ -149,12 +154,16 @@ export default function useGroupHelper({ initial = [], peer }: Props) {
       })
       .then((group) => {
         setSelectedGroups((prev) => {
-          const index = prev.findIndex((g) => g.name === selectedGroup.name);
+          const index = prev.findIndex((g) =>
+            sameGroupIdentity(g, selectedGroup),
+          );
+          if (index === -1) return prev;
           const clone = [...prev];
           clone[index] = {
             ...clone[index],
             id: group.id,
             name: group.name,
+            issued: group.issued,
           };
           return clone;
         });

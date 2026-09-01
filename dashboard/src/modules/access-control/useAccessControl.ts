@@ -8,6 +8,7 @@ import { usePolicies } from "@/contexts/PoliciesProvider";
 import { Group } from "@/interfaces/Group";
 import { Policy, PortRange, Protocol } from "@/interfaces/Policy";
 import { PostureCheck } from "@/interfaces/PostureCheck";
+import { resolveGroupID } from "@/modules/groups/groupIdentity";
 import useGroupHelper from "@/modules/groups/useGroupHelper";
 import { usePostureCheck } from "@/modules/posture-checks/usePostureCheck";
 
@@ -179,7 +180,7 @@ export const useAccessControl = ({
   const submit = async () => {
     const g1 = getSourceGroupsToUpdate();
     const g2 = getDestinationGroupsToUpdate();
-    const createOrUpdateGroups = uniqBy([...g1, ...g2], "name").map(
+    const createOrUpdateGroups = uniqBy([...g1, ...g2], "key").map(
       (g) => g.promise,
     );
     const groups = await Promise.all(
@@ -204,14 +205,12 @@ export const useAccessControl = ({
 
     let sources = sourceGroups
       .map((g) => {
-        const find = groups.find((group) => group.name === g.name);
-        return find?.id;
+        return resolveGroupID(g, groups);
       })
       .filter((g) => g !== undefined) as string[];
     let destinations = destinationGroups
       .map((g) => {
-        const find = groups.find((group) => group.name === g.name);
-        return find?.id;
+        return resolveGroupID(g, groups);
       })
       .filter((g) => g !== undefined) as string[];
 
