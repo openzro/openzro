@@ -449,16 +449,15 @@ func validateNewGroup(ctx context.Context, transaction store.Store, accountID st
 	}
 
 	if newGroup.ID == "" && newGroup.Issued == types.GroupIssuedAPI {
-		existingGroup, err := transaction.GetGroupByName(ctx, store.LockingStrengthShare, accountID, newGroup.Name)
+		existingGroupIDs, err := transaction.GetGroupIDsByNameAndIssued(ctx, store.LockingStrengthShare, accountID, newGroup.Name, types.GroupIssuedAPI)
 		if err != nil {
-			if s, ok := status.FromError(err); !ok || s.Type() != status.NotFound {
-				return err
-			}
+			return err
 		}
 
-		// Prevent duplicate groups for API-issued groups.
-		// Integration or JWT groups can be duplicated as they are coming from the IdP that we don't have control of.
-		if existingGroup != nil {
+		// Group display names are unique only within the same issuer.
+		// JWT and integration groups are owned by their IdP source and
+		// may intentionally share a display name with an API group.
+		if len(existingGroupIDs) > 0 {
 			return status.Errorf(status.AlreadyExists, "group with name %s already exists", newGroup.Name)
 		}
 
