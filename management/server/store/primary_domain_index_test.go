@@ -92,16 +92,17 @@ func TestPrimaryPrivateDomainIndex(t *testing.T) {
 // TestCreateAccountReportsPrimaryDomainConflict guards the trap the tests above
 // walked past.
 //
-// SaveAccount carries clause.OnConflict{UpdateAll: true}. Postgres renders that
-// with the primary key as the conflict target, so a violation of any other
-// unique index still surfaces. MySQL renders ON DUPLICATE KEY UPDATE, which has
-// no target and absorbs every unique key — so SaveAccount returns nil, writes
-// nothing, and hands the caller an account id for a row that does not exist.
+// It was written when SaveAccount still carried
+// clause.OnConflict{UpdateAll: true}, which MySQL rendered without a conflict
+// target and which therefore absorbed this index — the save reported success
+// having written nothing, or landed the values on the winner's row. #164
+// removed the clause and TestSaveAccountReportsPrimaryDomainConflict covers
+// that side now.
 //
-// That is worse than a duplicate and completely silent, which is why creation
-// paths that can collide on idx_accounts_primary_private_domain use
-// CreateAccount instead. This asserts both halves: the conflict is reported,
-// and the account really was not created.
+// This one keeps its own value: the creation paths use CreateAccount, and an
+// insert-only method has to report the conflict on its own terms. It asserts
+// both halves — the conflict is reported, and the account really was not
+// created.
 func TestCreateAccountReportsPrimaryDomainConflict(t *testing.T) {
 	ctx := context.Background()
 

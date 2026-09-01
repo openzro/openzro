@@ -110,3 +110,46 @@ func TestSaveAccountCreatesAndReplaces(t *testing.T) {
 		require.Len(t, store.GetAllAccounts(ctx), 1, "replacing must not leave a second account behind")
 	})
 }
+
+// The same account object saved twice, which is not a contrived case:
+// GetOrCreateAccountByUser saves the account it just built and then saves the
+// same pointer again when the owner's domain has to be written (user.go:819
+// and user.go:836).
+//
+// generateAccountSQLTypes projects the maps into the *G slices with append and
+// no reset, so the second call leaves every child in there twice. The upsert
+// used to absorb that — each duplicate simply updated the row its twin had
+// just written. Without it the duplicate is a plain insert of a key that
+// exists, which is exactly the kind of breakage a narrow fix is supposed not
+// to cause.
+func TestSaveAccountTwiceWithTheSameObject(t *testing.T) {
+	runTestForAllEngines(t, "", func(t *testing.T, store Store) {
+		ctx := context.Background()
+
+		account := newAccountWithId(ctx, "resave-acc", "owner-user", "")
+		key, _ := types.GenerateDefaultSetupKey()
+		account.SetupKeys[key.Key] = key
+		account.Peers["peer-a"] = &nbpeer.Peer{
+			Key:    "resave-peer-key",
+			IP:     net.IP{127, 0, 0, 3},
+			Meta:   nbpeer.PeerSystemMeta{},
+			Name:   "peer a",
+			Status: &nbpeer.PeerStatus{Connected: true, LastSeen: time.Now().UTC()},
+		}
+
+		require.NoError(t, store.SaveAccount(ctx, account))
+
+		// Same pointer, no reload. This is the shape user.go uses.
+		account.Domain = "resaved.example"
+		require.NoError(t, store.SaveAccount(ctx, account),
+			"saving the same account object twice must not fail")
+
+		stored, err := store.GetAccount(ctx, account.Id)
+		require.NoError(t, err)
+		require.Equal(t, "resaved.example", stored.Domain)
+		require.Len(t, stored.Peers, 1, "the peer was written twice")
+		require.Len(t, stored.Users, 1, "the user was written twice")
+		require.Len(t, stored.SetupKeys, 1, "the setup key was written twice")
+		require.Len(t, stored.Groups, len(account.Groups), "the groups were written twice")
+	})
+}

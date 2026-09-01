@@ -182,14 +182,16 @@ func (s *SqlStore) AcquireReadLockByUID(ctx context.Context, uniqueID string) (u
 // CreateAccount inserts a brand new account, and fails if anything already in
 // the database refuses it.
 //
-// Deliberately not SaveAccount. That one carries
-// clause.OnConflict{UpdateAll: true}, which Postgres renders with the primary
-// key as its conflict target — so a violation of any other unique index still
-// surfaces — while MySQL renders ON DUPLICATE KEY UPDATE, which has no target
-// and absorbs *every* unique key. A SaveAccount that collides with
-// idx_accounts_primary_private_domain on MySQL therefore returns nil while
-// creating nothing, and the caller is handed an account id for a row that does
-// not exist.
+// Deliberately not SaveAccount, and the reason changed with #164. SaveAccount
+// used to carry clause.OnConflict{UpdateAll: true}, which MySQL rendered
+// without a conflict target and which therefore swallowed this index; that
+// clause is gone, so both now report the conflict. What still separates them
+// is what they mean: SaveAccount replaces an account and its whole tree,
+// deleting the associations and writing them again, while this inserts one new
+// account and nothing else.
+//
+// A creation path wants the second. Reaching for SaveAccount to create would
+// work, and would also delete-and-recreate a tree that does not exist yet.
 //
 // Creation paths that can collide on that index have to insert plainly instead,
 // so losing the race is reported rather than swallowed. SaveAccount is left as

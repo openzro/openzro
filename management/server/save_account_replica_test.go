@@ -32,6 +32,12 @@ func TestSaveAccount_ConcurrentAcrossReplicas(t *testing.T) {
 		seed := newAccountWithId(ctx, accountID, "owner-user", "tenant.example", false)
 		require.NoError(t, r.A.Store.SaveAccount(ctx, seed))
 
+		// The barrier goes after the read and the mutation, not before them.
+		// What has to collide is the two writes, each carrying a payload built
+		// from a pre-commit snapshot; aligning the reads instead would let a
+		// near-serial run have the second writer read what the first already
+		// committed, and the test would pass without ever racing.
+		align := newBarrier()
 		save := func(store interface {
 			SaveAccount(context.Context, *types.Account) error
 		}, groupID string) <-chan error {
@@ -43,6 +49,7 @@ func TestSaveAccount_ConcurrentAcrossReplicas(t *testing.T) {
 					return
 				}
 				account.Groups[groupID] = &types.Group{ID: groupID, Name: groupID, AccountID: accountID}
+				align.wait(t)
 				errCh <- store.SaveAccount(ctx, account)
 			}()
 			return errCh
