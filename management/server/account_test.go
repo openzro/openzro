@@ -2804,6 +2804,21 @@ func TestAccount_SetJWTGroups(t *testing.T) {
 
 	assert.NoError(t, manager.Store.SaveAccount(context.Background(), account), "unable to save account")
 
+	groupsByNameAndIssuer := func(t *testing.T, name, issued string) []*types.Group {
+		t.Helper()
+
+		groups, err := manager.Store.GetAccountGroups(context.Background(), store.LockingStrengthShare, "accountID")
+		require.NoError(t, err)
+
+		var matches []*types.Group
+		for _, group := range groups {
+			if group.Name == name && group.Issued == issued {
+				matches = append(matches, group)
+			}
+		}
+		return matches
+	}
+
 	t.Run("skip sync for token auth type", func(t *testing.T) {
 		claims := nbcontext.UserAuth{
 			UserId:    "user1",
@@ -2833,7 +2848,7 @@ func TestAccount_SetJWTGroups(t *testing.T) {
 		assert.Empty(t, user.AutoGroups, "auto groups must be empty")
 	})
 
-	t.Run("jwt match existing api group", func(t *testing.T) {
+	t.Run("jwt creates its own group when a name matches an existing api group", func(t *testing.T) {
 		claims := nbcontext.UserAuth{
 			UserId:    "user1",
 			AccountId: "accountID",
@@ -2844,14 +2859,19 @@ func TestAccount_SetJWTGroups(t *testing.T) {
 
 		user, err := manager.Store.GetUserByUserID(context.Background(), store.LockingStrengthShare, "user1")
 		assert.NoError(t, err, "unable to get user")
-		assert.Len(t, user.AutoGroups, 0)
+		require.Len(t, user.AutoGroups, 1)
 
-		group1, err := manager.Store.GetGroupByID(context.Background(), store.LockingStrengthShare, "accountID", "group1")
-		assert.NoError(t, err, "unable to get group")
-		assert.Equal(t, group1.Issued, types.GroupIssuedAPI, "group should be api issued")
+		apiGroups := groupsByNameAndIssuer(t, "group1", types.GroupIssuedAPI)
+		require.Len(t, apiGroups, 1, "the API group must remain owned by the API source")
+		assert.NotContains(t, user.AutoGroups, apiGroups[0].ID,
+			"JWT sync must not attach a user to an API group by matching a human-readable name")
+
+		jwtGroups := groupsByNameAndIssuer(t, "group1", types.GroupIssuedJWT)
+		require.Len(t, jwtGroups, 1, "JWT should create its own group with the same display name")
+		assert.Contains(t, user.AutoGroups, jwtGroups[0].ID)
 	})
 
-	t.Run("jwt match existing api group in user auto groups", func(t *testing.T) {
+	t.Run("jwt keeps an existing api group and adds the jwt-owned group with the same name", func(t *testing.T) {
 		account.Users["user1"].AutoGroups = []string{"group1"}
 		assert.NoError(t, manager.Store.SaveUser(context.Background(), store.LockingStrengthUpdate, account.Users["user1"]))
 
@@ -2865,11 +2885,16 @@ func TestAccount_SetJWTGroups(t *testing.T) {
 
 		user, err := manager.Store.GetUserByUserID(context.Background(), store.LockingStrengthShare, "user1")
 		assert.NoError(t, err, "unable to get user")
-		assert.Len(t, user.AutoGroups, 1)
+		require.Len(t, user.AutoGroups, 2)
 
-		group1, err := manager.Store.GetGroupByID(context.Background(), store.LockingStrengthShare, "accountID", "group1")
-		assert.NoError(t, err, "unable to get group")
-		assert.Equal(t, group1.Issued, types.GroupIssuedAPI, "group should be api issued")
+		apiGroups := groupsByNameAndIssuer(t, "group1", types.GroupIssuedAPI)
+		require.Len(t, apiGroups, 1)
+		assert.Contains(t, user.AutoGroups, apiGroups[0].ID,
+			"pre-existing non-JWT groups should be preserved when JWT groups are synced")
+
+		jwtGroups := groupsByNameAndIssuer(t, "group1", types.GroupIssuedJWT)
+		require.Len(t, jwtGroups, 1)
+		assert.Contains(t, user.AutoGroups, jwtGroups[0].ID)
 	})
 
 	t.Run("add jwt group", func(t *testing.T) {
@@ -2883,7 +2908,7 @@ func TestAccount_SetJWTGroups(t *testing.T) {
 
 		user, err := manager.Store.GetUserByUserID(context.Background(), store.LockingStrengthShare, "user1")
 		assert.NoError(t, err, "unable to get user")
-		assert.Len(t, user.AutoGroups, 2, "groups count should not be change")
+		assert.Len(t, user.AutoGroups, 3, "API group1 plus JWT group1 and group2 should remain")
 	})
 
 	t.Run("existed group not update", func(t *testing.T) {
@@ -2911,11 +2936,11 @@ func TestAccount_SetJWTGroups(t *testing.T) {
 
 		groups, err := manager.Store.GetAccountGroups(context.Background(), store.LockingStrengthShare, "accountID")
 		assert.NoError(t, err)
-		assert.Len(t, groups, 3, "new group3 should be added")
+		assert.Len(t, groups, 4, "new group3 should be added alongside the API and JWT group1 groups")
 
 		user, err := manager.Store.GetUserByUserID(context.Background(), store.LockingStrengthShare, "user2")
 		assert.NoError(t, err, "unable to get user")
-		assert.Len(t, user.AutoGroups, 1, "new group should be added")
+		assert.Len(t, user.AutoGroups, 2, "JWT group1 and group3 should be added")
 	})
 
 	t.Run("remove all JWT groups when list is empty", func(t *testing.T) {
