@@ -191,12 +191,10 @@ func (s *SqlStore) AcquireReadLockByUID(ctx context.Context, uniqueID string) (u
 // account and nothing else.
 //
 // A creation path wants the second. Reaching for SaveAccount to create would
-// work, and would also delete-and-recreate a tree that does not exist yet.
-//
-// Creation paths that can collide on that index have to insert plainly instead,
-// so losing the race is reported rather than swallowed. SaveAccount is left as
-// it is for the paths that genuinely mean "write this account, whatever is
-// there" — see #143.
+// work, and would also delete-and-recreate a tree that does not exist yet, so
+// this exists to say what the caller means rather than to avoid a trap.
+// SaveAccount stays for the paths that genuinely mean "write this account and
+// its tree, whatever is there" — see #143.
 func (s *SqlStore) CreateAccount(ctx context.Context, account *types.Account) error {
 	generateAccountSQLTypes(account)
 

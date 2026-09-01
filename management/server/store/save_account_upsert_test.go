@@ -13,16 +13,19 @@ import (
 	"github.com/openzro/openzro/management/server/types"
 )
 
-// SaveAccount ends in a Create carrying clause.OnConflict{UpdateAll: true},
-// and the two engines render that differently. Postgres names the primary key
-// as the conflict target, so a violation of any other unique index still
-// escapes. MySQL renders ON DUPLICATE KEY UPDATE, which has no target and
-// absorbs every unique key — reporting success, writing nothing the caller
-// asked for, and updating whichever row held the conflicting key (#161).
+// SaveAccount used to end in a Create carrying
+// clause.OnConflict{UpdateAll: true}, which the engines rendered
+// differently. Postgres named the primary key as the conflict target, so a
+// violation of any other unique index still escaped. MySQL rendered ON
+// DUPLICATE KEY UPDATE, which has no target: it absorbed every unique key and
+// applied the incoming values to whichever row held the conflicting one
+// (#161). Harmless while accounts carried no unique index but the primary
+// key; idx_accounts_primary_private_domain (#162) was the first, and #164
+// removed the clause.
 //
-// That was harmless while accounts carried no unique index but the primary
-// key. idx_accounts_primary_private_domain (#162) is the first, so these tests
-// exist to keep the clause honest — or to prove it is not needed.
+// These tests are what that removal rests on. The refusal has to be reported,
+// the report has to be true, and it must not be paid for by overwriting the
+// account that won.
 func TestSaveAccountReportsPrimaryDomainConflict(t *testing.T) {
 	runTestForAllEngines(t, "", func(t *testing.T, store Store) {
 		ctx := context.Background()
@@ -117,11 +120,18 @@ func TestSaveAccountCreatesAndReplaces(t *testing.T) {
 // and user.go:836).
 //
 // generateAccountSQLTypes projects the maps into the *G slices with append and
-// no reset, so the second call leaves every child in there twice. The upsert
-// used to absorb that — each duplicate simply updated the row its twin had
-// just written. Without it the duplicate is a plain insert of a key that
-// exists, which is exactly the kind of breakage a narrow fix is supposed not
-// to cause.
+// no reset, so the second call leaves every child in there twice — measured,
+// 1 then 2 then 3 across three saves of one object (#165).
+//
+// The worry was that removing the parent's upsert turns each duplicate into a
+// plain insert of a key that already exists. It does not, and this test
+// catches nothing today: the database ends correct on all three engines
+// because GORM upserts the associations itself under FullSaveAssociations,
+// independently of whatever clause the parent Create carries.
+//
+// It is here because that correctness rests on GORM behavior nobody chose to
+// depend on. If association handling changes, this fails rather than
+// GetOrCreateAccountByUser does.
 func TestSaveAccountTwiceWithTheSameObject(t *testing.T) {
 	runTestForAllEngines(t, "", func(t *testing.T, store Store) {
 		ctx := context.Background()
