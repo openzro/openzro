@@ -30,6 +30,22 @@ the failing one may already be applied, so treat a failed upgrade as a
 database whose schema is part-way between the two versions — which is
 another reason to take the backup below before starting.
 
+## Unreleased
+
+### Before upgrading
+
+No pre-upgrade action is required for the route validation change.
+
+### After upgrading
+
+- **Editing a route can now expose duplicate direct-peer routes created
+  by older versions.** Older releases could allow two routes in the
+  same account with the same prefix or domain and the same direct peer.
+  The new validation rejects that state. If editing either duplicate
+  now returns "already has this route", delete one of the duplicate
+  routes first; simply disabling or editing one duplicate can still be
+  rejected because the other duplicate remains.
+
 ## v0.53.1-alpha.89
 
 ### Before upgrading
@@ -176,17 +192,16 @@ concurrent writes competing for the same primary private domain.
 Aligning MySQL's isolation level is tracked in
 [#157](https://github.com/openzro/openzro/issues/157).
 
-### Multi-replica: three invariants are still enforced only in-process
+### Multi-replica: one known invariant is still enforced only in-process
 
 A management deployment running **more than one replica** can still
-produce duplicates for two cases, because the check is a read followed
-by a write protected by a lock that lives inside one process:
+produce duplicates for one known case, because the check is a read
+followed by a write protected by a lock that lives inside one process:
 
 - group names issued through the API
-- route prefix and domain overlap
 
 DNS zone overlap is **not** in that list. It is enforced on both
-engines: on PostgreSQL by the constraint added in this release, and on
+engines: on PostgreSQL by the validation added in this release, and on
 MySQL by InnoDB's gap lock, which refuses the second write. What MySQL
 still lacks there is a usable error, which is the limitation above, not
 a duplication risk.
