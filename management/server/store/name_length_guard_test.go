@@ -11,7 +11,6 @@ import (
 	"github.com/openzro/openzro/management/server/migration"
 	resourceTypes "github.com/openzro/openzro/management/server/networks/resources/types"
 	"github.com/openzro/openzro/management/server/posture"
-	"github.com/openzro/openzro/management/server/types"
 )
 
 // #159 and #160 narrowed these two name columns to varchar(128), and
@@ -72,6 +71,26 @@ func TestRefuseOversizedColumn(t *testing.T) {
 			require.ErrorContains(t, err, "upgrade-notes.md")
 		})
 
+		// The three subtests above prove the function. They do not prove it is
+		// called, and the wiring is the part that actually stops the data
+		// loss: RefuseOversizedColumn only helps because migratePreAuto runs
+		// it before AutoMigrate. Remove the hook or reorder it after the
+		// narrowing and every assertion above still passes while PostgreSQL
+		// goes back to truncating silently.
+		t.Run("migratePreAuto refuses before anything is narrowed", func(t *testing.T) {
+			restore := widenNameColumn(t, db, "network_resources")
+			t.Cleanup(restore)
+
+			require.NoError(t, db.Exec(
+				"INSERT INTO network_resources (id, account_id, name) VALUES (?, ?, ?)",
+				"wired-one-over", account.Id, strings.Repeat("a", migration.MaxNameLength+1)).Error)
+			t.Cleanup(func() { db.Exec("DELETE FROM network_resources WHERE id = ?", "wired-one-over") })
+
+			err := migratePreAuto(ctx, db)
+			require.Error(t, err, "the pre-auto migrations must refuse a name the narrowing would truncate")
+			require.ErrorContains(t, err, "wired-one-over")
+		})
+
 		t.Run("counts characters, not bytes", func(t *testing.T) {
 			// 100 three-byte characters: 100 long, 300 bytes. Under the limit
 			// by the only measure that matters, and over it by the wrong one.
@@ -83,8 +102,6 @@ func TestRefuseOversizedColumn(t *testing.T) {
 			require.NoError(t, migration.RefuseOversizedColumn[posture.Checks](ctx, db, "name", migration.MaxNameLength),
 				"a 100-character name must fit even though it is 300 bytes")
 		})
-
-		_ = types.PrivateCategory
 	})
 }
 

@@ -34,9 +34,13 @@ another reason to take the backup below before starting.
 
 ### Before upgrading
 
-Three migrations enforce invariants that were previously held only in
-application code. Run all three queries. **Empty results mean the
-migrations apply cleanly.**
+This release enforces in the database several invariants that were
+previously held only in application code, and narrows two columns.
+
+**Run every check below.** They cover the blocks known at the time of
+this release: three for duplicate values, two for values too long for a
+narrowed column. An empty result from all of them means these migrations
+have nothing to refuse.
 
 PostgreSQL:
 
@@ -64,8 +68,8 @@ first.
 
 Two more, because the same release also bounds those name columns at
 128 characters. Duplicates are not the only thing that can stop the
-upgrade: a name longer than the new column fails when the schema
-changes, and the duplicate queries above would not show it.
+upgrade, and the duplicate queries above would not show a name that is
+merely too long.
 
 ```sql
 -- 4. network resource names too long for the new column
@@ -142,8 +146,10 @@ one. Often, not always. Confirm rather than assume.
   was only enforced when creating one. Update is now enforced too, so an
   API call that previously succeeded can now return a conflict. This is
   intended.
-- **Network resource names are bounded at 128 characters**, declared in
-  the OpenAPI schema.
+- **Network resource and posture check names are bounded at 128
+  characters**, declared in the OpenAPI schema for both, on the write
+  payloads as well as the responses. A create or update carrying a
+  longer name is rejected.
 - **Two people signing in from the same company at the same moment no
   longer creates two accounts for that domain.** The second login joins
   the first's account instead of creating a competing one.

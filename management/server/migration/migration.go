@@ -572,6 +572,16 @@ func RefuseOversizedColumn[T any](ctx context.Context, db *gorm.DB, column strin
 		log.WithContext(ctx).Debugf("table for %T does not exist, nothing to check", model)
 		return nil
 	}
+	// The column has to be checked separately, and this is not defensive
+	// clutter: this runs in migratePreAuto, before AutoMigrate, so the schema
+	// it sees is by definition the older one. A table can exist without the
+	// column that is about to be added, and querying it then fails with
+	// "no such column" — turning a guard against data loss into a crash on
+	// startup.
+	if !db.Migrator().HasColumn(&model, column) {
+		log.WithContext(ctx).Debugf("%T has no column %s yet, nothing to check", model, column)
+		return nil
+	}
 
 	stmt := &gorm.Statement{DB: db}
 	if err := stmt.Parse(&model); err != nil {
