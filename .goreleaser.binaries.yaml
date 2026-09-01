@@ -230,6 +230,8 @@ nfpms:
     bindir: /usr/bin
     builds: [openzro-mgmt]
     formats: [deb]
+    dependencies:
+      - libstdc++6
     contents:
       - src: release_files/management/openzro-management.service
         dst: /lib/systemd/system/openzro-management.service
@@ -252,6 +254,8 @@ nfpms:
     bindir: /usr/bin
     builds: [openzro-mgmt]
     formats: [rpm]
+    dependencies:
+      - libstdc++
     contents:
       - src: release_files/management/openzro-management.service
         dst: /lib/systemd/system/openzro-management.service
@@ -274,6 +278,8 @@ nfpms:
     bindir: /usr/bin
     builds: [openzro-mgmt]
     formats: [archlinux]
+    dependencies:
+      - gcc-libs
     prerelease: "{{ .Prerelease }}"   # see openzro-archlinux comment above
     archlinux:
       pkgbase: openzro-management
