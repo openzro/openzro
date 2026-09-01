@@ -177,20 +177,6 @@ func TestSaveAccount_ConcurrentAcrossReplicas(t *testing.T) {
 			}
 			losers++
 
-			// How the refusal arrives differs by engine, and the difference is
-			// #157, not this change. MySQL under REPEATABLE READ takes a gap
-			// lock on the index range, so the two writers deadlock before
-			// either insert is refused: the invariant holds, the error is one
-			// the caller cannot act on. Measured identical with and without
-			// the upsert clause, so removing it neither causes nor cures this.
-			//
-			// Pinned to that mechanism rather than to "an error happened",
-			// which would pass on a permission failure or a broken fixture.
-			if isRepeatableReadEngine() {
-				require.ErrorContains(t, err, "Error 1213",
-					"replica %s must lose to the gap-lock deadlock, which is what holds this on MySQL today; got %v", name, err)
-				continue
-			}
 			s, ok := status.FromError(err)
 			require.True(t, ok && s.Type() == status.AlreadyExists,
 				"replica %s must be refused with a typed conflict, not a raw driver error; got %v", name, err)

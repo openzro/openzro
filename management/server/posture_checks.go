@@ -71,7 +71,10 @@ func (am *DefaultAccountManager) SavePostureChecks(ctx context.Context, accountI
 		}
 
 		postureChecks.AccountID = accountID
-		return transaction.SavePostureChecks(ctx, store.LockingStrengthUpdate, postureChecks)
+		if isUpdate {
+			return transaction.SavePostureChecks(ctx, store.LockingStrengthUpdate, postureChecks)
+		}
+		return transaction.CreatePostureChecks(ctx, store.LockingStrengthUpdate, postureChecks)
 	})
 	if err != nil {
 		return nil, err

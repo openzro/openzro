@@ -151,6 +151,7 @@ type Store interface {
 	GetAllPostureChecks(ctx context.Context, lockStrength LockingStrength) ([]*posture.Checks, error)
 	GetPostureChecksByID(ctx context.Context, lockStrength LockingStrength, accountID, postureCheckID string) (*posture.Checks, error)
 	GetPostureChecksByIDs(ctx context.Context, lockStrength LockingStrength, accountID string, postureChecksIDs []string) (map[string]*posture.Checks, error)
+	CreatePostureChecks(ctx context.Context, lockStrength LockingStrength, postureCheck *posture.Checks) error
 	SavePostureChecks(ctx context.Context, lockStrength LockingStrength, postureCheck *posture.Checks) error
 	DeletePostureChecks(ctx context.Context, lockStrength LockingStrength, accountID, postureChecksID string) error
 
@@ -240,6 +241,7 @@ type Store interface {
 	GetNetworkResourcesByAccountID(ctx context.Context, lockStrength LockingStrength, accountID string) ([]*resourceTypes.NetworkResource, error)
 	GetNetworkResourceByID(ctx context.Context, lockStrength LockingStrength, accountID, resourceID string) (*resourceTypes.NetworkResource, error)
 	GetNetworkResourceByName(ctx context.Context, lockStrength LockingStrength, accountID, resourceName string) (*resourceTypes.NetworkResource, error)
+	CreateNetworkResource(ctx context.Context, lockStrength LockingStrength, resource *resourceTypes.NetworkResource) error
 	SaveNetworkResource(ctx context.Context, lockStrength LockingStrength, resource *resourceTypes.NetworkResource) error
 	DeleteNetworkResource(ctx context.Context, lockStrength LockingStrength, accountID, resourceID string) error
 	GetPeerByIP(ctx context.Context, lockStrength LockingStrength, accountID string, ip net.IP) (*nbpeer.Peer, error)

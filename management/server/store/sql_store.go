@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -125,6 +126,29 @@ func GetKeyQueryCondition(s *SqlStore) string {
 	return keyQueryCondition
 }
 
+func (s *SqlStore) transactionOptions() *sql.TxOptions {
+	if s.storeEngine != types.MysqlStoreEngine {
+		return nil
+	}
+	return &sql.TxOptions{Isolation: sql.LevelReadCommitted}
+}
+
+func (s *SqlStore) transaction(ctx context.Context, db *gorm.DB, operation func(tx *gorm.DB) error) error {
+	db = db.WithContext(ctx)
+	if opts := s.transactionOptions(); opts != nil {
+		return db.Transaction(operation, opts)
+	}
+	return db.Transaction(operation)
+}
+
+func (s *SqlStore) begin(ctx context.Context) *gorm.DB {
+	db := s.db.WithContext(ctx)
+	if opts := s.transactionOptions(); opts != nil {
+		return db.Begin(opts)
+	}
+	return db.Begin()
+}
+
 // AcquireGlobalLock acquires global lock across all the accounts and returns a function that releases the lock
 func (s *SqlStore) AcquireGlobalLock(ctx context.Context) (unlock func()) {
 	log.WithContext(ctx).Tracef("acquiring global lock")
@@ -224,7 +248,7 @@ func (s *SqlStore) SaveAccount(ctx context.Context, account *types.Account) erro
 
 	generateAccountSQLTypes(account)
 
-	err := s.db.Transaction(func(tx *gorm.DB) error {
+	err := s.transaction(ctx, s.db, func(tx *gorm.DB) error {
 		result := tx.Select(clause.Associations).Delete(account.Policies, "account_id = ?", account.Id)
 		if result.Error != nil {
 			return result.Error
@@ -348,7 +372,7 @@ func (s *SqlStore) checkAccountDomainBeforeSave(ctx context.Context, accountID, 
 func (s *SqlStore) DeleteAccount(ctx context.Context, account *types.Account) error {
 	start := time.Now()
 
-	err := s.db.Transaction(func(tx *gorm.DB) error {
+	err := s.transaction(ctx, s.db, func(tx *gorm.DB) error {
 		result := tx.Select(clause.Associations).Delete(account.Policies, "account_id = ?", account.Id)
 		if result.Error != nil {
 			return result.Error
@@ -398,7 +422,7 @@ func (s *SqlStore) SavePeer(ctx context.Context, lockStrength LockingStrength, a
 	peerCopy := peer.Copy()
 	peerCopy.AccountID = accountID
 
-	err := s.db.Clauses(clause.Locking{Strength: string(lockStrength)}).Transaction(func(tx *gorm.DB) error {
+	err := s.transaction(ctx, s.db.Clauses(clause.Locking{Strength: string(lockStrength)}), func(tx *gorm.DB) error {
 		// check if peer exists before saving
 		var peerID string
 		result := tx.Model(&nbpeer.Peer{}).Select("id").Find(&peerID, accountAndIDQueryCondition, accountID, peer.ID)
@@ -709,7 +733,7 @@ func (s *SqlStore) DeleteUserMFA(ctx context.Context, lockStrength LockingStreng
 }
 
 func (s *SqlStore) DeleteUser(ctx context.Context, lockStrength LockingStrength, accountID, userID string) error {
-	err := s.db.Transaction(func(tx *gorm.DB) error {
+	err := s.transaction(ctx, s.db, func(tx *gorm.DB) error {
 		result := tx.Clauses(clause.Locking{Strength: string(lockStrength)}).
 			Delete(&types.PersonalAccessToken{}, "user_id = ?", userID)
 		if result.Error != nil {
@@ -1774,7 +1798,7 @@ func (s *SqlStore) IncrementNetworkSerial(ctx context.Context, lockStrength Lock
 
 func (s *SqlStore) ExecuteInTransaction(ctx context.Context, operation func(store Store) error) error {
 	startTime := time.Now()
-	tx := s.db.Begin()
+	tx := s.begin(ctx)
 	if tx.Error != nil {
 		return tx.Error
 	}
@@ -2040,7 +2064,7 @@ func (s *SqlStore) SavePolicy(ctx context.Context, lockStrength LockingStrength,
 }
 
 func (s *SqlStore) DeletePolicy(ctx context.Context, lockStrength LockingStrength, accountID, policyID string) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return s.transaction(ctx, s.db, func(tx *gorm.DB) error {
 		if err := tx.Where("policy_id = ?", policyID).Delete(&types.PolicyRule{}).Error; err != nil {
 			return fmt.Errorf("delete policy rules: %w", err)
 		}
@@ -2143,16 +2167,29 @@ func (s *SqlStore) GetPostureChecksByIDs(ctx context.Context, lockStrength Locki
 	return postureChecksMap, nil
 }
 
-// SavePostureChecks saves a posture checks to the database.
+// CreatePostureChecks inserts a new posture check in the database.
+func (s *SqlStore) CreatePostureChecks(ctx context.Context, lockStrength LockingStrength, postureCheck *posture.Checks) error {
+	result := s.db.Clauses(clause.Locking{Strength: string(lockStrength)}).Create(postureCheck)
+	if result.Error != nil {
+		log.WithContext(ctx).Errorf("failed to create posture checks in store: %s", result.Error)
+		// idx_posture_checks_account_name is what holds the per-account name
+		// invariant across replicas, and this is the only layer that sees the
+		// driver error. Attributing any unique violation on this table to the
+		// name holds while that index and the primary key are the only ones.
+		if isUniqueConstraintViolation(result.Error) {
+			return status.NewPostureCheckNameAlreadyExistsError(postureCheck.Name)
+		}
+		return status.Errorf(status.Internal, "failed to create posture checks in store")
+	}
+
+	return nil
+}
+
+// SavePostureChecks saves a posture check to the database.
 func (s *SqlStore) SavePostureChecks(ctx context.Context, lockStrength LockingStrength, postureCheck *posture.Checks) error {
 	result := s.db.Clauses(clause.Locking{Strength: string(lockStrength)}).Save(postureCheck)
 	if result.Error != nil {
 		log.WithContext(ctx).Errorf("failed to save posture checks to store: %s", result.Error)
-		// Same reasoning as SaveNetworkResource: idx_posture_checks_account_name
-		// is what holds the per-account name invariant across replicas, and
-		// this is the only layer that sees the driver error. Attributing any
-		// unique violation on this table to the name holds while that index and
-		// the primary key are the only ones.
 		if isUniqueConstraintViolation(result.Error) {
 			return status.NewPostureCheckNameAlreadyExistsError(postureCheck.Name)
 		}
@@ -2824,10 +2861,10 @@ func (s *SqlStore) GetNetworkResourceByName(ctx context.Context, lockStrength Lo
 	return netResources, nil
 }
 
-func (s *SqlStore) SaveNetworkResource(ctx context.Context, lockStrength LockingStrength, resource *resourceTypes.NetworkResource) error {
-	result := s.db.Clauses(clause.Locking{Strength: string(lockStrength)}).Save(resource)
+func (s *SqlStore) CreateNetworkResource(ctx context.Context, lockStrength LockingStrength, resource *resourceTypes.NetworkResource) error {
+	result := s.db.Clauses(clause.Locking{Strength: string(lockStrength)}).Create(resource)
 	if result.Error != nil {
-		log.WithContext(ctx).Errorf("failed to save network resource to store: %v", result.Error)
+		log.WithContext(ctx).Errorf("failed to create network resource in store: %v", result.Error)
 		// idx_network_resources_account_name is what holds the per-account
 		// name invariant across replicas, so a violation here is the loser of
 		// a real race, not an internal fault. Classified here because this is
@@ -2841,6 +2878,19 @@ func (s *SqlStore) SaveNetworkResource(ctx context.Context, lockStrength Locking
 		// the offending constraint differently (Postgres and MySQL give the
 		// index name, SQLite gives the columns), so it would mean per-engine
 		// parsing rather than one more string match.
+		if isUniqueConstraintViolation(result.Error) {
+			return status.NewResourceNameAlreadyExistsError(resource.Name)
+		}
+		return status.Errorf(status.Internal, "failed to create network resource in store")
+	}
+
+	return nil
+}
+
+func (s *SqlStore) SaveNetworkResource(ctx context.Context, lockStrength LockingStrength, resource *resourceTypes.NetworkResource) error {
+	result := s.db.Clauses(clause.Locking{Strength: string(lockStrength)}).Save(resource)
+	if result.Error != nil {
+		log.WithContext(ctx).Errorf("failed to save network resource to store: %v", result.Error)
 		if isUniqueConstraintViolation(result.Error) {
 			return status.NewResourceNameAlreadyExistsError(resource.Name)
 		}
