@@ -240,9 +240,19 @@ func (s *SqlStore) SaveAccount(ctx context.Context, account *types.Account) erro
 			return result.Error
 		}
 
+		// No OnConflict clause. It used to carry UpdateAll: true, which the
+		// engines render differently — Postgres names the primary key as the
+		// conflict target, MySQL renders ON DUPLICATE KEY UPDATE, which has no
+		// target and absorbs every unique key (#161). That was harmless while
+		// accounts carried no unique index but the primary key; it stopped
+		// being harmless when idx_accounts_primary_private_domain landed.
+		//
+		// It is not needed either way: the account and its associations are
+		// deleted immediately above, in this same transaction, so the insert
+		// has nothing of its own to conflict with. What the clause was
+		// absorbing was somebody *else's* row.
 		result = tx.
 			Session(&gorm.Session{FullSaveAssociations: true}).
-			Clauses(clause.OnConflict{UpdateAll: true}).
 			Create(account)
 		if result.Error != nil {
 			return result.Error
