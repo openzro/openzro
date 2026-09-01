@@ -62,6 +62,10 @@ type ClusterBootstrapConfig struct {
 	// Interval is the discovery reconcile period. Defaults to
 	// cluster.DefaultDiscoveryInterval (10 s) when zero.
 	Interval time.Duration
+
+	// LookupTimeout is how long a locator cache miss waits for peer-pod
+	// answers. Defaults to cluster.LookupTimeout when zero.
+	LookupTimeout time.Duration
 }
 
 func (c ClusterBootstrapConfig) validate() error {
@@ -70,6 +74,9 @@ func (c ClusterBootstrapConfig) validate() error {
 	}
 	if c.Port < 0 || c.Port > 65535 {
 		return fmt.Errorf("cluster bootstrap: invalid Port %d", c.Port)
+	}
+	if c.LookupTimeout < 0 {
+		return fmt.Errorf("cluster bootstrap: invalid LookupTimeout %s", c.LookupTimeout)
 	}
 	if c.PodIP == "" {
 		return fmt.Errorf("cluster bootstrap: PodIP is required (set POD_IP via the K8s downward API)")
@@ -122,7 +129,7 @@ func StartCluster(ctx context.Context, st *store.Store, cfg ClusterBootstrapConf
 	}
 
 	dispatcher := NewLocalPeerDispatcher(st)
-	locator := cluster.NewPeerLocator(transport, dispatcher)
+	locator := cluster.NewPeerLocator(transport, dispatcher, cluster.WithLookupTimeout(cfg.LookupTimeout))
 	locator.SetMetrics(metrics)
 	forwarder, err := cluster.NewForwarder(transport, locator, dispatcher)
 	if err != nil {

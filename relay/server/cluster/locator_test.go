@@ -56,9 +56,11 @@ func newPeerID(seed byte) messages.PeerID {
 	return p
 }
 
+const testLookupTimeout = 2 * time.Second
+
 // startPair spins up two transports + locators and dials each
 // other so they form a 2-pod cluster for the test.
-func startPair(t *testing.T, ownsA, ownsB []messages.PeerID) (*PeerLocator, *PeerLocator, string, string) {
+func startPair(t *testing.T, ownsA, ownsB []messages.PeerID, opts ...PeerLocatorOption) (*PeerLocator, *PeerLocator, string, string) {
 	t.Helper()
 	skipOnDarwinCI(t)
 
@@ -68,8 +70,8 @@ func startPair(t *testing.T, ownsA, ownsB []messages.PeerID) (*PeerLocator, *Pee
 	transA := NewTransport("127.0.0.1:0", "", nil)
 	transB := NewTransport("127.0.0.1:0", "", nil)
 
-	locA := NewPeerLocator(transA, ownerA)
-	locB := NewPeerLocator(transB, ownerB)
+	locA := NewPeerLocator(transA, ownerA, opts...)
+	locB := NewPeerLocator(transB, ownerB, opts...)
 
 	transA.handler = &dispatchHandler{loc: locA}
 	transB.handler = &dispatchHandler{loc: locB}
@@ -133,7 +135,7 @@ func waitClusterReady(t *testing.T, tr *Transport, expected string) {
 
 func TestLocator_LookupHitsRemote(t *testing.T) {
 	wanted := newPeerID(0x42)
-	locA, _, _, addrB := startPair(t, nil, []messages.PeerID{wanted})
+	locA, _, _, addrB := startPair(t, nil, []messages.PeerID{wanted}, WithLookupTimeout(testLookupTimeout))
 
 	pod, ok, err := locA.Lookup(context.Background(), wanted)
 	require.NoError(t, err)
@@ -146,7 +148,7 @@ func TestLocator_LookupHitsRemote(t *testing.T) {
 
 func TestLocator_LookupCacheHitSkipsBroadcast(t *testing.T) {
 	wanted := newPeerID(0x10)
-	locA, _, _, addrB := startPair(t, nil, []messages.PeerID{wanted})
+	locA, _, _, addrB := startPair(t, nil, []messages.PeerID{wanted}, WithLookupTimeout(testLookupTimeout))
 
 	_, _, err := locA.Lookup(context.Background(), wanted)
 	require.NoError(t, err)
@@ -190,9 +192,31 @@ func TestLocator_LookupNoPeerPodsFailsFast(t *testing.T) {
 		"with no peer pods to ask, lookup must fail fast — not wait the full timeout")
 }
 
+func TestLocator_LookupTimeoutOption(t *testing.T) {
+	defaulted := NewPeerLocator(
+		NewTransport("127.0.0.1:0", "", nil),
+		newFakeOwner(),
+	)
+	require.Equal(t, LookupTimeout, defaulted.LookupTimeoutValue())
+
+	custom := NewPeerLocator(
+		NewTransport("127.0.0.1:0", "", nil),
+		newFakeOwner(),
+		WithLookupTimeout(2*time.Second),
+	)
+	require.Equal(t, 2*time.Second, custom.LookupTimeoutValue())
+
+	zero := NewPeerLocator(
+		NewTransport("127.0.0.1:0", "", nil),
+		newFakeOwner(),
+		WithLookupTimeout(0),
+	)
+	require.Equal(t, LookupTimeout, zero.LookupTimeoutValue())
+}
+
 func TestLocator_InvalidateDropsCacheEntry(t *testing.T) {
 	wanted := newPeerID(0x55)
-	locA, _, _, _ := startPair(t, nil, []messages.PeerID{wanted})
+	locA, _, _, _ := startPair(t, nil, []messages.PeerID{wanted}, WithLookupTimeout(testLookupTimeout))
 
 	_, _, err := locA.Lookup(context.Background(), wanted)
 	require.NoError(t, err)
@@ -259,7 +283,7 @@ func TestLocator_StaleCacheEntryIsLazilyEvicted(t *testing.T) {
 
 func TestLocator_ConcurrentLookupsShareWaiter(t *testing.T) {
 	wanted := newPeerID(0xAA)
-	locA, _, _, addrB := startPair(t, nil, []messages.PeerID{wanted})
+	locA, _, _, addrB := startPair(t, nil, []messages.PeerID{wanted}, WithLookupTimeout(testLookupTimeout))
 
 	const callers = 8
 	var wg sync.WaitGroup

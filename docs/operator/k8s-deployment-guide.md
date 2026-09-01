@@ -274,6 +274,15 @@ between pods labeled `app.kubernetes.io/name: openzro-relay`. The
 HMAC gate authenticates HELLO either way — NetworkPolicy is
 defense-in-depth, not the primary trust boundary.
 
+The relay waits up to 200 ms for a peer-pod ownership answer on a
+cluster lookup miss. Cache hits and successful lookups return as soon
+as the answer arrives; increasing the value mainly makes a real "peer
+connected nowhere" miss take longer to report. If relay pods run with
+tight CPU limits or on noisy nodes and you see false "peer not found"
+results, set `--cluster-lookup-timeout` or `OZ_CLUSTER_LOOKUP_TIMEOUT`
+to a larger duration such as `2s`. The per-packet forwarding path is
+still capped at 5 s.
+
 See [ADR-0014](../adr/0014-coordinated-multi-pod-relay.md) for the
 full design (broadcast-on-miss locator, single-pod bypass, HELLO
 handshake) and the trade-offs against alternatives like

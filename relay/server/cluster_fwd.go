@@ -12,10 +12,10 @@ import (
 )
 
 // clusterForwardTimeout caps how long handleTransportMsg waits for
-// the cluster fabric to deliver before logging and dropping. The
-// locator's broadcast deadline is ~2 s and inter-pod RTT inside K8s
-// is sub-millisecond; 5 s gives the locator slack while still
-// failing fast on a real partition.
+// the cluster fabric to deliver before logging and dropping. The locator's
+// default miss deadline is shorter, but operators can raise it for
+// CPU-throttled or noisy clusters; 5 s caps that path while still failing fast
+// on a real partition.
 const clusterForwardTimeout = 5 * time.Second
 
 // errClusterPeerNotFound mirrors cluster.ErrPeerNotFound so the
