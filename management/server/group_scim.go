@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rs/xid"
+
 	"github.com/openzro/openzro/management/server/account"
 	"github.com/openzro/openzro/management/server/permissions/modules"
 	"github.com/openzro/openzro/management/server/permissions/operations"
@@ -31,17 +33,18 @@ func (am *DefaultAccountManager) SCIMCreateGroup(ctx context.Context, accountID,
 		return nil, status.Errorf(status.InvalidArgument, "displayName is required")
 	}
 
-	if existing, _ := am.Store.GetGroupByName(ctx, store.LockingStrengthShare, displayName, accountID); existing != nil {
-		return nil, ErrSCIMGroupAlreadyExists
+	if err := am.validateSCIMGroupNameAvailable(ctx, accountID, displayName, ""); err != nil {
+		return nil, err
 	}
 
 	group := &types.Group{
+		ID:        xid.New().String(),
 		AccountID: accountID,
 		Name:      displayName,
 		Issued:    types.GroupIssuedIntegration,
 		Peers:     []string{},
 	}
-	if err := am.SaveGroup(ctx, accountID, callerID, group, true); err != nil {
+	if err := am.SaveGroups(ctx, accountID, callerID, []*types.Group{group}, true); err != nil {
 		return nil, err
 	}
 	propagated, err := am.applySCIMGroupMembers(ctx, accountID, group.ID, memberUserIDs, nil)
@@ -73,10 +76,13 @@ func (am *DefaultAccountManager) SCIMReplaceGroup(ctx context.Context, accountID
 	if err != nil {
 		return nil, ErrSCIMGroupNotFound
 	}
-	if displayName != "" {
+	if displayName != "" && displayName != group.Name {
+		if err := am.validateSCIMGroupNameAvailable(ctx, accountID, displayName, groupID); err != nil {
+			return nil, err
+		}
 		group.Name = displayName
 	}
-	if err := am.SaveGroup(ctx, accountID, callerID, group, false); err != nil {
+	if err := am.SaveGroups(ctx, accountID, callerID, []*types.Group{group}, false); err != nil {
 		return nil, err
 	}
 	prev, err := am.usersInGroup(ctx, accountID, groupID)
@@ -167,10 +173,13 @@ func (am *DefaultAccountManager) SCIMRenameGroup(ctx context.Context, accountID,
 	if err != nil {
 		return nil, ErrSCIMGroupNotFound
 	}
-	if newName != "" {
+	if newName != "" && newName != group.Name {
+		if err := am.validateSCIMGroupNameAvailable(ctx, accountID, newName, groupID); err != nil {
+			return nil, err
+		}
 		group.Name = newName
 	}
-	if err := am.SaveGroup(ctx, accountID, callerID, group, false); err != nil {
+	if err := am.SaveGroups(ctx, accountID, callerID, []*types.Group{group}, false); err != nil {
 		return nil, err
 	}
 	return group, nil
@@ -219,7 +228,7 @@ func (am *DefaultAccountManager) SCIMDeleteGroup(ctx context.Context, accountID,
 	if propagated {
 		am.UpdateAccountPeers(ctx, accountID)
 	}
-	return am.DeleteGroup(ctx, accountID, callerID, groupID)
+	return am.DeleteGroups(ctx, accountID, callerID, []string{groupID})
 }
 
 // SCIMListGroups returns groups in the account, filtered by display
@@ -491,6 +500,19 @@ func (am *DefaultAccountManager) requireSCIMGroupPermission(ctx context.Context,
 	}
 	if !allowed {
 		return status.NewPermissionDeniedError()
+	}
+	return nil
+}
+
+func (am *DefaultAccountManager) validateSCIMGroupNameAvailable(ctx context.Context, accountID, displayName, currentGroupID string) error {
+	groupIDs, err := am.Store.GetGroupIDsByNameAndIssued(ctx, store.LockingStrengthShare, accountID, displayName, types.GroupIssuedIntegration)
+	if err != nil {
+		return err
+	}
+	for _, groupID := range groupIDs {
+		if groupID != currentGroupID {
+			return ErrSCIMGroupAlreadyExists
+		}
 	}
 	return nil
 }

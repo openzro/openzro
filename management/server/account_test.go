@@ -3603,6 +3603,236 @@ func TestPropagateUserGroupMemberships(t *testing.T) {
 	})
 }
 
+func TestSCIMCreateGroup_ScopesDisplayNameToIntegrationGroups(t *testing.T) {
+	manager, err := createManager(t)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	initiatorID := "test-user"
+	account, err := manager.GetOrCreateAccountByUser(ctx, initiatorID, "example.com")
+	require.NoError(t, err)
+
+	apiGroup := &types.Group{
+		Name:   "Shared display name",
+		Issued: types.GroupIssuedAPI,
+		Peers:  []string{},
+	}
+	require.NoError(t, manager.SaveGroup(ctx, account.Id, initiatorID, apiGroup, true))
+
+	scimGroup, err := requireSCIMGroupResult(t, func() (*types.Group, error) {
+		return manager.SCIMCreateGroup(ctx, account.Id, initiatorID, apiGroup.Name, nil)
+	})
+	require.NoError(t, err)
+	require.NotEqual(t, apiGroup.ID, scimGroup.ID, "SCIM must not attach to an API group by displayName")
+	require.Equal(t, types.GroupIssuedIntegration, scimGroup.Issued)
+
+	apiGroups := accountGroupsByNameAndIssued(t, manager, account.Id, apiGroup.Name, types.GroupIssuedAPI)
+	require.Len(t, apiGroups, 1)
+	require.Equal(t, apiGroup.ID, apiGroups[0].ID)
+
+	scimGroups := accountGroupsByNameAndIssued(t, manager, account.Id, apiGroup.Name, types.GroupIssuedIntegration)
+	require.Len(t, scimGroups, 1)
+	require.Equal(t, scimGroup.ID, scimGroups[0].ID)
+
+	_, err = requireSCIMGroupResult(t, func() (*types.Group, error) {
+		return manager.SCIMCreateGroup(ctx, account.Id, initiatorID, apiGroup.Name, nil)
+	})
+	require.ErrorIs(t, err, ErrSCIMGroupAlreadyExists)
+	scimGroups = accountGroupsByNameAndIssued(t, manager, account.Id, apiGroup.Name, types.GroupIssuedIntegration)
+	require.Len(t, scimGroups, 1, "SCIM must reject duplicates within the integration source")
+}
+
+func TestSCIMUpdateGroup_ScopesDisplayNameToIntegrationGroups(t *testing.T) {
+	testCases := []struct {
+		name   string
+		rename func(ctx context.Context, manager *DefaultAccountManager, accountID, initiatorID, groupID, displayName string) (*types.Group, error)
+	}{
+		{
+			name: "replace",
+			rename: func(ctx context.Context, manager *DefaultAccountManager, accountID, initiatorID, groupID, displayName string) (*types.Group, error) {
+				return manager.SCIMReplaceGroup(ctx, accountID, initiatorID, groupID, displayName, nil)
+			},
+		},
+		{
+			name: "rename",
+			rename: func(ctx context.Context, manager *DefaultAccountManager, accountID, initiatorID, groupID, displayName string) (*types.Group, error) {
+				return manager.SCIMRenameGroup(ctx, accountID, initiatorID, groupID, displayName)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			manager, err := createManager(t)
+			require.NoError(t, err)
+
+			ctx := context.Background()
+			initiatorID := "test-user"
+			account, err := manager.GetOrCreateAccountByUser(ctx, initiatorID, "example.com")
+			require.NoError(t, err)
+
+			apiGroup := &types.Group{
+				Name:   "Shared display name",
+				Issued: types.GroupIssuedAPI,
+				Peers:  []string{},
+			}
+			require.NoError(t, manager.SaveGroup(ctx, account.Id, initiatorID, apiGroup, true))
+
+			firstSCIMGroup, err := requireSCIMGroupResult(t, func() (*types.Group, error) {
+				return manager.SCIMCreateGroup(ctx, account.Id, initiatorID, "Original SCIM name", nil)
+			})
+			require.NoError(t, err)
+			secondSCIMGroup, err := requireSCIMGroupResult(t, func() (*types.Group, error) {
+				return manager.SCIMCreateGroup(ctx, account.Id, initiatorID, "Other SCIM name", nil)
+			})
+			require.NoError(t, err)
+
+			updated, err := requireSCIMGroupResult(t, func() (*types.Group, error) {
+				return tc.rename(ctx, manager, account.Id, initiatorID, firstSCIMGroup.ID, apiGroup.Name)
+			})
+			require.NoError(t, err)
+			require.Equal(t, apiGroup.Name, updated.Name)
+
+			apiGroups := accountGroupsByNameAndIssued(t, manager, account.Id, apiGroup.Name, types.GroupIssuedAPI)
+			require.Len(t, apiGroups, 1)
+			require.Equal(t, apiGroup.ID, apiGroups[0].ID)
+
+			scimGroups := accountGroupsByNameAndIssued(t, manager, account.Id, apiGroup.Name, types.GroupIssuedIntegration)
+			require.Len(t, scimGroups, 1)
+			require.Equal(t, firstSCIMGroup.ID, scimGroups[0].ID)
+
+			_, err = requireSCIMGroupResult(t, func() (*types.Group, error) {
+				return tc.rename(ctx, manager, account.Id, initiatorID, secondSCIMGroup.ID, apiGroup.Name)
+			})
+			require.ErrorIs(t, err, ErrSCIMGroupAlreadyExists)
+
+			unchanged, err := manager.Store.GetGroupByID(ctx, store.LockingStrengthShare, account.Id, secondSCIMGroup.ID)
+			require.NoError(t, err)
+			require.Equal(t, "Other SCIM name", unchanged.Name)
+		})
+	}
+}
+
+func TestSCIMUpdateGroup_AllowsLegacyIntegrationDuplicateWhenNameIsUnchanged(t *testing.T) {
+	testCases := []struct {
+		name   string
+		rename func(ctx context.Context, manager *DefaultAccountManager, accountID, initiatorID, groupID, displayName string) (*types.Group, error)
+	}{
+		{
+			name: "replace",
+			rename: func(ctx context.Context, manager *DefaultAccountManager, accountID, initiatorID, groupID, displayName string) (*types.Group, error) {
+				return manager.SCIMReplaceGroup(ctx, accountID, initiatorID, groupID, displayName, nil)
+			},
+		},
+		{
+			name: "rename",
+			rename: func(ctx context.Context, manager *DefaultAccountManager, accountID, initiatorID, groupID, displayName string) (*types.Group, error) {
+				return manager.SCIMRenameGroup(ctx, accountID, initiatorID, groupID, displayName)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			manager, err := createManager(t)
+			require.NoError(t, err)
+
+			ctx := context.Background()
+			initiatorID := "test-user"
+			account, err := manager.GetOrCreateAccountByUser(ctx, initiatorID, "example.com")
+			require.NoError(t, err)
+
+			legacyGroups := []*types.Group{
+				{ID: "legacy-scim-1", AccountID: account.Id, Name: "Legacy SCIM name", Issued: types.GroupIssuedIntegration},
+				{ID: "legacy-scim-2", AccountID: account.Id, Name: "Legacy SCIM name", Issued: types.GroupIssuedIntegration},
+			}
+			require.NoError(t, manager.Store.SaveGroups(ctx, store.LockingStrengthUpdate, account.Id, legacyGroups))
+
+			updated, err := requireSCIMGroupResult(t, func() (*types.Group, error) {
+				return tc.rename(ctx, manager, account.Id, initiatorID, legacyGroups[0].ID, legacyGroups[0].Name)
+			})
+			require.NoError(t, err)
+			require.Equal(t, legacyGroups[0].Name, updated.Name)
+
+			matches := accountGroupsByNameAndIssued(t, manager, account.Id, legacyGroups[0].Name, types.GroupIssuedIntegration)
+			require.Len(t, matches, 2, "idempotent SCIM updates must not break existing duplicate data")
+		})
+	}
+}
+
+func TestSCIMDeleteGroup_ReturnsWhileHoldingAccountLock(t *testing.T) {
+	manager, err := createManager(t)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	initiatorID := "test-user"
+	account, err := manager.GetOrCreateAccountByUser(ctx, initiatorID, "example.com")
+	require.NoError(t, err)
+	scimServiceUser := types.NewUser("scim-service-user", types.UserRoleAdmin, true, false, "SCIM", nil, types.UserIssuedAPI)
+	scimServiceUser.AccountID = account.Id
+	require.NoError(t, manager.Store.SaveUser(ctx, store.LockingStrengthUpdate, scimServiceUser))
+
+	scimGroup, err := requireSCIMGroupResult(t, func() (*types.Group, error) {
+		return manager.SCIMCreateGroup(ctx, account.Id, initiatorID, "SCIM group", nil)
+	})
+	require.NoError(t, err)
+
+	err = requireSCIMGroupError(t, func() error {
+		return manager.SCIMDeleteGroup(ctx, account.Id, scimServiceUser.Id, scimGroup.ID)
+	})
+	require.NoError(t, err)
+
+	_, err = manager.Store.GetGroupByID(ctx, store.LockingStrengthShare, account.Id, scimGroup.ID)
+	require.Error(t, err)
+}
+
+type scimGroupResult struct {
+	group *types.Group
+	err   error
+}
+
+func requireSCIMGroupResult(t *testing.T, call func() (*types.Group, error)) (*types.Group, error) {
+	t.Helper()
+
+	done := make(chan scimGroupResult, 1)
+	go func() {
+		group, err := call()
+		done <- scimGroupResult{group: group, err: err}
+	}()
+
+	select {
+	case result := <-done:
+		return result.group, result.err
+	case <-time.After(10 * time.Second):
+		t.Fatal("SCIM group call never returned; it may be blocked on a re-entered account lock")
+		return nil, assert.AnError
+	}
+}
+
+func requireSCIMGroupError(t *testing.T, call func() error) error {
+	t.Helper()
+
+	_, err := requireSCIMGroupResult(t, func() (*types.Group, error) {
+		return nil, call()
+	})
+	return err
+}
+
+func accountGroupsByNameAndIssued(t *testing.T, manager *DefaultAccountManager, accountID, name, issued string) []*types.Group {
+	t.Helper()
+
+	groups, err := manager.Store.GetAccountGroups(context.Background(), store.LockingStrengthShare, accountID)
+	require.NoError(t, err)
+
+	var matches []*types.Group
+	for _, group := range groups {
+		if group.Name == name && group.Issued == issued {
+			matches = append(matches, group)
+		}
+	}
+	return matches
+}
+
 // TestSCIMRemoveGroupMember_RecoversFromPartialWrite pins openzro
 // #104 review-1: a retry after a partial-write failure (User.AutoGroups
 // already removed by an earlier attempt, but Group.Peers still

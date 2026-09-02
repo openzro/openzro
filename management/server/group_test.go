@@ -30,36 +30,64 @@ const (
 
 func TestDefaultAccountManager_CreateGroup(t *testing.T) {
 	am, err := createManager(t)
-	if err != nil {
-		t.Error("failed to create account manager")
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	account, err := am.GetOrCreateAccountByUser(ctx, groupAdminUserID, "example.com")
+	require.NoError(t, err)
+
+	apiGroup := &types.Group{
+		Name:   "Shared API name",
+		Issued: types.GroupIssuedAPI,
+		Peers:  []string{},
+	}
+	require.NoError(t, am.SaveGroup(ctx, account.Id, groupAdminUserID, apiGroup, true))
+	require.NotEmpty(t, apiGroup.ID)
+
+	apiDuplicate := &types.Group{
+		Name:   apiGroup.Name,
+		Issued: types.GroupIssuedAPI,
+		Peers:  []string{},
+	}
+	err = am.SaveGroup(ctx, account.Id, groupAdminUserID, apiDuplicate, true)
+	require.Error(t, err)
+	s, ok := status.FromError(err)
+	require.True(t, ok)
+	require.Equal(t, status.AlreadyExists, s.Type())
+
+	testCases := []struct {
+		name   string
+		issued string
+	}{
+		{
+			name:   "integration",
+			issued: types.GroupIssuedIntegration,
+		},
+		{
+			name:   "jwt",
+			issued: types.GroupIssuedJWT,
+		},
 	}
 
-	_, account, err := initTestGroupAccount(am)
-	if err != nil {
-		t.Fatalf("failed to init testing account: %s", err)
-	}
-	for _, group := range account.Groups {
-		group.Issued = types.GroupIssuedIntegration
-		err = am.SaveGroup(context.Background(), account.Id, groupAdminUserID, group, true)
-		if err != nil {
-			t.Errorf("should allow to create %s groups", types.GroupIssuedIntegration)
-		}
-	}
+	for _, tc := range testCases {
+		t.Run("api can share a name with "+tc.name, func(t *testing.T) {
+			sourceGroup := &types.Group{
+				ID:     "idp-" + tc.name,
+				Name:   "IdP owned name " + tc.name,
+				Issued: tc.issued,
+				Peers:  []string{},
+			}
+			require.NoError(t, am.SaveGroup(ctx, account.Id, groupAdminUserID, sourceGroup, true))
 
-	for _, group := range account.Groups {
-		group.Issued = types.GroupIssuedJWT
-		err = am.SaveGroup(context.Background(), account.Id, groupAdminUserID, group, true)
-		if err != nil {
-			t.Errorf("should allow to create %s groups", types.GroupIssuedJWT)
-		}
-	}
-	for _, group := range account.Groups {
-		group.Issued = types.GroupIssuedAPI
-		group.ID = ""
-		err = am.SaveGroup(context.Background(), account.Id, groupAdminUserID, group, true)
-		if err == nil {
-			t.Errorf("should not create api group with the same name, %s", group.Name)
-		}
+			apiSameName := &types.Group{
+				Name:   sourceGroup.Name,
+				Issued: types.GroupIssuedAPI,
+				Peers:  []string{},
+			}
+			require.NoError(t, am.SaveGroup(ctx, account.Id, groupAdminUserID, apiSameName, true))
+			require.NotEmpty(t, apiSameName.ID)
+			require.NotEqual(t, sourceGroup.ID, apiSameName.ID)
+		})
 	}
 }
 
