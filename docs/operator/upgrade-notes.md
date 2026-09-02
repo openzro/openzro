@@ -52,6 +52,16 @@ No pre-upgrade action is required for the route validation change.
   now returns "already has this route", delete one of the duplicate
   routes first; simply disabling or editing one duplicate can still be
   rejected because the other duplicate remains.
+- **JWT group sync no longer joins a user to a manual/API group just
+  because the IdP sends the same display name.** That unsafe join would
+  let a manually created group grant access by name collision alone. If
+  the IdP sends a name already used by an API group, openZro now creates
+  or uses a separate JWT-managed group with the same name. Existing
+  policies still point to group IDs, so policies that reference the API
+  group will not automatically grant access to the new JWT group. Add
+  the JWT group to the intended policies after it appears; ship the
+  dashboard group-origin labels with this change so operators can tell
+  the two groups apart.
 
 ## v0.53.1-alpha.89
 
