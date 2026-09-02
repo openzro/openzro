@@ -79,7 +79,13 @@ jobs:
       - name: Install OS build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y -q gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu
+          # g++-aarch64-linux-gnu, not just gcc: the management binary is
+          # built with -tags=archive_duckdb, and go-duckdb links a prebuilt
+          # static library that needs libstdc++. The cross compiler alone
+          # gives us aarch64-linux-gnu-gcc but no arm64 libstdc++, so the
+          # arm64 link fails with `cannot find -lstdc++` while amd64 passes
+          # on the runner's native library. See #178.
+          sudo apt-get install -y -q gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
       - name: Decide goreleaser flags
         id: flags
