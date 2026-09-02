@@ -4,6 +4,8 @@ import {
   groupIssued,
   groupIssuedDescription,
   groupIssuedLabel,
+  type GroupOrigin,
+  unknownGroupIssued,
 } from "@/modules/groups/groupIdentity";
 
 type Props = {
@@ -11,13 +13,15 @@ type Props = {
   className?: string;
 };
 
-const variants: Record<GroupIssued, string> = {
+const variants: Record<GroupOrigin, string> = {
   [GroupIssued.API]:
     "border-neutral-300 bg-neutral-100 text-neutral-600 dark:border-nb-gray-700 dark:bg-nb-gray-900 dark:text-nb-gray-300",
   [GroupIssued.JWT]:
-    "border-sky-300 bg-sky-100 text-sky-700 dark:border-sky-700 dark:bg-sky-950/50 dark:text-sky-300",
+    "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-200",
   [GroupIssued.INTEGRATION]:
-    "border-violet-300 bg-violet-100 text-violet-700 dark:border-violet-700 dark:bg-violet-950/50 dark:text-violet-300",
+    "border-violet-300 bg-violet-100 text-violet-800 dark:border-violet-700 dark:bg-violet-950/50 dark:text-violet-200",
+  [unknownGroupIssued]:
+    "border-neutral-400 bg-neutral-50 text-neutral-800 dark:border-nb-gray-600 dark:bg-nb-gray-900 dark:text-nb-gray-200",
 };
 
 export default function GroupOriginBadge({ issued, className }: Props) {

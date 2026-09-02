@@ -1,20 +1,36 @@
 import { Group, GroupIssued } from "@/interfaces/Group";
 
-type GroupIdentity = Pick<Group, "id" | "issued" | "name">;
+export const unknownGroupIssued = "unknown";
 
-export function groupIssued(issued?: GroupIssued): GroupIssued {
-  return issued ?? GroupIssued.API;
+export type GroupOrigin = GroupIssued | typeof unknownGroupIssued;
+
+type GroupIdentity = Pick<Group, "id" | "name"> & {
+  issued?: GroupIssued | string;
+};
+
+const knownGroupIssued = new Set<string>(Object.values(GroupIssued));
+
+export function groupIssued(issued?: GroupIssued | string): GroupOrigin {
+  if (!issued) return GroupIssued.API;
+  if (knownGroupIssued.has(issued)) return issued as GroupIssued;
+  return unknownGroupIssued;
+}
+
+function groupIssuerKey(issued?: GroupIssued | string): string {
+  const origin = groupIssued(issued);
+  if (origin === unknownGroupIssued && issued) return `${origin}:${issued}`;
+  return origin;
 }
 
 export function groupIdentityKey(group?: GroupIdentity): string {
   if (!group) return "group:none";
   if (group.id) return `group:id:${group.id}`;
-  return `group:new:${groupIssued(group.issued)}:${group.name}`;
+  return `group:new:${groupIssuerKey(group.issued)}:${group.name}`;
 }
 
 export function groupIssuerNameKey(group?: GroupIdentity): string {
   if (!group) return "group:none";
-  return `group:issuer-name:${groupIssued(group.issued)}:${group.name}`;
+  return `group:issuer-name:${groupIssuerKey(group.issued)}:${group.name}`;
 }
 
 export function sameGroupIdentity(
@@ -39,26 +55,28 @@ export function groupSearchText(group: GroupIdentity): string {
   return `${group.name} ${groupIssuedLabel(group.issued)}`;
 }
 
-export function groupIssuedLabel(issued?: GroupIssued): string {
+export function groupIssuedLabel(issued?: GroupIssued | string): string {
   switch (groupIssued(issued)) {
     case GroupIssued.JWT:
       return "JWT";
     case GroupIssued.INTEGRATION:
       return "SCIM";
     case GroupIssued.API:
-    default:
       return "API";
+    case unknownGroupIssued:
+      return "Unknown";
   }
 }
 
-export function groupIssuedDescription(issued?: GroupIssued): string {
+export function groupIssuedDescription(issued?: GroupIssued | string): string {
   switch (groupIssued(issued)) {
     case GroupIssued.JWT:
       return "Created from JWT group claims. Membership is driven by the IdP.";
     case GroupIssued.INTEGRATION:
       return "Provisioned by SCIM. Membership changes may be overwritten by the IdP.";
     case GroupIssued.API:
-    default:
       return "Created manually in the dashboard or through the API.";
+    case unknownGroupIssued:
+      return "Origin is not recognized by this dashboard version. Treat it as externally managed until the dashboard is upgraded.";
   }
 }
