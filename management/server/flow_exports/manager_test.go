@@ -61,9 +61,11 @@ func TestArchiveConfigFromRowsUsesRowParquetWhenEnvIsEmpty(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	cfg, ok, err := ArchiveConfigFromRows(context.Background(), s)
+	cfg, source, ok, err := ArchiveConfigFromRows(context.Background(), s)
 	require.NoError(t, err)
 	require.True(t, ok, "row-level parquet archive must enable the read path even when env format is empty")
+	assert.Equal(t, "flow_exports#1 s3/dashboard-s3", source)
+	assert.NotContains(t, source, "secret")
 	assert.Equal(t, "s3", cfg.Provider)
 	assert.Equal(t, "flow-archive", cfg.Bucket)
 	assert.Equal(t, "tenant-a", cfg.Prefix)
@@ -90,7 +92,7 @@ func TestArchiveConfigFromRowsHonorsRowFormatOverride(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, ok, err := ArchiveConfigFromRows(context.Background(), s)
+	_, _, ok, err := ArchiveConfigFromRows(context.Background(), s)
 	require.NoError(t, err)
 	assert.False(t, ok, "row-level ndjson must not inherit env parquet")
 }
@@ -112,12 +114,45 @@ func TestArchiveConfigFromRowsInheritsEnvWhenRowFormatIsEmpty(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	cfg, ok, err := ArchiveConfigFromRows(context.Background(), s)
+	cfg, source, ok, err := ArchiveConfigFromRows(context.Background(), s)
 	require.NoError(t, err)
 	require.True(t, ok, "empty row format should inherit env parquet")
+	assert.Equal(t, "flow_exports#1 gcs/dashboard-gcs", source)
 	assert.Equal(t, "gcs", cfg.Provider)
 	assert.Equal(t, "flow-archive", cfg.Bucket)
 	assert.Equal(t, "tenant-b", cfg.Prefix)
 	assert.Equal(t, "project", cfg.ProjectID)
 	assert.Equal(t, []byte(`{"type":"service_account"}`), cfg.CredentialsJSON)
+}
+
+func TestArchiveConfigFromRowsUsesFirstEnabledParquetExport(t *testing.T) {
+	t.Setenv(envArchiveFormat, "")
+	s := newTestStore(t)
+
+	_, err := s.Save(context.Background(), SaveInput{
+		Name:    "first-parquet",
+		Type:    TypeS3,
+		Enabled: true,
+		S3: &S3DestConfig{
+			Bucket: "first-archive",
+			Format: "parquet",
+		},
+	})
+	require.NoError(t, err)
+	_, err = s.Save(context.Background(), SaveInput{
+		Name:    "second-parquet",
+		Type:    TypeGCS,
+		Enabled: true,
+		GCS: &GCSDestConfig{
+			Bucket: "second-archive",
+			Format: "parquet",
+		},
+	})
+	require.NoError(t, err)
+
+	cfg, source, ok, err := ArchiveConfigFromRows(context.Background(), s)
+	require.NoError(t, err)
+	require.True(t, ok)
+	assert.Equal(t, "flow_exports#1 s3/first-parquet", source)
+	assert.Equal(t, "first-archive", cfg.Bucket)
 }

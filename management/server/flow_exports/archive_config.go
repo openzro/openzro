@@ -2,6 +2,7 @@ package flow_exports
 
 import (
 	"context"
+	"fmt"
 
 	log "github.com/sirupsen/logrus"
 
@@ -12,15 +13,15 @@ import (
 // effective format is Parquet. List() sorts by ID, so the choice is
 // deterministic when an operator has configured more than one archive.
 //
-// Decrypt/build errors are logged and skipped, matching Manager.ApplyAll:
+// Decrypt/type errors are logged and skipped, matching Manager.ApplyAll:
 // one malformed export row must not prevent management from starting.
-func ArchiveConfigFromRows(ctx context.Context, cfgStore *Store) (flowArchive.Config, bool, error) {
+func ArchiveConfigFromRows(ctx context.Context, cfgStore *Store) (flowArchive.Config, string, bool, error) {
 	if cfgStore == nil {
-		return flowArchive.Config{}, false, nil
+		return flowArchive.Config{}, "", false, nil
 	}
 	rows, err := cfgStore.List(ctx)
 	if err != nil {
-		return flowArchive.Config{}, false, err
+		return flowArchive.Config{}, "", false, err
 	}
 	for _, row := range rows {
 		if !row.Enabled {
@@ -60,7 +61,7 @@ func ArchiveConfigFromRows(ctx context.Context, cfgStore *Store) (flowArchive.Co
 				Region:          c.Region,
 				AccessKeyID:     c.AccessKey,
 				SecretAccessKey: c.SecretKey,
-			}, true, nil
+			}, archiveReaderSource(row), true, nil
 		case TypeGCS:
 			c, ok := plain.(*GCSDestConfig)
 			if !ok || c == nil {
@@ -80,8 +81,12 @@ func ArchiveConfigFromRows(ctx context.Context, cfgStore *Store) (flowArchive.Co
 				ProjectID:       c.ProjectID,
 				CredentialsFile: c.CredentialsFile,
 				CredentialsJSON: []byte(c.CredentialsJSON),
-			}, true, nil
+			}, archiveReaderSource(row), true, nil
 		}
 	}
-	return flowArchive.Config{}, false, nil
+	return flowArchive.Config{}, "", false, nil
+}
+
+func archiveReaderSource(row FlowExport) string {
+	return fmt.Sprintf("flow_exports#%d %s/%s", row.ID, row.Type, row.Name)
 }

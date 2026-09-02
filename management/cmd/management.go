@@ -1050,7 +1050,7 @@ func flowArchiveFromConfig(
 	if flowExportsStore == nil {
 		return nil, "", nil
 	}
-	cfg, ok, err := flowExports.ArchiveConfigFromRows(ctx, flowExportsStore)
+	cfg, source, ok, err := flowExports.ArchiveConfigFromRows(ctx, flowExportsStore)
 	if err != nil {
 		return nil, "", fmt.Errorf("flow_exports archive config: %w", err)
 	}
@@ -1058,7 +1058,7 @@ func flowArchiveFromConfig(
 		return nil, "", nil
 	}
 	archiveStore, err = flowArchive.NewParquet(cfg)
-	return archiveStore, "flow_exports", err
+	return archiveStore, source, err
 }
 
 func cpFile(src, dst string) error {

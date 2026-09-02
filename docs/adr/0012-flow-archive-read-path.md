@@ -136,6 +136,12 @@ Two concrete pieces:
   `OPENZRO_FLOW_ARCHIVE_FORMAT=parquet`; dashboard-configured flow exports can
   do it on the row itself. Row-level format overrides the env default, and the
   federated reader follows the same precedence.
+* The federated reader is assembled at management startup. Dashboard changes
+  to flow export rows are applied immediately to the write-side sinks, but the
+  archive read path sees the changed row only after management restarts. When
+  multiple enabled S3/GCS exports resolve to Parquet, the reader picks the
+  first row by ID and logs that choice; additional Parquet archives keep
+  writing, but are not queried by the UI in this release.
 * The federated read **does not** transparently bridge NDJSON → Parquet.
   A separate one-shot tool (a follow-up ADR — out of scope for this
   one) will re-emit historical NDJSON as Parquet when an operator wants

@@ -71,6 +71,13 @@ No pre-upgrade action is required for the route validation change.
   `OPENZRO_FLOW_ARCHIVE_GCS_BUCKET`. For dashboard-configured exports,
   set that export's Format to `parquet`; a row-level format overrides
   the env default, and the dashboard reader uses the same precedence.
+  The reader is assembled only when management starts. Saving or
+  editing a dashboard export starts writing with the new format
+  immediately, but archive reads from that export require a management
+  restart. If more than one enabled S3/GCS export resolves to Parquet,
+  the dashboard reader uses the first row by ID and logs the selected
+  export; the other Parquet exports keep writing normally but are not
+  queried by the UI.
   Archives written with the default NDJSON format remain available in
   the bucket for external tools, but the dashboard does not query them.
 
