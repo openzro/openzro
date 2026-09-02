@@ -697,11 +697,14 @@ release:
 
     - **Windows binaries are unsigned** in this release stream. Windows
       SmartScreen will warn — click "More info" → "Run anyway".
-    - **macOS binaries are not notarized** in this release stream. Run
-      `xattr -d com.apple.quarantine <path-to-binary>` to remove the
-      Gatekeeper quarantine flag.
-    - For signed builds, use a tagged release from the upstream
-      goreleaser pipeline (TODO: SignPath integration).
+    - **The macOS installer is signed and notarized.**
+      `openzro_<version>_darwin_universal.pkg` is submitted to Apple's
+      notary service and stapled during the release, so it opens without
+      a Gatekeeper prompt and needs no `xattr` workaround.
+    - **The macOS tarballs are not.** The `*_darwin_*.tar.gz` archives
+      hold plain binaries that skip signing, so Gatekeeper quarantines
+      them on first run. Prefer the installer; if you need a raw binary,
+      `xattr -d com.apple.quarantine <path-to-binary>` clears the flag.
 
 snapshot:
   version_template: "{{ .Tag }}-snapshot-{{ .ShortCommit }}"

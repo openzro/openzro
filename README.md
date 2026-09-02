@@ -168,9 +168,10 @@ sudo brew services start openzro
 #   openzro_<version>_darwin_universal.pkg
 ```
 
-The `.pkg` is unsigned; first run may need `xattr -d com.apple.quarantine`
-or right-click → *Open*. Apple Developer ID notarization is tracked as
-[issue #2](https://github.com/openzro/openzro/issues/2).
+The `.pkg` is signed with an Apple Developer ID and notarized, so it
+installs without a Gatekeeper prompt. The raw `*_darwin_*.tar.gz`
+binaries are not signed — those still need
+`xattr -d com.apple.quarantine` or right-click → *Open* on first run.
 
 ### Self-hosted control plane on Kubernetes
 
