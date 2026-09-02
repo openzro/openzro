@@ -45,6 +45,9 @@ func (am *DefaultAccountManager) SCIMCreateGroup(ctx context.Context, accountID,
 		Peers:     []string{},
 	}
 	if err := am.SaveGroups(ctx, accountID, callerID, []*types.Group{group}, true); err != nil {
+		if isGroupAlreadyExists(err) {
+			return nil, ErrSCIMGroupAlreadyExists
+		}
 		return nil, err
 	}
 	propagated, err := am.applySCIMGroupMembers(ctx, accountID, group.ID, memberUserIDs, nil)
@@ -83,6 +86,9 @@ func (am *DefaultAccountManager) SCIMReplaceGroup(ctx context.Context, accountID
 		group.Name = displayName
 	}
 	if err := am.SaveGroups(ctx, accountID, callerID, []*types.Group{group}, false); err != nil {
+		if isGroupAlreadyExists(err) {
+			return nil, ErrSCIMGroupAlreadyExists
+		}
 		return nil, err
 	}
 	prev, err := am.usersInGroup(ctx, accountID, groupID)
@@ -138,6 +144,13 @@ func (am *DefaultAccountManager) scimSingleUserMembership(ctx context.Context, a
 	var propagated bool
 	err := am.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
 		ctx := ctx
+		if err := lockSCIMGroupInTx(ctx, tx, accountID, groupID); err != nil {
+			return err
+		}
+		if err := tx.LockAccount(ctx, store.LockingStrengthUpdate, accountID); err != nil {
+			return err
+		}
+
 		settings, err := tx.GetAccountSettings(ctx, store.LockingStrengthShare, accountID)
 		if err != nil {
 			return err
@@ -180,6 +193,9 @@ func (am *DefaultAccountManager) SCIMRenameGroup(ctx context.Context, accountID,
 		group.Name = newName
 	}
 	if err := am.SaveGroups(ctx, accountID, callerID, []*types.Group{group}, false); err != nil {
+		if isGroupAlreadyExists(err) {
+			return nil, ErrSCIMGroupAlreadyExists
+		}
 		return nil, err
 	}
 	return group, nil
@@ -206,6 +222,13 @@ func (am *DefaultAccountManager) SCIMDeleteGroup(ctx context.Context, accountID,
 	var propagated bool
 	err = am.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
 		ctx := ctx
+		if err := lockSCIMGroupInTx(ctx, tx, accountID, groupID); err != nil {
+			return err
+		}
+		if err := tx.LockAccount(ctx, store.LockingStrengthUpdate, accountID); err != nil {
+			return err
+		}
+
 		settings, err := tx.GetAccountSettings(ctx, store.LockingStrengthShare, accountID)
 		if err != nil {
 			return err
@@ -317,6 +340,13 @@ func (am *DefaultAccountManager) applySCIMGroupMembers(ctx context.Context, acco
 	var propagated bool
 	err := am.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
 		ctx := ctx
+		if err := lockSCIMGroupInTx(ctx, tx, accountID, groupID); err != nil {
+			return err
+		}
+		if err := tx.LockAccount(ctx, store.LockingStrengthUpdate, accountID); err != nil {
+			return err
+		}
+
 		settings, err := tx.GetAccountSettings(ctx, store.LockingStrengthShare, accountID)
 		if err != nil {
 			return err
@@ -523,6 +553,18 @@ func stringSet(xs []string) map[string]struct{} {
 		out[s] = struct{}{}
 	}
 	return out
+}
+
+func isGroupAlreadyExists(err error) bool {
+	s, ok := status.FromError(err)
+	return ok && s.Type() == status.AlreadyExists
+}
+
+func lockSCIMGroupInTx(ctx context.Context, tx store.Store, accountID, groupID string) error {
+	if _, err := tx.GetGroupByID(ctx, store.LockingStrengthUpdate, accountID, groupID); err != nil {
+		return ErrSCIMGroupNotFound
+	}
+	return nil
 }
 
 // _ ensures account package is referenced so the import linter does

@@ -1299,7 +1299,7 @@ func TestAccountManager_NetworkUpdates_SaveGroup(t *testing.T) {
 	}()
 
 	group.Peers = []string{peer1.ID, peer2.ID, peer3.ID}
-	if err := manager.SaveGroup(context.Background(), account.Id, userID, &group, true); err != nil {
+	if err := manager.SaveGroup(context.Background(), account.Id, userID, &group, false); err != nil {
 		t.Errorf("save group: %v", err)
 		return
 	}

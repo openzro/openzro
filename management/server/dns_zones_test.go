@@ -471,7 +471,7 @@ func TestNetworkMap_CustomZonesComposition(t *testing.T) {
 	// this is the operator's natural flow and exercises the group
 	// membership wiring end-to-end.
 	g := &types.Group{ID: dnsZoneTestGroupID, Name: "test-group", Peers: []string{peer1.ID}}
-	require.NoError(t, am.SaveGroup(ctx, dnsZoneTestAccountID, dnsZoneTestUserID, g, true))
+	require.NoError(t, am.SaveGroup(ctx, dnsZoneTestAccountID, dnsZoneTestUserID, g, false))
 
 	// Three zones distributed to dnsZoneTestGroupID:
 	//   - "ok": enabled with a record -> peer1 must see, peer2 must not

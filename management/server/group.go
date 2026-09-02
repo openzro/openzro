@@ -72,9 +72,14 @@ func (am *DefaultAccountManager) SaveGroup(ctx context.Context, accountID, userI
 	return am.SaveGroups(ctx, accountID, userID, []*types.Group{newGroup}, create)
 }
 
-// SaveGroups adds new groups to the account.
-// Note: This function does not acquire the global lock.
-// It is the caller's responsibility to ensure proper locking is in place before invoking this method.
+// SaveGroups adds or updates groups in the account.
+//
+// The process-local wrapper lock in SaveGroup is intentionally not required
+// here. Creates take the account row before proving the same-source name absent;
+// updates take the affected group rows first, then the account row. Peer
+// references are checked before either lock family, while the same-source name
+// proof stays non-locking under the account row; taking group locks after the
+// account row would invert against group-first writers.
 func (am *DefaultAccountManager) SaveGroups(ctx context.Context, accountID, userID string, groups []*types.Group, create bool) error {
 	operation := operations.Create
 	if !create {
@@ -93,9 +98,36 @@ func (am *DefaultAccountManager) SaveGroups(ctx context.Context, accountID, user
 	var updateAccountPeers bool
 
 	err = am.Store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
+		for _, newGroup := range groups {
+			if err = prepareGroupSave(ctx, transaction, accountID, newGroup); err != nil {
+				return err
+			}
+		}
+
+		lockedGroups := make(map[string]*types.Group, len(groups))
+		if !create {
+			groupIDsToLock := make([]string, 0, len(groups))
+			for _, newGroup := range groups {
+				groupIDsToLock = append(groupIDsToLock, newGroup.ID)
+			}
+			slices.Sort(groupIDsToLock)
+
+			for _, groupID := range groupIDsToLock {
+				oldGroup, err := transaction.GetGroupByID(ctx, store.LockingStrengthUpdate, accountID, groupID)
+				if err != nil {
+					return err
+				}
+				lockedGroups[groupID] = oldGroup
+			}
+		}
+
+		if err = transaction.LockAccount(ctx, store.LockingStrengthUpdate, accountID); err != nil {
+			return err
+		}
+
 		groupIDs := make([]string, 0, len(groups))
 		for _, newGroup := range groups {
-			if err = validateNewGroup(ctx, transaction, accountID, newGroup); err != nil {
+			if err = validateGroupSave(ctx, transaction, accountID, newGroup, create, lockedGroups[newGroup.ID]); err != nil {
 				return err
 			}
 
@@ -140,7 +172,7 @@ func (am *DefaultAccountManager) prepareGroupEvents(ctx context.Context, transac
 	addedPeers := make([]string, 0)
 	removedPeers := make([]string, 0)
 
-	oldGroup, err := transaction.GetGroupByID(ctx, store.LockingStrengthShare, accountID, newGroup.ID)
+	oldGroup, err := transaction.GetGroupByID(ctx, store.LockingStrengthNone, accountID, newGroup.ID)
 	if err == nil && oldGroup != nil {
 		addedPeers = util.Difference(newGroup.Peers, oldGroup.Peers)
 		removedPeers = util.Difference(oldGroup.Peers, newGroup.Peers)
@@ -152,7 +184,7 @@ func (am *DefaultAccountManager) prepareGroupEvents(ctx context.Context, transac
 	}
 
 	modifiedPeers := slices.Concat(addedPeers, removedPeers)
-	peers, err := transaction.GetPeersByIDs(ctx, store.LockingStrengthShare, accountID, modifiedPeers)
+	peers, err := transaction.GetPeersByIDs(ctx, store.LockingStrengthNone, accountID, modifiedPeers)
 	if err != nil {
 		log.WithContext(ctx).Debugf("failed to get peers for group events: %v", err)
 		return nil
@@ -228,10 +260,25 @@ func (am *DefaultAccountManager) DeleteGroups(ctx context.Context, accountID, us
 	var updateAccountPeers bool
 
 	err = am.Store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
-		for _, groupID := range groupIDs {
+		lockedGroups := make(map[string]*types.Group, len(groupIDs))
+		groupIDsToLock := slices.Clone(groupIDs)
+		slices.Sort(groupIDsToLock)
+		for _, groupID := range groupIDsToLock {
 			group, err := transaction.GetGroupByID(ctx, store.LockingStrengthUpdate, accountID, groupID)
 			if err != nil {
 				allErrors = errors.Join(allErrors, err)
+				continue
+			}
+			lockedGroups[groupID] = group
+		}
+
+		if err = transaction.LockAccount(ctx, store.LockingStrengthUpdate, accountID); err != nil {
+			return err
+		}
+
+		for _, groupID := range groupIDs {
+			group, ok := lockedGroups[groupID]
+			if !ok {
 				continue
 			}
 
@@ -288,13 +335,17 @@ func (am *DefaultAccountManager) GroupAddPeer(ctx context.Context, accountID, gr
 	var err error
 
 	err = am.Store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
-		group, err = transaction.GetGroupByID(context.Background(), store.LockingStrengthUpdate, accountID, groupID)
+		group, err = transaction.GetGroupByID(ctx, store.LockingStrengthUpdate, accountID, groupID)
 		if err != nil {
 			return err
 		}
 
 		if updated := group.AddPeer(peerID); !updated {
 			return nil
+		}
+
+		if err = transaction.LockAccount(ctx, store.LockingStrengthUpdate, accountID); err != nil {
+			return err
 		}
 
 		updateAccountPeers, err = areGroupChangesAffectPeers(ctx, transaction, accountID, []string{groupID})
@@ -329,13 +380,17 @@ func (am *DefaultAccountManager) GroupAddResource(ctx context.Context, accountID
 	var err error
 
 	err = am.Store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
-		group, err = transaction.GetGroupByID(context.Background(), store.LockingStrengthUpdate, accountID, groupID)
+		group, err = transaction.GetGroupByID(ctx, store.LockingStrengthUpdate, accountID, groupID)
 		if err != nil {
 			return err
 		}
 
 		if updated := group.AddResource(resource); !updated {
 			return nil
+		}
+
+		if err = transaction.LockAccount(ctx, store.LockingStrengthUpdate, accountID); err != nil {
+			return err
 		}
 
 		updateAccountPeers, err = areGroupChangesAffectPeers(ctx, transaction, accountID, []string{groupID})
@@ -370,13 +425,17 @@ func (am *DefaultAccountManager) GroupDeletePeer(ctx context.Context, accountID,
 	var err error
 
 	err = am.Store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
-		group, err = transaction.GetGroupByID(context.Background(), store.LockingStrengthUpdate, accountID, groupID)
+		group, err = transaction.GetGroupByID(ctx, store.LockingStrengthUpdate, accountID, groupID)
 		if err != nil {
 			return err
 		}
 
 		if updated := group.RemovePeer(peerID); !updated {
 			return nil
+		}
+
+		if err = transaction.LockAccount(ctx, store.LockingStrengthUpdate, accountID); err != nil {
+			return err
 		}
 
 		updateAccountPeers, err = areGroupChangesAffectPeers(ctx, transaction, accountID, []string{groupID})
@@ -411,13 +470,17 @@ func (am *DefaultAccountManager) GroupDeleteResource(ctx context.Context, accoun
 	var err error
 
 	err = am.Store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
-		group, err = transaction.GetGroupByID(context.Background(), store.LockingStrengthUpdate, accountID, groupID)
+		group, err = transaction.GetGroupByID(ctx, store.LockingStrengthUpdate, accountID, groupID)
 		if err != nil {
 			return err
 		}
 
 		if updated := group.RemoveResource(resource); !updated {
 			return nil
+		}
+
+		if err = transaction.LockAccount(ctx, store.LockingStrengthUpdate, accountID); err != nil {
+			return err
 		}
 
 		updateAccountPeers, err = areGroupChangesAffectPeers(ctx, transaction, accountID, []string{groupID})
@@ -442,25 +505,15 @@ func (am *DefaultAccountManager) GroupDeleteResource(ctx context.Context, accoun
 	return nil
 }
 
-// validateNewGroup validates the new group for existence and required fields.
-func validateNewGroup(ctx context.Context, transaction store.Store, accountID string, newGroup *types.Group) error {
+// prepareGroupSave checks fields and references that must happen before
+// SaveGroups takes group/account locks. Peer existence uses a locking read so a
+// concurrent peer delete cannot commit between validation and the group save.
+func prepareGroupSave(ctx context.Context, transaction store.Store, accountID string, newGroup *types.Group) error {
 	if newGroup.ID == "" && newGroup.Issued != types.GroupIssuedAPI {
 		return status.Errorf(status.InvalidArgument, "%s group without ID set", newGroup.Issued)
 	}
 
 	if newGroup.ID == "" && newGroup.Issued == types.GroupIssuedAPI {
-		existingGroupIDs, err := transaction.GetGroupIDsByNameAndIssued(ctx, store.LockingStrengthShare, accountID, newGroup.Name, types.GroupIssuedAPI)
-		if err != nil {
-			return err
-		}
-
-		// Group display names are unique only within the same issuer.
-		// JWT and integration groups are owned by their IdP source and
-		// may intentionally share a display name with an API group.
-		if len(existingGroupIDs) > 0 {
-			return status.Errorf(status.AlreadyExists, "group with name %s already exists", newGroup.Name)
-		}
-
 		newGroup.ID = xid.New().String()
 	}
 
@@ -468,6 +521,55 @@ func validateNewGroup(ctx context.Context, transaction store.Store, accountID st
 		_, err := transaction.GetPeerByID(ctx, store.LockingStrengthShare, accountID, peerID)
 		if err != nil {
 			return status.Errorf(status.InvalidArgument, "peer with ID \"%s\" not found", peerID)
+		}
+	}
+
+	return nil
+}
+
+// validateGroupSave validates a group create or update.
+//
+// Group display names are unique only within the same issuer. JWT and
+// integration groups are owned by their IdP source and may intentionally share
+// a display name with an API group. Updates with an unchanged name are allowed
+// even when legacy duplicate rows already exist, so operators can still edit
+// or remove old data without this validation making every duplicate row
+// unmanageable.
+func validateGroupSave(ctx context.Context, transaction store.Store, accountID string, newGroup *types.Group, create bool, oldGroup *types.Group) error {
+	if create && newGroup.ID != "" {
+		// The caller already holds the account row. Keep probes non-locking
+		// here; taking group locks after the account row would deadlock against
+		// group-first update/delete transactions.
+		existingGroup, err := transaction.GetGroupByID(ctx, store.LockingStrengthNone, accountID, newGroup.ID)
+		if err == nil && existingGroup != nil {
+			return status.Errorf(status.AlreadyExists, "group with ID %s already exists", newGroup.ID)
+		}
+		if err != nil {
+			s, ok := status.FromError(err)
+			if !ok || s.Type() != status.NotFound {
+				return err
+			}
+		}
+	}
+
+	checkName := create
+	if !create {
+		if oldGroup == nil {
+			return status.Errorf(status.Internal, "existing group %s was not locked before validation", newGroup.ID)
+		}
+		checkName = oldGroup.Name != newGroup.Name || oldGroup.Issued != newGroup.Issued
+	}
+
+	if checkName {
+		existingGroupIDs, err := transaction.GetGroupIDsByNameAndIssued(ctx, store.LockingStrengthNone, accountID, newGroup.Name, newGroup.Issued)
+		if err != nil {
+			return err
+		}
+		for _, groupID := range existingGroupIDs {
+			if !create && groupID == newGroup.ID {
+				continue
+			}
+			return status.Errorf(status.AlreadyExists, "group with name %s already exists", newGroup.Name)
 		}
 	}
 

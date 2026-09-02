@@ -566,7 +566,7 @@ func TestDNSAccountPeersUpdate(t *testing.T) {
 			ID:    "groupA",
 			Name:  "GroupA",
 			Peers: []string{peer1.ID, peer2.ID, peer3.ID},
-		}, true)
+		}, false)
 		assert.NoError(t, err)
 
 		done := make(chan struct{})
