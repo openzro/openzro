@@ -4,6 +4,7 @@ import { CommandItem } from "@components/Command";
 import { Popover, PopoverContent, PopoverTrigger } from "@components/Popover";
 import { ScrollArea } from "@components/ScrollArea";
 import { GroupBadgeIcon } from "@components/ui/GroupBadgeIcon";
+import GroupOriginBadge from "@components/ui/GroupOriginBadge";
 import TextWithTooltip from "@components/ui/TextWithTooltip";
 import { cn } from "@utils/helpers";
 import { Command, CommandGroup, CommandInput, CommandList } from "cmdk";
@@ -18,6 +19,10 @@ import * as React from "react";
 import { useState } from "react";
 import { useElementSize } from "@/hooks/useElementSize";
 import { Group } from "@/interfaces/Group";
+import {
+  groupIdentityKey,
+  groupSearchText,
+} from "@/modules/groups/groupIdentity";
 
 interface MultiSelectProps {
   values: string[];
@@ -136,8 +141,8 @@ export function GroupFilterSelector({
 
                       return (
                         <CommandItem
-                          key={value}
-                          value={value}
+                          key={groupIdentityKey(item)}
+                          value={groupSearchText(item)}
                           className={"p-1"}
                           onSelect={() => {
                             toggle(value);
@@ -166,6 +171,7 @@ export function GroupFilterSelector({
                                   issued={item?.issued}
                                 />
                                 <TextWithTooltip text={value} maxChars={15} />
+                                <GroupOriginBadge issued={item?.issued} />
                               </div>
                               <div
                                 className={

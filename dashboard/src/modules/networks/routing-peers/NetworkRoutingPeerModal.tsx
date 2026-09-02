@@ -44,6 +44,7 @@ import { Network, NetworkRouter } from "@/interfaces/Network";
 import { OperatingSystem } from "@/interfaces/OperatingSystem";
 import { Peer } from "@/interfaces/Peer";
 import { SetupKey } from "@/interfaces/SetupKey";
+import { resolveGroupID } from "@/modules/groups/groupIdentity";
 import useGroupHelper from "@/modules/groups/useGroupHelper";
 import { RoutingPeerMasqueradeSwitch } from "@/modules/networks/routing-peers/RoutingPeerMasqueradeSwitch";
 import SetupModal from "@/modules/setup-openzro-modal/SetupModal";
@@ -142,10 +143,13 @@ function RoutingPeerModalContent({
 
   const addRouter = async () => {
     const g1 = getAllRoutingGroupsToUpdate();
-    const createOrUpdateGroups = uniqBy([...g1], "name").map((g) => g.promise);
+    const createOrUpdateGroups = uniqBy([...g1], "key").map((g) => g.promise);
     const createdGroups = await Promise.all(
       createOrUpdateGroups.map((call) => call()),
     );
+    const peerGroupIDs = routingPeerGroups
+      .map((group) => resolveGroupID(group, createdGroups))
+      .filter((id) => id !== undefined) as string[];
 
     const isRoutingPeer = type === "peer";
 
@@ -155,9 +159,7 @@ function RoutingPeerModalContent({
       loadingMessage: "Adding Routing Peer...",
       promise: create({
         peer: isRoutingPeer ? routingPeer?.id : undefined,
-        peer_groups: !isRoutingPeer
-          ? createdGroups.map((g) => g.id)
-          : undefined,
+        peer_groups: !isRoutingPeer ? peerGroupIDs : undefined,
         metric: parseInt(metric),
         enabled,
         masquerade: isRoutingPeer && isNonLinuxRoutingPeer ? true : masquerade,
@@ -169,10 +171,13 @@ function RoutingPeerModalContent({
 
   const updateRouter = async () => {
     const g1 = getAllRoutingGroupsToUpdate();
-    const createOrUpdateGroups = uniqBy([...g1], "name").map((g) => g.promise);
+    const createOrUpdateGroups = uniqBy([...g1], "key").map((g) => g.promise);
     const createdGroups = await Promise.all(
       createOrUpdateGroups.map((call) => call()),
     );
+    const peerGroupIDs = routingPeerGroups
+      .map((group) => resolveGroupID(group, createdGroups))
+      .filter((id) => id !== undefined) as string[];
 
     const isRoutingPeer = type === "peer";
 
@@ -182,9 +187,7 @@ function RoutingPeerModalContent({
       loadingMessage: "Adding Routing Peer...",
       promise: update({
         peer: isRoutingPeer ? routingPeer?.id : undefined,
-        peer_groups: !isRoutingPeer
-          ? createdGroups.map((g) => g.id)
-          : undefined,
+        peer_groups: !isRoutingPeer ? peerGroupIDs : undefined,
         metric: parseInt(metric),
         enabled,
         masquerade: isRoutingPeer && isNonLinuxRoutingPeer ? true : masquerade,

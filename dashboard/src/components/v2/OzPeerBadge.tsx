@@ -7,6 +7,7 @@ import { useMemo, useState } from "react";
 import { useGroups } from "@/contexts/GroupsProvider";
 import { Group } from "@/interfaces/Group";
 import { AssignPeerToGroupModal } from "@/modules/groups/AssignPeerToGroupModal";
+import { sameGroupIdentity } from "@/modules/groups/groupIdentity";
 
 // v2 paint of PeerBadge — chip that shows a group's peer count and
 // opens AssignPeerToGroupModal on click. Same behavior as the legacy
@@ -31,7 +32,7 @@ export default function OzPeerBadge({
   const { dropdownOptions, addDropdownOptions } = useGroups();
 
   const currentGroup = useMemo(
-    () => dropdownOptions?.find((g) => g.name === group?.name),
+    () => dropdownOptions?.find((g) => sameGroupIdentity(g, group)),
     [group, dropdownOptions],
   );
 

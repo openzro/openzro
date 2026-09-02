@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { useGroups } from "@/contexts/GroupsProvider";
 import { Group } from "@/interfaces/Group";
 import { AssignPeerToGroupModal } from "@/modules/groups/AssignPeerToGroupModal";
+import { sameGroupIdentity } from "@/modules/groups/groupIdentity";
 
 type Props = {
   children?: React.ReactNode;
@@ -27,7 +28,7 @@ export default function PeerBadge({
   const { dropdownOptions, addDropdownOptions } = useGroups();
 
   const currentGroup = useMemo(() => {
-    return dropdownOptions?.find((g) => g.name === group?.name);
+    return dropdownOptions?.find((g) => sameGroupIdentity(g, group));
   }, [group, dropdownOptions]);
 
   const peerCount = useMemo(() => {

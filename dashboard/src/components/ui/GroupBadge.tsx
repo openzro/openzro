@@ -1,11 +1,13 @@
 import Badge from "@components/Badge";
 import { GroupBadgeIcon } from "@components/ui/GroupBadgeIcon";
+import GroupOriginBadge from "@components/ui/GroupOriginBadge";
 import { SmallBadge } from "@components/ui/SmallBadge";
 import TruncatedText from "@components/ui/TruncatedText";
 import { cn } from "@utils/helpers";
 import { XIcon } from "lucide-react";
 import * as React from "react";
 import { Group } from "@/interfaces/Group";
+import { groupIdentityKey } from "@/modules/groups/groupIdentity";
 
 type Props = {
   group: Group;
@@ -34,7 +36,7 @@ export default function GroupBadge({
 
   return (
     <Badge
-      key={group.id ?? group.name}
+      key={groupIdentityKey(group)}
       useHover={true}
       data-cy={"group-badge"}
       variant={"gray-ghost"}
@@ -51,6 +53,7 @@ export default function GroupBadge({
         maxWidth={maxWidth}
         hideTooltip={hideTooltip}
       />
+      <GroupOriginBadge issued={group?.issued} />
       {children}
       {isNew && showNewBadge && <SmallBadge />}
       {showX && (

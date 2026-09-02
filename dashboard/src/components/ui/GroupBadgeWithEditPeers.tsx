@@ -1,12 +1,18 @@
 import Badge from "@components/Badge";
+import { GroupBadgeIcon } from "@components/ui/GroupBadgeIcon";
+import GroupOriginBadge from "@components/ui/GroupOriginBadge";
 import TextWithTooltip from "@components/ui/TextWithTooltip";
 import { cn } from "@utils/helpers";
-import { EyeIcon, FolderGit2, SquarePen } from "lucide-react";
+import { EyeIcon, SquarePen } from "lucide-react";
 import * as React from "react";
 import { useMemo, useState } from "react";
 import { useGroups } from "@/contexts/GroupsProvider";
 import { Group } from "@/interfaces/Group";
 import { AssignPeerToGroupModal } from "@/modules/groups/AssignPeerToGroupModal";
+import {
+  groupIdentityKey,
+  sameGroupIdentity,
+} from "@/modules/groups/groupIdentity";
 
 type Props = {
   group: Group;
@@ -30,14 +36,14 @@ export default function GroupBadgeWithEditPeers({
     useGroups();
 
   const currentGroup = useMemo(() => {
-    return dropdownOptions?.find((g) => g.name === group?.name);
+    return dropdownOptions?.find((g) => sameGroupIdentity(g, group));
   }, [group, dropdownOptions]);
 
   const peerCount =
     currentGroup?.peers?.length ?? currentGroup?.peers_count ?? 0;
 
   const updateGroupOptions = (g: Group) => {
-    updateGroupDropdown(group.name, g);
+    updateGroupDropdown(group, g);
     onPeerAssignmentChange?.(group, g);
   };
 
@@ -56,7 +62,7 @@ export default function GroupBadgeWithEditPeers({
       )}
 
       <Badge
-        key={group.id ?? group.name}
+        key={groupIdentityKey(group)}
         useHover={true}
         variant={"gray-ghost"}
         className={cn(
@@ -79,8 +85,9 @@ export default function GroupBadgeWithEditPeers({
               "text-nb-gray-200 flex gap-1.5 items-center z-10 relative"
             }
           >
-            <FolderGit2 size={12} className={"shrink-0"} />
+            <GroupBadgeIcon id={group?.id} issued={group?.issued} />
             <TextWithTooltip text={group?.name || ""} maxChars={20} />
+            <GroupOriginBadge issued={group?.issued} />
             {isNew && showNewBadge && (
               <span
                 className={

@@ -42,11 +42,22 @@ import {
 } from "@/components/v2/OzTabs";
 import { useGroups } from "@/contexts/GroupsProvider";
 import { useElementSize } from "@/hooks/useElementSize";
-import type { Group, GroupPeer, GroupResource } from "@/interfaces/Group";
+import {
+  GroupIssued,
+  type Group,
+  type GroupPeer,
+  type GroupResource,
+} from "@/interfaces/Group";
 import { NetworkResource } from "@/interfaces/Network";
 import type { Peer } from "@/interfaces/Peer";
 import { PolicyRuleResource } from "@/interfaces/Policy";
 import { User } from "@/interfaces/User";
+import {
+  groupIdentityKey,
+  groupIssuerNameKey,
+  groupSearchText,
+  sameGroupIdentity,
+} from "@/modules/groups/groupIdentity";
 import { HorizontalUsersStack } from "@/modules/users/HorizontalUsersStack";
 
 interface MultiSelectProps {
@@ -116,8 +127,12 @@ export function PeerGroupSelector({
     const clientGroups = dropdownOptions.filter(
       (group) => group.keepClientState,
     );
-    let uniqueGroups = unionBy(sortedGroups, dropdownOptions, "name");
-    uniqueGroups = unionBy(clientGroups, uniqueGroups, "name");
+    let uniqueGroups = unionBy(
+      sortedGroups,
+      dropdownOptions,
+      groupIssuerNameKey,
+    );
+    uniqueGroups = unionBy(clientGroups, uniqueGroups, groupIssuerNameKey);
 
     uniqueGroups = hideAllGroup
       ? uniqueGroups.filter((group) => group.name !== "All")
@@ -127,61 +142,82 @@ export function PeerGroupSelector({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groups]);
 
-  const toggleGroupByName = (name: string) => {
-    const isSelected = values.find((group) => group.name == name) != undefined;
+  const newGroupOption = (name: string): Group => ({
+    name,
+    issued: GroupIssued.API,
+  });
+
+  const toggleGroup = (option: Group) => {
+    const isSelected =
+      values.find((group) => sameGroupIdentity(group, option)) != undefined;
     if (isSelected) {
-      deselectGroup(name);
+      deselectGroup(option);
     } else {
-      selectGroup(name);
+      selectGroup(option);
     }
   };
 
   // Add group to the groupOptions if it does not exist
-  const selectGroup = (name: string) => {
+  const selectGroup = (selectedGroup: Group) => {
     onResourceChange?.(undefined);
-    const group = groups?.find((group) => group.name == name);
-    const option = dropdownOptions.find((option) => option.name == name);
-    const groupPeers: GroupPeer[] | undefined =
-      (group?.peers as GroupPeer[]) || [];
-    const groupResources: GroupResource[] | undefined =
-      (group?.resources as GroupResource[]) || [];
+    const group = groups?.find((group) =>
+      sameGroupIdentity(group, selectedGroup),
+    );
+    const option =
+      dropdownOptions.find((option) =>
+        sameGroupIdentity(option, selectedGroup),
+      ) ?? selectedGroup;
+    const sourceGroup = group ?? option;
+    const groupPeers: GroupPeer[] | undefined = [
+      ...(((sourceGroup?.peers as GroupPeer[]) || []) as GroupPeer[]),
+    ];
+    const groupResources: GroupResource[] | undefined = [
+      ...(((sourceGroup?.resources as GroupResource[]) ||
+        []) as GroupResource[]),
+    ];
 
-    if (peer) groupPeers?.push({ id: peer?.id as string, name: peer?.name });
+    if (peer && !groupPeers.some((p) => p.id === peer.id)) {
+      groupPeers?.push({ id: peer?.id as string, name: peer?.name });
+    }
 
-    if (!group && !option) {
+    const existsInDropdown = dropdownOptions.some((option) =>
+      sameGroupIdentity(option, selectedGroup),
+    );
+    if (!group && !existsInDropdown) {
       addDropdownOptions([
-        { name: name, peers: groupPeers, resources: groupResources },
+        {
+          ...selectedGroup,
+          peers: groupPeers,
+          resources: groupResources,
+          keepClientState: true,
+        },
       ]);
     }
 
+    const nextGroup: Group = {
+      ...sourceGroup,
+      name: selectedGroup.name,
+      id: group?.id ?? sourceGroup?.id,
+      issued: sourceGroup?.issued ?? selectedGroup.issued ?? GroupIssued.API,
+      peers: groupPeers,
+      resources: groupResources,
+    };
+
     if (max == 1 && values.length == 1) {
-      onChange([
-        {
-          name: name,
-          id: group?.id,
-          peers: groupPeers,
-          resources: groupResources,
-        },
-      ]);
+      onChange([nextGroup]);
     } else {
-      onChange((previous) => [
-        ...previous,
-        {
-          name: name,
-          id: group?.id,
-          peers: groupPeers,
-          resources: groupResources,
-        },
-      ]);
+      onChange((previous) => [...previous, nextGroup]);
     }
 
     if (max == 1) setOpen(false);
   };
 
   // Remove group from the groupOptions if it does not have an id
-  const deselectGroup = (name: string) => {
+  const deselectGroup = (selectedGroup: Group) => {
     onChange((previous) => {
-      return previous.filter((group) => group.name != name);
+      return previous.filter(
+        (group) => !sameGroupIdentity(group, selectedGroup),
+      );
     });
   };
 
@@ -219,8 +255,10 @@ export function PeerGroupSelector({
   }, [open, dropdownOptions]);
 
   const onPeerAssignmentChange = (oldGroup: Group, newGroup: Group) => {
-    const filtered = values.filter((group) => group.name !== oldGroup.name);
-    const union = unionBy([newGroup], filtered, "name");
+    const filtered = values.filter(
+      (group) => !sameGroupIdentity(group, oldGroup),
+    );
+    const union = unionBy([newGroup], filtered, groupIssuerNameKey);
     onChange(union);
   };
 
@@ -292,11 +330,7 @@ export function PeerGroupSelector({
             data-cy={dataCy}
             ref={inputRef}
           >
-            <div
-              className={
-                "flex items-center gap-2 flex-wrap h-full"
-              }
-            >
+            <div className={"flex items-center gap-2 flex-wrap h-full"}>
               {resource && showResources && (
                 <ResourceBadge
                   className={"py-[3px]"}
@@ -312,7 +346,7 @@ export function PeerGroupSelector({
               {values.map((group) => {
                 return (
                   <div
-                    key={group.name}
+                    key={groupIdentityKey(group)}
                     className={cn(
                       showPeerCount
                         ? "flex gap-x-1 gap-y-2 items-center justify-between w-full"
@@ -323,7 +357,7 @@ export function PeerGroupSelector({
                       <GroupBadgeWithEditPeers
                         className={"py-[3px]"}
                         group={group}
-                        key={group.name}
+                        key={groupIdentityKey(group)}
                         showNewBadge={true}
                         onPeerAssignmentChange={onPeerAssignmentChange}
                         useSave={saveGroupAssignments}
@@ -332,14 +366,14 @@ export function PeerGroupSelector({
                       <GroupBadge
                         className={"py-[3px]"}
                         group={group}
-                        key={group.name}
+                        key={groupIdentityKey(group)}
                         showNewBadge={true}
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
                           if (disableInlineRemoveGroup) return;
                           if (peer != undefined && group.name == "All") return; // Prevent removing the "All" group
-                          toggleGroupByName(group.name);
+                          toggleGroup(group);
                         }}
                         showX={
                           peer != undefined
@@ -428,7 +462,7 @@ export function PeerGroupSelector({
                       <CommandItem
                         key={search}
                         onSelect={() => {
-                          toggleGroupByName(search);
+                          toggleGroup(newGroupOption(search));
                           searchRef.current?.focus();
                         }}
                         value={search}
@@ -449,8 +483,9 @@ export function PeerGroupSelector({
 
                     {sortedDropdownOptions.slice(0, slice).map((option) => {
                       const isSelected =
-                        values.find((group) => group.name == option.name) !=
-                        undefined;
+                        values.find((group) =>
+                          sameGroupIdentity(group, option),
+                        ) != undefined;
                       const peerCount =
                         option.peers?.length ?? option?.peers_count ?? 0;
 
@@ -472,17 +507,17 @@ export function PeerGroupSelector({
                           }
                           disabled={!isDisabled}
                           className={"w-full block"}
-                          key={option.name}
+                          key={groupIdentityKey(option)}
                         >
                           <CommandItem
-                            key={option.name}
-                            value={option.name + option.id}
+                            key={groupIdentityKey(option)}
+                            value={groupSearchText(option)}
                             disabled={isDisabled}
                             onSelect={() => {
                               if (peer != undefined && option.name == "All")
                                 return; // Prevent removing the "All" group
                               if (isDisabled) return;
-                              toggleGroupByName(option.name);
+                              toggleGroup(option);
                               searchRef.current?.focus();
                             }}
                             className={cn(isDisabled && "opacity-40")}
