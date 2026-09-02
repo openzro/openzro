@@ -131,11 +131,11 @@ Two concrete pieces:
   deliberately conservative: changing the default object format would
   surprise existing operators and downstream tools that consume
   `*.ndjson.gz` directly.
-* **Operators must explicitly flip**
-  `OPENZRO_FLOW_ARCHIVE_FORMAT=parquet` to enable dashboard reads from the
-  archive. The flip is one-way for the archive (you can keep producing both
-  formats during a transition by running two sinks, but the federated read
-  recognizes only Parquet).
+* **Operators must explicitly choose Parquet** to enable dashboard reads from
+  the archive. Env-configured archives do that with
+  `OPENZRO_FLOW_ARCHIVE_FORMAT=parquet`; dashboard-configured flow exports can
+  do it on the row itself. Row-level format overrides the env default, and the
+  federated reader follows the same precedence.
 * The federated read **does not** transparently bridge NDJSON → Parquet.
   A separate one-shot tool (a follow-up ADR — out of scope for this
   one) will re-emit historical NDJSON as Parquet when an operator wants

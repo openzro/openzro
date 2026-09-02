@@ -64,12 +64,15 @@ No pre-upgrade action is required for the route validation change.
   the two groups apart.
 - **Linux management releases can read Parquet flow archives from the
   dashboard.** To make network traffic events older than
-  `OPENZRO_FLOW_RETENTION` visible in the UI, set
-  `OPENZRO_FLOW_ARCHIVE_FORMAT=parquet` on the same deployment that
-  writes `OPENZRO_FLOW_ARCHIVE_S3_BUCKET` or
-  `OPENZRO_FLOW_ARCHIVE_GCS_BUCKET`. Archives written with the default
-  NDJSON format remain available in the bucket for external tools, but
-  the dashboard does not query them.
+  `OPENZRO_FLOW_RETENTION` visible in the UI, the archive that writes
+  the bucket must have effective format `parquet`. For env-configured
+  archives, set `OPENZRO_FLOW_ARCHIVE_FORMAT=parquet` on the same
+  deployment that writes `OPENZRO_FLOW_ARCHIVE_S3_BUCKET` or
+  `OPENZRO_FLOW_ARCHIVE_GCS_BUCKET`. For dashboard-configured exports,
+  set that export's Format to `parquet`; a row-level format overrides
+  the env default, and the dashboard reader uses the same precedence.
+  Archives written with the default NDJSON format remain available in
+  the bucket for external tools, but the dashboard does not query them.
 
 ## v0.53.1-alpha.89
 

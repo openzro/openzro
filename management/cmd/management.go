@@ -382,32 +382,6 @@ var (
 			if flowBuilt != nil {
 				flowStore = flowBuilt.Store
 				defer func() { _ = flowBuilt.Close() }()
-
-				// Cold-archive read path (ADR-0012). When the operator has
-				// configured a Parquet archive (S3 or GCS) AND this binary
-				// was built with `-tags=archive_duckdb`, wrap the hot store
-				// in a federated layer that routes queries by date window.
-				// Otherwise — no archive configured, NDJSON-only archive,
-				// or non-DuckDB build — federated falls through to hot-only
-				// behavior.
-				archiveStore, archErr := flowArchive.NewFromEnv()
-				switch {
-				case errors.Is(archErr, flowArchive.ErrUnavailable):
-					log.WithContext(ctx).Warn(
-						"flow archive: configured but binary built without archive_duckdb — " +
-							"rebuild with `-tags=archive_duckdb` to enable federated reads")
-				case archErr != nil:
-					return fmt.Errorf("flow archive store: %w", archErr)
-				}
-				if archiveStore != nil {
-					fed, err := flowFederated.New(flowStore, archiveStore, flowBuilt.Retention)
-					if err != nil {
-						return fmt.Errorf("flow federated store: %w", err)
-					}
-					flowStore = fed
-					log.WithContext(ctx).Infof(
-						"flow archive: federated read enabled (hot retention=%s)", flowBuilt.Retention)
-				}
 			}
 
 			// flow_exports: runtime-configurable destinations. The store
@@ -537,6 +511,39 @@ var (
 					return st.Compliant, st.Reason, nil
 				})
 				defer func() { _ = mdmManager.Close() }()
+			}
+
+			if flowStore != nil {
+				// Cold-archive read path (ADR-0012). When the operator has
+				// configured a Parquet archive (S3 or GCS) AND this binary
+				// was built with `-tags=archive_duckdb`, wrap the hot store
+				// in a federated layer that routes queries by date window.
+				// Environment configuration keeps its old precedence; when
+				// that does not yield a reader, fall back to the first
+				// enabled dashboard flow export whose effective format is
+				// Parquet. Otherwise — no archive configured, NDJSON-only
+				// archive, or non-DuckDB build — federated falls through to
+				// hot-only behavior.
+				archiveStore, archiveSource, archErr := flowArchiveFromConfig(ctx, flowExportsStore)
+				switch {
+				case errors.Is(archErr, flowArchive.ErrUnavailable):
+					log.WithContext(ctx).Warnf(
+						"flow archive: %s configured but binary built without archive_duckdb — "+
+							"rebuild with `-tags=archive_duckdb` to enable federated reads",
+						archiveSource)
+				case archErr != nil:
+					return fmt.Errorf("flow archive store: %w", archErr)
+				}
+				if archiveStore != nil {
+					fed, err := flowFederated.New(flowStore, archiveStore, flowBuilt.Retention)
+					if err != nil {
+						return fmt.Errorf("flow federated store: %w", err)
+					}
+					flowStore = fed
+					log.WithContext(ctx).Infof(
+						"flow archive: federated read enabled (source=%s, hot retention=%s)",
+						archiveSource, flowBuilt.Retention)
+				}
 			}
 
 			// Build FlowService + flow_exports.Manager BEFORE
@@ -1029,6 +1036,29 @@ func handleRebrand(cmd *cobra.Command) error {
 		}
 	}
 	return nil
+}
+
+func flowArchiveFromConfig(
+	ctx context.Context,
+	flowExportsStore *flowExports.Store,
+) (flowstore.Store, string, error) {
+	archiveStore, err := flowArchive.NewFromEnv()
+	if archiveStore != nil || err != nil {
+		return archiveStore, "environment", err
+	}
+
+	if flowExportsStore == nil {
+		return nil, "", nil
+	}
+	cfg, ok, err := flowExports.ArchiveConfigFromRows(ctx, flowExportsStore)
+	if err != nil {
+		return nil, "", fmt.Errorf("flow_exports archive config: %w", err)
+	}
+	if !ok {
+		return nil, "", nil
+	}
+	archiveStore, err = flowArchive.NewParquet(cfg)
+	return archiveStore, "flow_exports", err
 }
 
 func cpFile(src, dst string) error {

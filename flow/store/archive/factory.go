@@ -83,6 +83,14 @@ func NewFromEnv() (store.Store, error) {
 		return nil, nil
 	}
 
+	return NewParquet(cfg)
+}
+
+// NewParquet constructs an archive reader for a source whose effective
+// write format is already known to be Parquet. It applies the same
+// runtime bounds as NewFromEnv so env-configured and dashboard-
+// configured archives share timeout, memory and concurrency behavior.
+func NewParquet(cfg Config) (store.Store, error) {
 	cfg.QueryTimeout = parseTimeout(os.Getenv(envQueryTimeout))
 	cfg.MemoryLimit = os.Getenv(envMemoryLimit)
 	cfg.Threads = parseInt(os.Getenv(envThreads))
