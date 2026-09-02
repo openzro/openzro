@@ -317,7 +317,7 @@ func initTestGroupAccount(am *DefaultAccountManager) (*DefaultAccountManager, *t
 	groupForRoute2 := &types.Group{
 		ID:        "grp-for-route2",
 		AccountID: "account-id",
-		Name:      "Group for route",
+		Name:      "Group for route peer groups",
 		Issued:    types.GroupIssuedAPI,
 		Peers:     make([]string, 0),
 	}
@@ -410,13 +410,19 @@ func initTestGroupAccount(am *DefaultAccountManager) (*DefaultAccountManager, *t
 		return nil, nil, err
 	}
 
-	_ = am.SaveGroup(context.Background(), accountID, groupAdminUserID, groupForRoute, true)
-	_ = am.SaveGroup(context.Background(), accountID, groupAdminUserID, groupForRoute2, true)
-	_ = am.SaveGroup(context.Background(), accountID, groupAdminUserID, groupForNameServerGroups, true)
-	_ = am.SaveGroup(context.Background(), accountID, groupAdminUserID, groupForPolicies, true)
-	_ = am.SaveGroup(context.Background(), accountID, groupAdminUserID, groupForSetupKeys, true)
-	_ = am.SaveGroup(context.Background(), accountID, groupAdminUserID, groupForUsers, true)
-	_ = am.SaveGroup(context.Background(), accountID, groupAdminUserID, groupForIntegration, true)
+	for _, group := range []*types.Group{
+		groupForRoute,
+		groupForRoute2,
+		groupForNameServerGroups,
+		groupForPolicies,
+		groupForSetupKeys,
+		groupForUsers,
+		groupForIntegration,
+	} {
+		if err := am.SaveGroup(context.Background(), accountID, groupAdminUserID, group, true); err != nil {
+			return nil, nil, err
+		}
+	}
 
 	acc, err := am.Store.GetAccount(context.Background(), account.Id)
 	if err != nil {
@@ -474,7 +480,7 @@ func TestGroupAccountPeersUpdate(t *testing.T) {
 			ID:    "groupB",
 			Name:  "GroupB",
 			Peers: []string{peer1.ID, peer2.ID},
-		}, true)
+		}, false)
 		assert.NoError(t, err)
 
 		select {
@@ -567,7 +573,7 @@ func TestGroupAccountPeersUpdate(t *testing.T) {
 			ID:    "groupA",
 			Name:  "GroupA",
 			Peers: []string{peer1.ID, peer2.ID},
-		}, true)
+		}, false)
 		assert.NoError(t, err)
 
 		select {
@@ -636,7 +642,7 @@ func TestGroupAccountPeersUpdate(t *testing.T) {
 			ID:    "groupC",
 			Name:  "GroupC",
 			Peers: []string{peer1.ID, peer3.ID},
-		}, true)
+		}, false)
 		assert.NoError(t, err)
 
 		select {
@@ -677,7 +683,7 @@ func TestGroupAccountPeersUpdate(t *testing.T) {
 			ID:    "groupA",
 			Name:  "GroupA",
 			Peers: []string{peer1.ID, peer2.ID, peer3.ID},
-		}, true)
+		}, false)
 		assert.NoError(t, err)
 
 		select {
@@ -704,7 +710,7 @@ func TestGroupAccountPeersUpdate(t *testing.T) {
 			ID:    "groupD",
 			Name:  "GroupD",
 			Peers: []string{peer1.ID},
-		}, true)
+		}, false)
 		assert.NoError(t, err)
 
 		select {
@@ -751,7 +757,7 @@ func TestGroupAccountPeersUpdate(t *testing.T) {
 			ID:    "groupE",
 			Name:  "GroupE",
 			Peers: []string{peer2.ID, peer3.ID},
-		}, true)
+		}, false)
 		assert.NoError(t, err)
 
 		select {

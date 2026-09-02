@@ -1709,6 +1709,20 @@ func (am *DefaultAccountManager) SyncUserJWTGroups(ctx context.Context, userAuth
 	var hasChanges bool
 	var user *types.User
 	err = am.Store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
+		if settings.GroupsPropagationEnabled {
+			// Propagation can update existing Group.Peers later in this
+			// transaction. Lock group rows before the account row so this path
+			// does not invert against route/DNS validators that read groups
+			// before serializing on the account.
+			if _, err := transaction.GetAccountGroups(ctx, store.LockingStrengthUpdate, userAuth.AccountId); err != nil {
+				return fmt.Errorf("error locking account groups: %w", err)
+			}
+		}
+
+		if err := transaction.LockAccount(ctx, store.LockingStrengthUpdate, userAuth.AccountId); err != nil {
+			return err
+		}
+
 		user, err = transaction.GetUserByUserID(ctx, store.LockingStrengthShare, userAuth.UserId)
 		if err != nil {
 			return fmt.Errorf("error getting user: %w", err)

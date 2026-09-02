@@ -2153,7 +2153,7 @@ func TestRouteAccountPeersUpdate(t *testing.T) {
 			ID:    "groupB",
 			Name:  "GroupB",
 			Peers: []string{peer1ID},
-		}, true)
+		}, false)
 		assert.NoError(t, err)
 
 		select {
@@ -2193,7 +2193,7 @@ func TestRouteAccountPeersUpdate(t *testing.T) {
 			ID:    "groupC",
 			Name:  "GroupC",
 			Peers: []string{peer1ID},
-		}, true)
+		}, false)
 		assert.NoError(t, err)
 
 		select {

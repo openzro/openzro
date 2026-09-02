@@ -34,7 +34,8 @@ another reason to take the backup below before starting.
 
 ### Before upgrading
 
-No pre-upgrade action is required for the route validation change.
+No pre-upgrade action is required for the route validation and group
+serialization changes.
 
 ### After upgrading
 
@@ -62,6 +63,13 @@ No pre-upgrade action is required for the route validation change.
   the JWT group to the intended policies after it appears; ship the
   dashboard group-origin labels with this change so operators can tell
   the two groups apart.
+- **Group display names are serialized per account and issuer/source.**
+  Creating or renaming a group to a name already used by another group
+  from the same source now returns a conflict across multi-replica
+  management deployments instead of relying on process-local locking or
+  database deadlocks. The source boundary is intentional: API, JWT and
+  SCIM groups may still share the same display name, and IdP-managed
+  groups never attach to API groups by name alone.
 - **Linux management releases can read Parquet flow archives from the
   dashboard.** To make network traffic events older than
   `OPENZRO_FLOW_RETENTION` visible in the UI, the archive that writes
@@ -208,24 +216,6 @@ one. Often, not always. Confirm rather than assume.
   now returns a clear rejection on PostgreSQL** instead of an internal
   error. On MySQL this case still returns an internal error — see the
   limitation below.
-
-## Known limitations
-
-### Multi-replica: one known invariant is still enforced only in-process
-
-A management deployment running **more than one replica** can still
-produce duplicates for one known case, because the check is a read
-followed by a write protected by a lock that lives inside one process:
-
-- group names issued through the API
-
-DNS zone overlap is **not** in that list. It is enforced on both
-engines by validation under the account-row serialization point, and a
-concurrent loser receives an actionable overlap error.
-
-Single-replica deployments are unaffected by any of this — the
-in-process lock is sufficient there. Progress is tracked in
-[#143](https://github.com/openzro/openzro/issues/143).
 
 ## Earlier releases
 

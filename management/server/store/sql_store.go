@@ -1235,6 +1235,25 @@ func (s *SqlStore) GetAccountSettings(ctx context.Context, lockStrength LockingS
 	return accountSettings.Settings, nil
 }
 
+// LockAccount locks only the account row. Callers use it as a transaction
+// serialization point when they need account-wide exclusion without loading the
+// account tree or mutating the network serial.
+func (s *SqlStore) LockAccount(ctx context.Context, lockStrength LockingStrength, accountID string) error {
+	tx := s.db
+	if lockStrength != LockingStrengthNone {
+		tx = tx.Clauses(clause.Locking{Strength: string(lockStrength)})
+	}
+
+	var account types.Account
+	if err := tx.Model(&types.Account{}).Select("id").Where(idQueryCondition, accountID).First(&account).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return status.NewAccountNotFoundError(accountID)
+		}
+		return status.Errorf(status.Internal, "issue locking account in store: %s", err)
+	}
+	return nil
+}
+
 func (s *SqlStore) GetAccountCreatedBy(ctx context.Context, lockStrength LockingStrength, accountID string) (string, error) {
 	tx := s.db
 	if lockStrength != LockingStrengthNone {

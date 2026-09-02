@@ -87,6 +87,7 @@ type Store interface {
 	GetAccountSettings(ctx context.Context, lockStrength LockingStrength, accountID string) (*types.Settings, error)
 	GetAccountDNSSettings(ctx context.Context, lockStrength LockingStrength, accountID string) (*types.DNSSettings, error)
 	GetAccountCreatedBy(ctx context.Context, lockStrength LockingStrength, accountID string) (string, error)
+	LockAccount(ctx context.Context, lockStrength LockingStrength, accountID string) error
 	SaveAccount(ctx context.Context, account *types.Account) error
 	// CreateAccount inserts a new account without upsert semantics, so a
 	// unique-index violation is reported instead of silently absorbed.
