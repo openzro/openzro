@@ -1,9 +1,11 @@
 package flow_exports
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestArchiveFormatFor_RowOverride pins the contract: when a row
@@ -37,4 +39,120 @@ func TestArchiveFormatFor_EmptyEnvReturnsEmpty(t *testing.T) {
 	t.Setenv(envArchiveFormat, "")
 	assert.Empty(t, archiveFormatFor(""),
 		"no override anywhere → caller (sink constructor) decides")
+}
+
+func TestArchiveConfigFromRowsUsesRowParquetWhenEnvIsEmpty(t *testing.T) {
+	t.Setenv(envArchiveFormat, "")
+	s := newTestStore(t)
+
+	_, err := s.Save(context.Background(), SaveInput{
+		Name:    "dashboard-s3",
+		Type:    TypeS3,
+		Enabled: true,
+		S3: &S3DestConfig{
+			Bucket:    "flow-archive",
+			Region:    "auto",
+			Endpoint:  "https://r2.example",
+			Prefix:    "tenant-a",
+			AccessKey: "access",
+			SecretKey: "secret",
+			Format:    "parquet",
+		},
+	})
+	require.NoError(t, err)
+
+	cfg, source, ok, err := ArchiveConfigFromRows(context.Background(), s)
+	require.NoError(t, err)
+	require.True(t, ok, "row-level parquet archive must enable the read path even when env format is empty")
+	assert.Equal(t, "flow_exports#1 s3/dashboard-s3", source)
+	assert.NotContains(t, source, "secret")
+	assert.Equal(t, "s3", cfg.Provider)
+	assert.Equal(t, "flow-archive", cfg.Bucket)
+	assert.Equal(t, "tenant-a", cfg.Prefix)
+	assert.Equal(t, "https://r2.example", cfg.Endpoint)
+	assert.Equal(t, "auto", cfg.Region)
+	assert.Equal(t, "access", cfg.AccessKeyID)
+	assert.Equal(t, "secret", cfg.SecretAccessKey)
+}
+
+func TestArchiveConfigFromRowsHonorsRowFormatOverride(t *testing.T) {
+	t.Setenv(envArchiveFormat, "parquet")
+	s := newTestStore(t)
+
+	_, err := s.Save(context.Background(), SaveInput{
+		Name:    "legacy-ndjson",
+		Type:    TypeGCS,
+		Enabled: true,
+		GCS: &GCSDestConfig{
+			Bucket:          "flow-archive",
+			ProjectID:       "project",
+			CredentialsFile: "/var/run/gcp.json",
+			Format:          "ndjson",
+		},
+	})
+	require.NoError(t, err)
+
+	_, _, ok, err := ArchiveConfigFromRows(context.Background(), s)
+	require.NoError(t, err)
+	assert.False(t, ok, "row-level ndjson must not inherit env parquet")
+}
+
+func TestArchiveConfigFromRowsInheritsEnvWhenRowFormatIsEmpty(t *testing.T) {
+	t.Setenv(envArchiveFormat, "parquet")
+	s := newTestStore(t)
+
+	_, err := s.Save(context.Background(), SaveInput{
+		Name:    "dashboard-gcs",
+		Type:    TypeGCS,
+		Enabled: true,
+		GCS: &GCSDestConfig{
+			Bucket:          "flow-archive",
+			Prefix:          "tenant-b",
+			ProjectID:       "project",
+			CredentialsJSON: `{"type":"service_account"}`,
+		},
+	})
+	require.NoError(t, err)
+
+	cfg, source, ok, err := ArchiveConfigFromRows(context.Background(), s)
+	require.NoError(t, err)
+	require.True(t, ok, "empty row format should inherit env parquet")
+	assert.Equal(t, "flow_exports#1 gcs/dashboard-gcs", source)
+	assert.Equal(t, "gcs", cfg.Provider)
+	assert.Equal(t, "flow-archive", cfg.Bucket)
+	assert.Equal(t, "tenant-b", cfg.Prefix)
+	assert.Equal(t, "project", cfg.ProjectID)
+	assert.Equal(t, []byte(`{"type":"service_account"}`), cfg.CredentialsJSON)
+}
+
+func TestArchiveConfigFromRowsUsesFirstEnabledParquetExport(t *testing.T) {
+	t.Setenv(envArchiveFormat, "")
+	s := newTestStore(t)
+
+	_, err := s.Save(context.Background(), SaveInput{
+		Name:    "first-parquet",
+		Type:    TypeS3,
+		Enabled: true,
+		S3: &S3DestConfig{
+			Bucket: "first-archive",
+			Format: "parquet",
+		},
+	})
+	require.NoError(t, err)
+	_, err = s.Save(context.Background(), SaveInput{
+		Name:    "second-parquet",
+		Type:    TypeGCS,
+		Enabled: true,
+		GCS: &GCSDestConfig{
+			Bucket: "second-archive",
+			Format: "parquet",
+		},
+	})
+	require.NoError(t, err)
+
+	cfg, source, ok, err := ArchiveConfigFromRows(context.Background(), s)
+	require.NoError(t, err)
+	require.True(t, ok)
+	assert.Equal(t, "flow_exports#1 s3/first-parquet", source)
+	assert.Equal(t, "first-archive", cfg.Bucket)
 }

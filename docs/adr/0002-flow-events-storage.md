@@ -146,20 +146,24 @@ to validate against.
 
 ### COLD archive: batched object-storage writes
 
-Per-event POSTs to S3 are wasteful and expensive. The cold path
-buffers events in memory and writes a Parquet file every N minutes
-(default 15 min) to a configured bucket:
+Per-event POSTs to S3 are wasteful and expensive. The cold path buffers
+events in memory and writes an archive object every N minutes (default 15
+min) to a configured bucket. Set `OPENZRO_FLOW_ARCHIVE_FORMAT=parquet` when
+the dashboard should be able to query events after the hot retention window:
 
 ```
 OPENZRO_FLOW_ARCHIVE_S3_BUCKET=openzro-flow-archive
 OPENZRO_FLOW_ARCHIVE_S3_REGION=us-east-1
-OPENZRO_FLOW_ARCHIVE_INTERVAL=15m
+OPENZRO_FLOW_ARCHIVE_S3_FLUSH_INTERVAL=15m
+OPENZRO_FLOW_ARCHIVE_FORMAT=parquet
 ```
 
-GCS and R2 use the same interface with different auth glue. Parquet is
-chosen because it is the universal format for analytical query tools
-(DuckDB, Athena, BigQuery, ClickHouse) — operators querying their
-archive with their own tools should not need openzro-specific
+GCS and R2 use the same interface with different auth glue. Empty or
+unrecognized `OPENZRO_FLOW_ARCHIVE_FORMAT` values keep the older gzipped
+NDJSON output for compatibility with external tools, but the dashboard does
+not query that format. Parquet is chosen because it is the universal format
+for analytical query tools (DuckDB, Athena, BigQuery, ClickHouse) — operators
+querying their archive with their own tools should not need openzro-specific
 decoders.
 
 ### Retention and aging
@@ -174,9 +178,9 @@ Instead: hot and cold receive the **same** real-time write stream. If
 both are configured, every event lands in both. Cold has everything
 since archiving started; hot has only the configurable recent window.
 
-The dashboard's "Network Traffic Events" page queries the hot store
-exclusively and shows: "Older than {retention}? Query your archive
-or SIEM."
+The dashboard's "Network Traffic Events" page queries the hot store for
+recent events and, when the management binary includes `archive_duckdb` and
+the archive format is Parquet, queries the bucket for older events.
 
 ### Backpressure
 
@@ -305,7 +309,7 @@ partitioned-aware code (alpha.27+), not migrated. Justification:
 
 - Default retention is 30 days (`OPENZRO_FLOW_RETENTION=720h` in the
   chart), so the maximum data loss is bounded by that window.
-- Flow events are **not** the source of truth for any client behaviour
+- Flow events are **not** the source of truth for any client behavior
   — peers continue streaming new events the moment they reconnect, so
   the dashboard's view rebuilds from the live stream within minutes.
 - A copy-then-swap migration (rename → create partitioned → INSERT
@@ -342,12 +346,13 @@ from the new list and only `Close()`-ing sinks that left.
 The "PR-F" placeholder at the top of this ADR reserved cold archive
 write-side; the dashboard's read-side over the same data landed in
 [ADR-0012](0012-flow-archive-read-path.md). Brief recap: archive
-sinks now emit Parquet (gated by `OPENZRO_FLOW_ARCHIVE_FORMAT=parquet`)
-and a federated wrapper in `flow/store/federated/` queries either
-the hot store, the archive (via DuckDB embedded — `flow/store/archive/`
-behind the `archive_duckdb` build tag), or both per the requested
-date window. Operators on the legacy NDJSON archive keep their
-write side intact; the federated read engages only when the format
-flips to Parquet.
+sinks can emit Parquet (via `OPENZRO_FLOW_ARCHIVE_FORMAT=parquet` for
+env-configured sinks, or a row-level `format=parquet` on dashboard-
+configured flow exports) and a federated wrapper in
+`flow/store/federated/` queries either the hot store, the archive (via
+DuckDB embedded — `flow/store/archive/` behind the `archive_duckdb`
+build tag), or both per the requested date window. Operators on the
+legacy NDJSON archive keep their write side intact; the federated read
+engages only when the effective format is Parquet.
 
 ## References

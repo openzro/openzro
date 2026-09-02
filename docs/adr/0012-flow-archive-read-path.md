@@ -59,9 +59,10 @@ Two concrete pieces:
 
 1. **Write side — Apache Parquet** as the archive object format.
    `flow/sinks/s3.go` and `flow/sinks/gcs.go` learn a
-   `OPENZRO_FLOW_ARCHIVE_FORMAT` env knob (`ndjson` | `parquet`) defaulting
-   to **`parquet` for new installs** and **`ndjson` for existing operators
-   who set neither** (back-compat — see Migration below). Same partition
+   `OPENZRO_FLOW_ARCHIVE_FORMAT` env knob (`ndjson` | `parquet`). Empty or
+   unrecognized values resolve to **`ndjson` for back-compat**; operators
+   must set **`OPENZRO_FLOW_ARCHIVE_FORMAT=parquet`** to make the dashboard's
+   federated read path query the bucket. Same partition
    layout the sinks already write today (Hive-style for Athena / Glue
    / DuckDB-friendly):
 
@@ -126,34 +127,44 @@ Two concrete pieces:
 
 ### 1. Format default and migration
 
-* **New installs** default to Parquet. Operators bringing up a fresh
-  cluster after this ADR ships get the federated read for free.
-* **Existing installs** keep NDJSON until they flip
-  `OPENZRO_FLOW_ARCHIVE_FORMAT=parquet`. The flip is one-way for the
-  archive (you can keep producing both formats during a transition by
-  running two sinks, but the federated read recognises only Parquet).
+* **Unset or unrecognized format values keep writing NDJSON.** This is
+  deliberately conservative: changing the default object format would
+  surprise existing operators and downstream tools that consume
+  `*.ndjson.gz` directly.
+* **Operators must explicitly choose Parquet** to enable dashboard reads from
+  the archive. Env-configured archives do that with
+  `OPENZRO_FLOW_ARCHIVE_FORMAT=parquet`; dashboard-configured flow exports can
+  do it on the row itself. Row-level format overrides the env default, and the
+  federated reader follows the same precedence.
+* The federated reader is assembled at management startup. Dashboard changes
+  to flow export rows are applied immediately to the write-side sinks, but the
+  archive read path sees the changed row only after management restarts. When
+  multiple enabled S3/GCS exports resolve to Parquet, the reader picks the
+  first row by ID and logs that choice; additional Parquet archives keep
+  writing, but are not queried by the UI in this release.
 * The federated read **does not** transparently bridge NDJSON → Parquet.
   A separate one-shot tool (a follow-up ADR — out of scope for this
   one) will re-emit historical NDJSON as Parquet when an operator wants
   contiguous history.
 
 This back-compat keeps the upgrade path frictionless: deploy the new
-management binary, observe that Parquet writes start happening for new
-events, optionally run the tool against old prefixes once it ships.
+management binary, leave existing NDJSON consumers untouched, then opt into
+Parquet when dashboard access to cold history is wanted. Optionally run the
+tool against old prefixes once it ships.
 
 ### 2. CGo dependency
 
 `go-duckdb` requires CGo. We accept that cost for the management binary
 because:
 
-* Linux + macOS CGo cross-compile is well-trodden via [goreleaser][gor]
-  matrices that already exist in the repo (`.goreleaser*.yaml`).
+* Linux CGo cross-compile is supported by the release workflow's
+  [goreleaser][gor] matrix and cross-compilers.
 * Windows CGo for management is the riskiest target. We **gate the
-  archive store behind a build tag** `archive_duckdb`. Linux and macOS
-  builds turn it on by default; the Windows binary ships without the
-  archive read store until smoke tests on a Windows runner clear it.
+  archive store behind a build tag** `archive_duckdb`. Linux builds turn it
+  on by default; macOS and Windows management binaries ship without the
+  archive read store until smoke tests on those runners clear it.
   When that build tag is off, the federated layer detects the absent
-  archive store and falls back silently to hot-only — same behaviour as
+  archive store and falls back silently to hot-only — same behavior as
   today.
 * No CGo on the dashboard, signal, relay, or client binaries. Only
   management.

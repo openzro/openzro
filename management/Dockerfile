@@ -1,5 +1,5 @@
 FROM ubuntu:24.04
-RUN apt update && apt install -y ca-certificates && rm -fr /var/cache/apt
+RUN apt update && apt install -y ca-certificates libstdc++6 && rm -fr /var/cache/apt
 ENTRYPOINT [ "/go/bin/openzro-mgmt","management"]
 CMD ["--log-file", "console"]
 COPY openzro-mgmt /go/bin/openzro-mgmt
