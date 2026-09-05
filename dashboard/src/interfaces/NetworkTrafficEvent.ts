@@ -36,4 +36,11 @@ export interface NetworkTrafficEventsResponse {
   events: NetworkTrafficEvent[];
   limit: number;
   offset: number;
+  // Set when part of the requested window could not be read, so the
+  // events above are real but not all of them. Absent on a whole
+  // answer. Worth surfacing rather than ignoring: a gap in flow events
+  // is indistinguishable from a quiet period, and this screen is used
+  // to decide that nothing happened.
+  incomplete?: boolean;
+  incomplete_reason?: string;
 }

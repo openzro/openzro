@@ -19,6 +19,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -148,3 +149,34 @@ type Store interface {
 	// this as DROP PARTITION rather than DELETE for O(1) cost.
 	Purge(ctx context.Context, olderThan time.Time) (int64, error)
 }
+
+// IncompleteError reports that a query was answered from more than one
+// source and at least one source failed. The events returned alongside
+// it are real and correctly ordered; they are simply not all of them.
+//
+// It exists because the alternative shapes are both wrong. Returning
+// nil error throws away the only evidence that the answer is short, and
+// an absence of events reads as "nothing happened" — the most damaging
+// wrong conclusion this data can produce, since the screen is used to
+// investigate incidents. Returning a plain error throws away events that
+// were fetched successfully, and makes a slow object store take the hot
+// path down with it.
+//
+// Callers that do not know about this type treat it as a failure, which
+// is the safe default: they report a problem instead of a truncated
+// answer. Callers that do know can serve the events and say what is
+// missing.
+type IncompleteError struct {
+	// Missing names the half of the window that could not be read, in
+	// the caller's terms rather than the storage layer's: "older" or
+	// "recent", not "archive" or "hot".
+	Missing string
+	// Err is the underlying failure, kept for logs and errors.Is.
+	Err error
+}
+
+func (e *IncompleteError) Error() string {
+	return fmt.Sprintf("incomplete result: %s events could not be read: %v", e.Missing, e.Err)
+}
+
+func (e *IncompleteError) Unwrap() error { return e.Err }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -245,4 +246,59 @@ func TestList_RendersEventDTO(t *testing.T) {
 	// (older agents) round-trip via hex; that path is exercised by other
 	// cases.
 	assert.Equal(t, "rule-allow", e.RuleID)
+}
+
+// The store answering with events *and* an error is the shape a
+// partly-readable window produces. It has to reach the client as a 200
+// carrying the events, plus a marker saying the list is short.
+//
+// Serving the events is deliberate: recent traffic should not go dark
+// because an object store is slow. Marking them is the half that was
+// missing, and its absence is what let a 280s archive timeout return
+// HTTP 200 with only post-retention events for a window that began a
+// week earlier.
+func TestList_IncompleteResultIsServedAndMarked(t *testing.T) {
+	fs := &fakeStore{
+		out: []*store.Event{{EventID: []byte{0x01}, ReceivedAt: time.Now().UTC()}},
+		err: &store.IncompleteError{Missing: "older", Err: context.DeadlineExceeded},
+	}
+	rec := httptest.NewRecorder()
+	newServer(true, fs).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/network-traffic-events", nil))
+
+	require.Equal(t, http.StatusOK, rec.Code,
+		"the events are real; the status code cannot say 'here, but short'")
+
+	var body struct {
+		Events           []map[string]any `json:"events"`
+		Incomplete       bool             `json:"incomplete"`
+		IncompleteReason string           `json:"incomplete_reason"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Len(t, body.Events, 1, "the readable half must still be served")
+	require.True(t, body.Incomplete, "a short list rendered as complete is the bug")
+	require.Contains(t, body.IncompleteReason, "older",
+		"the reason must say which end is missing, so the reader knows where not to trust it")
+}
+
+// A complete answer must be byte-identical to what clients received
+// before the field existed. If every response carried the marker, it
+// would stop meaning anything.
+func TestList_CompleteResultCarriesNoMarker(t *testing.T) {
+	fs := &fakeStore{out: []*store.Event{{EventID: []byte{0x01}, ReceivedAt: time.Now().UTC()}}}
+	rec := httptest.NewRecorder()
+	newServer(true, fs).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/network-traffic-events", nil))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.NotContains(t, rec.Body.String(), "incomplete",
+		"omitempty keeps a whole answer indistinguishable from before this field")
+}
+
+// An error that is not an IncompleteError still fails the request. The
+// new path must not turn real outages into quiet 200s.
+func TestList_RealErrorStillFails(t *testing.T) {
+	fs := &fakeStore{err: errors.New("everything is down")}
+	rec := httptest.NewRecorder()
+	newServer(true, fs).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/network-traffic-events", nil))
+
+	require.GreaterOrEqual(t, rec.Code, 500, "nothing readable is a failure, not a short answer")
 }

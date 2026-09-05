@@ -13,6 +13,7 @@ package network_events
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -78,6 +79,16 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 	}
 
 	events, err := h.store.Query(r.Context(), filter)
+	// A partly-readable window answers with the events it has plus a
+	// labeled error. Serving them is right -- recent traffic should not
+	// go dark because an object store is slow -- but only if the caller
+	// is told the answer is short. Anything else reports a gap in the
+	// data as a gap in the traffic.
+	var incomplete *store.IncompleteError
+	if errors.As(err, &incomplete) {
+		writeIncompleteResponse(w, events, filter.Offset, filter.Limit, incomplete)
+		return
+	}
 	if err != nil {
 		util.WriteError(r.Context(), err, w)
 		return
@@ -230,6 +241,17 @@ type response struct {
 	Events []eventDTO `json:"events"`
 	Limit  int        `json:"limit"`
 	Offset int        `json:"offset"`
+	// Incomplete marks a result that is real but short: part of the
+	// requested window could not be read. Omitted when the answer is
+	// whole, so a complete response is byte-identical to what clients
+	// received before this field existed.
+	//
+	// It matters more than it looks. Flow events are read to find out
+	// what happened, and a missing half looks exactly like a quiet
+	// period. Without this the only trace was a warning in a server log,
+	// which is not where anyone is looking while staring at a dashboard.
+	Incomplete       bool   `json:"incomplete,omitempty"`
+	IncompleteReason string `json:"incomplete_reason,omitempty"`
 }
 
 // eventDTO is the wire shape per event. Bytes-typed fields go on the
@@ -334,18 +356,47 @@ func formatDirection(d store.Direction) string {
 	return "unknown"
 }
 
-func writeListResponse(w http.ResponseWriter, events []*store.Event, offset, limit int) {
+// writeIncompleteResponse serves what was readable and says what was
+// not. Still 200: the events are real, the ordering is real, and the
+// caller asked for a page of them. The status code cannot express "here,
+// but short", so the body does.
+func writeIncompleteResponse(
+	w http.ResponseWriter,
+	events []*store.Event,
+	offset, limit int,
+	incomplete *store.IncompleteError,
+) {
+	writeResponse(w, response{
+		Events:     toDTOs(events),
+		Limit:      limit,
+		Offset:     offset,
+		Incomplete: true,
+		IncompleteReason: fmt.Sprintf(
+			"%s events could not be read, so this list may be missing entries",
+			incomplete.Missing),
+	})
+}
+
+func toDTOs(events []*store.Event) []eventDTO {
 	dtos := make([]eventDTO, len(events))
 	for i, e := range events {
 		dtos[i] = toDTO(e)
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(response{
-		Events: dtos,
+	return dtos
+}
+
+func writeListResponse(w http.ResponseWriter, events []*store.Event, offset, limit int) {
+	writeResponse(w, response{
+		Events: toDTOs(events),
 		Limit:  limit,
 		Offset: offset,
-	}); err != nil {
+	})
+}
+
+func writeResponse(w http.ResponseWriter, body response) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(body); err != nil {
 		// Encoding failure is a programming bug, not an operator
 		// problem — log loud rather than try to recover.
 		_, _ = fmt.Fprintf(w, "encode response: %v", err)

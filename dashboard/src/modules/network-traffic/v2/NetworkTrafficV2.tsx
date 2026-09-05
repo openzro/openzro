@@ -242,6 +242,18 @@ export default function NetworkTrafficV2() {
     return `/network-traffic-events?${qs}`;
   }, [range]);
 
+  // A range with a start and no end is the calendar mid-selection: the
+  // first click of a two-click pick. DateRangePickerV2 emits it, so
+  // without this the picker fires a query for "from that date onward",
+  // which on the archive side means from that date to the retention
+  // boundary. Picking a start date in June asked for two months of cold
+  // storage nobody wanted, took 280s, exceeded the query deadline, and
+  // occupied one of four archive slots the whole time.
+  //
+  // A half-picked range is a UI state, not a question. Presets are
+  // unaffected — every one of them carries both bounds.
+  const rangeSettled = !range?.from || !!range?.to;
+
   // Held until the default range has been decided, so the page issues
   // one request with the operator's window rather than an unbounded one
   // followed by the real one. An operator who chose "all" still gets an
@@ -254,7 +266,7 @@ export default function NetworkTrafficV2() {
     queryUrl,
     false,
     true,
-    defaultApplied,
+    defaultApplied && rangeSettled,
   );
 
   // Holding the request makes SWR's key null, and a null key reports
@@ -263,7 +275,7 @@ export default function NetworkTrafficV2() {
   // show", so without folding the hold into it the mount renders the
   // cold-start panel over an empty groups array and then replaces it
   // with the table a moment later.
-  const isLoading = eventsLoading || !defaultApplied;
+  const isLoading = eventsLoading || !defaultApplied || !rangeSettled;
 
   const groups = useMemo(
     () =>
@@ -349,6 +361,19 @@ export default function NetworkTrafficV2() {
           your access policies match traffic in the wild.
         </p>
       </header>
+
+      {data?.incomplete ? (
+        <OzCard className="flex items-start gap-3 border-oz2-warn bg-oz2-warn-bg px-4 py-3">
+          <span className="mt-0.5 shrink-0 text-oz2-warn">{ICONS.warn}</span>
+          <div className="text-[13.5px] leading-relaxed text-oz2-text">
+            <span className="font-medium">This list is incomplete.</span>{" "}
+            {data.incomplete_reason ??
+              "Part of the selected range could not be read."}{" "}
+            Absent events here do not mean absent traffic — narrow the range or
+            retry before drawing conclusions.
+          </div>
+        </OzCard>
+      ) : null}
 
       {isColdStart ? (
         <OzEmptyState
@@ -1163,6 +1188,13 @@ const ICONS = {
     </>,
   ),
   chevDown: baseIcon(<path d="m6 9 6 6 6-6" />),
+  warn: baseIcon(
+    <>
+      <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
+    </>,
+  ),
   refresh: baseIcon(
     <>
       <path d="M21 12a9 9 0 1 1-3.5-7.1" />
