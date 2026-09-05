@@ -350,6 +350,19 @@ export default function NetworkTrafficV2() {
         </p>
       </header>
 
+      {data?.incomplete ? (
+        <OzCard className="flex items-start gap-3 border-oz2-warn bg-oz2-warn-bg px-4 py-3">
+          <span className="mt-0.5 shrink-0 text-oz2-warn">{ICONS.warn}</span>
+          <div className="text-[13.5px] leading-relaxed text-oz2-text">
+            <span className="font-medium">This list is incomplete.</span>{" "}
+            {data.incomplete_reason ??
+              "Part of the selected range could not be read."}{" "}
+            Absent events here do not mean absent traffic — narrow the range or
+            retry before drawing conclusions.
+          </div>
+        </OzCard>
+      ) : null}
+
       {isColdStart ? (
         <OzEmptyState
           title="No network traffic events yet"
@@ -1163,6 +1176,13 @@ const ICONS = {
     </>,
   ),
   chevDown: baseIcon(<path d="m6 9 6 6 6-6" />),
+  warn: baseIcon(
+    <>
+      <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
+    </>,
+  ),
   refresh: baseIcon(
     <>
       <path d="M21 12a9 9 0 1 1-3.5-7.1" />

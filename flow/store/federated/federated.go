@@ -128,9 +128,21 @@ func (f *Federated) Query(ctx context.Context, filter store.Filter) ([]*store.Ev
 
 // queryBoth fans out to hot + archive in parallel, merges by
 // ReceivedAt desc, and applies the caller's Limit / Offset on the
-// merged stream. A failure on either side is logged but does not
-// fail the whole call — operators get partial data with a warning,
-// which is better than an empty result during a bucket outage.
+// merged stream.
+//
+// A failure on one side returns the other side's events together with a
+// store.IncompleteError. Dropping the failed half and returning nil
+// error, which is what this used to do, is the worst available
+// behaviour: the caller renders a short list as if it were the whole
+// answer, and a gap in flow events reads as "nothing happened" rather
+// than "we could not look". The only record was a warning in a log
+// nobody reads while looking at a dashboard.
+//
+// Failing outright is not better either. It would take the hot path down
+// whenever the object store is slow, which is exactly when an operator
+// most wants to see recent traffic. So: both halves when both work, one
+// half plus a labelled error when one does not, and a real error only
+// when there is nothing to show.
 func (f *Federated) queryBoth(
 	ctx context.Context,
 	original, hotFilter, archFilter store.Filter,
@@ -166,7 +178,18 @@ func (f *Federated) queryBoth(
 	}
 
 	merged := mergeByReceivedAtDesc(hotEv, archEv)
-	return applyPaging(merged, original.Limit, original.Offset), nil
+	paged := applyPaging(merged, original.Limit, original.Offset)
+
+	// The window is named from the caller's point of view. "archive" and
+	// "hot" are storage details; what the caller lost is older events or
+	// recent ones.
+	if archErr != nil {
+		return paged, &store.IncompleteError{Missing: "older", Err: archErr}
+	}
+	if hotErr != nil {
+		return paged, &store.IncompleteError{Missing: "recent", Err: hotErr}
+	}
+	return paged, nil
 }
 
 // splitByBoundary chops the filter's time window so the hot side

@@ -230,11 +230,21 @@ func TestQuery_AppliesPagingAfterMerge(t *testing.T) {
 	assert.Len(t, got, 2, "paging should apply across merged result")
 }
 
-// TestQuery_PartialFailure_HotOnly captures the resilience contract:
-// when the archive bucket is briefly unreachable, federated still
-// returns the hot half rather than failing the whole call. The
-// dashboard surfaces "incomplete" via the ProbeAvailability hook;
-// this test pins the behavior.
+// TestQuery_PartialFailure_HotOnly keeps the resilience half of the
+// contract and fixes the half that was never built. When the archive is
+// unreachable, federated still returns the hot events rather than
+// failing the whole call -- an operator should not lose sight of recent
+// traffic because an object store is slow.
+//
+// It used to also require a nil error, on the stated grounds that "the
+// dashboard surfaces incomplete via the ProbeAvailability hook". No such
+// hook exists in this path; the only ProbeAvailability in the tree is
+// the client's DNS resolver pool, which has nothing to do with flow
+// storage. So the resilience decision was made against a signal nobody
+// wrote, and the result shipped: a truncated list rendered as the whole
+// answer, with a gap in the data indistinguishable from a quiet period.
+//
+// The events still come back. They now come back labelled.
 func TestQuery_PartialFailure_HotOnly(t *testing.T) {
 	arch := &fakeStore{name: "arch", queryErr: errors.New("bucket unreachable")}
 	hot := &fakeStore{
@@ -249,8 +259,12 @@ func TestQuery_PartialFailure_HotOnly(t *testing.T) {
 		AccountID: "a",
 		Since:     fixedNow().Add(-50 * 24 * time.Hour),
 	})
-	require.NoError(t, err, "hot success should mask archive failure")
-	assert.Len(t, got, 1)
+	assert.Len(t, got, 1, "the readable half is still served")
+
+	var incomplete *store.IncompleteError
+	require.ErrorAs(t, err, &incomplete,
+		"the caller has to be able to tell a short answer from a complete one")
+	assert.Equal(t, "older", incomplete.Missing)
 }
 
 // TestQuery_BothFailed_PropagatesError ensures we never silently
