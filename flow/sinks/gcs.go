@@ -244,6 +244,17 @@ func (g *GCS) loop() {
 // the S3 sink: durability comes from the streaming pipeline
 // (Datadog / Elastic), not from a single archive.
 func (g *GCS) upload(ctx context.Context, batch []*store.Event) {
+	// One object per (account, UTC date): the path names both, so a
+	// batch that mixes them cannot go out as a single file. See
+	// partitionBatch.
+	for _, group := range partitionBatch(batch) {
+		g.uploadGroup(ctx, group)
+	}
+}
+
+// uploadGroup writes one group, whose events all agree on the account
+// and date the object key asserts.
+func (g *GCS) uploadGroup(ctx context.Context, batch []*store.Event) {
 	body, contentType, contentEncoding, err := g.encodeForFormat(batch)
 	if err != nil {
 		log.Errorf("flow sink GCS: encode batch (%d events): %v", len(batch), err)

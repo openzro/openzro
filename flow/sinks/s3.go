@@ -222,6 +222,17 @@ func (s *S3) loop() {
 // best-effort, mirrored by the streaming exporter for durability
 // needs.
 func (s *S3) upload(ctx context.Context, batch []*store.Event) {
+	// One object per (account, UTC date): the path names both, so a
+	// batch that mixes them cannot go out as a single file. See
+	// partitionBatch.
+	for _, group := range partitionBatch(batch) {
+		s.uploadGroup(ctx, group)
+	}
+}
+
+// uploadGroup writes one group, whose events all agree on the account
+// and date the object key asserts.
+func (s *S3) uploadGroup(ctx context.Context, batch []*store.Event) {
 	body, contentType, contentEncoding, err := s.encodeForFormat(batch)
 	if err != nil {
 		log.Errorf("flow sink S3: encode batch (%d events): %v", len(batch), err)
