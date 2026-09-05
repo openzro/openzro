@@ -311,8 +311,19 @@ func buildQuery(url string, f store.Filter) (string, []any) {
 	)
 	sb.WriteString("SELECT ")
 	sb.WriteString(strings.Join(selectColumns, ", "))
-	sb.WriteString(" FROM read_parquet(?, hive_partitioning=true) WHERE 1=1")
-	args = append(args, url)
+	// The glob is interpolated, not bound, and that is forced rather than
+	// chosen. DuckDB resolves the file list while binding the statement,
+	// so a parameter in that position leaves the binder with nothing to
+	// expand — and it fails the whole prepare with "could not bind
+	// parameter" as soon as any *other* parameter is present. A query
+	// with only the path bound happens to work, which is why this
+	// survived until a dashboard request arrived carrying a time window.
+	//
+	// url is built from the operator's bucket and prefix, never from
+	// request input, and quoteString doubles any single quote.
+	sb.WriteString(" FROM read_parquet(")
+	sb.WriteString(quoteString(url))
+	sb.WriteString(", hive_partitioning=true) WHERE 1=1")
 
 	if f.PeerID != "" {
 		sb.WriteString(" AND peer_id = ?")
