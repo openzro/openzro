@@ -301,6 +301,46 @@ func (d *duckdbStore) parquetURL(accountID string) string {
 	return fmt.Sprintf(readParquetURL, d.cfg.Provider, d.cfg.Bucket, prefix, accountID)
 }
 
+// writePartitionBounds narrows the file list before any file is opened.
+//
+// Without it the reader filters only on received_at, a column that lives
+// *inside* the parquet files, so DuckDB opens every object under the
+// account to answer any question. The objects are laid out
+// year=/month=/day= precisely so most of them can be skipped, and
+// nothing was using it: a two-month window over a four-month archive
+// read all four, ran past the ingress timeout, and returned 504.
+//
+// The bounds are one day wider on each side, deliberately. The sink
+// names a file after the ReceivedAt of the *first* event in the batch
+// (flow/sinks/gcs.go), so a batch that crosses midnight files its later
+// events under the earlier day. These predicates only prune — the
+// received_at clauses below still decide the answer — so a widened
+// bound costs one extra directory while a tight one drops real rows and
+// says nothing.
+//
+// The literals are quoted because the partition columns do not share a
+// type: DuckDB infers year=2026 as BIGINT but leaves month=05 VARCHAR,
+// the leading zero defeating the cast, and comparing that VARCHAR
+// against an integer is a binder error. A string literal is accepted by
+// both, and the sink zero-pads every component, so lexicographic order
+// is numeric order. Written as nested comparisons on the bare columns
+// rather than arithmetic over them, because that is the shape DuckDB
+// prunes on.
+func writePartitionBounds(sb *strings.Builder, since, until time.Time) {
+	if !since.IsZero() {
+		lo := since.UTC().AddDate(0, 0, -1)
+		fmt.Fprintf(sb,
+			" AND (year > '%04d' OR (year = '%04d' AND (month > '%02d' OR (month = '%02d' AND day >= '%02d'))))",
+			lo.Year(), lo.Year(), int(lo.Month()), int(lo.Month()), lo.Day())
+	}
+	if !until.IsZero() {
+		hi := until.UTC().AddDate(0, 0, 1)
+		fmt.Fprintf(sb,
+			" AND (year < '%04d' OR (year = '%04d' AND (month < '%02d' OR (month = '%02d' AND day <= '%02d'))))",
+			hi.Year(), hi.Year(), int(hi.Month()), int(hi.Month()), hi.Day())
+	}
+}
+
 // buildQuery produces the parameterised SELECT. Filters that the
 // caller did not set degenerate to TRUE so the query plan stays
 // uniform regardless of how many fields are constrained.
@@ -349,6 +389,8 @@ func buildQuery(url string, f store.Filter) (string, []any) {
 		sb.WriteString(" AND protocol = ?")
 		args = append(args, *f.Protocol)
 	}
+	writePartitionBounds(&sb, f.Since, f.Until)
+
 	if !f.Since.IsZero() {
 		sb.WriteString(" AND received_at >= ?")
 		args = append(args, f.Since.UTC())
