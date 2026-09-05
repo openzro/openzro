@@ -336,6 +336,13 @@ func (c *Compactor) isAlreadyCompact(ctx context.Context, glob string, sources [
 // unpadded directory would be silently excluded from every query whose
 // window it should match.
 func (c *Compactor) rewrite(ctx context.Context, glob, outDir string) error {
+	// #nosec G202 -- glob and outDir are not request input. They are
+	// built from operator configuration and a date this command was
+	// given, and both go through quote(), which doubles any single
+	// quote. DuckDB resolves a file list while binding a statement, so a
+	// parameter in this position leaves the binder nothing to expand --
+	// that failure shipped once already (openzro#185) and is why these
+	// are interpolated at all.
 	_, err := c.DB.ExecContext(ctx, `COPY (
 		SELECT * EXCLUDE (year, month, day, account),
 		       printf('%04d', year(received_at))  AS year,
@@ -347,7 +354,7 @@ func (c *Compactor) rewrite(ctx context.Context, glob, outDir string) error {
 	return err
 }
 
-// fingerprint reads a glob and summarises its rows. See Fingerprint for
+// fingerprint reads a glob and summarizes its rows. See Fingerprint for
 // why it is three numbers and why the partition columns are excluded.
 func (c *Compactor) fingerprint(ctx context.Context, glob string) (Fingerprint, error) {
 	var f Fingerprint

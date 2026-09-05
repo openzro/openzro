@@ -32,8 +32,8 @@ func TestCheckUnderPrefix(t *testing.T) {
 		// Refused rather than resolved. These are legal object keys that
 		// no traversal happens on, but they read as an escape and any
 		// layer that ever normalizes them becomes one.
-		{"dot dot segment", "flows/../other/x.parquet", "flows", false},
-		{"dot segment", "flows/./x.parquet", "flows", false},
+		{"parent segment", "flows/../other/x.parquet", "flows", false},
+		{"current-directory segment", "flows/./x.parquet", "flows", false},
 		{"double slash", "flows//x.parquet", "flows", false},
 		{"leading slash", "/flows/x.parquet", "flows", false},
 		{"empty key", "", "flows", false},
