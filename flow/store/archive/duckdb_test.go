@@ -63,14 +63,17 @@ func TestNewParquet_GCSUsesHMACEnv(t *testing.T) {
 // just `WHERE 1=1 ORDER BY ... LIMIT MaxRowsPerQuery`. Verifies the
 // glob URL and the safety-net LIMIT both land in the SQL.
 func TestBuildQuery_AccountIDOnly(t *testing.T) {
-	q, args := buildQuery("s3://b/year=*/month=*/day=*/account=acct-1/*.parquet", store.Filter{})
-	assert.Contains(t, q, "FROM read_parquet(?, hive_partitioning=true)")
+	glob := "s3://b/year=*/month=*/day=*/account=acct-1/*.parquet"
+	q, args := buildQuery(glob, store.Filter{})
+	// Interpolated, not bound: DuckDB expands the file list while binding,
+	// so a parameter here breaks the prepare as soon as a second parameter
+	// exists. See TestBuildQueryPreparesWithFilters, which runs it.
+	assert.Contains(t, q, "FROM read_parquet('"+glob+"', hive_partitioning=true)")
 	assert.Contains(t, q, "WHERE 1=1")
 	assert.Contains(t, q, "ORDER BY received_at DESC")
 	assert.Contains(t, q, "LIMIT ?")
-	require.Len(t, args, 2)
-	assert.Equal(t, "s3://b/year=*/month=*/day=*/account=acct-1/*.parquet", args[0])
-	assert.Equal(t, MaxRowsPerQuery, args[1].(int))
+	require.Len(t, args, 1)
+	assert.Equal(t, MaxRowsPerQuery, args[0].(int))
 }
 
 // TestBuildQuery_AllFilters exercises every Filter field. Catches
@@ -113,7 +116,9 @@ func TestBuildQuery_AllFilters(t *testing.T) {
 		assert.Contains(t, q, want)
 	}
 	// 12 args: url + 9 filters + limit + offset
-	assert.Len(t, args, 12)
+	// Eleven, not twelve: the parquet glob is interpolated into the SQL
+	// rather than bound, so it is no longer an argument.
+	assert.Len(t, args, 11)
 }
 
 // TestBuildQuery_LimitClamping ensures a caller asking for "give me
@@ -134,8 +139,9 @@ func TestBuildQuery_LimitClamping(t *testing.T) {
 // column and silently match nothing.
 func TestBuildQuery_RuleIDIsHexEncoded(t *testing.T) {
 	_, args := buildQuery("u", store.Filter{RuleID: []byte{0xab, 0xcd}})
-	// args = [url, rule_id, limit] — find rule_id at index 1
-	assert.Equal(t, "abcd", args[1].(string))
+	// args = [rule_id, limit] — the glob is interpolated, not bound, so it
+	// no longer occupies index 0.
+	assert.Equal(t, "abcd", args[0].(string))
 }
 
 // TestParquetURL_HivePartition checks the URL template lines up with
