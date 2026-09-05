@@ -80,7 +80,7 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 
 	events, err := h.store.Query(r.Context(), filter)
 	// A partly-readable window answers with the events it has plus a
-	// labelled error. Serving them is right -- recent traffic should not
+	// labeled error. Serving them is right -- recent traffic should not
 	// go dark because an object store is slow -- but only if the caller
 	// is told the answer is short. Anything else reports a gap in the
 	// data as a gap in the traffic.

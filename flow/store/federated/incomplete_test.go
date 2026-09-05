@@ -104,7 +104,7 @@ func TestQueryStaysCleanWhenBothSidesWork(t *testing.T) {
 		Until:     now,
 		Limit:     100,
 	})
-	require.NoError(t, err, "a complete answer must not be labelled incomplete")
+	require.NoError(t, err, "a complete answer must not be labeled incomplete")
 	require.Len(t, events, 2)
 }
 

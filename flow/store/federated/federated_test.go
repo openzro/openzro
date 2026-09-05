@@ -244,7 +244,7 @@ func TestQuery_AppliesPagingAfterMerge(t *testing.T) {
 // wrote, and the result shipped: a truncated list rendered as the whole
 // answer, with a gap in the data indistinguishable from a quiet period.
 //
-// The events still come back. They now come back labelled.
+// The events still come back. They now come back labeled.
 func TestQuery_PartialFailure_HotOnly(t *testing.T) {
 	arch := &fakeStore{name: "arch", queryErr: errors.New("bucket unreachable")}
 	hot := &fakeStore{

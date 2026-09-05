@@ -133,7 +133,7 @@ func (f *Federated) Query(ctx context.Context, filter store.Filter) ([]*store.Ev
 // A failure on one side returns the other side's events together with a
 // store.IncompleteError. Dropping the failed half and returning nil
 // error, which is what this used to do, is the worst available
-// behaviour: the caller renders a short list as if it were the whole
+// behavior: the caller renders a short list as if it were the whole
 // answer, and a gap in flow events reads as "nothing happened" rather
 // than "we could not look". The only record was a warning in a log
 // nobody reads while looking at a dashboard.
@@ -141,7 +141,7 @@ func (f *Federated) Query(ctx context.Context, filter store.Filter) ([]*store.Ev
 // Failing outright is not better either. It would take the hot path down
 // whenever the object store is slow, which is exactly when an operator
 // most wants to see recent traffic. So: both halves when both work, one
-// half plus a labelled error when one does not, and a real error only
+// half plus a labeled error when one does not, and a real error only
 // when there is nothing to show.
 func (f *Federated) queryBoth(
 	ctx context.Context,
