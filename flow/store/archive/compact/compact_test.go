@@ -236,7 +236,8 @@ func TestCompactDayRefusesToDeleteWhenRowsAreLost(t *testing.T) {
 
 	_, err := c.CompactDay(context.Background(), time.Date(2026, 7, 29, 0, 0, 0, 0, time.UTC))
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "read 10 rows, rewrote 9")
+	require.Contains(t, err.Error(), "rows=10")
+	require.Contains(t, err.Error(), "rows=9")
 	require.Contains(t, err.Error(), "originals left untouched")
 	require.Empty(t, fs.deleted, "a short rewrite must not cost the originals")
 	require.Equal(t, 10, fs.count("flows"))
@@ -281,4 +282,60 @@ func TestCompactDayFilesRowsByTheirOwnDate(t *testing.T) {
 			"/flows/year=*/month=*/day=*/account=*/*.parquet', hive_partitioning=true) "+
 			"WHERE day(received_at) <> CAST(day AS INTEGER)").Scan(&stray))
 	require.Zero(t, stray, "no row may sit under a day other than its own")
+}
+
+// A row count catches loss and nothing else. This is the case it cannot
+// see: the rewrite emits exactly as many rows as it read, with one of
+// them changed. For an archive read back as audit evidence, silently
+// altered history is worse than missing history -- it is wrong and it
+// looks right.
+//
+// The substituted rewrite is not a strawman. A wrong join, a cast that
+// truncates an ID, a column mapped to its neighbour: all of them
+// preserve the count.
+func TestCompactDayRefusesWhenContentChangesButCountDoesNot(t *testing.T) {
+	c, fs, db := newFixture(t)
+	for i := range 10 {
+		seed(t, db, fs.root, "acct-A", "acct-A", day29+" 10:00:00", i)
+	}
+
+	c.rewriteFn = func(ctx context.Context, glob, outDir string) error {
+		dir := filepath.Join(outDir, "year=2026", "month=07", "day=29", "account=acct-A")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+		// Ten rows in, ten rows out, one peer_id rewritten.
+		_, err := db.ExecContext(ctx,
+			"COPY (SELECT * REPLACE (CASE WHEN event_id = 'ev-3' THEN 'tampered' ELSE peer_id END AS peer_id) "+
+				"FROM read_parquet("+quote(glob)+", hive_partitioning=true)) TO '"+
+				filepath.Join(dir, "same-count.parquet")+"' (FORMAT PARQUET)")
+		return err
+	}
+
+	_, err := c.CompactDay(context.Background(), time.Date(2026, 7, 29, 0, 0, 0, 0, time.UTC))
+	require.Error(t, err, "a count-preserving corruption must still be refused")
+	require.Contains(t, err.Error(), "rows=10", "both sides read ten rows; the count agreed")
+	require.Contains(t, err.Error(), "originals left untouched")
+	require.Empty(t, fs.deleted)
+	require.Equal(t, 10, fs.count("flows"))
+}
+
+// The fingerprint must not fire on the reordering compaction always
+// does. Merging 150 files into one changes row order by construction, so
+// an order-sensitive check would refuse every correct run and the guard
+// would be turned off within a week.
+func TestFingerprintIgnoresRowOrder(t *testing.T) {
+	c, fs, db := newFixture(t)
+	for i := range 12 {
+		acct := "acct-A"
+		if i%3 == 0 {
+			acct = "acct-B"
+		}
+		seed(t, db, fs.root, acct, acct, day29+fmt.Sprintf(" %02d:00:00", i), i)
+	}
+	res, err := c.CompactDay(context.Background(), time.Date(2026, 7, 29, 0, 0, 0, 0, time.UTC))
+	require.NoError(t, err, "compaction reorders rows; that must not read as corruption")
+	require.Equal(t, int64(12), res.Rows)
+	require.NotEmpty(t, res.Fingerprint.XOR)
+	require.NotEmpty(t, res.Fingerprint.Sum)
 }

@@ -10,6 +10,43 @@ import (
 	"time"
 )
 
+// Fingerprint identifies a set of rows independently of how they are
+// grouped into files or ordered within them, which is what makes it
+// comparable across a rewrite that changes both.
+//
+// Three numbers, because none of them is sufficient alone:
+//
+//   - Rows catches loss, and nothing else. A rewrite that replaced one
+//     row with a different one keeps the count exactly.
+//   - XOR catches substitution, and is order-independent as required --
+//     but identical rows cancel each other out, so losing a matched pair
+//     leaves it unchanged. Measured, not assumed: two copies of the same
+//     row hash to 0.
+//   - Sum catches what XOR cancels, since duplicates accumulate rather
+//     than annihilate.
+//
+// The partition columns are excluded on both sides. They are derived
+// from the path on the way in and rebuilt from received_at on the way
+// out, and repartitioning changes them on purpose -- including them
+// would report every corrected row as a corrupted one.
+type Fingerprint struct {
+	Rows int64
+	// XOR and Sum are text because neither fits a Go integer: bit_xor
+	// returns UBIGINT and sum returns HUGEINT. They are compared, never
+	// arithmetic, so the width does not need to travel.
+	XOR string
+	Sum string
+}
+
+// Equal reports whether two fingerprints describe the same rows.
+func (f Fingerprint) Equal(o Fingerprint) bool {
+	return f.Rows == o.Rows && f.XOR == o.XOR && f.Sum == o.Sum
+}
+
+func (f Fingerprint) String() string {
+	return fmt.Sprintf("rows=%d xor=%s sum=%s", f.Rows, f.XOR, f.Sum)
+}
+
 // Result reports what one day's compaction did. Every field is measured
 // rather than assumed, because the operation ends in a delete and an
 // operator asked to trust it deserves the arithmetic.
@@ -20,6 +57,7 @@ type Result struct {
 	Rows           int64
 	BytesWritten   int64
 	Accounts       []string
+	Fingerprint    Fingerprint
 	Skipped        bool   // already compact; nothing was written or deleted
 	SkippedBecause string //nolint:revive // reported to the operator, not branched on
 }
@@ -91,10 +129,11 @@ func (c *Compactor) CompactDay(ctx context.Context, day time.Time) (Result, erro
 	defer func() { _ = os.RemoveAll(tmp) }()
 
 	glob := c.dayGlob(day)
-	rowsBefore, err := c.countRows(ctx, glob)
+	before, err := c.fingerprint(ctx, glob)
 	if err != nil {
-		return res, fmt.Errorf("count rows: %w", err)
+		return res, fmt.Errorf("fingerprint sources: %w", err)
 	}
+	rowsBefore := before.Rows
 	if rowsBefore == 0 {
 		res.Skipped = true
 		res.SkippedBecause = "no rows"
@@ -119,20 +158,22 @@ func (c *Compactor) CompactDay(ctx context.Context, day time.Time) (Result, erro
 		return res, fmt.Errorf("rewrite produced no files for %d rows", rowsBefore)
 	}
 
-	// Count what is about to replace the originals, from the files
+	// Fingerprint what is about to replace the originals, from the files
 	// themselves rather than from the statement that produced them. A
-	// COPY that silently dropped a row would otherwise be discovered by
-	// the operator, months later, as missing history.
-	rowsAfter, err := c.countRows(ctx, filepath.Join(out, "**", "*.parquet"))
+	// COPY that dropped or altered a row would otherwise be discovered
+	// by the operator months later, as missing or wrong history, with
+	// the originals long gone.
+	after, err := c.fingerprint(ctx, filepath.Join(out, "**", "*.parquet"))
 	if err != nil {
-		return res, fmt.Errorf("verify rows: %w", err)
+		return res, fmt.Errorf("fingerprint rewrite: %w", err)
 	}
-	if rowsAfter != rowsBefore {
+	if !before.Equal(after) {
 		return res, fmt.Errorf(
-			"refusing to delete: read %d rows, rewrote %d; originals left untouched",
-			rowsBefore, rowsAfter)
+			"refusing to delete: read [%s], rewrote [%s]; originals left untouched",
+			before, after)
 	}
-	res.Rows = rowsAfter
+	res.Rows = after.Rows
+	res.Fingerprint = after
 
 	stamp := c.now().UTC().UnixNano()
 	for _, w := range written {
@@ -188,11 +229,27 @@ func (c *Compactor) rewrite(ctx context.Context, glob, outDir string) error {
 	return err
 }
 
-func (c *Compactor) countRows(ctx context.Context, glob string) (int64, error) {
-	var n int64
-	err := c.DB.QueryRowContext(ctx,
-		"SELECT count(*) FROM read_parquet("+quote(glob)+", hive_partitioning=true)").Scan(&n)
-	return n, err
+// fingerprint reads a glob and summarises its rows. See Fingerprint for
+// why it is three numbers and why the partition columns are excluded.
+func (c *Compactor) fingerprint(ctx context.Context, glob string) (Fingerprint, error) {
+	var f Fingerprint
+	// Both as text: bit_xor returns UBIGINT and sum returns HUGEINT,
+	// and neither fits an int64 the driver would hand back.
+	var xor sql.NullString
+	var sum sql.NullString
+	err := c.DB.QueryRowContext(ctx, `SELECT count(*),
+		    CAST(bit_xor(hash(r)) AS VARCHAR),
+		    CAST(sum(hash(r)::HUGEINT) AS VARCHAR)
+		FROM (
+		    SELECT * EXCLUDE (year, month, day, account)
+		    FROM read_parquet(`+quote(glob)+`, hive_partitioning=true)
+		) r`).Scan(&f.Rows, &xor, &sum)
+	if err != nil {
+		return Fingerprint{}, err
+	}
+	f.XOR = xor.String
+	f.Sum = sum.String
+	return f, nil
 }
 
 func (c *Compactor) dayPrefix(day time.Time) string {
