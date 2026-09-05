@@ -12,9 +12,10 @@ import (
 
 // Env-var contract — mirrors flow/sinks/factory.go so an operator
 // configures the bucket once and both write + read paths read the
-// same values. Only OPENZRO_FLOW_ARCHIVE_S3_BUCKET (or its GCS
-// counterpart) is required to enable the archive store; the rest
-// inherit defaults.
+// same bucket/prefix values. S3 can rely on provider defaults when no
+// explicit key is supplied; GCS reads additionally require HMAC
+// interoperability keys because DuckDB cannot authenticate with the
+// service-account JSON used by the write-side sink.
 const (
 	envS3Bucket    = "OPENZRO_FLOW_ARCHIVE_S3_BUCKET"
 	envS3Region    = "OPENZRO_FLOW_ARCHIVE_S3_REGION"
@@ -28,7 +29,15 @@ const (
 	envGCSCredentialsFile = "OPENZRO_FLOW_ARCHIVE_GCS_CREDENTIALS_FILE"
 	envGCSCredentialsJSON = "OPENZRO_FLOW_ARCHIVE_GCS_CREDENTIALS_JSON"
 	envGCSProjectID       = "OPENZRO_FLOW_ARCHIVE_GCS_PROJECT_ID"
-	envGCSEndpoint        = "OPENZRO_FLOW_ARCHIVE_GCS_ENDPOINT"
+	// DuckDB reads GCS through httpfs, whose GCS secret takes an HMAC
+	// key pair and nothing else — service account JSON is rejected with
+	// "Unknown parameter 'credential_chain' for secret type 'gcs'". The
+	// sink keeps using the JSON to *write*; only the read path needs
+	// these. Create them in the console under Cloud Storage →
+	// Interoperability.
+	envGCSHMACKeyID  = "OPENZRO_FLOW_ARCHIVE_GCS_HMAC_KEY_ID"
+	envGCSHMACSecret = "OPENZRO_FLOW_ARCHIVE_GCS_HMAC_SECRET"
+	envGCSEndpoint   = "OPENZRO_FLOW_ARCHIVE_GCS_ENDPOINT"
 
 	envFormat       = "OPENZRO_FLOW_ARCHIVE_FORMAT"
 	envQueryTimeout = "OPENZRO_FLOW_ARCHIVE_QUERY_TIMEOUT"
@@ -90,11 +99,21 @@ func NewFromEnv() (store.Store, error) {
 // write format is already known to be Parquet. It applies the same
 // runtime bounds as NewFromEnv so env-configured and dashboard-
 // configured archives share timeout, memory and concurrency behavior.
+// GCS dashboard rows still write through service-account credentials;
+// the DuckDB reader takes its HMAC interoperability pair from env.
 func NewParquet(cfg Config) (store.Store, error) {
 	cfg.QueryTimeout = parseTimeout(os.Getenv(envQueryTimeout))
 	cfg.MemoryLimit = os.Getenv(envMemoryLimit)
 	cfg.Threads = parseInt(os.Getenv(envThreads))
 	cfg.MaxConcurrentQueries = parseInt(os.Getenv(envMaxConcurrentQueries))
+	if cfg.Provider == "gcs" {
+		if cfg.AccessKeyID == "" {
+			cfg.AccessKeyID = os.Getenv(envGCSHMACKeyID)
+		}
+		if cfg.SecretAccessKey == "" {
+			cfg.SecretAccessKey = os.Getenv(envGCSHMACSecret)
+		}
+	}
 	return New(cfg)
 }
 
@@ -126,6 +145,8 @@ func configFromEnv() (Config, bool) {
 			Endpoint:        os.Getenv(envGCSEndpoint),
 			ProjectID:       os.Getenv(envGCSProjectID),
 			CredentialsFile: os.Getenv(envGCSCredentialsFile),
+			AccessKeyID:     os.Getenv(envGCSHMACKeyID),
+			SecretAccessKey: os.Getenv(envGCSHMACSecret),
 		}
 		if v := os.Getenv(envGCSCredentialsJSON); v != "" {
 			cfg.CredentialsJSON = []byte(v)

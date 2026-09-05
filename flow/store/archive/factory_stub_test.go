@@ -58,6 +58,8 @@ func clearArchiveEnv(t *testing.T) {
 		envGCSCredentialsFile,
 		envGCSCredentialsJSON,
 		envGCSProjectID,
+		envGCSHMACKeyID,
+		envGCSHMACSecret,
 		envGCSEndpoint,
 		envFormat,
 		envQueryTimeout,

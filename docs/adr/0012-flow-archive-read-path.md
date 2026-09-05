@@ -181,14 +181,19 @@ the credential model the sinks already use:
   connection (DuckDB has [`SECRET` objects][duckdb-secret] for this
   pattern). Pod-level IAM (IRSA / Workload Identity) works because the
   underlying SDK reads the same env vars.
-* **GCS**: read `GOOGLE_APPLICATION_CREDENTIALS` (path to the service
-  account JSON) and pass through DuckDB's gcs extension when present,
-  fall back to S3-compatible mode (`storage.googleapis.com` HMAC
-  endpoint) otherwise. The chart's flow sink config already supports
-  both; the archive store reuses the resolved values.
-
-No new env vars introduced — the archive store reads what is already
-configured.
+* **GCS**: DuckDB serves `gcs://` through `httpfs` and its GCS secret
+  accepts HMAC interoperability keys (`KEY_ID` / `SECRET`). It does not
+  accept service-account JSON (`CREDENTIAL_CHAIN` is rejected by the
+  binder), and there is no separate `gcs` extension to install. The
+  write-side sink can continue using service-account JSON or Workload
+  Identity, but dashboard reads require
+  `OPENZRO_FLOW_ARCHIVE_GCS_HMAC_KEY_ID` and
+  `OPENZRO_FLOW_ARCHIVE_GCS_HMAC_SECRET` on management. Dashboard
+  exports still store the write-side GCS settings in the database; the
+  read-side HMAC keys remain process env so they are not added as a new
+  persisted secret surface. Missing HMAC keys disable the archive
+  reader with a startup warning rather than preventing management from
+  serving hot-store flow events.
 
 ### 4. Schema evolution discipline
 

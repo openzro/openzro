@@ -2,8 +2,12 @@ package cmd
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"testing"
+
+	flowArchive "github.com/openzro/openzro/flow/store/archive"
 )
 
 const (
@@ -39,6 +43,26 @@ func Test_loadMgmtConfig(t *testing.T) {
 	}
 	if len(cfg.Relay.Addresses) == 0 {
 		t.Fatalf("relay address is empty")
+	}
+}
+
+func TestFlowArchiveConfigErrorIsFatal(t *testing.T) {
+	if flowArchiveConfigErrorIsFatal(nil) {
+		t.Fatal("nil archive config error should not be fatal")
+	}
+	for _, err := range []error{
+		flowArchive.ErrUnavailable,
+		fmt.Errorf("wrapped: %w", flowArchive.ErrUnavailable),
+		flowArchive.ErrMissingCredentials,
+		fmt.Errorf("wrapped: %w", flowArchive.ErrMissingCredentials),
+	} {
+		if flowArchiveConfigErrorIsFatal(err) {
+			t.Fatalf("optional archive error should not be fatal: %v", err)
+		}
+	}
+
+	if !flowArchiveConfigErrorIsFatal(errors.New("bad archive config")) {
+		t.Fatal("unexpected archive config error should remain fatal")
 	}
 }
 

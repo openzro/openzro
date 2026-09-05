@@ -79,6 +79,17 @@ serialization changes.
   `OPENZRO_FLOW_ARCHIVE_GCS_BUCKET`. For dashboard-configured exports,
   set that export's Format to `parquet`; a row-level format overrides
   the env default, and the dashboard reader uses the same precedence.
+  GCS archive reads also require DuckDB-compatible HMAC interoperability
+  credentials: set `OPENZRO_FLOW_ARCHIVE_GCS_HMAC_KEY_ID` and
+  `OPENZRO_FLOW_ARCHIVE_GCS_HMAC_SECRET` on management. The existing
+  service account JSON/file settings can continue writing the archive,
+  but DuckDB cannot read GCS with them; create the HMAC keys in Google
+  Cloud Console under Cloud Storage -> Interoperability. A GCS Parquet
+  reader configured without those two variables is disabled at
+  management startup with a warning naming the missing variables; the
+  dashboard keeps serving hot-store flow events, and archived GCS
+  history becomes readable after the variables are set and management
+  is restarted.
   The reader is assembled only when management starts. Saving or
   editing a dashboard export starts writing with the new format
   immediately, but archive reads from that export require a management

@@ -3,6 +3,7 @@
 package archive
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -31,7 +32,31 @@ func TestNew_RequiresBucketAndProvider(t *testing.T) {
 	assert.NoError(t, err, "valid s3 config should succeed")
 
 	_, err = New(Config{Provider: "gcs", Bucket: "b"})
+	assert.ErrorContains(t, err, envGCSHMACKeyID, "gcs reads require HMAC credentials")
+	assert.True(t, errors.Is(err, ErrMissingCredentials), "missing GCS HMAC keys must be typed")
+
+	_, err = New(Config{Provider: "gcs", Bucket: "b", AccessKeyID: "k", SecretAccessKey: "s"})
 	assert.NoError(t, err, "valid gcs config should succeed")
+}
+
+func TestNewParquet_GCSUsesHMACEnv(t *testing.T) {
+	t.Setenv(envGCSHMACKeyID, "hmac-key")
+	t.Setenv(envGCSHMACSecret, "hmac-secret")
+
+	st, err := NewParquet(Config{
+		Provider:        "gcs",
+		Bucket:          "flow-archive",
+		CredentialsJSON: []byte(`{"type":"service_account"}`),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, st)
+
+	d, ok := st.(*duckdbStore)
+	require.True(t, ok)
+	assert.Equal(t, "hmac-key", d.cfg.AccessKeyID)
+	assert.Equal(t, "hmac-secret", d.cfg.SecretAccessKey)
+	assert.Equal(t, []byte(`{"type":"service_account"}`), d.cfg.CredentialsJSON,
+		"the write-side credential can remain on the config, but DuckDB reads with HMAC")
 }
 
 // TestBuildQuery_AccountIDOnly produces the simplest viable query —
