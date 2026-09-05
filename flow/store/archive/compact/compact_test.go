@@ -134,6 +134,28 @@ func TestCompactDayRepartitionsMisfiledRows(t *testing.T) {
 	require.Zero(t, mismatched)
 }
 
+func TestCompactDayRepartitionsSingleMisfiledObject(t *testing.T) {
+	c, fs, db := newFixture(t)
+	seed(t, db, fs.root, "acct-A", "acct-B", day29+" 10:00:00", 1)
+
+	res, err := c.CompactDay(context.Background(), time.Date(2026, 7, 29, 0, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+	require.False(t, res.Skipped, "one source object can still be misfiled and need repair")
+	require.ElementsMatch(t, []string{"acct-B"}, res.Accounts)
+
+	keys, err := fs.List(context.Background(), "flows")
+	require.NoError(t, err)
+	require.Len(t, keys, 1)
+	require.Contains(t, keys[0], "account=acct-B/")
+
+	var mismatched int64
+	require.NoError(t, db.QueryRow(
+		"SELECT count(*) FROM read_parquet('"+fs.root+
+			"/flows/year=*/month=*/day=*/account=*/*.parquet', hive_partitioning=true) "+
+			"WHERE account_id <> account").Scan(&mismatched))
+	require.Zero(t, mismatched)
+}
+
 // The safety property, stated as a property rather than hoped for: a Put
 // that fails must leave every original in place. Compaction is the one
 // operation here that deletes data, so the failure mode that matters is
@@ -158,20 +180,24 @@ func TestCompactDayKeepsOriginalsWhenWriteFails(t *testing.T) {
 func TestCompactDayIsIdempotent(t *testing.T) {
 	c, fs, db := newFixture(t)
 	for i := range 6 {
-		seed(t, db, fs.root, "acct-A", "acct-A", day29+" 10:00:00", i)
+		acct := "acct-A"
+		if i%2 == 0 {
+			acct = "acct-B"
+		}
+		seed(t, db, fs.root, acct, acct, day29+" 10:00:00", i)
 	}
 	d := time.Date(2026, 7, 29, 0, 0, 0, 0, time.UTC)
 
 	first, err := c.CompactDay(context.Background(), d)
 	require.NoError(t, err)
-	require.Equal(t, 1, first.ObjectsAfter)
+	require.Equal(t, 2, first.ObjectsAfter)
 
 	second, err := c.CompactDay(context.Background(), d)
 	require.NoError(t, err)
 	require.True(t, second.Skipped, "a compacted day must be recognised as compacted")
 	require.Empty(t, second.Accounts)
-	require.Equal(t, 1, fs.count("flows"))
-	require.Len(t, fs.put, 1, "the second run must not write anything")
+	require.Equal(t, 2, fs.count("flows"))
+	require.Len(t, fs.put, 2, "the second run must not write anything")
 }
 
 // A day with nothing in it is not an error. The nightly job will meet
@@ -282,6 +308,49 @@ func TestCompactDayFilesRowsByTheirOwnDate(t *testing.T) {
 			"/flows/year=*/month=*/day=*/account=*/*.parquet', hive_partitioning=true) "+
 			"WHERE day(received_at) <> CAST(day AS INTEGER)").Scan(&stray))
 	require.Zero(t, stray, "no row may sit under a day other than its own")
+}
+
+func TestCompactDayFilesSingleObjectRowsByTheirOwnDate(t *testing.T) {
+	c, fs, db := newFixture(t)
+	seed(t, db, fs.root, "acct-A", "acct-A", "2026-07-28 23:58:00", 99)
+
+	res, err := c.CompactDay(context.Background(), time.Date(2026, 7, 29, 0, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+	require.False(t, res.Skipped, "one source object can still belong under a different day")
+
+	keys, err := fs.List(context.Background(), "flows")
+	require.NoError(t, err)
+	require.Len(t, keys, 1)
+	require.Contains(t, keys[0], "year=2026/month=07/day=28/account=acct-A/")
+
+	var stray int64
+	require.NoError(t, db.QueryRow(
+		"SELECT count(*) FROM read_parquet('"+fs.root+
+			"/flows/year=*/month=*/day=*/account=*/*.parquet', hive_partitioning=true) "+
+			"WHERE day(received_at) <> CAST(day AS INTEGER)").Scan(&stray))
+	require.Zero(t, stray)
+}
+
+func TestCompactDayLeavesParquetOutsideAccountPartitionAlone(t *testing.T) {
+	c, fs, db := newFixture(t)
+	seed(t, db, fs.root, "acct-A", "acct-A", day29+" 10:00:00", 1)
+
+	strayDir := filepath.Join(fs.root, "flows", "year=2026", "month=07", "day=29")
+	stray := filepath.Join(strayDir, "stray.parquet")
+	_, err := db.Exec("COPY (SELECT TIMESTAMP '2026-07-29 10:00:00' AS received_at, " +
+		"'acct-A' AS account_id, 'p' AS peer_id, 'e' AS event_id) TO '" +
+		stray + "' (FORMAT PARQUET)")
+	require.NoError(t, err)
+
+	res, err := c.CompactDay(context.Background(), time.Date(2026, 7, 29, 0, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+	require.True(t, res.Skipped, "the compactable object is already valid")
+
+	_, err = os.Stat(stray)
+	require.NoError(t, err, "objects outside account partitions are not read and must not be deleted")
+	for _, d := range fs.deleted {
+		require.NotContains(t, d, "stray.parquet")
+	}
 }
 
 // A row count catches loss and nothing else. This is the case it cannot

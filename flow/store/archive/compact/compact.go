@@ -113,25 +113,14 @@ func (c *Compactor) CompactDay(ctx context.Context, day time.Time) (res Result, 
 	if err != nil {
 		return res, fmt.Errorf("list %s: %w", dayPrefix, err)
 	}
-	sources = onlyParquet(sources)
+	sources = compactableParquet(sources, dayPrefix)
 	res.ObjectsBefore = len(sources)
 
-	// One object per account is the goal, so a day already at or below
-	// the number of accounts in it has nothing to gain and would only
-	// churn the bucket. Checking the count first also means a rerun over
-	// an already-compacted day is free rather than merely harmless.
-	if len(sources) <= 1 {
+	if len(sources) == 0 {
 		res.Skipped = true
-		res.SkippedBecause = "nothing to merge"
-		res.ObjectsAfter = len(sources)
+		res.SkippedBecause = "no source objects"
 		return res, nil
 	}
-
-	tmp, err := os.MkdirTemp("", "openzro-compact-")
-	if err != nil {
-		return res, fmt.Errorf("temp dir: %w", err)
-	}
-	defer func() { _ = os.RemoveAll(tmp) }()
 
 	glob := c.url(rel + "/account=*/*.parquet")
 	before, err := c.fingerprint(ctx, glob)
@@ -145,6 +134,25 @@ func (c *Compactor) CompactDay(ctx context.Context, day time.Time) (res Result, 
 		res.ObjectsAfter = len(sources)
 		return res, nil
 	}
+	res.Rows = before.Rows
+	res.Fingerprint = before
+
+	compact, err := c.isAlreadyCompact(ctx, glob, sources, dayPrefix)
+	if err != nil {
+		return res, fmt.Errorf("check compactness: %w", err)
+	}
+	if compact {
+		res.Skipped = true
+		res.SkippedBecause = "already compact"
+		res.ObjectsAfter = len(sources)
+		return res, nil
+	}
+
+	tmp, err := os.MkdirTemp("", "openzro-compact-")
+	if err != nil {
+		return res, fmt.Errorf("temp dir: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(tmp) }()
 
 	out := filepath.Join(tmp, "out")
 	rewrite := c.rewrite
@@ -254,6 +262,38 @@ func (c *Compactor) CompactDay(ctx context.Context, day time.Time) (res Result, 
 		}
 	}
 	return res, nil
+}
+
+// isAlreadyCompact reports whether the listed day is already in the
+// shape the reader expects: one object per path account, and every row
+// inside matching both that path account and that path date. A single
+// object is not enough evidence. Legacy batches can put another
+// account's rows, or another day's rows, into one otherwise-normal
+// object, and those are exactly the rows this tool exists to recover.
+func (c *Compactor) isAlreadyCompact(ctx context.Context, glob string, sources []string, dayPrefix string) (bool, error) {
+	accounts := make(map[string]struct{}, len(sources))
+	for _, k := range sources {
+		account, ok := sourceAccount(k, dayPrefix)
+		if !ok {
+			return false, fmt.Errorf("source %s is outside the compactable day layout", k)
+		}
+		accounts[account] = struct{}{}
+	}
+	if len(sources) != len(accounts) {
+		return false, nil
+	}
+
+	var mismatched int64
+	err := c.DB.QueryRowContext(ctx, `SELECT count(*)
+		FROM read_parquet(`+quote(glob)+`, hive_partitioning=true)
+		WHERE account_id <> CAST(account AS VARCHAR)
+		   OR printf('%04d', year(received_at)) <> CAST(year AS VARCHAR)
+		   OR printf('%02d', month(received_at)) <> CAST(month AS VARCHAR)
+		   OR printf('%02d', day(received_at)) <> CAST(day AS VARCHAR)`).Scan(&mismatched)
+	if err != nil {
+		return false, err
+	}
+	return mismatched == 0, nil
 }
 
 // rewrite is the whole merge. DuckDB reads the day, regroups by the
@@ -385,14 +425,36 @@ func collectOutputs(root string) ([]output, error) {
 	return out, err
 }
 
-func onlyParquet(keys []string) []string {
+func compactableParquet(keys []string, dayPrefix string) []string {
 	out := keys[:0:0]
 	for _, k := range keys {
-		if strings.HasSuffix(k, ".parquet") {
+		if strings.HasSuffix(k, ".parquet") && isCompactableDayObject(k, dayPrefix) {
 			out = append(out, k)
 		}
 	}
 	return out
+}
+
+func isCompactableDayObject(key, dayPrefix string) bool {
+	_, ok := sourceAccount(key, dayPrefix)
+	return ok
+}
+
+func sourceAccount(key, dayPrefix string) (string, bool) {
+	prefix := strings.TrimSuffix(dayPrefix, "/") + "/"
+	rel, ok := strings.CutPrefix(key, prefix)
+	if !ok {
+		return "", false
+	}
+	parts := strings.Split(rel, "/")
+	if len(parts) != 2 || !strings.HasSuffix(parts[1], ".parquet") {
+		return "", false
+	}
+	account, ok := strings.CutPrefix(parts[0], "account=")
+	if !ok || account == "" {
+		return "", false
+	}
+	return account, true
 }
 
 // quote single-quotes a path for DuckDB, doubling any quote inside it.
