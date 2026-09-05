@@ -23,6 +23,9 @@ const (
 	envS3AccessKey = "OPENZRO_FLOW_ARCHIVE_S3_ACCESS_KEY"
 	envS3SecretKey = "OPENZRO_FLOW_ARCHIVE_S3_SECRET_KEY"
 	envS3Prefix    = "OPENZRO_FLOW_ARCHIVE_S3_PREFIX"
+	// The sink's flush interval, read here only to size the
+	// partition-pruning margin. See Config.MaxBatchSpan.
+	envS3FlushInterval = "OPENZRO_FLOW_ARCHIVE_S3_FLUSH_INTERVAL"
 
 	envGCSBucket          = "OPENZRO_FLOW_ARCHIVE_GCS_BUCKET"
 	envGCSPrefix          = "OPENZRO_FLOW_ARCHIVE_GCS_PREFIX"
@@ -38,6 +41,9 @@ const (
 	envGCSHMACKeyID  = "OPENZRO_FLOW_ARCHIVE_GCS_HMAC_KEY_ID"
 	envGCSHMACSecret = "OPENZRO_FLOW_ARCHIVE_GCS_HMAC_SECRET"
 	envGCSEndpoint   = "OPENZRO_FLOW_ARCHIVE_GCS_ENDPOINT"
+	// As above: the pruning margin has to cover what the writer could
+	// have produced, not what it produces by default.
+	envGCSFlushInterval = "OPENZRO_FLOW_ARCHIVE_GCS_FLUSH_INTERVAL"
 
 	envFormat       = "OPENZRO_FLOW_ARCHIVE_FORMAT"
 	envQueryTimeout = "OPENZRO_FLOW_ARCHIVE_QUERY_TIMEOUT"
@@ -147,6 +153,7 @@ func configFromEnv() (Config, bool) {
 			CredentialsFile: os.Getenv(envGCSCredentialsFile),
 			AccessKeyID:     os.Getenv(envGCSHMACKeyID),
 			SecretAccessKey: os.Getenv(envGCSHMACSecret),
+			MaxBatchSpan:    parseTimeout(os.Getenv(envGCSFlushInterval)),
 		}
 		if v := os.Getenv(envGCSCredentialsJSON); v != "" {
 			cfg.CredentialsJSON = []byte(v)
@@ -162,6 +169,7 @@ func configFromEnv() (Config, bool) {
 			Region:          os.Getenv(envS3Region),
 			AccessKeyID:     os.Getenv(envS3AccessKey),
 			SecretAccessKey: os.Getenv(envS3SecretKey),
+			MaxBatchSpan:    parseTimeout(os.Getenv(envS3FlushInterval)),
 		}, true
 	}
 	return Config{}, false

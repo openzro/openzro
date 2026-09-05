@@ -37,6 +37,10 @@ another reason to take the backup below before starting.
 No pre-upgrade action is required for the route validation and group
 serialization changes.
 
+If you archive flow events to S3 or GCS in Parquet, see **Flow archive**
+below before upgrading. Nothing breaks if you skip this, but the check is
+easier to interpret before the reader's behaviour changes.
+
 ### After upgrading
 
 - **MySQL management transactions now run at READ COMMITTED.** This
@@ -99,6 +103,83 @@ serialization changes.
   queried by the UI.
   Archives written with the default NDJSON format remain available in
   the bucket for external tools, but the dashboard does not query them.
+
+### Flow archive (S3 / GCS, Parquet)
+
+Three changes ship together. The first two are improvements with no
+action required; the third describes a gap you may need to decide about.
+
+**Archive queries now skip files instead of reading every one.** The
+reader filtered only on `received_at`, a column inside the Parquet files,
+so any question opened every object for the account. Wide windows could
+exceed the ingress timeout and return 504. Queries now also constrain the
+`year`/`month`/`day` partition columns. No action required.
+
+**`type` and `direction` filters now apply to archived events.** They
+were accepted by the API and applied by the hot store, but ignored by the
+archive reader — so a filtered query returned correctly filtered results
+inside the retention window and unfiltered ones outside it. Expect a
+filtered query spanning the archive to return **fewer** rows than before
+the upgrade. That is the filter starting to work, not data loss.
+
+**Objects are now written one per account and UTC date.** Both sinks
+buffer into a queue shared by every account and flush on a timer, and
+they used to name the whole object after the first event in the batch. A
+batch that mixed accounts was filed entirely under one of them, and a
+batch crossing midnight was filed under the earlier day.
+
+Objects written before this release can therefore disagree with their own
+path. The reader now compares `account_id` as well, so those rows are no
+longer served to the wrong account. It cannot recover them for the right
+one: the path is what selects which objects are opened, and a misfiled
+object is still under the wrong prefix.
+
+| | before upgrade | after upgrade |
+| --- | --- | --- |
+| wrong account sees the rows | yes | no |
+| right account sees the rows | no | no |
+
+**To find out whether you are affected**, run these against your archive
+with the DuckDB CLI. Substitute your bucket, prefix and scheme (`s3://`
+or `gs://`), and configure credentials as your DuckDB install expects.
+
+```sql
+-- Events filed under the wrong account.
+SELECT account AS path_account, account_id AS row_account, count(*)
+FROM read_parquet('s3://BUCKET/PREFIX/year=*/month=*/day=*/account=*/*.parquet',
+                  hive_partitioning=true)
+WHERE account_id <> account
+GROUP BY 1, 2
+ORDER BY 3 DESC;
+```
+
+```sql
+-- Events filed under the wrong day.
+SELECT count(*)
+FROM read_parquet('s3://BUCKET/PREFIX/year=*/month=*/day=*/account=*/*.parquet',
+                  hive_partitioning=true)
+WHERE date_trunc('day', received_at)
+      <> make_date(year::INT, month::INT, day::INT);
+```
+
+Both read the whole archive, so run them off-hours on a large bucket.
+
+**If either returns rows**, decide by what the cold archive is for:
+
+- **Dashboard history only.** No action. The exposure is closed, queries
+  are faster, and the affected events are older than your hot retention.
+- **Audit or compliance.** The gap matters: those events are unreachable
+  from the account that owns them. Repartitioning — rewriting the
+  affected objects grouped by account and date — is the only fix, and it
+  is not automated. Open an issue if you need it.
+
+**If you raised the sink's flush interval** above the 15m default via
+`OPENZRO_FLOW_ARCHIVE_{S3,GCS}_FLUSH_INTERVAL` or in the dashboard, keep
+it set. The reader now reads that value to size how far its partition
+filter reaches back, because a long flush is exactly what produced
+objects whose contents predate their own name. Lowering or unsetting it
+after the fact can hide older events written under the previous setting.
+
 
 ## v0.53.1-alpha.89
 

@@ -82,6 +82,23 @@ type Config struct {
 	CredentialsFile string
 	ProjectID       string
 
+	// MaxBatchSpan is how far apart the events inside one archived
+	// object can be. It exists only to size the partition-pruning
+	// margin: an object is named after a date, and the pruning
+	// predicate has to reach far enough back to catch an object whose
+	// name predates the events it holds.
+	//
+	// The sinks now write one object per (account, UTC date), so
+	// anything written by this version needs no margin at all. Objects
+	// written earlier took their whole path from the first event
+	// dequeued, and so could span the sink's entire flush interval,
+	// which is operator-configurable with no upper bound. This is
+	// populated from that same interval so the reader's margin matches
+	// what the writer could actually have produced.
+	//
+	// Zero means the default one-day margin.
+	MaxBatchSpan time.Duration
+
 	// QueryTimeout bounds a single archive query — DuckDB will cancel
 	// the underlying httpfs reads when the context fires. Default
 	// 60s; bump it for large-window forensics if 60s is not enough.

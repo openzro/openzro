@@ -5,7 +5,6 @@ package archive
 import (
 	"context"
 	"database/sql"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -31,25 +30,10 @@ func TestBuildQueryPreparesWithFilters(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 
-	// Every column the reader selects, so the failure under test is the
-	// bind and not a missing column.
-	path := filepath.Join(t.TempDir(), "events.parquet")
-	_, err = db.ExecContext(ctx, "COPY (SELECT "+
-		"TIMESTAMP '2026-05-12 10:00:00' AS received_at, "+
-		"TIMESTAMP '2026-05-12 10:00:00' AS occurred_at, "+
-		"'acct-1' AS account_id, 'peer-a' AS peer_id, "+
-		"'ev-1' AS event_id, 'fl-1' AS flow_id, "+
-		"1::UTINYINT AS type, 1::UTINYINT AS direction, "+
-		"6::USMALLINT AS protocol, "+
-		"'10.0.0.1' AS source_ip, '10.0.0.2' AS dest_ip, "+
-		"1024::UINTEGER AS source_port, 443::UINTEGER AS dest_port, "+
-		"0::UTINYINT AS icmp_type, 0::UTINYINT AS icmp_code, "+
-		"true AS is_initiator, "+
-		"1::UBIGINT AS rx_packets, 2::UBIGINT AS tx_packets, "+
-		"10::UBIGINT AS rx_bytes, 20::UBIGINT AS tx_bytes, "+
-		"'' AS rule_id, '' AS source_resource_id, '' AS dest_resource_id"+
-		") TO '"+path+"' (FORMAT PARQUET)")
-	require.NoError(t, err)
+	// A partitioned tree, because that is the only shape the reader ever
+	// builds: parquetURL always globs year/month/day above the account.
+	root := t.TempDir()
+	seedEventParquet(t, db, partitionPath(root, "2026", "05", "12", "events.parquet"), "2026-05-12 10:00:00")
 
 	since := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	until := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -57,13 +41,14 @@ func TestBuildQueryPreparesWithFilters(t *testing.T) {
 	proto := uint16(6)
 
 	// The shape a dashboard request produces: a window plus predicates.
-	q, args := buildQuery(path, store.Filter{
-		PeerID:   "peer-a",
-		DestPort: &port,
-		Protocol: &proto,
-		Since:    since,
-		Until:    until,
-	})
+	q, args := buildQuery(partitionGlob(root), store.Filter{
+		AccountID: testAccount,
+		PeerID:    "peer-a",
+		DestPort:  &port,
+		Protocol:  &proto,
+		Since:     since,
+		Until:     until,
+	}, 1)
 
 	rows, err := db.QueryContext(ctx, q, args...)
 	require.NoError(t, err, "the query must prepare; binding the glob fails here as soon as a second parameter exists")
@@ -76,7 +61,7 @@ func TestBuildQueryPreparesWithFilters(t *testing.T) {
 // is now interpolated. Bucket and prefix come from operator configuration
 // rather than request input, so this is defence in depth, not a live hole.
 func TestBuildQueryQuotesTheGlob(t *testing.T) {
-	q, args := buildQuery("gcs://bucket/it's/**/*.parquet", store.Filter{})
+	q, args := buildQuery("gcs://bucket/it's/**/*.parquet", store.Filter{AccountID: "acct-1"}, 1)
 	require.Contains(t, q, "it''s", "a single quote has to be doubled for DuckDB")
 	require.NotContains(t, args, "gcs://bucket/it's/**/*.parquet", "the glob must not be an argument")
 }

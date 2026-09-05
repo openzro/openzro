@@ -147,7 +147,7 @@ func (d *duckdbStore) Query(ctx context.Context, f store.Filter) ([]*store.Event
 	}
 
 	url := d.parquetURL(f.AccountID)
-	q, args := buildQuery(url, f)
+	q, args := buildQuery(url, f, d.marginDays())
 	rows, err := conn.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("flow archive store: query: %w", err)
@@ -301,10 +301,80 @@ func (d *duckdbStore) parquetURL(accountID string) string {
 	return fmt.Sprintf(readParquetURL, d.cfg.Provider, d.cfg.Bucket, prefix, accountID)
 }
 
+// marginDays is the pruning margin this store reads with. It is a
+// method rather than an inline call so the wiring from configuration to
+// query has somewhere to be asserted: a reader that computes the right
+// margin and then queries with the default is the same outage as one
+// that computes it wrong.
+func (d *duckdbStore) marginDays() int {
+	return marginDaysFor(d.cfg.MaxBatchSpan)
+}
+
+// marginDaysFor turns the sink's worst-case batch span into the number
+// of days the pruning predicate must reach beyond the requested window.
+//
+// One day is the floor, not the answer: an object written by a sink that
+// buffers for 48h can carry events two days newer than the date in its
+// own name, and a predicate that stopped at the requested day would skip
+// it without saying so. Rounding up rather than down, because the cost
+// of an extra directory is a directory and the cost of one too few is a
+// missing row.
+func marginDaysFor(span time.Duration) int {
+	const day = 24 * time.Hour
+	days := 1
+	if span > 0 {
+		days += int((span + day - 1) / day)
+	}
+	return days
+}
+
+// writePartitionBounds narrows the file list before any file is opened.
+//
+// Without it the reader filters only on received_at, a column that lives
+// *inside* the parquet files, so DuckDB opens every object under the
+// account to answer any question. The objects are laid out
+// year=/month=/day= precisely so most of them can be skipped, and
+// nothing was using it: a two-month window over a four-month archive
+// read all four, ran past the ingress timeout, and returned 504.
+//
+// The bounds are one day wider on each side, deliberately. The sink
+// names a file after the ReceivedAt of the *first* event in the batch
+// (flow/sinks/gcs.go), so a batch that crosses midnight files its later
+// events under the earlier day. These predicates only prune — the
+// received_at clauses below still decide the answer — so a widened
+// bound costs one extra directory while a tight one drops real rows and
+// says nothing.
+//
+// The literals are quoted because the partition columns do not share a
+// type: DuckDB infers year=2026 as BIGINT but leaves month=05 VARCHAR,
+// the leading zero defeating the cast, and comparing that VARCHAR
+// against an integer is a binder error. A string literal is accepted by
+// both, and the sink zero-pads every component, so lexicographic order
+// is numeric order. Written as nested comparisons on the bare columns
+// rather than arithmetic over them, because that is the shape DuckDB
+// prunes on.
+func writePartitionBounds(sb *strings.Builder, since, until time.Time, marginDays int) {
+	if marginDays < 1 {
+		marginDays = 1
+	}
+	if !since.IsZero() {
+		lo := since.UTC().AddDate(0, 0, -marginDays)
+		fmt.Fprintf(sb,
+			" AND (year > '%04d' OR (year = '%04d' AND (month > '%02d' OR (month = '%02d' AND day >= '%02d'))))",
+			lo.Year(), lo.Year(), int(lo.Month()), int(lo.Month()), lo.Day())
+	}
+	if !until.IsZero() {
+		hi := until.UTC().AddDate(0, 0, marginDays)
+		fmt.Fprintf(sb,
+			" AND (year < '%04d' OR (year = '%04d' AND (month < '%02d' OR (month = '%02d' AND day <= '%02d'))))",
+			hi.Year(), hi.Year(), int(hi.Month()), int(hi.Month()), hi.Day())
+	}
+}
+
 // buildQuery produces the parameterised SELECT. Filters that the
 // caller did not set degenerate to TRUE so the query plan stays
 // uniform regardless of how many fields are constrained.
-func buildQuery(url string, f store.Filter) (string, []any) {
+func buildQuery(url string, f store.Filter, marginDays int) (string, []any) {
 	var (
 		sb   strings.Builder
 		args []any
@@ -324,6 +394,20 @@ func buildQuery(url string, f store.Filter) (string, []any) {
 	sb.WriteString(" FROM read_parquet(")
 	sb.WriteString(quoteString(url))
 	sb.WriteString(", hive_partitioning=true) WHERE 1=1")
+
+	// The account is already in the glob, and this predicate does not
+	// prune -- account_id lives inside the files, so every object the
+	// path selects is still opened. It is here because the path is a
+	// claim about a file's contents that the writer, until #186, did not
+	// keep: a batch mixing accounts was filed whole under the first
+	// event's account, and those objects are on disk now. Restricting on
+	// the path alone hands one account another's events.
+	//
+	// Query() rejects an empty AccountID before reaching here, so this
+	// is unconditional on purpose: a filter that somehow arrived without
+	// one must produce no rows, not every row.
+	sb.WriteString(" AND account_id = ?")
+	args = append(args, f.AccountID)
 
 	if f.PeerID != "" {
 		sb.WriteString(" AND peer_id = ?")
@@ -349,6 +433,22 @@ func buildQuery(url string, f store.Filter) (string, []any) {
 		sb.WriteString(" AND protocol = ?")
 		args = append(args, *f.Protocol)
 	}
+	// The hot store keeps type and direction as integers and compares
+	// them as integers; the parquet writer encodes them as strings
+	// (flow/sinks/parquet.go). Same filter, two representations, so the
+	// comparison has to be encoded rather than passed through -- and the
+	// two encoders have to agree, which is what typeString/dirString
+	// below exist to state.
+	if f.Type != nil {
+		sb.WriteString(" AND type = ?")
+		args = append(args, typeString(*f.Type))
+	}
+	if f.Direction != nil {
+		sb.WriteString(" AND direction = ?")
+		args = append(args, dirString(*f.Direction))
+	}
+	writePartitionBounds(&sb, f.Since, f.Until, marginDays)
+
 	if !f.Since.IsZero() {
 		sb.WriteString(" AND received_at >= ?")
 		args = append(args, f.Since.UTC())
@@ -473,6 +573,33 @@ func scanEvent(rows *sql.Rows) (*store.Event, error) {
 		ev.DestResource = b
 	}
 	return &ev, nil
+}
+
+// typeString and dirString are the inverse of parseEventType and
+// parseDirection below, and must stay identical to the encoders in
+// flow/sinks/parquet.go: they are what the archived strings were written
+// with. A disagreement here does not fail, it silently matches nothing,
+// which is why the round-trip is asserted rather than assumed.
+func typeString(t store.EventType) string {
+	switch t {
+	case store.EventTypeStart:
+		return "start"
+	case store.EventTypeEnd:
+		return "end"
+	case store.EventTypeDrop:
+		return "drop"
+	}
+	return "unknown"
+}
+
+func dirString(d store.Direction) string {
+	switch d {
+	case store.DirectionIngress:
+		return "ingress"
+	case store.DirectionEgress:
+		return "egress"
+	}
+	return "unknown"
 }
 
 func parseEventType(s string) store.EventType {
