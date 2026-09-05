@@ -4,6 +4,7 @@ package archive
 
 import (
 	"context"
+	"database/sql"
 	"time"
 
 	"github.com/openzro/openzro/flow/store"
@@ -14,6 +15,10 @@ import (
 // ErrUnavailable and falls back to hot-only behavior — same UX as
 // the v0.53.x line before ADR-0012.
 func New(_ Config) (store.Store, error) {
+	return nil, ErrUnavailable
+}
+
+func OpenParquetDB(_ context.Context, _ Config) (*sql.DB, error) {
 	return nil, ErrUnavailable
 }
 

@@ -59,19 +59,63 @@ type duckdbStore struct {
 // DuckDB connection opens lazily on each Query so a transient bucket
 // outage does not bring management down on boot.
 func New(cfg Config) (store.Store, error) {
+	cfg, err := normalizeConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &duckdbStore{
+		cfg: cfg,
+		sem: make(chan struct{}, cfg.MaxConcurrentQueries),
+	}, nil
+}
+
+// OpenParquetDB opens a DuckDB handle configured like the archive reader.
+// The compaction tool needs direct SQL access for COPY/read_parquet while
+// still sharing the reader's auth, memory and thread setup.
+func OpenParquetDB(ctx context.Context, cfg Config) (*sql.DB, error) {
+	cfg, err := normalizeConfig(configWithRuntimeEnv(cfg))
+	if err != nil {
+		return nil, err
+	}
+	conn, err := openDuckDB()
+	if err != nil {
+		return nil, err
+	}
+	d := &duckdbStore{cfg: cfg}
+	if err := d.bootstrapConn(ctx, conn); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	return conn, nil
+}
+
+func openDuckDB() (*sql.DB, error) {
+	conn, err := sql.Open("duckdb", "")
+	if err != nil {
+		return nil, fmt.Errorf("flow archive store: open duckdb: %w", err)
+	}
+	// bootstrapConn installs SETs and SECRETs on this handle. Keep the
+	// handle to one physical connection so a later Query/COPY cannot land
+	// on a fresh connection that never saw them.
+	conn.SetMaxOpenConns(1)
+	conn.SetMaxIdleConns(1)
+	return conn, nil
+}
+
+func normalizeConfig(cfg Config) (Config, error) {
 	if cfg.Bucket == "" {
-		return nil, fmt.Errorf("flow archive store: Bucket is required")
+		return Config{}, fmt.Errorf("flow archive store: Bucket is required")
 	}
 	if cfg.Provider == "" {
-		return nil, fmt.Errorf("flow archive store: Provider is required (s3 | gcs)")
+		return Config{}, fmt.Errorf("flow archive store: Provider is required (s3 | gcs)")
 	}
 	switch cfg.Provider {
 	case "s3", "gcs":
 	default:
-		return nil, fmt.Errorf("flow archive store: unsupported provider %q (want s3 | gcs)", cfg.Provider)
+		return Config{}, fmt.Errorf("flow archive store: unsupported provider %q (want s3 | gcs)", cfg.Provider)
 	}
 	if cfg.Provider == "gcs" && (cfg.AccessKeyID == "" || cfg.SecretAccessKey == "") {
-		return nil, newGCSHMACCredentialsError()
+		return Config{}, newGCSHMACCredentialsError()
 	}
 	if cfg.QueryTimeout <= 0 {
 		cfg.QueryTimeout = defaultQueryTimeout
@@ -85,10 +129,7 @@ func New(cfg Config) (store.Store, error) {
 	if cfg.MaxConcurrentQueries <= 0 {
 		cfg.MaxConcurrentQueries = defaultMaxConcurrentQueries
 	}
-	return &duckdbStore{
-		cfg: cfg,
-		sem: make(chan struct{}, cfg.MaxConcurrentQueries),
-	}, nil
+	return cfg, nil
 }
 
 // Save is a no-op: the archive is populated by the FlowService fan-out
@@ -136,9 +177,9 @@ func (d *duckdbStore) Query(ctx context.Context, f store.Filter) ([]*store.Event
 		return nil, ctx.Err()
 	}
 
-	conn, err := sql.Open("duckdb", "")
+	conn, err := openDuckDB()
 	if err != nil {
-		return nil, fmt.Errorf("flow archive store: open duckdb: %w", err)
+		return nil, err
 	}
 	defer conn.Close()
 
@@ -633,7 +674,7 @@ func quoteString(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 }
 
-// stripScheme normalises endpoints DuckDB expects without a scheme
+// stripScheme normalizes endpoints DuckDB expects without a scheme
 // (it manages http vs https via USE_SSL). Operators set
 // `https://...` for production and `http://localhost:9000` for
 // MinIO; we feed DuckDB the host portion either way.

@@ -59,7 +59,7 @@ func TestBuildQueryPreparesWithFilters(t *testing.T) {
 
 // A path holding a single quote must not break the statement, since the glob
 // is now interpolated. Bucket and prefix come from operator configuration
-// rather than request input, so this is defence in depth, not a live hole.
+// rather than request input, so this is defense in depth, not a live hole.
 func TestBuildQueryQuotesTheGlob(t *testing.T) {
 	q, args := buildQuery("gcs://bucket/it's/**/*.parquet", store.Filter{AccountID: "acct-1"}, 1)
 	require.Contains(t, q, "it''s", "a single quote has to be doubled for DuckDB")
