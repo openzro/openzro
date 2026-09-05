@@ -64,7 +64,7 @@ func TestNewParquet_GCSUsesHMACEnv(t *testing.T) {
 // glob URL and the safety-net LIMIT both land in the SQL.
 func TestBuildQuery_AccountIDOnly(t *testing.T) {
 	glob := "s3://b/year=*/month=*/day=*/account=acct-1/*.parquet"
-	q, args := buildQuery(glob, store.Filter{}, 1)
+	q, args := buildQuery(glob, store.Filter{AccountID: "acct-1"}, 1)
 	// Interpolated, not bound: DuckDB expands the file list while binding,
 	// so a parameter here breaks the prepare as soon as a second parameter
 	// exists. See TestBuildQueryPreparesWithFilters, which runs it.
@@ -72,8 +72,12 @@ func TestBuildQuery_AccountIDOnly(t *testing.T) {
 	assert.Contains(t, q, "WHERE 1=1")
 	assert.Contains(t, q, "ORDER BY received_at DESC")
 	assert.Contains(t, q, "LIMIT ?")
-	require.Len(t, args, 1)
-	assert.Equal(t, MaxRowsPerQuery, args[0].(int))
+	// account_id is bound unconditionally and comes first: the archive
+	// path claims an account, and objects written before #186 do not
+	// always keep that claim.
+	require.Len(t, args, 2)
+	assert.Equal(t, "acct-1", args[0].(string))
+	assert.Equal(t, MaxRowsPerQuery, args[1].(int))
 }
 
 // TestBuildQuery_AllFilters exercises every Filter field. Catches
@@ -115,10 +119,11 @@ func TestBuildQuery_AllFilters(t *testing.T) {
 	} {
 		assert.Contains(t, q, want)
 	}
-	// 12 args: url + 9 filters + limit + offset
-	// Eleven, not twelve: the parquet glob is interpolated into the SQL
-	// rather than bound, so it is no longer an argument.
-	assert.Len(t, args, 11)
+	// Twelve: account_id + 9 filters + limit + offset. The parquet glob
+	// is interpolated into the SQL rather than bound, so it is not an
+	// argument; account_id is bound and always present.
+	assert.Len(t, args, 12)
+	assert.Equal(t, "acct-1", args[0].(string), "the account is bound first and unconditionally")
 }
 
 // TestBuildQuery_LimitClamping ensures a caller asking for "give me
@@ -127,7 +132,7 @@ func TestBuildQuery_AllFilters(t *testing.T) {
 // year of archive into memory.
 func TestBuildQuery_LimitClamping(t *testing.T) {
 	for _, in := range []int{0, -1, MaxRowsPerQuery + 1, 1_000_000} {
-		_, args := buildQuery("u", store.Filter{Limit: in}, 1)
+		_, args := buildQuery("u", store.Filter{AccountID: "acct-1", Limit: in}, 1)
 		assert.Equal(t, MaxRowsPerQuery, args[len(args)-1].(int),
 			"input limit=%d should clamp to %d", in, MaxRowsPerQuery)
 	}
@@ -138,10 +143,10 @@ func TestBuildQuery_LimitClamping(t *testing.T) {
 // encoding the SELECT would compare raw bytes against a string
 // column and silently match nothing.
 func TestBuildQuery_RuleIDIsHexEncoded(t *testing.T) {
-	_, args := buildQuery("u", store.Filter{RuleID: []byte{0xab, 0xcd}}, 1)
-	// args = [rule_id, limit] — the glob is interpolated, not bound, so it
-	// no longer occupies index 0.
-	assert.Equal(t, "abcd", args[0].(string))
+	_, args := buildQuery("u", store.Filter{AccountID: "acct-1", RuleID: []byte{0xab, 0xcd}}, 1)
+	// args = [account_id, rule_id, limit] — the glob is interpolated, not
+	// bound, and account_id is always the first argument.
+	assert.Equal(t, "abcd", args[1].(string))
 }
 
 // TestParquetURL_HivePartition checks the URL template lines up with

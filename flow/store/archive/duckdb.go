@@ -395,6 +395,20 @@ func buildQuery(url string, f store.Filter, marginDays int) (string, []any) {
 	sb.WriteString(quoteString(url))
 	sb.WriteString(", hive_partitioning=true) WHERE 1=1")
 
+	// The account is already in the glob, and this predicate does not
+	// prune -- account_id lives inside the files, so every object the
+	// path selects is still opened. It is here because the path is a
+	// claim about a file's contents that the writer, until #186, did not
+	// keep: a batch mixing accounts was filed whole under the first
+	// event's account, and those objects are on disk now. Restricting on
+	// the path alone hands one account another's events.
+	//
+	// Query() rejects an empty AccountID before reaching here, so this
+	// is unconditional on purpose: a filter that somehow arrived without
+	// one must produce no rows, not every row.
+	sb.WriteString(" AND account_id = ?")
+	args = append(args, f.AccountID)
+
 	if f.PeerID != "" {
 		sb.WriteString(" AND peer_id = ?")
 		args = append(args, f.PeerID)

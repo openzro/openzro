@@ -42,11 +42,12 @@ func TestBuildQueryPreparesWithFilters(t *testing.T) {
 
 	// The shape a dashboard request produces: a window plus predicates.
 	q, args := buildQuery(partitionGlob(root), store.Filter{
-		PeerID:   "peer-a",
-		DestPort: &port,
-		Protocol: &proto,
-		Since:    since,
-		Until:    until,
+		AccountID: testAccount,
+		PeerID:    "peer-a",
+		DestPort:  &port,
+		Protocol:  &proto,
+		Since:     since,
+		Until:     until,
 	}, 1)
 
 	rows, err := db.QueryContext(ctx, q, args...)
@@ -60,7 +61,7 @@ func TestBuildQueryPreparesWithFilters(t *testing.T) {
 // is now interpolated. Bucket and prefix come from operator configuration
 // rather than request input, so this is defence in depth, not a live hole.
 func TestBuildQueryQuotesTheGlob(t *testing.T) {
-	q, args := buildQuery("gcs://bucket/it's/**/*.parquet", store.Filter{}, 1)
+	q, args := buildQuery("gcs://bucket/it's/**/*.parquet", store.Filter{AccountID: "acct-1"}, 1)
 	require.Contains(t, q, "it''s", "a single quote has to be doubled for DuckDB")
 	require.NotContains(t, args, "gcs://bucket/it's/**/*.parquet", "the glob must not be an argument")
 }

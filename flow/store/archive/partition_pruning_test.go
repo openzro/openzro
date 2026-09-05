@@ -54,8 +54,9 @@ func TestPartitionPruningSkipsFilesOutsideTheWindow(t *testing.T) {
 	require.NoError(t, os.WriteFile(corrupt, []byte("not parquet"), 0o644))
 
 	f := store.Filter{
-		Since: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
-		Until: time.Date(2026, 7, 31, 23, 59, 59, 0, time.UTC),
+		AccountID: testAccount,
+		Since:     time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
+		Until:     time.Date(2026, 7, 31, 23, 59, 59, 0, time.UTC),
 	}
 
 	q, args := buildQuery(partitionGlob(root), f, 1)
@@ -119,8 +120,9 @@ func TestPartitionBoundsAreWidenedByADay(t *testing.T) {
 	seedEventParquet(t, db, partitionPath(root, "2026", "06", "09", "x.parquet"), "2026-06-10 00:05:00")
 
 	q, args := buildQuery(partitionGlob(root), store.Filter{
-		Since: time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC),
-		Until: time.Date(2026, 6, 10, 23, 59, 59, 0, time.UTC),
+		AccountID: testAccount,
+		Since:     time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC),
+		Until:     time.Date(2026, 6, 10, 23, 59, 59, 0, time.UTC),
 	}, 1)
 	n, err := countRows(t, db, q, args)
 	require.NoError(t, err)
@@ -140,8 +142,9 @@ func TestPartitionBoundsSpanYearBoundary(t *testing.T) {
 	seedEventParquet(t, db, partitionPath(root, "2026", "01", "15", "x.parquet"), "2026-01-15 10:00:00")
 
 	q, args := buildQuery(partitionGlob(root), store.Filter{
-		Since: time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC),
-		Until: time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC),
+		AccountID: testAccount,
+		Since:     time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC),
+		Until:     time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC),
 	}, 1)
 	n, err := countRows(t, db, q, args)
 	require.NoError(t, err)
@@ -161,8 +164,9 @@ func TestPartitionBoundsWideningCrossesMonthAndYear(t *testing.T) {
 	seedEventParquet(t, db, partitionPath(root, "2026", "02", "01", "x.parquet"), "2026-01-31 23:55:00")
 
 	q, args := buildQuery(partitionGlob(root), store.Filter{
-		Since: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-		Until: time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC),
+		AccountID: testAccount,
+		Since:     time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		Until:     time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC),
 	}, 1)
 	n, err := countRows(t, db, q, args)
 	require.NoError(t, err)
@@ -174,7 +178,7 @@ func TestPartitionBoundsWideningCrossesMonthAndYear(t *testing.T) {
 // there is nothing to bound, and a bound built from a zero time would
 // exclude the entire archive.
 func TestPartitionBoundsAbsentWithoutAWindow(t *testing.T) {
-	q, _ := buildQuery("gcs://b/year=*/month=*/day=*/account=acct-1/*.parquet", store.Filter{}, 1)
+	q, _ := buildQuery("gcs://b/year=*/month=*/day=*/account=acct-1/*.parquet", store.Filter{AccountID: "acct-1"}, 1)
 	require.NotContains(t, q, " AND (year", "an unbounded query must read every partition")
 	require.Contains(t, q, "year=*", "the glob still spans them; it is the predicate that must be absent")
 }
@@ -221,8 +225,9 @@ func TestPruningFindsAnObjectOlderThanItsContents(t *testing.T) {
 	seedEventParquet(t, db, partitionPath(root, "2026", "06", "08", "x.parquet"), "2026-06-10 12:00:00")
 
 	f := store.Filter{
-		Since: time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC),
-		Until: time.Date(2026, 6, 10, 23, 59, 59, 0, time.UTC),
+		AccountID: testAccount,
+		Since:     time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC),
+		Until:     time.Date(2026, 6, 10, 23, 59, 59, 0, time.UTC),
 	}
 
 	q, args := buildQuery(partitionGlob(root), f, marginDaysFor(48*time.Hour))
@@ -281,4 +286,44 @@ func TestConfigFromEnvCarriesTheFlushInterval(t *testing.T) {
 		require.True(t, ok)
 		require.Zero(t, cfg.MaxBatchSpan)
 	})
+}
+
+// The archive path asserts an account; until #186 the writer did not
+// keep that promise, and those objects are on disk now. An object under
+// account=acct-A holding an acct-B row must return nothing for acct-A —
+// restricting on the path alone hands one account another's events.
+//
+// This is not a pruning predicate: account_id lives inside the file, so
+// the object is still opened. Opening it and returning nothing is the
+// point.
+func TestQueryNeverReturnsAnotherAccountsRows(t *testing.T) {
+	db, err := sql.Open("duckdb", "")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	root := t.TempDir()
+	// Filed under acct-A, carrying acct-B's event: exactly what a mixed
+	// batch produced.
+	seedEventParquetAs(t, db, partitionPath(root, "2026", "06", "10", "x.parquet"),
+		"2026-06-10 12:00:00", "acct-B")
+
+	q, args := buildQuery(partitionGlob(root), store.Filter{
+		AccountID: "acct-A",
+		Since:     time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC),
+		Until:     time.Date(2026, 6, 10, 23, 59, 59, 0, time.UTC),
+	}, 1)
+	n, err := countRows(t, db, q, args)
+	require.NoError(t, err, "the object is still read; it is the row that must be rejected")
+	require.Zero(t, n, "an object misfiled under acct-A leaked acct-B's event")
+
+	// The control: the same object answers acct-B, so the predicate is
+	// rejecting on identity rather than rejecting everything.
+	q, args = buildQuery(partitionGlob(root), store.Filter{
+		AccountID: "acct-B",
+		Since:     time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC),
+		Until:     time.Date(2026, 6, 10, 23, 59, 59, 0, time.UTC),
+	}, 1)
+	n, err = countRows(t, db, q, args)
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
 }
