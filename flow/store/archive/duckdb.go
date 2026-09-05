@@ -147,7 +147,7 @@ func (d *duckdbStore) Query(ctx context.Context, f store.Filter) ([]*store.Event
 	}
 
 	url := d.parquetURL(f.AccountID)
-	q, args := buildQuery(url, f)
+	q, args := buildQuery(url, f, d.marginDays())
 	rows, err := conn.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("flow archive store: query: %w", err)
@@ -301,6 +301,33 @@ func (d *duckdbStore) parquetURL(accountID string) string {
 	return fmt.Sprintf(readParquetURL, d.cfg.Provider, d.cfg.Bucket, prefix, accountID)
 }
 
+// marginDays is the pruning margin this store reads with. It is a
+// method rather than an inline call so the wiring from configuration to
+// query has somewhere to be asserted: a reader that computes the right
+// margin and then queries with the default is the same outage as one
+// that computes it wrong.
+func (d *duckdbStore) marginDays() int {
+	return marginDaysFor(d.cfg.MaxBatchSpan)
+}
+
+// marginDaysFor turns the sink's worst-case batch span into the number
+// of days the pruning predicate must reach beyond the requested window.
+//
+// One day is the floor, not the answer: an object written by a sink that
+// buffers for 48h can carry events two days newer than the date in its
+// own name, and a predicate that stopped at the requested day would skip
+// it without saying so. Rounding up rather than down, because the cost
+// of an extra directory is a directory and the cost of one too few is a
+// missing row.
+func marginDaysFor(span time.Duration) int {
+	const day = 24 * time.Hour
+	days := 1
+	if span > 0 {
+		days += int((span + day - 1) / day)
+	}
+	return days
+}
+
 // writePartitionBounds narrows the file list before any file is opened.
 //
 // Without it the reader filters only on received_at, a column that lives
@@ -326,15 +353,18 @@ func (d *duckdbStore) parquetURL(accountID string) string {
 // is numeric order. Written as nested comparisons on the bare columns
 // rather than arithmetic over them, because that is the shape DuckDB
 // prunes on.
-func writePartitionBounds(sb *strings.Builder, since, until time.Time) {
+func writePartitionBounds(sb *strings.Builder, since, until time.Time, marginDays int) {
+	if marginDays < 1 {
+		marginDays = 1
+	}
 	if !since.IsZero() {
-		lo := since.UTC().AddDate(0, 0, -1)
+		lo := since.UTC().AddDate(0, 0, -marginDays)
 		fmt.Fprintf(sb,
 			" AND (year > '%04d' OR (year = '%04d' AND (month > '%02d' OR (month = '%02d' AND day >= '%02d'))))",
 			lo.Year(), lo.Year(), int(lo.Month()), int(lo.Month()), lo.Day())
 	}
 	if !until.IsZero() {
-		hi := until.UTC().AddDate(0, 0, 1)
+		hi := until.UTC().AddDate(0, 0, marginDays)
 		fmt.Fprintf(sb,
 			" AND (year < '%04d' OR (year = '%04d' AND (month < '%02d' OR (month = '%02d' AND day <= '%02d'))))",
 			hi.Year(), hi.Year(), int(hi.Month()), int(hi.Month()), hi.Day())
@@ -344,7 +374,7 @@ func writePartitionBounds(sb *strings.Builder, since, until time.Time) {
 // buildQuery produces the parameterised SELECT. Filters that the
 // caller did not set degenerate to TRUE so the query plan stays
 // uniform regardless of how many fields are constrained.
-func buildQuery(url string, f store.Filter) (string, []any) {
+func buildQuery(url string, f store.Filter, marginDays int) (string, []any) {
 	var (
 		sb   strings.Builder
 		args []any
@@ -389,7 +419,7 @@ func buildQuery(url string, f store.Filter) (string, []any) {
 		sb.WriteString(" AND protocol = ?")
 		args = append(args, *f.Protocol)
 	}
-	writePartitionBounds(&sb, f.Since, f.Until)
+	writePartitionBounds(&sb, f.Since, f.Until, marginDays)
 
 	if !f.Since.IsZero() {
 		sb.WriteString(" AND received_at >= ?")

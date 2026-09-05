@@ -64,7 +64,7 @@ func TestNewParquet_GCSUsesHMACEnv(t *testing.T) {
 // glob URL and the safety-net LIMIT both land in the SQL.
 func TestBuildQuery_AccountIDOnly(t *testing.T) {
 	glob := "s3://b/year=*/month=*/day=*/account=acct-1/*.parquet"
-	q, args := buildQuery(glob, store.Filter{})
+	q, args := buildQuery(glob, store.Filter{}, 1)
 	// Interpolated, not bound: DuckDB expands the file list while binding,
 	// so a parameter here breaks the prepare as soon as a second parameter
 	// exists. See TestBuildQueryPreparesWithFilters, which runs it.
@@ -99,7 +99,7 @@ func TestBuildQuery_AllFilters(t *testing.T) {
 		Limit:      50,
 		Offset:     100,
 	}
-	q, args := buildQuery("s3://b/account=acct-1/*.parquet", f)
+	q, args := buildQuery("s3://b/account=acct-1/*.parquet", f, 1)
 	for _, want := range []string{
 		"peer_id = ?",
 		"source_ip = ?",
@@ -127,7 +127,7 @@ func TestBuildQuery_AllFilters(t *testing.T) {
 // year of archive into memory.
 func TestBuildQuery_LimitClamping(t *testing.T) {
 	for _, in := range []int{0, -1, MaxRowsPerQuery + 1, 1_000_000} {
-		_, args := buildQuery("u", store.Filter{Limit: in})
+		_, args := buildQuery("u", store.Filter{Limit: in}, 1)
 		assert.Equal(t, MaxRowsPerQuery, args[len(args)-1].(int),
 			"input limit=%d should clamp to %d", in, MaxRowsPerQuery)
 	}
@@ -138,7 +138,7 @@ func TestBuildQuery_LimitClamping(t *testing.T) {
 // encoding the SELECT would compare raw bytes against a string
 // column and silently match nothing.
 func TestBuildQuery_RuleIDIsHexEncoded(t *testing.T) {
-	_, args := buildQuery("u", store.Filter{RuleID: []byte{0xab, 0xcd}})
+	_, args := buildQuery("u", store.Filter{RuleID: []byte{0xab, 0xcd}}, 1)
 	// args = [rule_id, limit] — the glob is interpolated, not bound, so it
 	// no longer occupies index 0.
 	assert.Equal(t, "abcd", args[0].(string))

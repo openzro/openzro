@@ -61,6 +61,9 @@ func ArchiveConfigFromRows(ctx context.Context, cfgStore *Store) (flowArchive.Co
 				Region:          c.Region,
 				AccessKeyID:     c.AccessKey,
 				SecretAccessKey: c.SecretKey,
+				// Sizes the partition-pruning margin; see
+				// flowArchive.Config.MaxBatchSpan.
+				MaxBatchSpan: c.FlushInterval,
 			}, archiveReaderSource(row), true, nil
 		case TypeGCS:
 			c, ok := plain.(*GCSDestConfig)
@@ -81,6 +84,9 @@ func ArchiveConfigFromRows(ctx context.Context, cfgStore *Store) (flowArchive.Co
 				ProjectID:       c.ProjectID,
 				CredentialsFile: c.CredentialsFile,
 				CredentialsJSON: []byte(c.CredentialsJSON),
+				// Sizes the partition-pruning margin; see
+				// flowArchive.Config.MaxBatchSpan.
+				MaxBatchSpan: c.FlushInterval,
 			}, archiveReaderSource(row), true, nil
 		}
 	}
