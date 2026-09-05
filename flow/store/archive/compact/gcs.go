@@ -127,9 +127,9 @@ func (g *GCSStore) Write(ctx context.Context, key string, body []byte) error {
 		_ = w.Close()
 		return fmt.Errorf("compact: write %q: %w", key, err)
 	}
-	// Close is where GCS reports the failure that matters: the bytes are
-	// not durable until it returns, so a Write that only checked the
-	// io.Writer would report success on an object that never landed.
+	// Close is where the storage client can still report upload failure.
+	// CompactDay does not trust this alone: it re-reads and fingerprints
+	// replacement objects from the store before deleting originals.
 	if err := w.Close(); err != nil {
 		return fmt.Errorf("compact: finalize %q: %w", key, err)
 	}
