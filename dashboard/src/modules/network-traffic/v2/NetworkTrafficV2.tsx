@@ -176,7 +176,8 @@ export default function NetworkTrafficV2() {
   // hence the [0]. Initial render before the fetch resolves uses no
   // filter; once the value lands, defaultRangeFromSetting may flip
   // `range` to a windowed shape.
-  const { data: accounts } = useFetchApi<Account[]>("/accounts");
+  const { data: accounts, isLoading: accountsLoading } =
+    useFetchApi<Account[]>("/accounts");
 
   const [search, setSearch] = useState("");
   const [range, setRange] = useState<DateRange | undefined>();
@@ -198,14 +199,26 @@ export default function NetworkTrafficV2() {
   const [userPickedRange, setUserPickedRange] = useState(false);
 
   // Apply the operator's default range exactly once per page mount.
+  //
+  // defaultApplied flips as soon as /accounts settles, whether or not a
+  // preference came back, because it also gates the events request
+  // below. Returning early without flipping it — the previous shape —
+  // left "no preference" indistinguishable from "still loading", and
+  // the page fired an unbounded query on mount that it then repeated
+  // with the real window.
+  //
+  // That first query is not merely wasted. An absent `since` makes the
+  // federated store read the whole cold archive, which is a full scan,
+  // so opening the page cost two archive-wide reads and returned 504.
   useEffect(() => {
     if (defaultApplied) return;
+    if (accountsLoading) return;
+    setDefaultApplied(true);
     const pref = accounts?.[0]?.settings?.extra?.network_traffic_default_range;
     if (!pref) return;
-    setDefaultApplied(true);
     const windowed = defaultRangeFromSetting(pref);
     if (windowed) setRange(windowed);
-  }, [accounts, defaultApplied]);
+  }, [accounts, accountsLoading, defaultApplied]);
 
   useEffect(() => {
     setPageSize(PAGE_SIZE);
@@ -229,11 +242,20 @@ export default function NetworkTrafficV2() {
     return `/network-traffic-events?${qs}`;
   }, [range]);
 
+  // Held until the default range has been decided, so the page issues
+  // one request with the operator's window rather than an unbounded one
+  // followed by the real one. An operator who chose "all" still gets an
+  // unbounded query — that is the setting working, not the bug.
   const {
     data,
     isLoading,
     mutate: mutateFlows,
-  } = useFetchApi<NetworkTrafficEventsResponse>(queryUrl);
+  } = useFetchApi<NetworkTrafficEventsResponse>(
+    queryUrl,
+    false,
+    true,
+    defaultApplied,
+  );
 
   const groups = useMemo(
     () =>
