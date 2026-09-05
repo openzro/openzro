@@ -272,12 +272,21 @@ func (s *S3) encodeForFormat(batch []*store.Event) (body []byte, contentType, co
 	}
 }
 
-// objectKey builds the partitioned object path. Dates are taken from
-// the first event's ReceivedAt — within a single batch they are
-// nanoseconds apart, so partitioning by the head is fine and avoids
-// fragmenting batches across day boundaries (which would produce many
-// tiny files). Extension reflects the archive format so DuckDB / S3
-// listing can filter by suffix without sniffing magic bytes.
+// objectKey builds the partitioned object path from any event in the
+// group, which is only safe because partitionBatch has already made
+// every event in that group agree on the account and the UTC date the
+// path names. Call it with a group, never with a raw flush batch.
+//
+// It used to be called with the batch, on the reasoning that events
+// within one batch are nanoseconds apart. They are not: the queue is
+// shared by every account and drained on a timer, so a batch mixes
+// accounts and can straddle midnight, and nothing orders it either. The
+// fear that motivated the shortcut -- fragmenting batches into many tiny
+// files -- is real but narrower than it looked, since a batch that
+// already belongs to one partition still goes out as one object.
+//
+// Extension reflects the archive format so DuckDB / S3 listing can
+// filter by suffix without sniffing magic bytes.
 func (s *S3) objectKey(first *store.Event) string {
 	t := first.ReceivedAt.UTC()
 	prefix := s.cfg.Prefix

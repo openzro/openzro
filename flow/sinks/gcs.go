@@ -293,6 +293,8 @@ func (g *GCS) encodeForFormat(batch []*store.Event) (body []byte, contentType, c
 
 // objectKey mirrors the S3 sink's path layout so an operator can run
 // both archives in parallel and have a stable schema in either tool.
+// Like its counterpart, it takes any event from a group prepared by
+// partitionBatch, not a raw flush batch.
 func (g *GCS) objectKey(first *store.Event) string {
 	t := first.ReceivedAt.UTC()
 	prefix := g.cfg.Prefix
