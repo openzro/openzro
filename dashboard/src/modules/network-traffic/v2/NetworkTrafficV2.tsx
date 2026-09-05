@@ -248,7 +248,7 @@ export default function NetworkTrafficV2() {
   // unbounded query — that is the setting working, not the bug.
   const {
     data,
-    isLoading,
+    isLoading: eventsLoading,
     mutate: mutateFlows,
   } = useFetchApi<NetworkTrafficEventsResponse>(
     queryUrl,
@@ -256,6 +256,14 @@ export default function NetworkTrafficV2() {
     true,
     defaultApplied,
   );
+
+  // Holding the request makes SWR's key null, and a null key reports
+  // isLoading: false — the page is not loading, it simply has not asked
+  // yet. Every consumer below reads that flag as "there is nothing to
+  // show", so without folding the hold into it the mount renders the
+  // cold-start panel over an empty groups array and then replaces it
+  // with the table a moment later.
+  const isLoading = eventsLoading || !defaultApplied;
 
   const groups = useMemo(
     () =>
@@ -336,9 +344,9 @@ export default function NetworkTrafficV2() {
           Flow Traffic
         </h1>
         <p className="mt-1 max-w-2xl text-[14px] text-oz2-text-muted">
-          Per-flow records reported by your peers — connection starts, ends,
-          and drops. Useful for forensics, capacity planning, and validating
-          that your access policies match traffic in the wild.
+          Per-flow records reported by your peers — connection starts, ends, and
+          drops. Useful for forensics, capacity planning, and validating that
+          your access policies match traffic in the wild.
         </p>
       </header>
 
@@ -670,7 +678,9 @@ function EventCell({ row }: { row: Row }) {
       <div className="relative flex w-6 shrink-0 flex-col items-center justify-center">
         <span
           aria-label={meta.label}
-          className={`relative z-10 grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 bg-oz2-surface ${dotToneClasses[meta.tone]}`}
+          className={`relative z-10 grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 bg-oz2-surface ${
+            dotToneClasses[meta.tone]
+          }`}
         >
           {meta.icon}
         </span>
@@ -736,11 +746,7 @@ function PeerCell({
   // the hostname is one of many sharing the IP. IP subtitle stays
   // unconditional so the operator always has the raw datapoint to
   // cross-check against the ingress access log.
-  const label = peer
-    ? peer.name
-    : isAmbiguous
-      ? ip
-      : (fallback ?? ip);
+  const label = peer ? peer.name : isAmbiguous ? ip : fallback ?? ip;
   const sub = label !== ip ? ip : null;
 
   return (
@@ -772,8 +778,8 @@ function PeerCell({
                   </ul>
                   <p className="mt-2 text-[10.5px] leading-[1.45] text-oz2-text-faint">
                     The agent can&apos;t distinguish between them at the
-                    dataplane layer — HTTP Host header decides at L7. Check
-                    the ingress access log to see what was actually requested.
+                    dataplane layer — HTTP Host header decides at L7. Check the
+                    ingress access log to see what was actually requested.
                   </p>
                 </div>
               }
@@ -782,7 +788,9 @@ function PeerCell({
             >
               <span
                 className="inline-flex cursor-help items-center gap-1 rounded-md border border-oz2-warn/40 bg-oz2-warn/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-oz2-warn"
-                aria-label={`Shared IP with ${ambiguousResources!.length} hosts`}
+                aria-label={`Shared IP with ${
+                  ambiguousResources!.length
+                } hosts`}
               >
                 <AlertTriangleIcon size={9} />
                 {ambiguousResources!.length}
@@ -841,10 +849,7 @@ function TrafficCell({ flow }: { flow: FlowGroup }) {
           className="flex h-1 w-[120px] overflow-hidden rounded-full bg-oz2-border-soft"
         >
           <span className="bg-oz2-acc" style={{ width: `${rxPct}%` }} />
-          <span
-            className="bg-oz2-acc-soft-2"
-            style={{ width: `${txPct}%` }}
-          />
+          <span className="bg-oz2-acc-soft-2" style={{ width: `${txPct}%` }} />
         </div>
       )}
       <span className="font-mono text-[10.5px] text-oz2-text-faint">
