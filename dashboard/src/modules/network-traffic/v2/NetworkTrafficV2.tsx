@@ -242,6 +242,18 @@ export default function NetworkTrafficV2() {
     return `/network-traffic-events?${qs}`;
   }, [range]);
 
+  // A range with a start and no end is the calendar mid-selection: the
+  // first click of a two-click pick. DateRangePickerV2 emits it, so
+  // without this the picker fires a query for "from that date onward",
+  // which on the archive side means from that date to the retention
+  // boundary. Picking a start date in June asked for two months of cold
+  // storage nobody wanted, took 280s, exceeded the query deadline, and
+  // occupied one of four archive slots the whole time.
+  //
+  // A half-picked range is a UI state, not a question. Presets are
+  // unaffected — every one of them carries both bounds.
+  const rangeSettled = !range?.from || !!range?.to;
+
   // Held until the default range has been decided, so the page issues
   // one request with the operator's window rather than an unbounded one
   // followed by the real one. An operator who chose "all" still gets an
@@ -254,7 +266,7 @@ export default function NetworkTrafficV2() {
     queryUrl,
     false,
     true,
-    defaultApplied,
+    defaultApplied && rangeSettled,
   );
 
   // Holding the request makes SWR's key null, and a null key reports
@@ -263,7 +275,7 @@ export default function NetworkTrafficV2() {
   // show", so without folding the hold into it the mount renders the
   // cold-start panel over an empty groups array and then replaces it
   // with the table a moment later.
-  const isLoading = eventsLoading || !defaultApplied;
+  const isLoading = eventsLoading || !defaultApplied || !rangeSettled;
 
   const groups = useMemo(
     () =>
