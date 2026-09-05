@@ -37,13 +37,25 @@ const testAccount = "acct-1"
 // ts is a DuckDB timestamp literal body, e.g. "2026-05-12 10:00:00".
 func seedEventParquetAs(t *testing.T, db *sql.DB, path, ts, accountID string) {
 	t.Helper()
+	seedTypedAs(t, db, path, ts, accountID, "start", "ingress")
+}
+
+// seedTyped writes a row with a chosen type and direction, for the
+// filters that compare them.
+func seedTyped(t *testing.T, db *sql.DB, path, ts, typ, dir string) {
+	t.Helper()
+	seedTypedAs(t, db, path, ts, testAccount, typ, dir)
+}
+
+func seedTypedAs(t *testing.T, db *sql.DB, path, ts, accountID, typ, dir string) {
+	t.Helper()
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 	_, err := db.ExecContext(context.Background(), "COPY (SELECT "+
 		"TIMESTAMP '"+ts+"' AS received_at, "+
 		"TIMESTAMP '"+ts+"' AS occurred_at, "+
 		"'"+accountID+"' AS account_id, 'peer-a' AS peer_id, "+
 		"'ev-1' AS event_id, 'fl-1' AS flow_id, "+
-		"'start' AS type, 'ingress' AS direction, "+
+		"'"+typ+"' AS type, '"+dir+"' AS direction, "+
 		"6::UINTEGER AS protocol, "+
 		"'10.0.0.1' AS source_ip, '10.0.0.2' AS dest_ip, "+
 		"1024::UINTEGER AS source_port, 443::UINTEGER AS dest_port, "+

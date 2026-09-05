@@ -433,6 +433,20 @@ func buildQuery(url string, f store.Filter, marginDays int) (string, []any) {
 		sb.WriteString(" AND protocol = ?")
 		args = append(args, *f.Protocol)
 	}
+	// The hot store keeps type and direction as integers and compares
+	// them as integers; the parquet writer encodes them as strings
+	// (flow/sinks/parquet.go). Same filter, two representations, so the
+	// comparison has to be encoded rather than passed through -- and the
+	// two encoders have to agree, which is what typeString/dirString
+	// below exist to state.
+	if f.Type != nil {
+		sb.WriteString(" AND type = ?")
+		args = append(args, typeString(*f.Type))
+	}
+	if f.Direction != nil {
+		sb.WriteString(" AND direction = ?")
+		args = append(args, dirString(*f.Direction))
+	}
 	writePartitionBounds(&sb, f.Since, f.Until, marginDays)
 
 	if !f.Since.IsZero() {
@@ -559,6 +573,33 @@ func scanEvent(rows *sql.Rows) (*store.Event, error) {
 		ev.DestResource = b
 	}
 	return &ev, nil
+}
+
+// typeString and dirString are the inverse of parseEventType and
+// parseDirection below, and must stay identical to the encoders in
+// flow/sinks/parquet.go: they are what the archived strings were written
+// with. A disagreement here does not fail, it silently matches nothing,
+// which is why the round-trip is asserted rather than assumed.
+func typeString(t store.EventType) string {
+	switch t {
+	case store.EventTypeStart:
+		return "start"
+	case store.EventTypeEnd:
+		return "end"
+	case store.EventTypeDrop:
+		return "drop"
+	}
+	return "unknown"
+}
+
+func dirString(d store.Direction) string {
+	switch d {
+	case store.DirectionIngress:
+		return "ingress"
+	case store.DirectionEgress:
+		return "egress"
+	}
+	return "unknown"
 }
 
 func parseEventType(s string) store.EventType {
