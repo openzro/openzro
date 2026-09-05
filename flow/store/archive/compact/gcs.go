@@ -62,6 +62,11 @@ func NewGCS(ctx context.Context, cfg GCSConfig) (*GCSStore, error) {
 			option.WithHTTPClient(httpClient),
 		)
 	}
+	// Keep reads on the same JSON API as list/write/delete. The default
+	// XML read path is a separate code path in the Go client and is not
+	// what fake-gcs-server emulates; JSON reads are also the client
+	// library's recommended direction.
+	opts = append(opts, storage.WithJSONReads())
 	client, err := storage.NewClient(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("compact: new GCS client: %w", err)

@@ -69,7 +69,7 @@ func startMinIO(t *testing.T) string {
 		Started: true,
 	})
 	if err != nil {
-		t.Skipf("MinIO container unavailable: %v", err)
+		t.Fatalf("failed to start MinIO container: %v", err)
 	}
 	t.Cleanup(func() { _ = c.Terminate(context.Background()) })
 
