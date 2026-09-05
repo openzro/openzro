@@ -316,8 +316,16 @@ func TestQueryNeverReturnsAnotherAccountsRows(t *testing.T) {
 	require.NoError(t, err, "the object is still read; it is the row that must be rejected")
 	require.Zero(t, n, "an object misfiled under acct-A leaked acct-B's event")
 
-	// The control: the same object answers acct-B, so the predicate is
-	// rejecting on identity rather than rejecting everything.
+	// The control: pointed at this object explicitly, the row does come
+	// back for acct-B. It proves the predicate rejects on identity
+	// rather than rejecting everything -- and no more than that.
+	//
+	// It is not a claim that acct-B can find this event. Query() builds
+	// the glob from the account, so acct-B would read account=acct-B and
+	// never open an object misfiled under account=acct-A. The glob here
+	// is passed by hand, which is the only reason the object is in
+	// scope. Closing the leak and recovering the data are different
+	// problems; only the first one is in this branch.
 	q, args = buildQuery(partitionGlob(root), store.Filter{
 		AccountID: "acct-B",
 		Since:     time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC),

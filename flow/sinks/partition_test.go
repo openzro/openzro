@@ -47,9 +47,10 @@ func TestPartitionBatchGroupsAgreeWithTheirObjectKey(t *testing.T) {
 }
 
 // The account half, on its own, because it is not a pruning concern.
-// The archive query carries no account_id predicate: isolation rests
-// entirely on the path. An event filed under the wrong account leaks
-// into that account's results and disappears from its own.
+// The reader now compares account_id as well as the path, so a misfiled
+// event is no longer served to the wrong account — but the path is what
+// decides which objects are opened, so it is still lost to the right
+// one. Only the writer can put it somewhere both halves agree on.
 func TestPartitionBatchNeverMixesAccountsInOneObject(t *testing.T) {
 	batch := []*store.Event{
 		ev("acct-A", time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)),

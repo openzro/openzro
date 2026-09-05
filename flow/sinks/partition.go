@@ -36,10 +36,15 @@ func keyFor(ev *store.Event) partitionKey {
 // batch[0] alone, which made the path a claim about one event and a
 // guess about the rest:
 //
-//   - Events for other accounts were filed under batch[0]'s account.
-//     The archive query carries no account_id predicate — isolation
-//     rests entirely on the path — so those events both leaked into the
-//     wrong account's results and vanished from their own.
+//   - Events for other accounts were filed under batch[0]'s account,
+//     where the reader served them to that account: the archive query
+//     restricted by the path alone. It now also compares account_id, so
+//     the leak is closed for objects already written. Being unreadable
+//     by the wrong account does not make them readable by the right one,
+//     though — the path is what selects which objects are opened at all,
+//     and a misfiled object is still under the wrong prefix. Legacy
+//     objects stay invisible to their own account until they are
+//     repartitioned.
 //   - Events on the other side of midnight were filed under batch[0]'s
 //     day. Reading by date could not find them without scanning
 //     everything, which is what partition pruning stops doing.
