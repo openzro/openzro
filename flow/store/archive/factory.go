@@ -79,7 +79,7 @@ const (
 // In practice an operator picks one, so the precedence rarely
 // matters.
 func NewFromEnv() (store.Store, error) {
-	cfg, ok := configFromEnv()
+	cfg, ok := ConfigFromEnv()
 	if !ok {
 		// No bucket configured → operator opted out, not a failure.
 		return nil, nil
@@ -108,6 +108,17 @@ func NewFromEnv() (store.Store, error) {
 // GCS dashboard rows still write through service-account credentials;
 // the DuckDB reader takes its HMAC interoperability pair from env.
 func NewParquet(cfg Config) (store.Store, error) {
+	return New(configWithRuntimeEnv(cfg))
+}
+
+// ConfigFromEnv returns the archive bucket configuration from the
+// OPENZRO_FLOW_ARCHIVE_* environment variables, without checking the
+// effective archive format.
+func ConfigFromEnv() (Config, bool) {
+	return configFromEnv()
+}
+
+func configWithRuntimeEnv(cfg Config) Config {
 	cfg.QueryTimeout = parseTimeout(os.Getenv(envQueryTimeout))
 	cfg.MemoryLimit = os.Getenv(envMemoryLimit)
 	cfg.Threads = parseInt(os.Getenv(envThreads))
@@ -120,7 +131,7 @@ func NewParquet(cfg Config) (store.Store, error) {
 			cfg.SecretAccessKey = os.Getenv(envGCSHMACSecret)
 		}
 	}
-	return New(cfg)
+	return cfg
 }
 
 // parseInt parses an env-supplied integer, returning 0 on empty or
