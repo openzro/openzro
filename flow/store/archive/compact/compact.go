@@ -51,12 +51,16 @@ func (f Fingerprint) String() string {
 // rather than assumed, because the operation ends in a delete and an
 // operator asked to trust it deserves the arithmetic.
 type Result struct {
-	Day            time.Time
-	ObjectsBefore  int
-	ObjectsAfter   int
-	Rows           int64
-	BytesWritten   int64
-	Accounts       []string
+	Day           time.Time
+	ObjectsBefore int
+	ObjectsAfter  int
+	Rows          int64
+	BytesWritten  int64
+	Accounts      []string
+	// Orphans names replacements this run wrote and then could not
+	// remove after refusing to finish. They are the operator's to delete;
+	// nothing else will, and the reader will trip over them.
+	Orphans        []string
 	Fingerprint    Fingerprint
 	Skipped        bool   // already compact; nothing was written or deleted
 	SkippedBecause string //nolint:revive // reported to the operator, not branched on
@@ -99,11 +103,12 @@ type Compactor struct {
 // is deleted until the replacement is written AND its row count matches
 // what was read. A compaction that loses rows leaves the originals in
 // place and says so.
-func (c *Compactor) CompactDay(ctx context.Context, day time.Time) (Result, error) {
+func (c *Compactor) CompactDay(ctx context.Context, day time.Time) (res Result, err error) {
 	day = day.UTC()
-	res := Result{Day: day}
+	res = Result{Day: day}
 
-	dayPrefix := c.dayPrefix(day)
+	rel := dayPath(day)
+	dayPrefix := c.keyPrefix(rel)
 	sources, err := c.Store.List(ctx, dayPrefix)
 	if err != nil {
 		return res, fmt.Errorf("list %s: %w", dayPrefix, err)
@@ -128,7 +133,7 @@ func (c *Compactor) CompactDay(ctx context.Context, day time.Time) (Result, erro
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
 
-	glob := c.dayGlob(day)
+	glob := c.url(rel + "/account=*/*.parquet")
 	before, err := c.fingerprint(ctx, glob)
 	if err != nil {
 		return res, fmt.Errorf("fingerprint sources: %w", err)
@@ -150,11 +155,11 @@ func (c *Compactor) CompactDay(ctx context.Context, day time.Time) (Result, erro
 		return res, fmt.Errorf("rewrite: %w", err)
 	}
 
-	written, err := collectOutputs(out)
+	outputs, err := collectOutputs(out)
 	if err != nil {
 		return res, fmt.Errorf("collect outputs: %w", err)
 	}
-	if len(written) == 0 {
+	if len(outputs) == 0 {
 		return res, fmt.Errorf("rewrite produced no files for %d rows", rowsBefore)
 	}
 
@@ -176,8 +181,28 @@ func (c *Compactor) CompactDay(ctx context.Context, day time.Time) (Result, erro
 	res.Fingerprint = after
 
 	stamp := c.now().UTC().UnixNano()
-	for _, w := range written {
-		body, err := os.ReadFile(w.path)
+	// Every key written this run, so a failure before the delete can
+	// take them back out. A half-written replacement left in the bucket
+	// is not inert: the reader globs the partition and opens whatever it
+	// finds, so a truncated parquet fails every query that touches the
+	// day -- turning a compaction that safely refused into an outage.
+	var writtenKeys []string
+	defer func() {
+		if err == nil {
+			return
+		}
+		for _, k := range writtenKeys {
+			if delErr := c.Store.Delete(ctx, k); delErr != nil {
+				// Best effort: the originals are intact either way, and
+				// the operator needs the name to finish the cleanup.
+				res.Orphans = append(res.Orphans, k)
+			}
+		}
+	}()
+
+	for _, w := range outputs {
+		var body []byte
+		body, err = os.ReadFile(w.path)
 		if err != nil {
 			return res, fmt.Errorf("read %s: %w", w.path, err)
 		}
@@ -185,22 +210,46 @@ func (c *Compactor) CompactDay(ctx context.Context, day time.Time) (Result, erro
 		// is where the zero padding in rewrite becomes load-bearing:
 		// these strings go straight into the object key the reader
 		// prunes on, and "month=7" is a directory no query will match.
-		key := fmt.Sprintf("%s/%s/compact-%d.parquet", c.rootPrefix(), w.partition(), stamp)
-		if err := c.Store.Put(ctx, key, body); err != nil {
+		key := c.keyPrefix(w.partition() + fmt.Sprintf("/compact-%d.parquet", stamp))
+		if err = c.Store.Write(ctx, key, body); err != nil {
 			// Nothing has been deleted yet, so a failure here costs a
 			// stray object and no data. The next run overwrites it.
-			return res, fmt.Errorf("put %s: %w", key, err)
+			return res, fmt.Errorf("write %s: %w", key, err)
 		}
+		writtenKeys = append(writtenKeys, key)
 		res.BytesWritten += int64(len(body))
 		res.Accounts = append(res.Accounts, w.account)
 		res.ObjectsAfter++
 	}
 
+	// Read the replacements back out of the store and fingerprint what
+	// actually landed there. Everything up to here proves the rewrite
+	// was right; this proves the write was. A Write that reported
+	// success while truncating, or a store that accepted bytes and
+	// returned different ones, is indistinguishable from success at
+	// every earlier step -- and the next step deletes the only other
+	// copy.
+	var written Fingerprint
+	written, err = c.fingerprint(ctx, c.url(fmt.Sprintf("year=*/month=*/day=*/account=*/compact-%d.parquet", stamp)))
+	if err != nil {
+		// Unreadable is as disqualifying as different, and says the same
+		// thing to the operator: the originals are still the only good
+		// copy, and they are still there.
+		return res, fmt.Errorf(
+			"refusing to delete: stored objects could not be read back; originals left untouched: %w", err)
+	}
+	if !before.Equal(written) {
+		return res, fmt.Errorf(
+			"refusing to delete: read [%s], stored [%s]; originals left untouched",
+			before, written)
+	}
+
 	// Only the keys listed at the start. Anything the sink wrote while
 	// this ran is not in that list and survives, which is why the list
-	// is taken once and not refreshed.
+	// is taken once and not refreshed -- and why a re-listed prefix at
+	// the end would be a way to delete data nobody inspected.
 	for _, key := range sources {
-		if err := c.Store.Delete(ctx, key); err != nil {
+		if err = c.Store.Delete(ctx, key); err != nil {
 			return res, fmt.Errorf("delete %s: %w", key, err)
 		}
 	}
@@ -252,21 +301,25 @@ func (c *Compactor) fingerprint(ctx context.Context, glob string) (Fingerprint, 
 	return f, nil
 }
 
-func (c *Compactor) dayPrefix(day time.Time) string {
-	p := fmt.Sprintf("year=%04d/month=%02d/day=%02d", day.Year(), int(day.Month()), day.Day())
+// dayPath is the day's location relative to the archive root, and the
+// only place the layout is spelled out. Both the object key and the
+// DuckDB URL are built by prefixing it, so neither is ever recovered by
+// trimming the other apart.
+func dayPath(day time.Time) string {
+	return fmt.Sprintf("year=%04d/month=%02d/day=%02d", day.Year(), int(day.Month()), day.Day())
+}
+
+// keyPrefix turns a root-relative path into an object key.
+func (c *Compactor) keyPrefix(rel string) string {
 	if c.KeyPrefix == "" {
-		return p
+		return rel
 	}
-	return c.rootPrefix() + "/" + p
+	return strings.TrimSuffix(c.KeyPrefix, "/") + "/" + rel
 }
 
-func (c *Compactor) rootPrefix() string {
-	return strings.TrimSuffix(c.KeyPrefix, "/")
-}
-
-func (c *Compactor) dayGlob(day time.Time) string {
-	return fmt.Sprintf("%s/%s/account=*/*.parquet",
-		strings.TrimSuffix(c.ReadRoot, "/"), trimPrefixPath(c.dayPrefix(day), c.KeyPrefix))
+// url turns a root-relative path into something DuckDB can read.
+func (c *Compactor) url(rel string) string {
+	return strings.TrimSuffix(c.ReadRoot, "/") + "/" + rel
 }
 
 func (c *Compactor) now() time.Time {
@@ -340,13 +393,6 @@ func onlyParquet(keys []string) []string {
 		}
 	}
 	return out
-}
-
-func trimPrefixPath(full, prefix string) string {
-	if prefix == "" {
-		return full
-	}
-	return strings.TrimPrefix(full, strings.TrimSuffix(prefix, "/")+"/")
 }
 
 // quote single-quotes a path for DuckDB, doubling any quote inside it.

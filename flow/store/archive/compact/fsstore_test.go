@@ -17,11 +17,12 @@ import (
 type fsStore struct {
 	root string
 
-	mu        sync.Mutex
-	putErr    error // injected: fail the next Put
-	deleteErr error // injected: fail the next Delete
-	deleted   []string
-	put       []string
+	mu             sync.Mutex
+	putErr         error // injected: fail the next Write
+	truncateWrites bool  // injected: store a short prefix of the bytes
+	deleteErr      error // injected: fail the next Delete
+	deleted        []string
+	put            []string
 }
 
 func (f *fsStore) List(_ context.Context, prefix string) ([]string, error) {
@@ -47,7 +48,7 @@ func (f *fsStore) List(_ context.Context, prefix string) ([]string, error) {
 	return out, err
 }
 
-func (f *fsStore) Put(_ context.Context, key string, body []byte) error {
+func (f *fsStore) Write(_ context.Context, key string, body []byte) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.putErr != nil {
@@ -58,7 +59,14 @@ func (f *fsStore) Put(_ context.Context, key string, body []byte) error {
 		return err
 	}
 	f.put = append(f.put, key)
+	if f.truncateWrites && len(body) > 8 {
+		body = body[:len(body)/2]
+	}
 	return os.WriteFile(p, body, 0o644)
+}
+
+func (f *fsStore) Read(_ context.Context, key string) ([]byte, error) {
+	return os.ReadFile(filepath.Join(f.root, filepath.FromSlash(key)))
 }
 
 func (f *fsStore) Delete(_ context.Context, key string) error {

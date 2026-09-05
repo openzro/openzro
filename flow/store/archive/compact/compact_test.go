@@ -339,3 +339,28 @@ func TestFingerprintIgnoresRowOrder(t *testing.T) {
 	require.NotEmpty(t, res.Fingerprint.XOR)
 	require.NotEmpty(t, res.Fingerprint.Sum)
 }
+
+// Everything before this proves the rewrite was right. This proves the
+// write was. A Write that reports success while storing something else
+// -- truncated, empty, a different object -- looks identical to success
+// at every earlier step, and the next step deletes the only other copy.
+//
+// The store here accepts the bytes and keeps a truncated prefix of them,
+// which is what a partial upload leaves behind.
+func TestCompactDayRefusesWhenTheStoredObjectDiffers(t *testing.T) {
+	c, fs, db := newFixture(t)
+	for i := range 10 {
+		seed(t, db, fs.root, "acct-A", "acct-A", day29+" 10:00:00", i)
+	}
+	fs.truncateWrites = true
+
+	_, err := c.CompactDay(context.Background(), time.Date(2026, 7, 29, 0, 0, 0, 0, time.UTC))
+	require.Error(t, err, "what landed in the store has to be checked, not what was sent to it")
+	require.Contains(t, err.Error(), "originals left untouched")
+	require.Equal(t, 10, fs.count("flows"),
+		"the originals must survive, and the bad replacement must not be left behind")
+	for _, k := range fs.deleted {
+		require.Contains(t, k, "compact-",
+			"only this run's own replacements may be removed; no original may be")
+	}
+}
