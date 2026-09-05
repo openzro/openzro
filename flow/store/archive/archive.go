@@ -34,14 +34,21 @@ var ErrUnavailable = errors.New(
 	"flow archive store: built without archive_duckdb tag — " +
 		"rebuild with `go build -tags=archive_duckdb` to enable")
 
+// ErrMissingCredentials is returned when the archive reader is
+// configured but lacks the credentials DuckDB needs to authenticate.
+// The archive read path is optional, so management treats this like
+// ErrUnavailable and keeps serving hot-store flow events.
+var ErrMissingCredentials = errors.New("flow archive store: missing credentials")
+
 // Config configures the DuckDB-backed archive Store. The fields
 // mirror the env-var contract used by flow/sinks so the operator
 // configures the bucket once and the read + write paths share it.
 type Config struct {
 	// Provider is the object-store family DuckDB will read from.
 	// "s3" covers AWS S3, MinIO, Cloudflare R2, Backblaze B2 — any
-	// S3-compatible service. "gcs" covers Google Cloud Storage native
-	// auth (HMAC interop falls back to "s3").
+	// S3-compatible service. "gcs" covers Google Cloud Storage buckets
+	// written by the native GCS sink, but DuckDB still requires HMAC
+	// interoperability keys for reads.
 	Provider string
 
 	// Bucket is the destination bucket name. Required.
@@ -68,9 +75,9 @@ type Config struct {
 	SecretAccessKey string
 	SessionToken    string
 
-	// CredentialsJSON / CredentialsFile / ProjectID are the GCS
-	// equivalents. Set whichever the operator already has wired into
-	// the matching sink.
+	// CredentialsJSON / CredentialsFile / ProjectID mirror the GCS
+	// sink config, but DuckDB's read path does not use them; GCS reads
+	// require AccessKeyID / SecretAccessKey interoperability keys.
 	CredentialsJSON []byte
 	CredentialsFile string
 	ProjectID       string

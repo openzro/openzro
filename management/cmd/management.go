@@ -531,7 +531,12 @@ var (
 						"flow archive: %s configured but binary built without archive_duckdb — "+
 							"rebuild with `-tags=archive_duckdb` to enable federated reads",
 						archiveSource)
-				case archErr != nil:
+				case errors.Is(archErr, flowArchive.ErrMissingCredentials):
+					log.WithContext(ctx).Warnf(
+						"flow archive: %s configured but archive credentials are incomplete: %v; "+
+							"continuing with hot-store flow events only",
+						archiveSource, archErr)
+				case flowArchiveConfigErrorIsFatal(archErr):
 					return fmt.Errorf("flow archive store: %w", archErr)
 				}
 				if archiveStore != nil {
@@ -1059,6 +1064,12 @@ func flowArchiveFromConfig(
 	}
 	archiveStore, err = flowArchive.NewParquet(cfg)
 	return archiveStore, source, err
+}
+
+func flowArchiveConfigErrorIsFatal(err error) bool {
+	return err != nil &&
+		!errors.Is(err, flowArchive.ErrUnavailable) &&
+		!errors.Is(err, flowArchive.ErrMissingCredentials)
 }
 
 func cpFile(src, dst string) error {

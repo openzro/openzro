@@ -70,6 +70,9 @@ func New(cfg Config) (store.Store, error) {
 	default:
 		return nil, fmt.Errorf("flow archive store: unsupported provider %q (want s3 | gcs)", cfg.Provider)
 	}
+	if cfg.Provider == "gcs" && (cfg.AccessKeyID == "" || cfg.SecretAccessKey == "") {
+		return nil, newGCSHMACCredentialsError()
+	}
 	if cfg.QueryTimeout <= 0 {
 		cfg.QueryTimeout = defaultQueryTimeout
 	}
@@ -245,27 +248,44 @@ func (d *duckdbStore) applyAuthS3(ctx context.Context, conn *sql.DB) error {
 }
 
 func (d *duckdbStore) applyAuthGCS(ctx context.Context, conn *sql.DB) error {
-	// DuckDB's native GCS support uses the gcs extension when
-	// available, otherwise the S3-compat path. We prefer the native
-	// extension because it consumes service-account JSON the same way
-	// the GCS sink does — no HMAC dance, no re-issuing keys.
-	if _, err := conn.ExecContext(ctx, "INSTALL gcs"); err != nil {
-		return fmt.Errorf("flow archive store: install gcs: %w", err)
+	// No INSTALL gcs here, and this is not an omission. DuckDB has no
+	// gcs extension — the request 404s against extensions.duckdb.org
+	// for every version — and GCS is served by httpfs, which
+	// bootstrapConn already loaded.
+	//
+	// The secret takes an HMAC key pair and nothing else. Service
+	// account JSON is rejected outright:
+	//
+	//   Binder Error: Unknown parameter 'credential_chain' for secret
+	//   type 'gcs' with default provider 'config'
+	//
+	// So the read path needs interoperability keys even where the sink
+	// writes with a service account. Refuse during store construction so
+	// management can disable the optional archive reader with one warning
+	// instead of building a secret that cannot authenticate and failing
+	// once per dashboard query.
+	if d.cfg.AccessKeyID == "" || d.cfg.SecretAccessKey == "" {
+		return newGCSHMACCredentialsError()
 	}
-	if _, err := conn.ExecContext(ctx, "LOAD gcs"); err != nil {
-		return fmt.Errorf("flow archive store: load gcs: %w", err)
-	}
-	parts := []string{"TYPE GCS"}
-	if len(d.cfg.CredentialsJSON) > 0 {
-		// JSON is multi-line; quoteString doubles single quotes which
-		// is what DuckDB needs.
-		parts = append(parts, fmt.Sprintf("CREDENTIAL_CHAIN %s", quoteString(string(d.cfg.CredentialsJSON))))
+
+	parts := []string{
+		"TYPE GCS",
+		fmt.Sprintf("KEY_ID %s", quoteString(d.cfg.AccessKeyID)),
+		fmt.Sprintf("SECRET %s", quoteString(d.cfg.SecretAccessKey)),
 	}
 	stmt := fmt.Sprintf("CREATE OR REPLACE SECRET archive_secret (%s)", strings.Join(parts, ", "))
 	if _, err := conn.ExecContext(ctx, stmt); err != nil {
 		return fmt.Errorf("flow archive store: configure gcs secret: %w", err)
 	}
 	return nil
+}
+
+func newGCSHMACCredentialsError() error {
+	return fmt.Errorf(
+		"%w: GCS archive reads need HMAC credentials — set %s and %s "+
+			"(Cloud Storage → Interoperability). Service account JSON writes the archive "+
+			"but DuckDB cannot read with it",
+		ErrMissingCredentials, envGCSHMACKeyID, envGCSHMACSecret)
 }
 
 // parquetURL builds the read_parquet glob for an account. The
