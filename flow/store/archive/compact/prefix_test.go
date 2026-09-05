@@ -24,14 +24,14 @@ func TestCheckUnderPrefix(t *testing.T) {
 		// The one that matters: a boundary that is not a path boundary.
 		// Object stores have no directories, so "flows" would otherwise
 		// match "flowsomething" and a delete would walk into a
-		// neighbouring dataset.
+		// neighboring dataset.
 		{"sibling sharing a name prefix", "flowsomething/x.parquet", "flows", false},
 		{"different tree", "other/x.parquet", "flows", false},
 		{"parent of the prefix", "x.parquet", "flows", false},
 
 		// Refused rather than resolved. These are legal object keys that
 		// no traversal happens on, but they read as an escape and any
-		// layer that ever normalises them becomes one.
+		// layer that ever normalizes them becomes one.
 		{"dot dot segment", "flows/../other/x.parquet", "flows", false},
 		{"dot segment", "flows/./x.parquet", "flows", false},
 		{"double slash", "flows//x.parquet", "flows", false},

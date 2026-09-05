@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -173,6 +174,72 @@ func TestCompactDayKeepsOriginalsWhenWriteFails(t *testing.T) {
 	require.Equal(t, 8, fs.count("flows"), "every original must still be there")
 }
 
+func TestCompactDayKeepsVerifiedReplacementsWhenOriginalDeleteFails(t *testing.T) {
+	c, fs, db := newFixture(t)
+	for i := range 4 {
+		seed(t, db, fs.root, "acct-A", "acct-A", day29+" 10:00:00", i)
+	}
+	fs.deleteErr = errors.New("bucket refused the delete")
+	fs.deleteErrAfter = 1
+
+	_, err := c.CompactDay(context.Background(), time.Date(2026, 7, 29, 0, 0, 0, 0, time.UTC))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "delete")
+
+	keys, err := fs.List(context.Background(), "flows")
+	require.NoError(t, err)
+	replacement := false
+	for _, k := range keys {
+		if strings.HasPrefix(k, "flows/year=2026/month=07/day=29/account=acct-A/compact-") {
+			replacement = true
+		}
+	}
+	require.True(t, replacement, "the verified replacement must survive; an original may already be gone")
+	require.Len(t, fs.deleted, 1, "the injected failure fires after one original delete")
+}
+
+func TestCompactDayRemovesReplacementWhenNoOriginalWasDeleted(t *testing.T) {
+	c, fs, db := newFixture(t)
+	for i := range 4 {
+		seed(t, db, fs.root, "acct-A", "acct-A", day29+" 10:00:00", i)
+	}
+	fs.deleteErr = errors.New("bucket refused the delete")
+	fs.deleteErrAfter = 0
+
+	_, err := c.CompactDay(context.Background(), time.Date(2026, 7, 29, 0, 0, 0, 0, time.UTC))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "delete")
+
+	keys, err := fs.List(context.Background(), "flows")
+	require.NoError(t, err)
+	for _, k := range keys {
+		require.NotContains(t, k, "/compact-",
+			"if no original was removed, the replacement can be cleaned up without risking data loss")
+	}
+	require.Equal(t, 4, fs.count("flows"), "all originals must still be present")
+	require.Len(t, fs.deleted, 1, "only the cleaned-up replacement should be recorded as deleted")
+}
+
+func TestCompactDayDryRunDoesNotWriteOrDelete(t *testing.T) {
+	c, fs, db := newFixture(t)
+	c.DryRun = true
+	for i := range 8 {
+		seed(t, db, fs.root, "acct-A", "acct-A", day29+" 10:00:00", i)
+	}
+
+	res, err := c.CompactDay(context.Background(), time.Date(2026, 7, 29, 0, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+	require.True(t, res.DryRun)
+	require.False(t, res.Skipped)
+	require.Equal(t, 8, res.ObjectsBefore)
+	require.Equal(t, 1, res.ObjectsAfter, "dry-run still reports the compacted shape")
+	require.Equal(t, int64(8), res.Rows)
+	require.NotZero(t, res.BytesWritten, "dry-run measures the bytes it would write")
+	require.Empty(t, fs.put, "dry-run must not write replacements")
+	require.Empty(t, fs.deleted, "dry-run must not delete originals")
+	require.Equal(t, 8, fs.count("flows"), "dry-run leaves source objects in place")
+}
+
 // A day that is already one object per account must cost nothing to
 // revisit. Without this a nightly job would rewrite and re-delete the
 // same data forever, and a rerun after a partial failure would churn
@@ -194,7 +261,7 @@ func TestCompactDayIsIdempotent(t *testing.T) {
 
 	second, err := c.CompactDay(context.Background(), d)
 	require.NoError(t, err)
-	require.True(t, second.Skipped, "a compacted day must be recognised as compacted")
+	require.True(t, second.Skipped, "a compacted day must be recognized as compacted")
 	require.Empty(t, second.Accounts)
 	require.Equal(t, 2, fs.count("flows"))
 	require.Len(t, fs.put, 2, "the second run must not write anything")
@@ -210,7 +277,7 @@ func TestCompactDayEmptyIsNotAnError(t *testing.T) {
 	require.Zero(t, res.ObjectsBefore)
 }
 
-// Compaction must not touch the neighbours. A job running for the 29th
+// Compaction must not touch the neighbors. A job running for the 29th
 // while the sink writes the 30th has to leave the 30th alone.
 func TestCompactDayLeavesOtherDaysAlone(t *testing.T) {
 	c, fs, db := newFixture(t)
@@ -234,9 +301,9 @@ func TestCompactDayLeavesOtherDaysAlone(t *testing.T) {
 	}
 }
 
-// The row-count check is the only thing between a bad rewrite and
-// deleted history, so it gets a test that makes it fire. A guard nobody
-// has seen trip is a guard nobody has tested.
+// The fingerprint check is the only thing between a bad rewrite and
+// deleted history, so it gets a test that makes the row-count part fire.
+// A guard nobody has seen trip is a guard nobody has tested.
 //
 // The substituted rewrite drops rows the way a subtly wrong COPY would:
 // it produces a valid, well-formed, correctly-partitioned output that is
@@ -360,7 +427,7 @@ func TestCompactDayLeavesParquetOutsideAccountPartitionAlone(t *testing.T) {
 // looks right.
 //
 // The substituted rewrite is not a strawman. A wrong join, a cast that
-// truncates an ID, a column mapped to its neighbour: all of them
+// truncates an ID, a column mapped to its neighbor: all of them
 // preserve the count.
 func TestCompactDayRefusesWhenContentChangesButCountDoesNot(t *testing.T) {
 	c, fs, db := newFixture(t)

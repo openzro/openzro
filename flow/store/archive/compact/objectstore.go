@@ -10,7 +10,7 @@
 //
 // The bytes were never the problem. Parquet is built for files in the
 // tens of megabytes, where the footer read that precedes every file is
-// amortised over a lot of data; at 7 KB the round trip is the whole
+// amortized over a lot of data; at 7 KB the round trip is the whole
 // cost. Compaction does not make the archive smaller, it makes it
 // answerable: one file per account-day turns 579 opens into 4.
 //

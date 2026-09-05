@@ -12,7 +12,7 @@ import (
 
 // fsStore is an ObjectStore over a directory, so the compaction logic
 // can be exercised end to end without a cloud account. DuckDB reads
-// local paths and gs:// paths through the same code path, so the only
+// local paths and gcs:// paths through the same code path, so the only
 // thing this substitutes is the SDK half.
 type fsStore struct {
 	root string
@@ -21,6 +21,8 @@ type fsStore struct {
 	putErr         error // injected: fail the next Write
 	truncateWrites bool  // injected: store a short prefix of the bytes
 	deleteErr      error // injected: fail the next Delete
+	deleteErrAfter int   // injected: allow this many deletes before failing once
+	deleteErrFired bool
 	deleted        []string
 	put            []string
 }
@@ -72,7 +74,8 @@ func (f *fsStore) Read(_ context.Context, key string) ([]byte, error) {
 func (f *fsStore) Delete(_ context.Context, key string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.deleteErr != nil {
+	if f.deleteErr != nil && !f.deleteErrFired && len(f.deleted) >= f.deleteErrAfter {
+		f.deleteErrFired = true
 		return f.deleteErr
 	}
 	f.deleted = append(f.deleted, key)

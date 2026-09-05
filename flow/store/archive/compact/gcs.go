@@ -5,11 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
+
+	"github.com/openzro/openzro/safedial"
 )
 
 // GCSConfig mirrors the fields flow/sinks.GCSConfig uses for auth, so an
@@ -26,6 +29,7 @@ type GCSConfig struct {
 	Endpoint        string
 	CredentialsJSON []byte
 	CredentialsFile string
+	HTTPClient      *http.Client
 }
 
 // GCSStore is an ObjectStore over a GCS bucket.
@@ -48,7 +52,15 @@ func NewGCS(ctx context.Context, cfg GCSConfig) (*GCSStore, error) {
 		opts = append(opts, option.WithAuthCredentialsFile(option.ServiceAccount, cfg.CredentialsFile))
 	}
 	if cfg.Endpoint != "" {
-		opts = append(opts, option.WithEndpoint(cfg.Endpoint), option.WithoutAuthentication())
+		httpClient := cfg.HTTPClient
+		if httpClient == nil {
+			httpClient = safedial.Client(0)
+		}
+		opts = append(opts,
+			option.WithEndpoint(cfg.Endpoint),
+			option.WithoutAuthentication(),
+			option.WithHTTPClient(httpClient),
+		)
 	}
 	client, err := storage.NewClient(ctx, opts...)
 	if err != nil {

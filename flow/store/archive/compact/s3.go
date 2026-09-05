@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -13,18 +14,21 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+
+	"github.com/openzro/openzro/safedial"
 )
 
 // S3Config mirrors the auth fields flow/sinks.S3Config uses, so the
 // repair tool reaches the same objects the sink wrote. Covers any
 // S3-compatible service: AWS, MinIO, R2, B2.
 type S3Config struct {
-	Bucket    string
-	Prefix    string
-	Region    string
-	Endpoint  string
-	AccessKey string
-	SecretKey string
+	Bucket     string
+	Prefix     string
+	Region     string
+	Endpoint   string
+	AccessKey  string
+	SecretKey  string
+	HTTPClient *http.Client
 }
 
 // S3Store is an ObjectStore over an S3 bucket.
@@ -47,6 +51,11 @@ func NewS3(ctx context.Context, cfg S3Config) (*S3Store, error) {
 		loadOpts = append(loadOpts, awsconfig.WithCredentialsProvider(
 			credentials.NewStaticCredentialsProvider(cfg.AccessKey, cfg.SecretKey, ""),
 		))
+	}
+	if cfg.HTTPClient != nil {
+		loadOpts = append(loadOpts, awsconfig.WithHTTPClient(cfg.HTTPClient))
+	} else if cfg.Endpoint != "" {
+		loadOpts = append(loadOpts, awsconfig.WithHTTPClient(safedial.Client(0)))
 	}
 	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, loadOpts...)
 	if err != nil {

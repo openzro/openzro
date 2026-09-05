@@ -33,7 +33,7 @@ func (e *ErrOutsidePrefix) Error() string {
 // Dot segments are refused rather than resolved. Object stores treat
 // them as ordinary characters, so "flows/../x" is a real key that no
 // traversal occurs on -- but it reads as an escape, and any layer that
-// ever normalises it becomes one. Refusing costs nothing: nothing in
+// ever normalizes it becomes one. Refusing costs nothing: nothing in
 // this archive's layout produces such a key.
 func checkUnderPrefix(key, prefix string) error {
 	fail := func() error { return &ErrOutsidePrefix{Key: key, Prefix: prefix} }

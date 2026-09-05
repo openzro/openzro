@@ -2,7 +2,9 @@ package compact
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -61,6 +63,7 @@ type Result struct {
 	// remove after refusing to finish. They are the operator's to delete;
 	// nothing else will, and the reader will trip over them.
 	Orphans        []string
+	DryRun         bool
 	Fingerprint    Fingerprint
 	Skipped        bool   // already compact; nothing was written or deleted
 	SkippedBecause string //nolint:revive // reported to the operator, not branched on
@@ -81,17 +84,20 @@ type Compactor struct {
 	// DuckDB.
 	Store ObjectStore
 	// ReadRoot is the URL prefix DuckDB globs under, e.g.
-	// "gs://bucket/flows" or a local directory in tests.
+	// "gcs://bucket/flows" or a local directory in tests.
 	ReadRoot string
 	// KeyPrefix is the same location expressed as an object key prefix,
 	// e.g. "flows". Empty for a bucket root.
 	KeyPrefix string
 	// Now supplies the clock for output names. Tests pin it.
 	Now func() time.Time
+	// DryRun performs every read-side validation and local rewrite, but
+	// stops before writing replacements or deleting originals.
+	DryRun bool
 
-	// rewriteFn is a seam. The row-count check below is the only thing
-	// standing between a bad rewrite and deleted history, and a
-	// guard that cannot be made to fire is a guard nobody has tested.
+	// rewriteFn is a seam. The fingerprint check below is the only thing
+	// standing between a bad rewrite and deleted history, and a guard
+	// that cannot be made to fire is a guard nobody has tested.
 	// Production leaves this nil and gets the real rewrite.
 	rewriteFn func(ctx context.Context, glob, outDir string) error
 }
@@ -100,12 +106,12 @@ type Compactor struct {
 // account, then deletes what it replaced.
 //
 // The order is the safety property, and it only reads one way: nothing
-// is deleted until the replacement is written AND its row count matches
-// what was read. A compaction that loses rows leaves the originals in
-// place and says so.
+// is deleted until the replacement is written AND its fingerprint matches
+// what was read. A compaction that loses or changes rows leaves the
+// originals in place and says so.
 func (c *Compactor) CompactDay(ctx context.Context, day time.Time) (res Result, err error) {
 	day = day.UTC()
-	res = Result{Day: day}
+	res = Result{Day: day, DryRun: c.DryRun}
 
 	rel := dayPath(day)
 	dayPrefix := c.keyPrefix(rel)
@@ -188,15 +194,32 @@ func (c *Compactor) CompactDay(ctx context.Context, day time.Time) (res Result, 
 	res.Rows = after.Rows
 	res.Fingerprint = after
 
-	stamp := c.now().UTC().UnixNano()
+	if c.DryRun {
+		for _, w := range outputs {
+			info, statErr := os.Stat(w.path)
+			if statErr != nil {
+				return res, fmt.Errorf("stat %s: %w", w.path, statErr)
+			}
+			res.BytesWritten += info.Size()
+			res.Accounts = append(res.Accounts, w.account)
+			res.ObjectsAfter++
+		}
+		return res, nil
+	}
+
+	runID, err := c.runID()
+	if err != nil {
+		return res, err
+	}
 	// Every key written this run, so a failure before the delete can
 	// take them back out. A half-written replacement left in the bucket
 	// is not inert: the reader globs the partition and opens whatever it
 	// finds, so a truncated parquet fails every query that touches the
 	// day -- turning a compaction that safely refused into an outage.
 	var writtenKeys []string
+	cleanupWritten := true
 	defer func() {
-		if err == nil {
+		if err == nil || !cleanupWritten {
 			return
 		}
 		for _, k := range writtenKeys {
@@ -218,7 +241,7 @@ func (c *Compactor) CompactDay(ctx context.Context, day time.Time) (res Result, 
 		// is where the zero padding in rewrite becomes load-bearing:
 		// these strings go straight into the object key the reader
 		// prunes on, and "month=7" is a directory no query will match.
-		key := c.keyPrefix(w.partition() + fmt.Sprintf("/compact-%d.parquet", stamp))
+		key := c.keyPrefix(w.partition() + "/compact-" + runID + ".parquet")
 		if err = c.Store.Write(ctx, key, body); err != nil {
 			// Nothing has been deleted yet, so a failure here costs a
 			// stray object and no data. The next run overwrites it.
@@ -238,7 +261,7 @@ func (c *Compactor) CompactDay(ctx context.Context, day time.Time) (res Result, 
 	// every earlier step -- and the next step deletes the only other
 	// copy.
 	var written Fingerprint
-	written, err = c.fingerprint(ctx, c.url(fmt.Sprintf("year=*/month=*/day=*/account=*/compact-%d.parquet", stamp)))
+	written, err = c.fingerprint(ctx, c.url("year=*/month=*/day=*/account=*/compact-"+runID+".parquet"))
 	if err != nil {
 		// Unreadable is as disqualifying as different, and says the same
 		// thing to the operator: the originals are still the only good
@@ -260,6 +283,12 @@ func (c *Compactor) CompactDay(ctx context.Context, day time.Time) (res Result, 
 		if err = c.Store.Delete(ctx, key); err != nil {
 			return res, fmt.Errorf("delete %s: %w", key, err)
 		}
+		// Once any original has been removed, deleting the verified
+		// replacement is the data-loss path. Keep it even if a later
+		// original delete fails. If the very first delete fails, every
+		// original is still intact and the defer can remove the
+		// replacement to avoid duplicate query results.
+		cleanupWritten = false
 	}
 	return res, nil
 }
@@ -369,6 +398,14 @@ func (c *Compactor) now() time.Time {
 	return time.Now()
 }
 
+func (c *Compactor) runID() (string, error) {
+	var suffix [8]byte
+	if _, err := rand.Read(suffix[:]); err != nil {
+		return "", fmt.Errorf("compact: random run id: %w", err)
+	}
+	return fmt.Sprintf("%d-%s", c.now().UTC().UnixNano(), hex.EncodeToString(suffix[:])), nil
+}
+
 // output is one file DuckDB's PARTITION_BY produced, with its partition
 // read back out of the directory it landed in.
 //
@@ -459,7 +496,7 @@ func sourceAccount(key, dayPrefix string) (string, bool) {
 
 // quote single-quotes a path for DuckDB, doubling any quote inside it.
 // Paths come from operator configuration, never from request input, so
-// this is defence in depth rather than a live hole -- the same posture
+// this is defense in depth rather than a live hole -- the same posture
 // the reader takes.
 func quote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "''") + "'"

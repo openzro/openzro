@@ -59,6 +59,15 @@ func TestNewParquet_GCSUsesHMACEnv(t *testing.T) {
 		"the write-side credential can remain on the config, but DuckDB reads with HMAC")
 }
 
+func TestOpenDuckDBUsesOnePhysicalConnection(t *testing.T) {
+	db, err := openDuckDB()
+	require.NoError(t, err)
+	defer db.Close()
+
+	require.Equal(t, 1, db.Stats().MaxOpenConnections,
+		"DuckDB SETs and SECRETs are connection-local; queries must use the bootstrapped connection")
+}
+
 // TestBuildQuery_AccountIDOnly produces the simplest viable query —
 // just `WHERE 1=1 ORDER BY ... LIMIT MaxRowsPerQuery`. Verifies the
 // glob URL and the safety-net LIMIT both land in the SQL.

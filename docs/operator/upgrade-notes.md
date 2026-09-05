@@ -39,7 +39,7 @@ serialization changes.
 
 If you archive flow events to S3 or GCS in Parquet, see **Flow archive**
 below before upgrading. Nothing breaks if you skip this, but the check is
-easier to interpret before the reader's behaviour changes.
+easier to interpret before the reader's behavior changes.
 
 ### After upgrading
 
@@ -141,7 +141,7 @@ object is still under the wrong prefix.
 
 **To find out whether you are affected**, run these against your archive
 with the DuckDB CLI. Substitute your bucket, prefix and scheme (`s3://`
-or `gs://`), and configure credentials as your DuckDB install expects.
+or `gcs://`), and configure credentials as your DuckDB install expects.
 
 ```sql
 -- Events filed under the wrong account.
@@ -179,6 +179,55 @@ it set. The reader now reads that value to size how far its partition
 filter reaches back, because a long flush is exactly what produced
 objects whose contents predate their own name. Lowering or unsetting it
 after the fact can hide older events written under the previous setting.
+
+**Archive compaction is available as an explicit operator action.** Use
+it only if the detection queries above return rows and the archive is
+used for audit or compliance, not just dashboard history. It is not a
+background task and management never runs it automatically.
+
+Build management with DuckDB support and run:
+
+```sh
+openzro-mgmt flow-archive compact \
+  --from 2026-06-01 \
+  --to 2026-06-30 \
+  --manifest /path/to/flow-archive-compact-2026-06.jsonl
+```
+
+The command is a dry run unless `--delete-originals` is present. It
+requires `--from`, `--to` and `--manifest`, writes a JSONL manifest to a
+new file, and refuses to overwrite an existing manifest. Dates are UTC
+and inclusive. Today and yesterday are skipped because a sink may still
+be writing those partitions. In dry-run entries, the manifest reports
+planned replacement size as `bytes_planned`; `bytes_written` remains
+zero because nothing was written to the bucket.
+
+The command reads archive bucket settings from the same
+`OPENZRO_FLOW_ARCHIVE_*` environment variables as management; non-secret
+values can be overridden with flags. Secrets stay in environment
+variables or credential files rather than command-line arguments, so they
+do not land in shell history. For GCS, the DuckDB read side still needs
+`OPENZRO_FLOW_ARCHIVE_GCS_HMAC_KEY_ID` and
+`OPENZRO_FLOW_ARCHIVE_GCS_HMAC_SECRET`, while writes/deletes use the
+service-account credential path already used by the GCS sink.
+
+Keep `--concurrency` low unless the compaction pod has memory reserved
+for it. Each worker opens its own DuckDB handle, and
+`OPENZRO_FLOW_ARCHIVE_MEMORY_LIMIT` is per handle, not a global cap; the
+default `--concurrency 1` is deliberately conservative. Verification
+also has to re-read the replacement objects from the bucket. Today that
+read is scoped by the compaction run ID rather than a narrow day range,
+so very large archives pay extra object listing cost during backfills.
+That cost is accepted to keep the delete gate simple and auditable.
+
+To actually replace objects after reviewing the dry-run manifest, repeat
+the same command with `--delete-originals`. The compactor writes
+replacement objects, re-reads what landed in the bucket, compares a row
+fingerprint, and only then deletes the original keys it listed at the
+start of that day. If deletion fails before any original was removed, the
+replacement is cleaned up. If deletion fails after at least one original
+was removed, the replacement is kept; this can temporarily duplicate cold
+results for that day, but it avoids losing the only good copy.
 
 
 ## v0.53.1-alpha.89

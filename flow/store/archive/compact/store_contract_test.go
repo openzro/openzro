@@ -3,6 +3,7 @@ package compact
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -62,3 +63,14 @@ var (
 	_ ObjectStore = (*GCSStore)(nil)
 	_ ObjectStore = (*S3Store)(nil)
 )
+
+func TestCustomEndpointsUseSafeDialer(t *testing.T) {
+	for _, file := range []string{"gcs.go", "s3.go"} {
+		t.Run(file, func(t *testing.T) {
+			src, err := os.ReadFile(file)
+			require.NoError(t, err)
+			require.Contains(t, string(src), "safedial.Client(0)",
+				"custom archive endpoints must keep the same SSRF dial guard as the sinks")
+		})
+	}
+}
