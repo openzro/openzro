@@ -1,0 +1,142 @@
+//go:build archive_duckdb
+
+package cmd
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	flowExports "github.com/openzro/openzro/management/server/flow_exports"
+	mgmtStore "github.com/openzro/openzro/management/server/store"
+	"github.com/openzro/openzro/management/server/types"
+)
+
+// testEncryptionKey is a throwaway 32-byte key, base64 as the store
+// expects. Not a secret: it exists only to let the row round-trip.
+const testEncryptionKey = "vCKp1HLogZ09qiOFWAz+mDpieiuPsBRtBSOvZd9d1hk="
+
+// writeMgmtConfig lays down the smallest management config that points at
+// a SQLite store in its own directory, and aims the package-level path at
+// it. Both are restored when the test ends.
+func writeMgmtConfig(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	cfg := map[string]any{
+		"Datadir":                dir,
+		"DataStoreEncryptionKey": testEncryptionKey,
+		"StoreConfig":            map[string]any{"Engine": "sqlite"},
+		// loadMgmtConfig dereferences HttpConfig unconditionally, so an
+		// empty object is the floor for a loadable config.
+		"HttpConfig": map[string]any{},
+	}
+	body, err := json.Marshal(cfg)
+	require.NoError(t, err)
+
+	path := filepath.Join(dir, "management.json")
+	require.NoError(t, os.WriteFile(path, body, 0o600))
+
+	oldPath := types.MgmtConfigPath
+	types.MgmtConfigPath = path
+	// loadMgmtConfig overrides Datadir with the --datadir flag whenever
+	// it is set, and the flag defaults to /var/lib/openzro. Point it at
+	// the temp dir so the config it returns describes this test.
+	oldDir := mgmtDataDir
+	mgmtDataDir = dir
+	t.Cleanup(func() {
+		types.MgmtConfigPath = oldPath
+		mgmtDataDir = oldDir
+	})
+	return dir
+}
+
+// The point of reading the dashboard's row: a deployment that configured
+// its archive under Integrations sets no OPENZRO_FLOW_ARCHIVE_*_BUCKET
+// anywhere, and its credential exists only as an encrypted row. Without
+// this the command needs a second copy of the service-account key, which
+// drifts from the console the first time one of them is rotated.
+func TestArchiveConfigFromIntegrationsReadsTheDashboardRow(t *testing.T) {
+	ctx := context.Background()
+	dir := writeMgmtConfig(t)
+
+	store, err := mgmtStore.NewStore(ctx, types.SqliteStoreEngine, dir, nil, false)
+	require.NoError(t, err)
+	sqlStore, ok := store.(*mgmtStore.SqlStore)
+	require.True(t, ok)
+
+	exports, err := flowExports.NewStore(sqlStore.GetGormDB(), testEncryptionKey)
+	require.NoError(t, err)
+	_, err = exports.Save(ctx, flowExports.SaveInput{
+		Name:    "archive",
+		Type:    flowExports.TypeGCS,
+		Enabled: true,
+		GCS: &flowExports.GCSDestConfig{
+			Bucket:          "bucket-from-console",
+			Prefix:          "flows",
+			Format:          "parquet",
+			CredentialsJSON: `{"type":"service_account"}`,
+		},
+	})
+	require.NoError(t, err)
+	require.NoError(t, store.Close(ctx))
+
+	cfg, source, found, err := archiveConfigFromIntegrations(ctx)
+	require.NoError(t, err)
+	require.True(t, found, "a configured archive must be found")
+	require.Equal(t, "gcs", cfg.Provider)
+	require.Equal(t, "bucket-from-console", cfg.Bucket)
+	require.Equal(t, "flows", cfg.Prefix)
+	require.Equal(t, `{"type":"service_account"}`, string(cfg.CredentialsJSON),
+		"the credential must come with it; that is the whole reason for reading the row")
+	require.Contains(t, source, "flow_exports")
+}
+
+// Flags still win, so an operator can point the command at a copy of the
+// bucket without touching what the deployment is running on.
+func TestFlowArchiveCompactConfigFlagsWinOverIntegrations(t *testing.T) {
+	ctx := context.Background()
+	dir := writeMgmtConfig(t)
+
+	store, err := mgmtStore.NewStore(ctx, types.SqliteStoreEngine, dir, nil, false)
+	require.NoError(t, err)
+	sqlStore, _ := store.(*mgmtStore.SqlStore)
+	exports, err := flowExports.NewStore(sqlStore.GetGormDB(), testEncryptionKey)
+	require.NoError(t, err)
+	_, err = exports.Save(ctx, flowExports.SaveInput{
+		Name: "archive", Type: flowExports.TypeGCS, Enabled: true,
+		GCS: &flowExports.GCSDestConfig{
+			Bucket: "bucket-from-console", Prefix: "flows", Format: "parquet",
+		},
+	})
+	require.NoError(t, err)
+	require.NoError(t, store.Close(ctx))
+
+	opts := &flowArchiveCompactOptions{concurrency: 1}
+	cmd := newFlowArchiveCompactCommand(opts)
+	require.NoError(t, cmd.Flags().Set("bucket", "bucket-from-flag"))
+
+	cfg, err := flowArchiveCompactConfig(ctx, cmd, opts)
+	require.NoError(t, err)
+	require.Equal(t, "bucket-from-flag", cfg.Bucket)
+	require.Equal(t, "gcs", cfg.Provider, "the rest of the row still applies")
+}
+
+// A management config that exists but cannot be read is a real
+// misconfiguration and must be reported. Only its absence is treated as
+// "not running beside a management deployment".
+func TestArchiveConfigFromIntegrationsReportsABrokenConfig(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "management.json")
+	require.NoError(t, os.WriteFile(path, []byte("{not json"), 0o600))
+	old := types.MgmtConfigPath
+	types.MgmtConfigPath = path
+	t.Cleanup(func() { types.MgmtConfigPath = old })
+
+	_, _, found, err := archiveConfigFromIntegrations(context.Background())
+	require.Error(t, err)
+	require.False(t, found)
+}

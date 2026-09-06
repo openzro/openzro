@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/openzro/openzro/management/server/types"
 	"os"
 	"testing"
 	"time"
@@ -172,7 +173,7 @@ func TestFlowArchiveCompactWorkerContinuesDryRunAfterDayError(t *testing.T) {
 
 func TestFlowArchiveCompactDoesNotCreateManifestWhenStoreConfigFails(t *testing.T) {
 	manifest := t.TempDir() + "/manifest.jsonl"
-	cmd := newFlowArchiveCompactCommand()
+	cmd := newFlowArchiveCompactCommand(&flowArchiveCompactOptions{concurrency: 1})
 	cmd.SetArgs([]string{
 		"--from", "2026-07-01",
 		"--to", "2026-07-01",
@@ -192,7 +193,7 @@ func TestFlowArchiveCompactDoesNotCreateManifestWhenDuckDBConfigFails(t *testing
 	t.Setenv("OPENZRO_FLOW_ARCHIVE_GCS_HMAC_KEY_ID", "")
 	t.Setenv("OPENZRO_FLOW_ARCHIVE_GCS_HMAC_SECRET", "")
 	manifest := t.TempDir() + "/manifest.jsonl"
-	cmd := newFlowArchiveCompactCommand()
+	cmd := newFlowArchiveCompactCommand(&flowArchiveCompactOptions{concurrency: 1})
 	cmd.SetArgs([]string{
 		"--from", "2026-07-01",
 		"--to", "2026-07-01",
@@ -265,5 +266,64 @@ func drainCompactResults(results <-chan flowArchiveCompactManifestEntry) []flowA
 		default:
 			return out
 		}
+	}
+}
+
+// Flags win over whatever was configured elsewhere, so an operator can
+// point the command at a copy of the bucket without touching the running
+// configuration.
+func TestFlowArchiveCompactConfigFlagsWinOverEnv(t *testing.T) {
+	t.Setenv("OPENZRO_FLOW_ARCHIVE_GCS_BUCKET", "from-env")
+	t.Setenv("OPENZRO_FLOW_ARCHIVE_GCS_PREFIX", "env-prefix")
+
+	opts := &flowArchiveCompactOptions{}
+	cmd := newFlowArchiveCompactCommand(opts)
+	require.NoError(t, cmd.Flags().Set("bucket", "from-flag"))
+	require.NoError(t, cmd.Flags().Set("prefix", "flag-prefix"))
+
+	cfg, err := flowArchiveCompactConfig(context.Background(), cmd, opts)
+	require.NoError(t, err)
+	require.Equal(t, "from-flag", cfg.Bucket)
+	require.Equal(t, "flag-prefix", cfg.Prefix)
+}
+
+// The environment is consulted before the dashboard, and finding a bucket
+// there means the command never opens the database. That matters for a
+// CronJob: an archive configured entirely through env should not need DB
+// credentials to compact.
+func TestFlowArchiveCompactConfigEnvSkipsTheDatabase(t *testing.T) {
+	t.Setenv("OPENZRO_FLOW_ARCHIVE_GCS_BUCKET", "from-env")
+	t.Setenv("OPENZRO_FLOW_ARCHIVE_GCS_HMAC_KEY_ID", "k")
+	t.Setenv("OPENZRO_FLOW_ARCHIVE_GCS_HMAC_SECRET", "s")
+	// A management config that exists and is unreadable: if Integrations
+	// were consulted, this would fail. An archive fully described by the
+	// environment must not need a database, which is what lets a CronJob
+	// run without database credentials.
+	broken := t.TempDir() + "/management.json"
+	require.NoError(t, os.WriteFile(broken, []byte("{not json"), 0o600))
+	old := types.MgmtConfigPath
+	types.MgmtConfigPath = broken
+	t.Cleanup(func() { types.MgmtConfigPath = old })
+
+	opts := &flowArchiveCompactOptions{}
+	cmd := newFlowArchiveCompactCommand(opts)
+
+	cfg, err := flowArchiveCompactConfig(context.Background(), cmd, opts)
+	require.NoError(t, err, "an env-configured archive must not require a database")
+	require.Equal(t, "from-env", cfg.Bucket)
+	require.Equal(t, "gcs", cfg.Provider)
+}
+
+// With nothing configured anywhere, the error has to name all three
+// places rather than only the environment -- an operator who set the
+// bucket in the dashboard and hit this needs to know the command looked
+// there.
+func TestFlowArchiveCompactConfigErrorNamesEverySource(t *testing.T) {
+	opts := &flowArchiveCompactOptions{}
+	cmd := newFlowArchiveCompactCommand(opts)
+	_, err := flowArchiveCompactConfig(context.Background(), cmd, opts)
+	require.Error(t, err)
+	for _, want := range []string{"Integrations", "OPENZRO_FLOW_ARCHIVE_", "--provider"} {
+		require.Contains(t, err.Error(), want)
 	}
 }
