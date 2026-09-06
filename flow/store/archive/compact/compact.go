@@ -367,26 +367,16 @@ func (c *Compactor) pinUTC(ctx context.Context) error {
 // unpadded directory would be silently excluded from every query whose
 // window it should match.
 //
-// The ORDER BY is a physical layout choice: the reader sorts responses
-// anyway, but if the backfill writes old-first files, changing that later
-// means rewriting the archive again. DuckDB partitioned writes emit one
-// file per partition per thread, so ORDER BY alone does not preserve the
-// row order inside the replacement object; the rewrite pins threads to 1
-// for this COPY only, then restores the operator's setting.
-func (c *Compactor) rewrite(ctx context.Context, glob, outDir string) (err error) {
+// The ORDER BY is a physical layout choice: the reader sorts API
+// responses anyway, but the compacted file's row-group statistics decide
+// whether DuckDB can skip unrelated ranges. Clustering by received_at
+// keeps those min/max ranges disjoint; without it, historical queries
+// scan every row group in the compacted object, and fixing that after a
+// destructive backfill means rewriting the archive again.
+func (c *Compactor) rewrite(ctx context.Context, glob, outDir string) error {
 	if err := c.pinUTC(ctx); err != nil {
 		return err
 	}
-	restoreThreads, err := c.pinSingleRewriteThread(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		restoreErr := restoreThreads(ctx)
-		if err == nil && restoreErr != nil {
-			err = restoreErr
-		}
-	}()
 	// #nosec G202 -- glob and outDir are not request input. They are
 	// built from operator configuration and a date this command was
 	// given, and both go through quote(), which doubles any single
@@ -394,7 +384,7 @@ func (c *Compactor) rewrite(ctx context.Context, glob, outDir string) (err error
 	// parameter in this position leaves the binder nothing to expand --
 	// that failure shipped once already (openzro#185) and is why these
 	// are interpolated at all.
-	_, err = c.DB.ExecContext(ctx, `COPY (
+	_, err := c.DB.ExecContext(ctx, `COPY (
 		SELECT * EXCLUDE (year, month, day, account),
 		       printf('%04d', year(received_at::TIMESTAMP))  AS year,
 		       printf('%02d', month(received_at::TIMESTAMP)) AS month,
@@ -404,24 +394,6 @@ func (c *Compactor) rewrite(ctx context.Context, glob, outDir string) (err error
 		ORDER BY year, month, day, account, received_at DESC
 	) TO `+quote(outDir)+` (FORMAT PARQUET, PARTITION_BY (year, month, day, account), OVERWRITE_OR_IGNORE)`)
 	return err
-}
-
-func (c *Compactor) pinSingleRewriteThread(ctx context.Context) (func(context.Context) error, error) {
-	var threads int
-	if err := c.DB.QueryRowContext(ctx, "SELECT current_setting('threads')::INTEGER").Scan(&threads); err != nil {
-		return nil, fmt.Errorf("compact: read DuckDB threads: %w", err)
-	}
-	if _, err := c.DB.ExecContext(ctx, "SET threads=1"); err != nil {
-		return nil, fmt.Errorf("compact: pin rewrite threads: %w", err)
-	}
-	return func(ctx context.Context) error {
-		// #nosec G201 -- threads was read as an integer from DuckDB's own
-		// current_setting() output, not from operator input.
-		if _, err := c.DB.ExecContext(ctx, fmt.Sprintf("SET threads=%d", threads)); err != nil {
-			return fmt.Errorf("compact: restore DuckDB threads: %w", err)
-		}
-		return nil
-	}, nil
 }
 
 // fingerprint reads a glob and summarizes its rows. See Fingerprint for
