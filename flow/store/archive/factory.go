@@ -130,6 +130,49 @@ func configWithRuntimeEnv(cfg Config) Config {
 		if cfg.SecretAccessKey == "" {
 			cfg.SecretAccessKey = os.Getenv(envGCSHMACSecret)
 		}
+		// The service-account credential, on the same terms as the HMAC
+		// pair above and for the same reason.
+		//
+		// configFromEnv returns an empty Config when no bucket is set in
+		// the environment, which is the normal shape for a deployment
+		// that configures its archive through the dashboard: the bucket
+		// lives in a flow_exports row, not in env. A caller that then
+		// supplies the bucket by flag gets a Config with every
+		// env-supplied credential already thrown away.
+		//
+		// For reads that was survivable, since the HMAC is restored just
+		// above. For the compaction tool it is not: writes and deletes go
+		// through the GCS SDK with this credential, and losing it falls
+		// back to ambient credentials -- which on a GKE node without
+		// Workload Identity is the node's service account, typically
+		// read-only. The failure is a permission error on write, pointing
+		// nowhere near the discarded configuration.
+		if len(cfg.CredentialsJSON) == 0 {
+			if v := os.Getenv(envGCSCredentialsJSON); v != "" {
+				cfg.CredentialsJSON = []byte(v)
+			}
+		}
+		if cfg.CredentialsFile == "" {
+			cfg.CredentialsFile = os.Getenv(envGCSCredentialsFile)
+		}
+	}
+	if cfg.Provider == "s3" {
+		// The same restoration, for the same reason. S3 uses one
+		// credential where GCS uses two -- the key pair signs both the
+		// DuckDB reads and the SDK's writes -- so losing it costs the
+		// whole operation rather than half of it.
+		//
+		// The symptom is worse than a missing credential, too. The AWS
+		// SDK falls through its own chain to the instance metadata
+		// service, so the error names EC2 IMDS on a machine that has
+		// none, and points nowhere near the configuration that was
+		// dropped.
+		if cfg.AccessKeyID == "" {
+			cfg.AccessKeyID = os.Getenv(envS3AccessKey)
+		}
+		if cfg.SecretAccessKey == "" {
+			cfg.SecretAccessKey = os.Getenv(envS3SecretKey)
+		}
 	}
 	return cfg
 }
