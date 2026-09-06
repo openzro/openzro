@@ -55,17 +55,29 @@ func newFlowArchiveCompactCommand(opts *flowArchiveCompactOptions) *cobra.Comman
 		Short: "Compact and repartition archived flow Parquet objects",
 		Long: "Compact and repartition archived flow Parquet objects.\n\n" +
 			"Where the archive is, resolved in this order:\n" +
-			"  1. the destination configured in the dashboard under Integrations,\n" +
-			"  2. OPENZRO_FLOW_ARCHIVE_* environment variables,\n" +
-			"  3. --provider / --bucket / --prefix flags, which win over both.\n\n" +
-			"Reading the dashboard's row means this command uses the same bucket and the\n" +
-			"same credential the sink is already writing with, instead of a second copy\n" +
-			"that drifts the first time one of them is rotated.\n\n" +
-			"GCS needs one thing the row cannot supply: the HMAC interoperability pair,\n" +
-			"in OPENZRO_FLOW_ARCHIVE_GCS_HMAC_KEY_ID and _SECRET. Reads go through\n" +
-			"DuckDB, whose GCS secret accepts those keys and rejects service-account\n" +
-			"JSON. Writes and deletes use the service account from the row. S3 needs no\n" +
-			"such split -- one key pair signs both.\n\n" +
+			"  1. OPENZRO_FLOW_ARCHIVE_* environment variables,\n" +
+			"  2. --provider / --bucket / --prefix / --region / --endpoint, which\n" +
+			"     override individual fields from the environment,\n" +
+			"  3. if provider and bucket are both set by then, nothing else is read --\n" +
+			"     no management config, no database,\n" +
+			"  4. otherwise the archive configured in the dashboard under Integrations,\n" +
+			"     with the flags layered back on top.\n\n" +
+			"The environment is all-or-nothing: without a bucket it describes no archive\n" +
+			"at all, so exporting only a prefix does not override the dashboard. Use a\n" +
+			"flag to change one field.\n\n" +
+			"Step 3 makes the flags an escape hatch rather than a preference. This\n" +
+			"command deletes objects, so pointing it at a copy of the bucket, or working\n" +
+			"around a broken deployment, must not depend on the management config being\n" +
+			"readable or the database being up.\n\n" +
+			"Step 4 is where a normal deployment lands: a cluster that configured its\n" +
+			"bucket in the dashboard has no OPENZRO_FLOW_ARCHIVE_*_BUCKET anywhere and\n" +
+			"its credential exists only as an encrypted row, so reading it is what avoids\n" +
+			"a second copy of the service-account key.\n\n" +
+			"GCS needs one thing no row can supply: the HMAC interoperability pair, in\n" +
+			"OPENZRO_FLOW_ARCHIVE_GCS_HMAC_KEY_ID and _SECRET. Reads go through DuckDB,\n" +
+			"whose GCS secret accepts those keys and rejects service-account JSON. Writes\n" +
+			"and deletes use the service account. S3 needs no such split -- one key pair\n" +
+			"signs both.\n\n" +
 			"Credentials are never flags, so they do not land in shell history or a\n" +
 			"process list.",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -347,37 +359,72 @@ func formatCompactDay(t time.Time) string {
 	return utcDay(t).Format("2006-01-02")
 }
 
-// flowArchiveCompactConfig resolves where the archive is, in the order an
-// operator would expect: what the dashboard was told, then the
-// environment, then the flags.
+// flowArchiveCompactConfig resolves where the archive is.
 //
-// The dashboard comes first because that is where this deployment's
-// archive actually lives. A cluster that configured its bucket under
-// Integrations has no OPENZRO_FLOW_ARCHIVE_*_BUCKET set anywhere, and
-// the credential exists only as an encrypted row -- so without this the
-// command needs its own copy of the service-account key, which then
-// drifts from the console the first time anybody rotates one and not the
-// other.
+// Explicit configuration first, the dashboard second:
 //
-// The environment still supplies what the row cannot. The GCS HMAC pair
-// is the reason: DuckDB reaches GCS through httpfs, whose secret takes
-// interoperability keys and rejects service-account JSON, so reads need a
-// credential the row has no field for. configWithRuntimeEnv restores it.
+//  1. OPENZRO_FLOW_ARCHIVE_* environment variables,
+//  2. --provider / --bucket / --prefix / --region / --endpoint flags,
+//     which override individual fields from the environment,
+//  3. if provider and bucket are BOTH set by then, nothing else is read
+//     -- no management config, no database,
+//  4. otherwise the archive configured in the dashboard under
+//     Integrations becomes the base, with the flags layered back on top.
 //
-// Flags win over both, so an operator can point the command at a copy of
-// the bucket without touching the running configuration.
+// The environment is all-or-nothing, which surprises people: ConfigFromEnv
+// reports "not configured" without a bucket and returns an empty Config,
+// so exporting only a prefix does not override the dashboard. That is how
+// the reader treats these variables everywhere, so it stays that way
+// rather than growing a special case here; a flag overrides one field.
+//
+// Step 3 is what makes the flags an escape hatch rather than a
+// preference. This command deletes objects, and an operator pointing it
+// at a copy of the bucket -- or working around a broken deployment --
+// must not be blocked because the management config is unreadable or the
+// database is down. If the flags say where to go, the command goes.
+//
+// Step 4 is where a normal deployment lands. A cluster that configured
+// its bucket in the dashboard has no OPENZRO_FLOW_ARCHIVE_*_BUCKET set
+// anywhere and its credential exists only as an encrypted row, so
+// reading it is what lets the CronJob run without a second copy of the
+// service-account key.
+//
+// The GCS HMAC pair is not part of this. It comes from the environment
+// in configWithRuntimeEnv, because DuckDB reaches GCS through httpfs,
+// whose secret takes interoperability keys and rejects service-account
+// JSON, and the row has no field for them.
 func flowArchiveCompactConfig(ctx context.Context, cmd *cobra.Command, opts *flowArchiveCompactOptions) (flowArchive.Config, error) {
-	cfg, _ := flowArchive.ConfigFromEnv()
-	if cfg.Bucket == "" {
-		fromRows, source, ok, err := archiveConfigFromIntegrations(ctx)
-		if err != nil {
-			return flowArchive.Config{}, err
-		}
-		if ok {
-			cmd.PrintErrf("flow archive compact: using the archive configured in Integrations (%s)\n", source)
-			cfg = fromRows
-		}
+	envCfg, _ := flowArchive.ConfigFromEnv()
+
+	cfg := envCfg
+	applyArchiveFlags(cmd, opts, &cfg)
+	if cfg.Provider != "" && cfg.Bucket != "" {
+		return cfg, nil
 	}
+
+	fromRows, source, ok, err := archiveConfigFromIntegrations(ctx)
+	if err != nil {
+		return flowArchive.Config{}, err
+	}
+	if ok {
+		cmd.PrintErrf("flow archive compact: using the archive configured in Integrations (%s)\n", source)
+		cfg = fromRows
+		mergeArchiveOverrides(envCfg, &cfg)
+		applyArchiveFlags(cmd, opts, &cfg)
+	}
+
+	if cfg.Provider == "" || cfg.Bucket == "" {
+		return flowArchive.Config{}, fmt.Errorf(
+			"flow archive compact: no archive configured. Set one up under Integrations " +
+				"in the dashboard, or set OPENZRO_FLOW_ARCHIVE_*, or pass --provider and --bucket")
+	}
+	return cfg, nil
+}
+
+// applyArchiveFlags overwrites the fields the operator named on the
+// command line. Only flags that were actually given, so an unset flag
+// does not blank a configured value.
+func applyArchiveFlags(cmd *cobra.Command, opts *flowArchiveCompactOptions, cfg *flowArchive.Config) {
 	flags := cmd.Flags()
 	if flags.Changed("provider") {
 		cfg.Provider = opts.provider
@@ -397,12 +444,34 @@ func flowArchiveCompactConfig(ctx context.Context, cmd *cobra.Command, opts *flo
 	if flags.Changed("gcs-credentials-file") {
 		cfg.CredentialsFile = opts.gcsCredentialsFile
 	}
-	if cfg.Provider == "" || cfg.Bucket == "" {
-		return flowArchive.Config{}, fmt.Errorf(
-			"flow archive compact: no archive configured. Set one up under Integrations " +
-				"in the dashboard, or set OPENZRO_FLOW_ARCHIVE_*, or pass --provider and --bucket")
+}
+
+// mergeArchiveOverrides layers whatever the environment set on top of a
+// base, leaving the base's value wherever the environment was silent.
+// Used to keep env precedence over the dashboard row when the row had to
+// be read to fill something else in.
+func mergeArchiveOverrides(from flowArchive.Config, into *flowArchive.Config) {
+	if from.Provider != "" {
+		into.Provider = from.Provider
 	}
-	return cfg, nil
+	if from.Bucket != "" {
+		into.Bucket = from.Bucket
+	}
+	if from.Prefix != "" {
+		into.Prefix = from.Prefix
+	}
+	if from.Endpoint != "" {
+		into.Endpoint = from.Endpoint
+	}
+	if from.Region != "" {
+		into.Region = from.Region
+	}
+	if len(from.CredentialsJSON) > 0 {
+		into.CredentialsJSON = from.CredentialsJSON
+	}
+	if from.CredentialsFile != "" {
+		into.CredentialsFile = from.CredentialsFile
+	}
 }
 
 func flowArchiveCompactStore(ctx context.Context, cfg flowArchive.Config) (archiveCompact.ObjectStore, func() error, error) {

@@ -54,6 +54,27 @@ func writeMgmtConfig(t *testing.T) string {
 	return dir
 }
 
+// seedArchiveRow writes one enabled GCS archive destination, the way the
+// dashboard would.
+func seedArchiveRow(t *testing.T, ctx context.Context, dir, bucket, prefix string) {
+	t.Helper()
+	store, err := mgmtStore.NewStore(ctx, types.SqliteStoreEngine, dir, nil, false)
+	require.NoError(t, err)
+	sqlStore, ok := store.(*mgmtStore.SqlStore)
+	require.True(t, ok)
+	exports, err := flowExports.NewStore(sqlStore.GetGormDB(), testEncryptionKey)
+	require.NoError(t, err)
+	_, err = exports.Save(ctx, flowExports.SaveInput{
+		Name: "archive", Type: flowExports.TypeGCS, Enabled: true,
+		GCS: &flowExports.GCSDestConfig{
+			Bucket: bucket, Prefix: prefix, Format: "parquet",
+			CredentialsJSON: `{"type":"service_account"}`,
+		},
+	})
+	require.NoError(t, err)
+	require.NoError(t, store.Close(ctx))
+}
+
 // The point of reading the dashboard's row: a deployment that configured
 // its archive under Integrations sets no OPENZRO_FLOW_ARCHIVE_*_BUCKET
 // anywhere, and its credential exists only as an encrypted row. Without
@@ -139,4 +160,92 @@ func TestArchiveConfigFromIntegrationsReportsABrokenConfig(t *testing.T) {
 	_, _, found, err := archiveConfigFromIntegrations(context.Background())
 	require.Error(t, err)
 	require.False(t, found)
+}
+
+// The escape hatch. This command deletes objects, so an operator
+// pointing it at a copy of the bucket -- or working around a broken
+// deployment -- must not be blocked because the management config cannot
+// be read. Flags that fully name the archive mean nothing else is
+// consulted at all.
+//
+// The config here exists and is unparseable, which is the case that used
+// to fail: the command returned that error before it ever reached the
+// flags.
+func TestFlowArchiveCompactConfigFlagsSkipABrokenManagementConfig(t *testing.T) {
+	broken := filepath.Join(t.TempDir(), "management.json")
+	require.NoError(t, os.WriteFile(broken, []byte("{not json"), 0o600))
+	old := types.MgmtConfigPath
+	types.MgmtConfigPath = broken
+	t.Cleanup(func() { types.MgmtConfigPath = old })
+
+	opts := &flowArchiveCompactOptions{concurrency: 1}
+	cmd := newFlowArchiveCompactCommand(opts)
+	require.NoError(t, cmd.Flags().Set("provider", "gcs"))
+	require.NoError(t, cmd.Flags().Set("bucket", "a-copy-of-the-bucket"))
+
+	cfg, err := flowArchiveCompactConfig(context.Background(), cmd, opts)
+	require.NoError(t, err, "flags that name the archive must not require a readable config")
+	require.Equal(t, "a-copy-of-the-bucket", cfg.Bucket)
+	require.Equal(t, "gcs", cfg.Provider)
+}
+
+// A flag that only names part of the archive is an override, not an
+// escape hatch: the row still supplies the rest, including the
+// credential.
+func TestFlowArchiveCompactConfigPartialFlagsStillReadIntegrations(t *testing.T) {
+	ctx := context.Background()
+	dir := writeMgmtConfig(t)
+	seedArchiveRow(t, ctx, dir, "bucket-from-console", "flows")
+
+	opts := &flowArchiveCompactOptions{concurrency: 1}
+	cmd := newFlowArchiveCompactCommand(opts)
+	require.NoError(t, cmd.Flags().Set("prefix", "prefix-from-flag"))
+
+	cfg, err := flowArchiveCompactConfig(ctx, cmd, opts)
+	require.NoError(t, err)
+	require.Equal(t, "bucket-from-console", cfg.Bucket, "the row still names the bucket")
+	require.Equal(t, "prefix-from-flag", cfg.Prefix, "and the flag still overrides what it names")
+	require.NotEmpty(t, cfg.CredentialsJSON, "the credential comes with the row")
+}
+
+// The environment is all-or-nothing, and that is worth pinning because
+// it surprises people. ConfigFromEnv reports "not configured" unless a
+// bucket is set, and returns an empty Config -- so exporting only a
+// prefix, expecting it to override the dashboard, does nothing.
+//
+// It is consistent with how the reader treats the same variables
+// everywhere, which is why it stays this way rather than growing a
+// special case. Use a flag to override one field.
+func TestFlowArchiveCompactConfigEnvWithoutBucketDoesNotOverrideIntegrations(t *testing.T) {
+	ctx := context.Background()
+	dir := writeMgmtConfig(t)
+	seedArchiveRow(t, ctx, dir, "bucket-from-console", "flows")
+	t.Setenv("OPENZRO_FLOW_ARCHIVE_GCS_PREFIX", "ignored-without-a-bucket")
+
+	opts := &flowArchiveCompactOptions{concurrency: 1}
+	cmd := newFlowArchiveCompactCommand(opts)
+
+	cfg, err := flowArchiveCompactConfig(ctx, cmd, opts)
+	require.NoError(t, err)
+	require.Equal(t, "bucket-from-console", cfg.Bucket)
+	require.Equal(t, "flows", cfg.Prefix,
+		"a prefix with no bucket beside it is not a configured archive")
+}
+
+// With a bucket beside it, the environment does describe an archive, and
+// it wins outright -- the row is never read.
+func TestFlowArchiveCompactConfigCompleteEnvWinsOverIntegrations(t *testing.T) {
+	ctx := context.Background()
+	dir := writeMgmtConfig(t)
+	seedArchiveRow(t, ctx, dir, "bucket-from-console", "flows")
+	t.Setenv("OPENZRO_FLOW_ARCHIVE_GCS_BUCKET", "bucket-from-env")
+	t.Setenv("OPENZRO_FLOW_ARCHIVE_GCS_PREFIX", "prefix-from-env")
+
+	opts := &flowArchiveCompactOptions{concurrency: 1}
+	cmd := newFlowArchiveCompactCommand(opts)
+
+	cfg, err := flowArchiveCompactConfig(ctx, cmd, opts)
+	require.NoError(t, err)
+	require.Equal(t, "bucket-from-env", cfg.Bucket)
+	require.Equal(t, "prefix-from-env", cfg.Prefix)
 }
