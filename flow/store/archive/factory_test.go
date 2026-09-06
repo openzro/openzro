@@ -63,3 +63,37 @@ func TestConfigWithRuntimeEnvLeavesS3Alone(t *testing.T) {
 	got := configWithRuntimeEnv(Config{Provider: "s3", Bucket: "b"})
 	require.Empty(t, got.CredentialsJSON)
 }
+
+// S3 has the same hole, and it costs more: one key pair signs both the
+// DuckDB reads and the SDK's writes, so losing it takes the whole
+// operation rather than half of it.
+//
+// The symptom is also worse. The AWS SDK falls through its own chain to
+// the instance metadata service, so the failure reads "no EC2 IMDS role
+// found" on a machine that has no IMDS -- observed while testing a GCS
+// bucket through its S3-compatible endpoint, and pointing nowhere near
+// the configuration that was dropped.
+func TestConfigWithRuntimeEnvKeepsS3CredentialsWithoutBucketEnv(t *testing.T) {
+	t.Setenv(envS3AccessKey, "s3-key")
+	t.Setenv(envS3SecretKey, "s3-secret")
+
+	cfg, ok := configFromEnv()
+	require.False(t, ok)
+	require.Empty(t, cfg.AccessKeyID)
+
+	cfg.Provider = "s3"
+	cfg.Bucket = "flow-archive"
+
+	got := configWithRuntimeEnv(cfg)
+	require.Equal(t, "s3-key", got.AccessKeyID)
+	require.Equal(t, "s3-secret", got.SecretAccessKey)
+}
+
+// And GCS must not pick up the S3 variables, which would silently sign
+// httpfs requests with the wrong pair.
+func TestConfigWithRuntimeEnvDoesNotCrossProviders(t *testing.T) {
+	t.Setenv(envS3AccessKey, "s3-key")
+	t.Setenv(envS3SecretKey, "s3-secret")
+	got := configWithRuntimeEnv(Config{Provider: "gcs", Bucket: "b"})
+	require.Empty(t, got.AccessKeyID, "GCS reads authenticate with the HMAC pair, not the S3 one")
+}
