@@ -399,7 +399,14 @@ func flowArchiveCompactConfig(ctx context.Context, cmd *cobra.Command, opts *flo
 	cfg := envCfg
 	applyArchiveFlags(cmd, opts, &cfg)
 	if cfg.Provider != "" && cfg.Bucket != "" {
-		return cfg, nil
+		// Credentials the environment holds have to be folded in here as
+		// well, not only inside the store constructors. Writes and
+		// deletes go through the cloud SDK with this config, and
+		// configFromEnv discards everything when no bucket was set in
+		// the environment -- so a bucket named by flag would otherwise
+		// reach the SDK with no credential at all and fall back to
+		// whatever ambient identity the host happens to have.
+		return flowArchive.ConfigWithRuntimeEnv(cfg), nil
 	}
 
 	fromRows, source, ok, err := archiveConfigFromIntegrations(ctx)
@@ -412,6 +419,7 @@ func flowArchiveCompactConfig(ctx context.Context, cmd *cobra.Command, opts *flo
 		mergeArchiveOverrides(envCfg, &cfg)
 		applyArchiveFlags(cmd, opts, &cfg)
 	}
+	cfg = flowArchive.ConfigWithRuntimeEnv(cfg)
 
 	if cfg.Provider == "" || cfg.Bucket == "" {
 		return flowArchive.Config{}, fmt.Errorf(
