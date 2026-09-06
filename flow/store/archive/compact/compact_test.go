@@ -53,6 +53,24 @@ func seed(t *testing.T, db *sql.DB, root, pathAccount, rowAccount, ts string, n 
 	require.NoError(t, err)
 }
 
+func seedManyShuffled(t *testing.T, db *sql.DB, root, file string, start, count, total int) {
+	t.Helper()
+	dir := filepath.Join(root, "flows", "year=2026", "month=07", "day=29", "account=acct-A")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	path := filepath.Join(dir, file)
+	_, err := db.ExecContext(context.Background(), "SET TimeZone='UTC'")
+	require.NoError(t, err)
+	_, err = db.ExecContext(context.Background(), fmt.Sprintf(`COPY (
+		SELECT (TIMESTAMP '2026-07-29 00:00:00'
+		       + (((i + %[1]d) * 104729 + 12345) %% %[3]d) * INTERVAL '1 microsecond')::TIMESTAMPTZ AS received_at,
+		       'acct-A' AS account_id,
+		       'peer-' || CAST(i + %[1]d AS VARCHAR) AS peer_id,
+		       'ev-' || CAST(i + %[1]d AS VARCHAR) AS event_id
+		FROM range(%[2]d) AS r(i)
+	) TO %[4]s (FORMAT PARQUET)`, start, count, total, quote(path)))
+	require.NoError(t, err)
+}
+
 // The headline: many tiny objects become one per account, and no row is
 // lost doing it. 40 objects of a few hundred bytes is the production
 // shape in miniature -- a real day held ~150.
@@ -509,6 +527,42 @@ func TestCompactDayWritesRowsNewestFirst(t *testing.T) {
 	}
 	require.NoError(t, rows.Err())
 	require.Equal(t, []string{"ev-5", "ev-4", "ev-3", "ev-2", "ev-1", "ev-0"}, got)
+}
+
+func TestCompactDayWritesDisjointReceivedAtRowGroups(t *testing.T) {
+	c, fs, db := newFixture(t)
+	const totalRows = 250_000
+	seedManyShuffled(t, db, fs.root, "source-a.parquet", 0, totalRows/2, totalRows)
+	seedManyShuffled(t, db, fs.root, "source-b.parquet", totalRows/2, totalRows/2, totalRows)
+
+	_, err := c.CompactDay(context.Background(), time.Date(2026, 7, 29, 0, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+
+	keys, err := fs.List(context.Background(), "flows")
+	require.NoError(t, err)
+	require.Len(t, keys, 1)
+	var rowGroups, overlaps int64
+	err = db.QueryRowContext(context.Background(), `WITH groups AS (
+			SELECT row_group_id,
+			       stats_min_value::TIMESTAMPTZ AS min_ts,
+			       stats_max_value::TIMESTAMPTZ AS max_ts
+			FROM parquet_metadata(`+quote(filepath.Join(fs.root, filepath.FromSlash(keys[0])))+`)
+			WHERE path_in_schema = 'received_at'
+		),
+		ordered AS (
+			SELECT min_ts,
+			       lag(max_ts) OVER (ORDER BY min_ts) AS previous_max_ts
+			FROM groups
+		)
+		SELECT count(*),
+		       CAST(COALESCE(sum(CASE
+		           WHEN previous_max_ts IS NOT NULL AND min_ts <= previous_max_ts THEN 1
+		           ELSE 0
+		       END), 0) AS BIGINT)
+		FROM ordered`).Scan(&rowGroups, &overlaps)
+	require.NoError(t, err)
+	require.Greater(t, rowGroups, int64(1), "the test must exercise row-group pruning, not only row order")
+	require.Zero(t, overlaps, "received_at row groups must be disjoint for min/max pruning to skip old ranges")
 }
 
 func TestCompactDayRestoresRewriteThreads(t *testing.T) {
