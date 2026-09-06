@@ -118,6 +118,20 @@ func ConfigFromEnv() (Config, bool) {
 	return configFromEnv()
 }
 
+// ConfigWithRuntimeEnv fills in what the environment supplies on top of
+// a config the caller assembled some other way -- from flags, or from a
+// flow_exports row.
+//
+// The store constructors apply this themselves, so the read path gets it
+// for free. A caller that also builds a *writer* has to ask: the
+// compaction tool authenticates its writes and deletes through the cloud
+// SDK with these same credentials, and a config whose bucket came from a
+// flag would otherwise carry none, because configFromEnv discards
+// everything when no bucket is set in the environment.
+func ConfigWithRuntimeEnv(cfg Config) Config {
+	return configWithRuntimeEnv(cfg)
+}
+
 func configWithRuntimeEnv(cfg Config) Config {
 	cfg.QueryTimeout = parseTimeout(os.Getenv(envQueryTimeout))
 	cfg.MemoryLimit = os.Getenv(envMemoryLimit)

@@ -249,3 +249,50 @@ func TestFlowArchiveCompactConfigCompleteEnvWinsOverIntegrations(t *testing.T) {
 	require.Equal(t, "bucket-from-env", cfg.Bucket)
 	require.Equal(t, "prefix-from-env", cfg.Prefix)
 }
+
+// A bucket named by flag with the credential in the environment: the
+// shape a SQLite deployment has to use, since it cannot read the
+// dashboard row.
+//
+// The credential has to reach the config the *store* is built from, not
+// only the one DuckDB reads with. Writes and deletes go through the
+// cloud SDK, and configFromEnv discards everything when no bucket is set
+// in the environment -- so without folding the runtime environment back
+// in, this config reaches the SDK with nothing and falls back to
+// whatever ambient identity the host has. On a GKE node that is a
+// read-only service account, and the first symptom is a permission error
+// naming a credential nobody configured.
+func TestFlowArchiveCompactConfigFlagBucketKeepsEnvCredentials(t *testing.T) {
+	t.Setenv("OPENZRO_FLOW_ARCHIVE_GCS_CREDENTIALS_JSON", `{"type":"service_account"}`)
+	t.Setenv("OPENZRO_FLOW_ARCHIVE_GCS_HMAC_KEY_ID", "hmac-key")
+	t.Setenv("OPENZRO_FLOW_ARCHIVE_GCS_HMAC_SECRET", "hmac-secret")
+
+	opts := &flowArchiveCompactOptions{concurrency: 1}
+	cmd := newFlowArchiveCompactCommand(opts)
+	require.NoError(t, cmd.Flags().Set("provider", "gcs"))
+	require.NoError(t, cmd.Flags().Set("bucket", "named-by-flag"))
+
+	cfg, err := flowArchiveCompactConfig(context.Background(), cmd, opts)
+	require.NoError(t, err)
+	require.Equal(t, "named-by-flag", cfg.Bucket)
+	require.Equal(t, `{"type":"service_account"}`, string(cfg.CredentialsJSON),
+		"the write credential must survive a bucket named by flag")
+	require.Equal(t, "hmac-key", cfg.AccessKeyID, "and the read credential with it")
+}
+
+// The same for S3, where one key pair signs both halves and losing it
+// costs the whole operation.
+func TestFlowArchiveCompactConfigFlagBucketKeepsS3Credentials(t *testing.T) {
+	t.Setenv("OPENZRO_FLOW_ARCHIVE_S3_ACCESS_KEY", "s3-key")
+	t.Setenv("OPENZRO_FLOW_ARCHIVE_S3_SECRET_KEY", "s3-secret")
+
+	opts := &flowArchiveCompactOptions{concurrency: 1}
+	cmd := newFlowArchiveCompactCommand(opts)
+	require.NoError(t, cmd.Flags().Set("provider", "s3"))
+	require.NoError(t, cmd.Flags().Set("bucket", "named-by-flag"))
+
+	cfg, err := flowArchiveCompactConfig(context.Background(), cmd, opts)
+	require.NoError(t, err)
+	require.Equal(t, "s3-key", cfg.AccessKeyID)
+	require.Equal(t, "s3-secret", cfg.SecretAccessKey)
+}
