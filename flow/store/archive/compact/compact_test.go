@@ -478,6 +478,56 @@ func TestFingerprintIgnoresRowOrder(t *testing.T) {
 	require.NotEmpty(t, res.Fingerprint.Sum)
 }
 
+// The reader orders query results, so this is not a correctness
+// requirement for API responses. It is a physical layout choice for the
+// backfill: once the original small files are deleted, changing the
+// compacted files' row order means rewriting the archive again. Keep the
+// replacement newest-first before the destructive run makes that layout
+// expensive to change.
+func TestCompactDayWritesRowsNewestFirst(t *testing.T) {
+	c, fs, db := newFixture(t)
+	for i := range 6 {
+		seed(t, db, fs.root, "acct-A", "acct-A", day29+fmt.Sprintf(" %02d:00:00", i), i)
+	}
+
+	_, err := c.CompactDay(context.Background(), time.Date(2026, 7, 29, 0, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+
+	keys, err := fs.List(context.Background(), "flows")
+	require.NoError(t, err)
+	require.Len(t, keys, 1)
+	rows, err := db.Query("SELECT event_id FROM read_parquet(" +
+		quote(filepath.Join(fs.root, filepath.FromSlash(keys[0]))) + ")")
+	require.NoError(t, err)
+	defer func() { _ = rows.Close() }()
+
+	var got []string
+	for rows.Next() {
+		var id string
+		require.NoError(t, rows.Scan(&id))
+		got = append(got, id)
+	}
+	require.NoError(t, rows.Err())
+	require.Equal(t, []string{"ev-5", "ev-4", "ev-3", "ev-2", "ev-1", "ev-0"}, got)
+}
+
+func TestCompactDayRestoresRewriteThreads(t *testing.T) {
+	c, fs, db := newFixture(t)
+	_, err := db.ExecContext(context.Background(), "SET threads=2")
+	require.NoError(t, err)
+	for i := range 6 {
+		seed(t, db, fs.root, "acct-A", "acct-A", day29+fmt.Sprintf(" %02d:00:00", i), i)
+	}
+
+	_, err = c.CompactDay(context.Background(), time.Date(2026, 7, 29, 0, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+
+	var threads int
+	err = db.QueryRowContext(context.Background(), "SELECT current_setting('threads')::INTEGER").Scan(&threads)
+	require.NoError(t, err)
+	require.Equal(t, 2, threads)
+}
+
 // Everything before this proves the rewrite was right. This proves the
 // write was. A Write that reports success while storing something else
 // -- truncated, empty, a different object -- looks identical to success
