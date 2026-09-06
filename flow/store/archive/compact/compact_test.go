@@ -511,6 +511,9 @@ func TestCompactDayWritesDisjointReceivedAtRowGroups(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, keys, 1)
 	var rowGroups, overlaps int64
+	// With parallel COPY, DuckDB keeps the received_at ranges disjoint
+	// but does not guarantee the row_group_id direction. That is fine:
+	// disjoint min/max statistics are the property range pruning needs.
 	err = db.QueryRowContext(context.Background(), `WITH groups AS (
 			SELECT row_group_id,
 			       stats_min_value::TIMESTAMPTZ AS min_ts,
