@@ -300,6 +300,9 @@ func (c *Compactor) CompactDay(ctx context.Context, day time.Time) (res Result, 
 // account's rows, or another day's rows, into one otherwise-normal
 // object, and those are exactly the rows this tool exists to recover.
 func (c *Compactor) isAlreadyCompact(ctx context.Context, glob string, sources []string, dayPrefix string) (bool, error) {
+	if err := c.pinUTC(ctx); err != nil {
+		return false, err
+	}
 	accounts := make(map[string]struct{}, len(sources))
 	for _, k := range sources {
 		account, ok := sourceAccount(k, dayPrefix)
@@ -316,13 +319,41 @@ func (c *Compactor) isAlreadyCompact(ctx context.Context, glob string, sources [
 	err := c.DB.QueryRowContext(ctx, `SELECT count(*)
 		FROM read_parquet(`+quote(glob)+`, hive_partitioning=true)
 		WHERE account_id <> CAST(account AS VARCHAR)
-		   OR printf('%04d', year(received_at)) <> CAST(year AS VARCHAR)
-		   OR printf('%02d', month(received_at)) <> CAST(month AS VARCHAR)
-		   OR printf('%02d', day(received_at)) <> CAST(day AS VARCHAR)`).Scan(&mismatched)
+		   OR printf('%04d', year(received_at::TIMESTAMP)) <> CAST(year AS VARCHAR)
+		   OR printf('%02d', month(received_at::TIMESTAMP)) <> CAST(month AS VARCHAR)
+		   OR printf('%02d', day(received_at::TIMESTAMP)) <> CAST(day AS VARCHAR)`).Scan(&mismatched)
 	if err != nil {
 		return false, err
 	}
 	return mismatched == 0, nil
+}
+
+// pinUTC forces the session's time zone, and does two jobs.
+//
+// It is what makes the date arithmetic bind at all. The sink writes
+// received_at as a UTC-adjusted parquet timestamp, which DuckDB reads
+// back as TIMESTAMP WITH TIME ZONE, and year() has no overload for that
+// type until a time zone is set -- SET TimeZone activates DuckDB's ICU
+// support, which supplies it. The first dry-run against the production
+// bucket failed with exactly that binder error, having passed every test
+// here, because no test fixture wrote the type the sink writes.
+//
+// And it decides what that arithmetic means. Rendering a TIMESTAMPTZ
+// uses the session zone, which otherwise follows the host: on a machine
+// in America/Sao_Paulo an event at 2026-06-01T02:30Z becomes "May 31"
+// and is filed under the previous day, silently, and only for events in
+// the first hours of a UTC day. The cluster this runs on is in that
+// zone. Measured, not feared.
+//
+// The archive's partitions are UTC by definition, so the session has to
+// be. The ::TIMESTAMP casts in the statements below are explicitness on
+// top of this, not the mechanism -- with the zone pinned, both forms
+// yield UTC.
+func (c *Compactor) pinUTC(ctx context.Context) error {
+	if _, err := c.DB.ExecContext(ctx, "SET TimeZone='UTC'"); err != nil {
+		return fmt.Errorf("compact: pin session to UTC: %w", err)
+	}
+	return nil
 }
 
 // rewrite is the whole merge. DuckDB reads the day, regroups by the
@@ -335,7 +366,17 @@ func (c *Compactor) isAlreadyCompact(ctx context.Context, glob string, sources [
 // reader compares those as strings, where '7' sorts after '07', so an
 // unpadded directory would be silently excluded from every query whose
 // window it should match.
+//
+// The ORDER BY is a physical layout choice: the reader sorts API
+// responses anyway, but the compacted file's row-group statistics decide
+// whether DuckDB can skip unrelated ranges. Clustering by received_at
+// keeps those min/max ranges disjoint; without it, historical queries
+// scan every row group in the compacted object, and fixing that after a
+// destructive backfill means rewriting the archive again.
 func (c *Compactor) rewrite(ctx context.Context, glob, outDir string) error {
+	if err := c.pinUTC(ctx); err != nil {
+		return err
+	}
 	// #nosec G202 -- glob and outDir are not request input. They are
 	// built from operator configuration and a date this command was
 	// given, and both go through quote(), which doubles any single
@@ -345,11 +386,12 @@ func (c *Compactor) rewrite(ctx context.Context, glob, outDir string) error {
 	// are interpolated at all.
 	_, err := c.DB.ExecContext(ctx, `COPY (
 		SELECT * EXCLUDE (year, month, day, account),
-		       printf('%04d', year(received_at))  AS year,
-		       printf('%02d', month(received_at)) AS month,
-		       printf('%02d', day(received_at))   AS day,
-		       account_id                         AS account
+		       printf('%04d', year(received_at::TIMESTAMP))  AS year,
+		       printf('%02d', month(received_at::TIMESTAMP)) AS month,
+		       printf('%02d', day(received_at::TIMESTAMP))   AS day,
+		       account_id                                    AS account
 		FROM read_parquet(`+quote(glob)+`, hive_partitioning=true)
+		ORDER BY year, month, day, account, received_at DESC
 	) TO `+quote(outDir)+` (FORMAT PARQUET, PARTITION_BY (year, month, day, account), OVERWRITE_OR_IGNORE)`)
 	return err
 }

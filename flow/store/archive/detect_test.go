@@ -31,6 +31,13 @@ func TestOperatorDetectionQueries(t *testing.T) {
 		"2026-06-12 12:00:00", testAccount)
 
 	glob := filepath.Join(root, "year=*", "month=*", "day=*", "account=*", "*.parquet")
+	var typ string
+	require.NoError(t, db.QueryRowContext(context.Background(),
+		"SELECT typeof(received_at) FROM read_parquet('"+glob+"') LIMIT 1").Scan(&typ))
+	require.Equal(t, "TIMESTAMP WITH TIME ZONE", typ,
+		"the upgrade-note queries must be tested against the type the sink writes")
+	_, err = db.ExecContext(context.Background(), "SET TimeZone='UTC'")
+	require.NoError(t, err)
 
 	t.Run("misfiled accounts", func(t *testing.T) {
 		var n int

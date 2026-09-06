@@ -23,6 +23,8 @@ func newFixture(t *testing.T) (*Compactor, *fsStore, *sql.DB) {
 	t.Helper()
 	db, err := sql.Open("duckdb", "")
 	require.NoError(t, err)
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 	t.Cleanup(func() { _ = db.Close() })
 
 	root := t.TempDir()
@@ -45,9 +47,27 @@ func seed(t *testing.T, db *sql.DB, root, pathAccount, rowAccount, ts string, n 
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 	file := filepath.Join(dir, fmt.Sprintf("%d-%s.parquet", n, rowAccount))
 	_, err := db.ExecContext(context.Background(), fmt.Sprintf(
-		`COPY (SELECT TIMESTAMP '%s' AS received_at, '%s' AS account_id,
+		`COPY (SELECT TIMESTAMPTZ '%s+00' AS received_at, '%s' AS account_id,
 		        'peer-%d' AS peer_id, 'ev-%d' AS event_id)
 		 TO '%s' (FORMAT PARQUET)`, ts, rowAccount, n, n, file))
+	require.NoError(t, err)
+}
+
+func seedManyShuffled(t *testing.T, db *sql.DB, root, file string, start, count, total int) {
+	t.Helper()
+	dir := filepath.Join(root, "flows", "year=2026", "month=07", "day=29", "account=acct-A")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	path := filepath.Join(dir, file)
+	_, err := db.ExecContext(context.Background(), "SET TimeZone='UTC'")
+	require.NoError(t, err)
+	_, err = db.ExecContext(context.Background(), fmt.Sprintf(`COPY (
+		SELECT (TIMESTAMP '2026-07-29 00:00:00'
+		       + (((i + %[1]d) * 104729 + 12345) %% %[3]d) * INTERVAL '1 microsecond')::TIMESTAMPTZ AS received_at,
+		       'acct-A' AS account_id,
+		       'peer-' || CAST(i + %[1]d AS VARCHAR) AS peer_id,
+		       'ev-' || CAST(i + %[1]d AS VARCHAR) AS event_id
+		FROM range(%[2]d) AS r(i)
+	) TO %[4]s (FORMAT PARQUET)`, start, count, total, quote(path)))
 	require.NoError(t, err)
 }
 
@@ -286,7 +306,7 @@ func TestCompactDayLeavesOtherDaysAlone(t *testing.T) {
 	}
 	other := filepath.Join(fs.root, "flows", "year=2026", "month=07", "day=30", "account=acct-A")
 	require.NoError(t, os.MkdirAll(other, 0o755))
-	_, err := db.Exec("COPY (SELECT TIMESTAMP '2026-07-30 10:00:00' AS received_at, " +
+	_, err := db.Exec("COPY (SELECT TIMESTAMPTZ '2026-07-30 10:00:00+00' AS received_at, " +
 		"'acct-A' AS account_id, 'p' AS peer_id, 'e' AS event_id) TO '" +
 		filepath.Join(other, "x.parquet") + "' (FORMAT PARQUET)")
 	require.NoError(t, err)
@@ -404,7 +424,7 @@ func TestCompactDayLeavesParquetOutsideAccountPartitionAlone(t *testing.T) {
 
 	strayDir := filepath.Join(fs.root, "flows", "year=2026", "month=07", "day=29")
 	stray := filepath.Join(strayDir, "stray.parquet")
-	_, err := db.Exec("COPY (SELECT TIMESTAMP '2026-07-29 10:00:00' AS received_at, " +
+	_, err := db.Exec("COPY (SELECT TIMESTAMPTZ '2026-07-29 10:00:00+00' AS received_at, " +
 		"'acct-A' AS account_id, 'p' AS peer_id, 'e' AS event_id) TO '" +
 		stray + "' (FORMAT PARQUET)")
 	require.NoError(t, err)
@@ -476,6 +496,52 @@ func TestFingerprintIgnoresRowOrder(t *testing.T) {
 	require.NotEmpty(t, res.Fingerprint.Sum)
 }
 
+func TestCompactDayWritesDisjointReceivedAtRowGroups(t *testing.T) {
+	c, fs, db := newFixture(t)
+	_, err := db.ExecContext(context.Background(), "SET threads=4")
+	require.NoError(t, err)
+	const totalRows = 250_000
+	seedManyShuffled(t, db, fs.root, "source-a.parquet", 0, totalRows/2, totalRows)
+	seedManyShuffled(t, db, fs.root, "source-b.parquet", totalRows/2, totalRows/2, totalRows)
+
+	_, err = c.CompactDay(context.Background(), time.Date(2026, 7, 29, 0, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+
+	keys, err := fs.List(context.Background(), "flows")
+	require.NoError(t, err)
+	require.Len(t, keys, 1)
+	var rowGroups, overlaps int64
+	// With parallel COPY, DuckDB keeps the received_at ranges disjoint
+	// but does not guarantee the row_group_id direction. That is fine:
+	// disjoint min/max statistics are the property range pruning needs.
+	err = db.QueryRowContext(context.Background(), `WITH groups AS (
+			SELECT row_group_id,
+			       stats_min_value::TIMESTAMPTZ AS min_ts,
+			       stats_max_value::TIMESTAMPTZ AS max_ts
+			FROM parquet_metadata(`+quote(filepath.Join(fs.root, filepath.FromSlash(keys[0])))+`)
+			WHERE path_in_schema = 'received_at'
+		),
+		ordered AS (
+			SELECT min_ts,
+			       lag(max_ts) OVER (ORDER BY min_ts) AS previous_max_ts
+			FROM groups
+		)
+		SELECT count(*),
+		       CAST(COALESCE(sum(CASE
+		           WHEN previous_max_ts IS NOT NULL AND min_ts <= previous_max_ts THEN 1
+		           ELSE 0
+		       END), 0) AS BIGINT)
+		FROM ordered`).Scan(&rowGroups, &overlaps)
+	require.NoError(t, err)
+	require.Greater(t, rowGroups, int64(1), "the test must exercise row-group pruning, not only row order")
+	require.Zero(t, overlaps, "received_at row groups must be disjoint for min/max pruning to skip old ranges")
+
+	var threads int
+	err = db.QueryRowContext(context.Background(), "SELECT current_setting('threads')::INTEGER").Scan(&threads)
+	require.NoError(t, err)
+	require.Equal(t, 4, threads, "the compactor should keep the operator's DuckDB parallelism")
+}
+
 // Everything before this proves the rewrite was right. This proves the
 // write was. A Write that reports success while storing something else
 // -- truncated, empty, a different object -- looks identical to success
@@ -499,4 +565,62 @@ func TestCompactDayRefusesWhenTheStoredObjectDiffers(t *testing.T) {
 		require.Contains(t, k, "compact-",
 			"only this run's own replacements may be removed; no original may be")
 	}
+}
+
+// The sink writes received_at as a UTC-adjusted parquet timestamp, which
+// DuckDB reads back as TIMESTAMP WITH TIME ZONE. Every fixture in this
+// package wrote a plain TIMESTAMP instead, so the date arithmetic in the
+// rewrite was never asked to handle the type production actually
+// produces -- and it could not: `year(TIMESTAMPTZ)` has no overload.
+//
+// The first dry-run against the real bucket failed on exactly this,
+// having passed every test here. This pins the type so it cannot drift
+// back.
+func TestCompactDayHandlesTimestampWithTimeZone(t *testing.T) {
+	c, fs, db := newFixture(t)
+	for i := range 6 {
+		seed(t, db, fs.root, "acct-A", "acct-A", day29+" 10:00:00", i)
+	}
+
+	// The fixtures now write TIMESTAMPTZ; assert that rather than trust
+	// it, since the whole defect was a fixture that lied about the type.
+	var typ string
+	require.NoError(t, db.QueryRow(
+		"SELECT typeof(received_at) FROM read_parquet('"+fs.root+
+			"/flows/year=*/month=*/day=*/account=*/*.parquet') LIMIT 1").Scan(&typ))
+	require.Equal(t, "TIMESTAMP WITH TIME ZONE", typ,
+		"the fixture must describe the parquet the sink writes")
+
+	res, err := c.CompactDay(context.Background(), time.Date(2026, 7, 29, 0, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+	require.Equal(t, 1, res.ObjectsAfter)
+	require.Equal(t, int64(6), res.Rows)
+}
+
+// Partitions are UTC by definition, and the session's zone decides what
+// casting a TIMESTAMPTZ yields. On a host in America/Sao_Paulo an event
+// at 2026-06-01T02:30Z renders as May 31, so without pinning the session
+// the row is filed under the previous day -- silently, and only for
+// events in the first hours of a UTC day.
+//
+// This is not hypothetical: the cluster that surfaced the type error
+// runs in that zone.
+func TestCompactDayIgnoresTheHostTimeZone(t *testing.T) {
+	c, fs, db := newFixture(t)
+	_, err := db.Exec("SET TimeZone='America/Sao_Paulo'")
+	require.NoError(t, err)
+
+	// 02:30 UTC on the 29th: still the 28th in Sao Paulo.
+	for i := range 4 {
+		seed(t, db, fs.root, "acct-A", "acct-A", day29+" 02:30:00", i)
+	}
+
+	_, err = c.CompactDay(context.Background(), time.Date(2026, 7, 29, 0, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+
+	keys, err := fs.List(context.Background(), "flows")
+	require.NoError(t, err)
+	require.Len(t, keys, 1)
+	require.Contains(t, keys[0], "year=2026/month=07/day=29/",
+		"an event at 02:30 UTC belongs to the UTC day, whatever the host thinks; got %q", keys[0])
 }
