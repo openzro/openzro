@@ -135,7 +135,7 @@ func (h *harness) seed(t *testing.T, day, account, rowAccount, ts string, n int)
 	t.Helper()
 	path := filepath.Join(h.tmp, fmt.Sprintf("seed-%d.parquet", n))
 	_, err := h.local.ExecContext(context.Background(), fmt.Sprintf(
-		`COPY (SELECT TIMESTAMP '%s' AS received_at, '%s' AS account_id,
+		`COPY (SELECT TIMESTAMPTZ '%s+00' AS received_at, '%s' AS account_id,
 		        'peer-%d' AS peer_id, 'ev-%d' AS event_id) TO '%s' (FORMAT PARQUET)`,
 		ts, rowAccount, n, n, path))
 	require.NoError(t, err)
@@ -216,7 +216,7 @@ func TestListPagesPastTheThousandKeyLimit(t *testing.T) {
 	// contents.
 	path := filepath.Join(h.tmp, "one.parquet")
 	_, err := h.local.Exec(
-		`COPY (SELECT TIMESTAMP '2026-07-30 10:00:00' AS received_at, 'acct-A' AS account_id) TO '` +
+		`COPY (SELECT TIMESTAMPTZ '2026-07-30 10:00:00+00' AS received_at, 'acct-A' AS account_id) TO '` +
 			path + `' (FORMAT PARQUET)`)
 	require.NoError(t, err)
 	body, err := os.ReadFile(path)
