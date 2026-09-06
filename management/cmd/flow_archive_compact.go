@@ -43,18 +43,31 @@ func newFlowArchiveCommand() *cobra.Command {
 		Short:        "Operate on archived flow traffic",
 		SilenceUsage: true,
 	}
-	cmd.AddCommand(newFlowArchiveCompactCommand())
+	cmd.AddCommand(newFlowArchiveCompactCommand(&flowArchiveCompactOptions{concurrency: 1}))
 	return cmd
 }
 
-func newFlowArchiveCompactCommand() *cobra.Command {
-	opts := &flowArchiveCompactOptions{concurrency: 1}
+// newFlowArchiveCompactCommand takes its options rather than making them,
+// so a test can read back what the flags resolved to.
+func newFlowArchiveCompactCommand(opts *flowArchiveCompactOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "compact --from YYYY-MM-DD --to YYYY-MM-DD --manifest FILE [--delete-originals]",
 		Short: "Compact and repartition archived flow Parquet objects",
 		Long: "Compact and repartition archived flow Parquet objects.\n\n" +
-			"Archive bucket settings default to OPENZRO_FLOW_ARCHIVE_* environment variables. " +
-			"Credentials stay in that env/file contract rather than command-line flags, so they do not land in shell history.",
+			"Where the archive is, resolved in this order:\n" +
+			"  1. the destination configured in the dashboard under Integrations,\n" +
+			"  2. OPENZRO_FLOW_ARCHIVE_* environment variables,\n" +
+			"  3. --provider / --bucket / --prefix flags, which win over both.\n\n" +
+			"Reading the dashboard's row means this command uses the same bucket and the\n" +
+			"same credential the sink is already writing with, instead of a second copy\n" +
+			"that drifts the first time one of them is rotated.\n\n" +
+			"GCS needs one thing the row cannot supply: the HMAC interoperability pair,\n" +
+			"in OPENZRO_FLOW_ARCHIVE_GCS_HMAC_KEY_ID and _SECRET. Reads go through\n" +
+			"DuckDB, whose GCS secret accepts those keys and rejects service-account\n" +
+			"JSON. Writes and deletes use the service account from the row. S3 needs no\n" +
+			"such split -- one key pair signs both.\n\n" +
+			"Credentials are never flags, so they do not land in shell history or a\n" +
+			"process list.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runFlowArchiveCompact(cmd, opts)
 		},
@@ -89,7 +102,7 @@ func runFlowArchiveCompact(cmd *cobra.Command, opts *flowArchiveCompactOptions) 
 		return fmt.Errorf("flow archive compact: --concurrency must be greater than zero")
 	}
 
-	cfg, err := flowArchiveCompactConfig(cmd, opts)
+	cfg, err := flowArchiveCompactConfig(cmd.Context(), cmd, opts)
 	if err != nil {
 		return err
 	}
@@ -334,8 +347,37 @@ func formatCompactDay(t time.Time) string {
 	return utcDay(t).Format("2006-01-02")
 }
 
-func flowArchiveCompactConfig(cmd *cobra.Command, opts *flowArchiveCompactOptions) (flowArchive.Config, error) {
+// flowArchiveCompactConfig resolves where the archive is, in the order an
+// operator would expect: what the dashboard was told, then the
+// environment, then the flags.
+//
+// The dashboard comes first because that is where this deployment's
+// archive actually lives. A cluster that configured its bucket under
+// Integrations has no OPENZRO_FLOW_ARCHIVE_*_BUCKET set anywhere, and
+// the credential exists only as an encrypted row -- so without this the
+// command needs its own copy of the service-account key, which then
+// drifts from the console the first time anybody rotates one and not the
+// other.
+//
+// The environment still supplies what the row cannot. The GCS HMAC pair
+// is the reason: DuckDB reaches GCS through httpfs, whose secret takes
+// interoperability keys and rejects service-account JSON, so reads need a
+// credential the row has no field for. configWithRuntimeEnv restores it.
+//
+// Flags win over both, so an operator can point the command at a copy of
+// the bucket without touching the running configuration.
+func flowArchiveCompactConfig(ctx context.Context, cmd *cobra.Command, opts *flowArchiveCompactOptions) (flowArchive.Config, error) {
 	cfg, _ := flowArchive.ConfigFromEnv()
+	if cfg.Bucket == "" {
+		fromRows, source, ok, err := archiveConfigFromIntegrations(ctx)
+		if err != nil {
+			return flowArchive.Config{}, err
+		}
+		if ok {
+			cmd.PrintErrf("flow archive compact: using the archive configured in Integrations (%s)\n", source)
+			cfg = fromRows
+		}
+	}
 	flags := cmd.Flags()
 	if flags.Changed("provider") {
 		cfg.Provider = opts.provider
@@ -357,7 +399,8 @@ func flowArchiveCompactConfig(cmd *cobra.Command, opts *flowArchiveCompactOption
 	}
 	if cfg.Provider == "" || cfg.Bucket == "" {
 		return flowArchive.Config{}, fmt.Errorf(
-			"flow archive compact: archive provider and bucket are required; set OPENZRO_FLOW_ARCHIVE_* or pass --provider and --bucket")
+			"flow archive compact: no archive configured. Set one up under Integrations " +
+				"in the dashboard, or set OPENZRO_FLOW_ARCHIVE_*, or pass --provider and --bucket")
 	}
 	return cfg, nil
 }
