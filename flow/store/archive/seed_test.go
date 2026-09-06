@@ -34,7 +34,7 @@ const testAccount = "acct-1"
 // integers would let a broken string predicate pass. The fixture this
 // grew out of had exactly that defect.
 //
-// ts is a DuckDB timestamp literal body, e.g. "2026-05-12 10:00:00".
+// ts is a UTC DuckDB timestamp literal body, e.g. "2026-05-12 10:00:00".
 func seedEventParquetAs(t *testing.T, db *sql.DB, path, ts, accountID string) {
 	t.Helper()
 	seedTypedAs(t, db, path, ts, accountID, "start", "ingress")
@@ -51,8 +51,8 @@ func seedTypedAs(t *testing.T, db *sql.DB, path, ts, accountID, typ, dir string)
 	t.Helper()
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 	_, err := db.ExecContext(context.Background(), "COPY (SELECT "+
-		"TIMESTAMP '"+ts+"' AS received_at, "+
-		"TIMESTAMP '"+ts+"' AS occurred_at, "+
+		"TIMESTAMPTZ '"+ts+"+00' AS received_at, "+
+		"TIMESTAMPTZ '"+ts+"+00' AS occurred_at, "+
 		"'"+accountID+"' AS account_id, 'peer-a' AS peer_id, "+
 		"'ev-1' AS event_id, 'fl-1' AS flow_id, "+
 		"'"+typ+"' AS type, '"+dir+"' AS direction, "+

@@ -142,6 +142,12 @@ object is still under the wrong prefix.
 **To find out whether you are affected**, run these against your archive
 with the DuckDB CLI. Substitute your bucket, prefix and scheme (`s3://`
 or `gcs://`), and configure credentials as your DuckDB install expects.
+Pin the session to UTC first; DuckDB reads the sink's Parquet timestamps
+as `TIMESTAMP WITH TIME ZONE`, and date functions use the session zone.
+
+```sql
+SET TimeZone='UTC';
+```
 
 ```sql
 -- Events filed under the wrong account.
