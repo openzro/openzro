@@ -21,6 +21,12 @@ on:
       - 'dashboard/**'
       - '.github/workflows/dashboard.yml'
 
+# npm ci runs whatever lifecycle scripts the dependency tree declares, so
+# the token this job carries is worth minimising: it needs to read the
+# repository and nothing else.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || github.actor_id }}
   cancel-in-progress: true
@@ -34,6 +40,10 @@ jobs:
         working-directory: dashboard
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Do not leave a credential in .git/config for the dependency
+          # install to find.
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -49,15 +59,25 @@ jobs:
         # that only happens on the runner is a difference nobody reviewed.
         run: npm ci
 
-      - name: Typecheck
-        # Separate from the build because Next reports type errors as
-        # build failures buried in output, and a bare tsc says which file
-        # in one line. It also catches errors in files the build tree
-        # -shakes away.
-        run: npx tsc --noEmit
-
       - name: Build
         # The same command and the same output directory the release
         # image is assembled from, so a build that passes here is the
         # build that ships.
         run: npm run build
+
+      - name: Typecheck
+        # After the build, and that ordering is load-bearing. Next
+        # generates next-env.d.ts, which is what declares the asset
+        # modules -- `import logo from "@/assets/openzro.svg"` and the
+        # rest. That file is gitignored, so a clean checkout does not
+        # have it and a typecheck run first fails on every asset import.
+        #
+        # Found the honest way: it passed on a developer machine, where a
+        # previous build had left the file behind, and failed on the
+        # first CI run.
+        #
+        # Still worth running separately even though the build
+        # type-checks: a bare tsc names the file in one line instead of
+        # burying it in build output, and it reaches files the build
+        # tree-shakes away.
+        run: npx tsc --noEmit
