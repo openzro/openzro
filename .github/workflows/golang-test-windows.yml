@@ -4,7 +4,31 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      # A change confined to these touches no Go. paths-ignore skips the
+      # workflow only when EVERY changed file matches, so a PR mixing
+      # dashboard and Go still runs the full matrix -- which is what
+      # keeps this safe. No Go package embeds the dashboard build, so
+      # there is no path from a .tsx to a compiled binary.
+      #
+      # Dashboard changes are covered by .github/workflows/dashboard.yml.
+      - 'dashboard/**'
+      - 'docs/**'
+      - '**/*.md'
+      - 'brand/**'
   pull_request:
+    paths-ignore:
+      # A change confined to these touches no Go. paths-ignore skips the
+      # workflow only when EVERY changed file matches, so a PR mixing
+      # dashboard and Go still runs the full matrix -- which is what
+      # keeps this safe. No Go package embeds the dashboard build, so
+      # there is no path from a .tsx to a compiled binary.
+      #
+      # Dashboard changes are covered by .github/workflows/dashboard.yml.
+      - 'dashboard/**'
+      - 'docs/**'
+      - '**/*.md'
+      - 'brand/**'
 
 env:
   downloadPath: '${{ github.workspace }}\temp'

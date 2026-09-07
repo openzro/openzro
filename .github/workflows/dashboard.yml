@@ -1,0 +1,63 @@
+name: Dashboard
+
+# The dashboard had no CI at all. A change under dashboard/ ran twenty-one
+# checks, every one of them Go, and not one of them compiled a line of
+# TypeScript -- npm run build lived only in release-binaries.yml, which
+# fires on a tag. So the first thing to notice a broken dashboard was the
+# release.
+#
+# This is the other half of skipping the Go matrix on dashboard-only
+# changes: a fast CI that validates nothing is worse than a slow one that
+# validates the wrong thing, because it looks the same from the outside.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'dashboard/**'
+      - '.github/workflows/dashboard.yml'
+  pull_request:
+    paths:
+      - 'dashboard/**'
+      - '.github/workflows/dashboard.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || github.actor_id }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Pinned to what release-binaries.yml builds the shipped image
+          # with. If these drift, CI passes on a Node the release never
+          # uses.
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Install
+        # ci, not install: the lockfile is the contract, and a resolution
+        # that only happens on the runner is a difference nobody reviewed.
+        run: npm ci
+
+      - name: Typecheck
+        # Separate from the build because Next reports type errors as
+        # build failures buried in output, and a bare tsc says which file
+        # in one line. It also catches errors in files the build tree
+        # -shakes away.
+        run: npx tsc --noEmit
+
+      - name: Build
+        # The same command and the same output directory the release
+        # image is assembled from, so a build that passes here is the
+        # build that ships.
+        run: npm run build
