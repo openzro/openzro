@@ -1,0 +1,79 @@
+name: Dashboard
+
+# The dashboard had no CI at all. A change under dashboard/ ran twenty-one
+# checks, every one of them Go, and not one of them compiled a line of
+# TypeScript -- npm run build lived only in release-binaries.yml, which
+# fires on a tag. So the first thing to notice a broken dashboard was the
+# release.
+#
+# This is the other half of skipping the Go matrix on dashboard-only
+# changes: a fast CI that validates nothing is worse than a slow one that
+# validates the wrong thing, because it looks the same from the outside.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'dashboard/**'
+      - '.github/workflows/dashboard.yml'
+  pull_request:
+    paths:
+      - 'dashboard/**'
+      - '.github/workflows/dashboard.yml'
+
+# npm ci runs whatever lifecycle scripts the dependency tree declares, so
+# the token this job carries is worth minimising: it needs to read the
+# repository and nothing else.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || github.actor_id }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Do not leave a credential in .git/config for the dependency
+          # install to find.
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          # Pinned to what release-binaries.yml builds the shipped image
+          # with. If these drift, CI passes on a Node the release never
+          # uses.
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Install
+        # ci, not install: the lockfile is the contract, and a resolution
+        # that only happens on the runner is a difference nobody reviewed.
+        run: npm ci
+
+      - name: Build
+        # The same command and the same output directory the release
+        # image is assembled from, so a build that passes here is the
+        # build that ships.
+        #
+        # This type-checks too, and there is no separate tsc step because
+        # a separate step would find nothing. next.config.js does not set
+        # typescript.ignoreBuildErrors, so `next build` runs the whole
+        # project through tsc -- measured, including a file nothing
+        # imports:
+        #
+        #   ./src/orphan-probe.ts:2:14  Type error
+        #
+        # An earlier draft ran tsc afterwards on the theory that it gave
+        # cleaner errors and reached files the build tree-shook away.
+        # Neither survived being checked: the build fails first, so the
+        # step never runs, and it catches unreferenced files anyway.
+        run: npm run build
