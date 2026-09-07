@@ -23,20 +23,30 @@ import (
 type handler struct {
 	accountManager  account.Manager
 	settingsManager settings.Manager
+	// archiveReads is deployment state, not account state: whether a
+	// window older than the hot retention is answered from an archive or
+	// simply returns nothing.
+	archiveReads bool
 }
 
-func AddEndpoints(accountManager account.Manager, settingsManager settings.Manager, router *mux.Router) {
-	accountsHandler := newHandler(accountManager, settingsManager)
+// archiveReads says whether this deployment answers windows older than
+// the hot retention from an archive. It rides on the account payload
+// because that is what the traffic page waits for before it queries, and
+// the page needs it to know whether a slow answer is coming or no answer
+// at all.
+func AddEndpoints(accountManager account.Manager, settingsManager settings.Manager, archiveReads bool, router *mux.Router) {
+	accountsHandler := newHandler(accountManager, settingsManager, archiveReads)
 	router.HandleFunc("/accounts/{accountId}", accountsHandler.updateAccount).Methods("PUT", "OPTIONS")
 	router.HandleFunc("/accounts/{accountId}", accountsHandler.deleteAccount).Methods("DELETE", "OPTIONS")
 	router.HandleFunc("/accounts", accountsHandler.getAllAccounts).Methods("GET", "OPTIONS")
 }
 
 // newHandler creates a new handler HTTP handler
-func newHandler(accountManager account.Manager, settingsManager settings.Manager) *handler {
+func newHandler(accountManager account.Manager, settingsManager settings.Manager, archiveReads bool) *handler {
 	return &handler{
 		accountManager:  accountManager,
 		settingsManager: settingsManager,
+		archiveReads:    archiveReads,
 	}
 }
 
@@ -68,7 +78,7 @@ func (h *handler) getAllAccounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := toAccountResponse(accountID, settings, meta, onboarding)
+	resp := toAccountResponse(accountID, settings, meta, onboarding, h.archiveReads)
 	util.WriteJSONObject(r.Context(), w, []*api.Account{resp})
 }
 
@@ -261,7 +271,7 @@ func (h *handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := toAccountResponse(accountID, updatedSettings, meta, updatedOnboarding)
+	resp := toAccountResponse(accountID, updatedSettings, meta, updatedOnboarding, h.archiveReads)
 
 	util.WriteJSONObject(r.Context(), w, &resp)
 }
@@ -290,7 +300,7 @@ func (h *handler) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	util.WriteJSONObject(r.Context(), w, util.EmptyObject{})
 }
 
-func toAccountResponse(accountID string, settings *types.Settings, meta *types.AccountMeta, onboarding *types.AccountOnboarding) *api.Account {
+func toAccountResponse(accountID string, settings *types.Settings, meta *types.AccountMeta, onboarding *types.AccountOnboarding, archiveReads bool) *api.Account {
 	jwtAllowGroups := settings.JWTAllowGroups
 	if jwtAllowGroups == nil {
 		jwtAllowGroups = []string{}
@@ -382,20 +392,22 @@ func toAccountResponse(accountID string, settings *types.Settings, meta *types.A
 	}
 
 	// Deployment-wide rather than per-account, and reported here because
-	// this is the payload the traffic page already waits for. Adding a
-	// second request to the page's load, or a settings endpoint that
-	// exists to carry one integer, would both cost more than they
-	// explain.
+	// this is the payload the traffic page already waits for. A second
+	// request, or a settings endpoint that exists to carry two fields,
+	// would each cost more than they explain.
 	//
-	// Rounded up: a window that reaches even one minute past the
-	// boundary is answered from the archive, so a client that rounded
-	// down would stay quiet about exactly the queries worth warning
-	// about.
-	hours := int((flowfactory.HotRetention() + time.Hour - 1) / time.Hour)
+	// Seconds, exactly, and not a rounded unit. The client uses this as
+	// the boundary itself, so any rounding moves the boundary: rounding
+	// up pushes it further into the past and leaves the client silent
+	// about the window between the real boundary and the rounded one --
+	// which is precisely the window worth warning about. Round for
+	// display, never for the comparison.
+	seconds := int(flowfactory.HotRetention() / time.Second)
 	if apiSettings.Extra == nil {
 		apiSettings.Extra = &api.AccountExtraSettings{}
 	}
-	apiSettings.Extra.NetworkTrafficHotRetentionHours = &hours
+	apiSettings.Extra.NetworkTrafficHotRetentionSeconds = &seconds
+	apiSettings.Extra.NetworkTrafficArchiveReadsEnabled = &archiveReads
 
 	return &api.Account{
 		Id:             accountID,

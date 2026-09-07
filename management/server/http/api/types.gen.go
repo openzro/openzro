@@ -295,6 +295,13 @@ type Account struct {
 
 // AccountExtraSettings defines model for AccountExtraSettings.
 type AccountExtraSettings struct {
+	// NetworkTrafficArchiveReadsEnabled Whether this deployment reads flow events older than the hot
+	// retention from an archive. False means a window past the
+	// boundary simply returns nothing, rather than returning slowly
+	// from object storage -- clients should not promise a wait for
+	// a tier that is not configured.
+	NetworkTrafficArchiveReadsEnabled *bool `json:"network_traffic_archive_reads_enabled,omitempty"`
+
 	// NetworkTrafficDefaultRange Pre-fills the date filter on the Flow Traffic dashboard page so
 	// opening it does not request every event that fits in the
 	// 10 000-event API ceiling. Recognised values: "1h", "6h", "24h",
@@ -319,16 +326,16 @@ type AccountExtraSettings struct {
 	// heartbeats, custom multicast, app-specific service discovery).
 	NetworkTrafficExcludedPorts *[]FlowPortFilter `json:"network_traffic_excluded_ports,omitempty"`
 
-	// NetworkTrafficHotRetentionHours How many hours of flow events the hot store keeps, as the
+	// NetworkTrafficHotRetentionSeconds How long the hot store keeps flow events, in seconds, as the
 	// server resolved it from OPENZRO_FLOW_RETENTION. Read-only and
 	// deployment-wide -- it is reported here because this is the
 	// payload the traffic page already waits for, not because it
 	// belongs to the account.
 	//
-	// Anything older than this is answered from the archive: object
-	// storage rather than the database, and seconds rather than
-	// milliseconds. Clients use it to say so before the query runs.
-	NetworkTrafficHotRetentionHours *int `json:"network_traffic_hot_retention_hours,omitempty"`
+	// Seconds rather than a rounded unit on purpose: clients use it
+	// as the boundary itself, and any rounding moves the boundary.
+	// Round for display, never for the comparison.
+	NetworkTrafficHotRetentionSeconds *int `json:"network_traffic_hot_retention_seconds,omitempty"`
 
 	// NetworkTrafficLogsEnabled Enables or disables network traffic logging. If enabled, all network traffic events from peers will be stored.
 	NetworkTrafficLogsEnabled bool `json:"network_traffic_logs_enabled"`

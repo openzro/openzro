@@ -287,16 +287,35 @@ export default function NetworkTrafficV2() {
   // regression waiting to be fixed, it is what the two tiers are, so the
   // honest thing is to say so before the wait rather than during it.
   //
-  // Deliberately derived from the range and not from the response: the
+  // Derived from the range and not from the response, deliberately: the
   // point is to set expectations while the operator is choosing, and a
   // response-carried flag arrives exactly too late to do that.
-  const hotRetentionHours =
-    accounts?.[0]?.settings?.extra?.network_traffic_hot_retention_hours;
+  const hotRetentionSeconds =
+    accounts?.[0]?.settings?.extra?.network_traffic_hot_retention_seconds;
+  const archiveReadsEnabled =
+    accounts?.[0]?.settings?.extra?.network_traffic_archive_reads_enabled;
+
   const queriesColdData = useMemo(() => {
-    if (!hotRetentionHours || !range?.from) return false;
-    const boundary = dayjs().subtract(hotRetentionHours, "hour");
-    return dayjs(range.from).isBefore(boundary);
-  }, [hotRetentionHours, range]);
+    if (!hotRetentionSeconds || !archiveReadsEnabled) return false;
+    // No start bound is the widest question there is: the federated
+    // store treats an absent `since` as reaching back forever, so it
+    // reads the whole archive. It is the most expensive shape and the
+    // one that most needs warning about, and an earlier version stayed
+    // silent on it because it checked `range.from` first.
+    if (!range?.from) return true;
+    const boundarySeconds = dayjs().diff(dayjs(range.from), "second");
+    return boundarySeconds > hotRetentionSeconds;
+  }, [hotRetentionSeconds, archiveReadsEnabled, range]);
+
+  // Rounded here and only here. The comparison above uses the exact
+  // value; this is the sentence.
+  const hotRetentionLabel = useMemo(() => {
+    if (!hotRetentionSeconds) return "";
+    const days = Math.floor(hotRetentionSeconds / 86400);
+    if (days >= 1) return `${days} day${days === 1 ? "" : "s"}`;
+    const hours = Math.max(1, Math.round(hotRetentionSeconds / 3600));
+    return `${hours} hour${hours === 1 ? "" : "s"}`;
+  }, [hotRetentionSeconds]);
 
   const groups = useMemo(
     () =>
@@ -392,7 +411,7 @@ export default function NetworkTrafficV2() {
             <span className="font-medium text-oz2-text">
               Reading archived traffic.
             </span>{" "}
-            This range reaches past the {hotRetentionHours}h the database keeps,
+            This range reaches past the {hotRetentionLabel} the database keeps,
             so the older part is read from object storage. Expect seconds rather
             than the usual instant response — narrow the range if you only need
             recent activity.

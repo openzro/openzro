@@ -126,6 +126,17 @@ func (f *Federated) Query(ctx context.Context, filter store.Filter) ([]*store.Ev
 	return f.queryBoth(ctx, filter, hotFilter, archFilter)
 }
 
+// ReadsArchive reports whether this store has an archive behind it.
+//
+// Callers use it to tell an operator what a slow query is waiting on. A
+// deployment with no archive answers only from the hot store, so a window
+// older than retention returns nothing rather than returning slowly, and
+// telling that operator to expect a wait would be describing a tier they
+// do not run.
+func (f *Federated) ReadsArchive() bool {
+	return f.archive != nil
+}
+
 // queryBoth fans out to hot + archive in parallel, merges by
 // ReceivedAt desc, and applies the caller's Limit / Offset on the
 // merged stream.

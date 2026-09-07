@@ -17,21 +17,37 @@ import (
 func TestAccountReportsHotRetention(t *testing.T) {
 	t.Setenv("OPENZRO_FLOW_RETENTION", "720h")
 
-	got := toAccountResponse("acct-1", &types.Settings{}, &types.AccountMeta{}, &types.AccountOnboarding{})
+	got := toAccountResponse("acct-1", &types.Settings{}, &types.AccountMeta{}, &types.AccountOnboarding{}, true)
 	require.NotNil(t, got.Settings.Extra)
-	require.NotNil(t, got.Settings.Extra.NetworkTrafficHotRetentionHours)
-	require.Equal(t, 720, *got.Settings.Extra.NetworkTrafficHotRetentionHours)
+	require.NotNil(t, got.Settings.Extra.NetworkTrafficHotRetentionSeconds)
+	require.Equal(t, 720*3600, *got.Settings.Extra.NetworkTrafficHotRetentionSeconds)
 }
 
-// Rounded up, deliberately. A window reaching even a minute past the
-// boundary is answered from the archive, so rounding down would leave
-// the client quiet about a query that is about to take seconds.
-func TestAccountRoundsRetentionUp(t *testing.T) {
+// Reported exactly, and this is the whole reason the field is seconds.
+//
+// The client uses this as the boundary itself. An earlier version
+// reported hours rounded up, which pushed the boundary further into the
+// past: a 90-minute retention was published as 2h, and a query starting
+// 100 minutes ago reached the archive on the server while the page,
+// comparing against 2h, said nothing. Silent in exactly the window worth
+// warning about.
+func TestAccountReportsRetentionExactly(t *testing.T) {
 	t.Setenv("OPENZRO_FLOW_RETENTION", "90m")
 
-	got := toAccountResponse("acct-1", &types.Settings{}, &types.AccountMeta{}, &types.AccountOnboarding{})
-	require.Equal(t, 2, *got.Settings.Extra.NetworkTrafficHotRetentionHours,
-		"90 minutes is two hours' worth of boundary, not one")
+	got := toAccountResponse("acct-1", &types.Settings{}, &types.AccountMeta{}, &types.AccountOnboarding{}, true)
+	require.Equal(t, 5400, *got.Settings.Extra.NetworkTrafficHotRetentionSeconds,
+		"the boundary must not be rounded; rounding it moves it")
+}
+
+// A deployment with no archive answers a window past the boundary with
+// nothing, not slowly. Promising a wait there describes a tier the
+// operator does not run.
+func TestAccountReportsWhetherArchiveReadsAreEnabled(t *testing.T) {
+	on := toAccountResponse("a", &types.Settings{}, &types.AccountMeta{}, &types.AccountOnboarding{}, true)
+	require.True(t, *on.Settings.Extra.NetworkTrafficArchiveReadsEnabled)
+
+	off := toAccountResponse("a", &types.Settings{}, &types.AccountMeta{}, &types.AccountOnboarding{}, false)
+	require.False(t, *off.Settings.Extra.NetworkTrafficArchiveReadsEnabled)
 }
 
 // An unset variable has to report the server's own default rather than
@@ -39,6 +55,6 @@ func TestAccountRoundsRetentionUp(t *testing.T) {
 func TestAccountReportsDefaultRetention(t *testing.T) {
 	t.Setenv("OPENZRO_FLOW_RETENTION", "")
 
-	got := toAccountResponse("acct-1", &types.Settings{}, &types.AccountMeta{}, &types.AccountOnboarding{})
-	require.Equal(t, int((7*24*time.Hour)/time.Hour), *got.Settings.Extra.NetworkTrafficHotRetentionHours)
+	got := toAccountResponse("acct-1", &types.Settings{}, &types.AccountMeta{}, &types.AccountOnboarding{}, true)
+	require.Equal(t, int((7*24*time.Hour)/time.Second), *got.Settings.Extra.NetworkTrafficHotRetentionSeconds)
 }

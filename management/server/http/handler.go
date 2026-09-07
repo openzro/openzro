@@ -38,6 +38,7 @@ import (
 	"github.com/openzro/openzro/management/server/http/handlers/peers"
 
 	flowstore "github.com/openzro/openzro/flow/store"
+	flowFederated "github.com/openzro/openzro/flow/store/federated"
 	flowExports "github.com/openzro/openzro/management/server/flow_exports"
 	"github.com/openzro/openzro/management/server/http/handlers/policies"
 	"github.com/openzro/openzro/management/server/http/handlers/routes"
@@ -134,7 +135,15 @@ func NewAPIHandler(
 		return nil, fmt.Errorf("register integrations endpoints: %w", err)
 	}
 
-	accounts.AddEndpoints(accountManager, settingsManager, router)
+	// The flow store handed in here is the federated one when an archive
+	// is attached, so it is the thing that knows. Asking it beats
+	// threading a second boolean down from wiring, and beats a package
+	// global that nothing owns.
+	archiveReads := false
+	if fed, ok := flowEventsStore.(*flowFederated.Federated); ok {
+		archiveReads = fed.ReadsArchive()
+	}
+	accounts.AddEndpoints(accountManager, settingsManager, archiveReads, router)
 	peers.AddEndpoints(accountManager, postureEvalStore, router)
 	users.AddEndpoints(accountManager, router)
 	mfaHandler.AddEndpoints(accountManager, router)

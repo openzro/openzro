@@ -18,14 +18,19 @@ export interface Account {
       // "1h" | "6h" | "24h" | "7d" | "30d" | "all". Empty / "all" keeps
       // the no-filter behaviour.
       network_traffic_default_range?: string;
-      // How many hours of flow events the hot store keeps, as the server
-      // resolved it. Read-only and deployment-wide -- it rides on this
-      // payload because the traffic page already waits for it, so the
-      // boundary is known before the first query rather than after.
+      // How long the hot store keeps flow events, in seconds, as the
+      // server resolved it. Read-only and deployment-wide -- it rides on
+      // this payload because the traffic page already waits for it, so
+      // the boundary is known before the first query rather than after.
       //
-      // Anything older is answered from object storage: seconds instead
-      // of milliseconds.
-      network_traffic_hot_retention_hours?: number;
+      // Seconds, not a rounded unit: this IS the boundary, and rounding
+      // it moves it. Round for display, never for the comparison.
+      network_traffic_hot_retention_seconds?: number;
+      // Whether events older than that are read from an archive at all.
+      // False means such a window returns nothing rather than returning
+      // slowly, so promising a wait would describe a tier this
+      // deployment does not run.
+      network_traffic_archive_reads_enabled?: boolean;
     };
     peer_login_expiration_enabled: boolean;
     peer_login_expiration: number;

@@ -255,19 +255,28 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/FlowPortFilter'
-        network_traffic_hot_retention_hours:
+        network_traffic_hot_retention_seconds:
           type: integer
           readOnly: true
           description: |
-            How many hours of flow events the hot store keeps, as the
+            How long the hot store keeps flow events, in seconds, as the
             server resolved it from OPENZRO_FLOW_RETENTION. Read-only and
             deployment-wide -- it is reported here because this is the
             payload the traffic page already waits for, not because it
             belongs to the account.
 
-            Anything older than this is answered from the archive: object
-            storage rather than the database, and seconds rather than
-            milliseconds. Clients use it to say so before the query runs.
+            Seconds rather than a rounded unit on purpose: clients use it
+            as the boundary itself, and any rounding moves the boundary.
+            Round for display, never for the comparison.
+        network_traffic_archive_reads_enabled:
+          type: boolean
+          readOnly: true
+          description: |
+            Whether this deployment reads flow events older than the hot
+            retention from an archive. False means a window past the
+            boundary simply returns nothing, rather than returning slowly
+            from object storage -- clients should not promise a wait for
+            a tier that is not configured.
         network_traffic_default_range:
           description: |
             Pre-fills the date filter on the Flow Traffic dashboard page so

@@ -339,15 +339,19 @@ func TestAccounts_AccountsHandler(t *testing.T) {
 
 			assert.Equal(t, tc.expectedID, actual.Id)
 
-			// The hot-retention hours are deployment information
-			// reported on every account, not settings belonging to one,
-			// so they are checked once and taken out before comparing
-			// what these cases are actually about. Leaving them in would
-			// mean five identical copies of the same expectation.
+			// The retention and the archive flag are deployment
+			// information reported on every account, not settings
+			// belonging to one, so they are checked once and taken out
+			// before comparing what these cases are actually about.
+			// Leaving them in would mean five identical copies of the
+			// same expectation.
 			require.NotNil(t, actual.Settings.Extra)
-			require.NotNil(t, actual.Settings.Extra.NetworkTrafficHotRetentionHours,
+			require.NotNil(t, actual.Settings.Extra.NetworkTrafficHotRetentionSeconds,
 				"every account reports the boundary; the traffic page needs it before it queries")
-			actual.Settings.Extra.NetworkTrafficHotRetentionHours = nil
+			require.NotNil(t, actual.Settings.Extra.NetworkTrafficArchiveReadsEnabled,
+				"and whether a window past that boundary is answered at all")
+			actual.Settings.Extra.NetworkTrafficHotRetentionSeconds = nil
+			actual.Settings.Extra.NetworkTrafficArchiveReadsEnabled = nil
 			if reflect.DeepEqual(*actual.Settings.Extra, api.AccountExtraSettings{}) {
 				actual.Settings.Extra = nil
 			}
