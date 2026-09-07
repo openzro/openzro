@@ -307,14 +307,25 @@ export default function NetworkTrafficV2() {
     return boundarySeconds > hotRetentionSeconds;
   }, [hotRetentionSeconds, archiveReadsEnabled, range]);
 
-  // Rounded here and only here. The comparison above uses the exact
-  // value; this is the sentence.
+  // The sentence, not the comparison -- that one uses the exact value
+  // above. This still must not round, for a smaller reason that is the
+  // same reason: telling an operator the database keeps "2 hours" when
+  // it keeps ninety minutes is a number they may act on.
+  //
+  // So: the largest unit the value divides into evenly, and minutes when
+  // nothing else fits. 30 days, 7 days, 36 hours, 90 minutes -- each
+  // exact.
   const hotRetentionLabel = useMemo(() => {
     if (!hotRetentionSeconds) return "";
-    const days = Math.floor(hotRetentionSeconds / 86400);
-    if (days >= 1) return `${days} day${days === 1 ? "" : "s"}`;
-    const hours = Math.max(1, Math.round(hotRetentionSeconds / 3600));
-    return `${hours} hour${hours === 1 ? "" : "s"}`;
+    const plural = (n: number, unit: string) =>
+      `${n} ${unit}${n === 1 ? "" : "s"}`;
+    if (hotRetentionSeconds % 86400 === 0)
+      return plural(hotRetentionSeconds / 86400, "day");
+    if (hotRetentionSeconds % 3600 === 0)
+      return plural(hotRetentionSeconds / 3600, "hour");
+    if (hotRetentionSeconds % 60 === 0)
+      return plural(hotRetentionSeconds / 60, "minute");
+    return plural(hotRetentionSeconds, "second");
   }, [hotRetentionSeconds]);
 
   const groups = useMemo(
