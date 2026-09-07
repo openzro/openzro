@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	flowfactory "github.com/openzro/openzro/flow/store/factory"
+
 	"github.com/gorilla/mux"
 
 	"github.com/openzro/openzro/management/server/account"
@@ -378,6 +380,22 @@ func toAccountResponse(accountID string, settings *types.Settings, meta *types.A
 			apiSettings.Extra.NetworkTrafficDefaultRange = &r
 		}
 	}
+
+	// Deployment-wide rather than per-account, and reported here because
+	// this is the payload the traffic page already waits for. Adding a
+	// second request to the page's load, or a settings endpoint that
+	// exists to carry one integer, would both cost more than they
+	// explain.
+	//
+	// Rounded up: a window that reaches even one minute past the
+	// boundary is answered from the archive, so a client that rounded
+	// down would stay quiet about exactly the queries worth warning
+	// about.
+	hours := int((flowfactory.HotRetention() + time.Hour - 1) / time.Hour)
+	if apiSettings.Extra == nil {
+		apiSettings.Extra = &api.AccountExtraSettings{}
+	}
+	apiSettings.Extra.NetworkTrafficHotRetentionHours = &hours
 
 	return &api.Account{
 		Id:             accountID,

@@ -277,6 +277,27 @@ export default function NetworkTrafficV2() {
   // with the table a moment later.
   const isLoading = eventsLoading || !defaultApplied || !rangeSettled;
 
+  // Whether the selected window reaches past the hot store, in which
+  // case the answer comes from object storage instead of the database.
+  //
+  // Measured on a production archive: a hot query answers in about
+  // 200ms, the same shape of question against the archive takes several
+  // seconds even once the objects are compacted, because the cost is
+  // round trips to object storage rather than rows. That gap is not a
+  // regression waiting to be fixed, it is what the two tiers are, so the
+  // honest thing is to say so before the wait rather than during it.
+  //
+  // Deliberately derived from the range and not from the response: the
+  // point is to set expectations while the operator is choosing, and a
+  // response-carried flag arrives exactly too late to do that.
+  const hotRetentionHours =
+    accounts?.[0]?.settings?.extra?.network_traffic_hot_retention_hours;
+  const queriesColdData = useMemo(() => {
+    if (!hotRetentionHours || !range?.from) return false;
+    const boundary = dayjs().subtract(hotRetentionHours, "hour");
+    return dayjs(range.from).isBefore(boundary);
+  }, [hotRetentionHours, range]);
+
   const groups = useMemo(
     () =>
       groupFlows(
@@ -361,6 +382,23 @@ export default function NetworkTrafficV2() {
           your access policies match traffic in the wild.
         </p>
       </header>
+
+      {queriesColdData ? (
+        <OzCard className="flex items-start gap-3 border-oz2-border bg-oz2-surface-2 px-4 py-3">
+          <span className="mt-0.5 shrink-0 text-oz2-text-muted">
+            {ICONS.archive}
+          </span>
+          <div className="text-[13.5px] leading-relaxed text-oz2-text-2">
+            <span className="font-medium text-oz2-text">
+              Reading archived traffic.
+            </span>{" "}
+            This range reaches past the {hotRetentionHours}h the database keeps,
+            so the older part is read from object storage. Expect seconds rather
+            than the usual instant response — narrow the range if you only need
+            recent activity.
+          </div>
+        </OzCard>
+      ) : null}
 
       {data?.incomplete ? (
         <OzCard className="flex items-start gap-3 border-oz2-warn bg-oz2-warn-bg px-4 py-3">
@@ -1188,6 +1226,13 @@ const ICONS = {
     </>,
   ),
   chevDown: baseIcon(<path d="m6 9 6 6 6-6" />),
+  archive: baseIcon(
+    <>
+      <rect x={2} y={4} width={20} height={5} rx={1} />
+      <path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9" />
+      <path d="M10 13h4" />
+    </>,
+  ),
   warn: baseIcon(
     <>
       <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />

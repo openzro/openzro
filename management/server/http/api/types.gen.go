@@ -319,6 +319,17 @@ type AccountExtraSettings struct {
 	// heartbeats, custom multicast, app-specific service discovery).
 	NetworkTrafficExcludedPorts *[]FlowPortFilter `json:"network_traffic_excluded_ports,omitempty"`
 
+	// NetworkTrafficHotRetentionHours How many hours of flow events the hot store keeps, as the
+	// server resolved it from OPENZRO_FLOW_RETENTION. Read-only and
+	// deployment-wide -- it is reported here because this is the
+	// payload the traffic page already waits for, not because it
+	// belongs to the account.
+	//
+	// Anything older than this is answered from the archive: object
+	// storage rather than the database, and seconds rather than
+	// milliseconds. Clients use it to say so before the query runs.
+	NetworkTrafficHotRetentionHours *int `json:"network_traffic_hot_retention_hours,omitempty"`
+
 	// NetworkTrafficLogsEnabled Enables or disables network traffic logging. If enabled, all network traffic events from peers will be stored.
 	NetworkTrafficLogsEnabled bool `json:"network_traffic_logs_enabled"`
 
@@ -1032,7 +1043,7 @@ type NetworkResource struct {
 	// Id Network Resource ID
 	Id string `json:"id"`
 
-	// Name Network resource name
+	// Name Network resource name. Unique within the account.
 	Name string `json:"name"`
 
 	// Type Network resource type based of the address
@@ -1050,7 +1061,7 @@ type NetworkResourceMinimum struct {
 	// Enabled Network resource status
 	Enabled bool `json:"enabled"`
 
-	// Name Network resource name
+	// Name Network resource name. Unique within the account.
 	Name string `json:"name"`
 }
 
@@ -1068,7 +1079,7 @@ type NetworkResourceRequest struct {
 	// Groups Group IDs containing the resource
 	Groups []string `json:"groups"`
 
-	// Name Network resource name
+	// Name Network resource name. Unique within the account.
 	Name string `json:"name"`
 }
 
@@ -1703,7 +1714,7 @@ type PostureCheckUpdate struct {
 	// Description Posture check friendly description
 	Description string `json:"description"`
 
-	// Name Posture check name identifier
+	// Name Posture check name identifier. Unique within the account.
 	Name string `json:"name"`
 }
 

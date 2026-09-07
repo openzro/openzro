@@ -127,6 +127,22 @@ func openDB(engine, dsn string) (*gorm.DB, error) {
 	}
 }
 
+// HotRetention reports how far back the hot store keeps events, as the
+// running process resolved it -- the same value the retention loop and
+// the federated split use.
+//
+// Exported because the dashboard needs it before it asks a question, not
+// after. A window older than this is answered from the archive: object
+// storage, seconds rather than milliseconds, and the operator deserves
+// to know that while picking the range rather than while waiting.
+//
+// It is deliberately re-read rather than cached at startup: this returns
+// what the environment says now, which is what the retention loop uses
+// on its next pass.
+func HotRetention() time.Duration {
+	return parseRetention(os.Getenv(envRetention))
+}
+
 func parseRetention(raw string) time.Duration {
 	const def = 7 * 24 * time.Hour
 	if raw == "" {
