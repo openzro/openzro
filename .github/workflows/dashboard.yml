@@ -63,21 +63,17 @@ jobs:
         # The same command and the same output directory the release
         # image is assembled from, so a build that passes here is the
         # build that ships.
+        #
+        # This type-checks too, and there is no separate tsc step because
+        # a separate step would find nothing. next.config.js does not set
+        # typescript.ignoreBuildErrors, so `next build` runs the whole
+        # project through tsc -- measured, including a file nothing
+        # imports:
+        #
+        #   ./src/orphan-probe.ts:2:14  Type error
+        #
+        # An earlier draft ran tsc afterwards on the theory that it gave
+        # cleaner errors and reached files the build tree-shook away.
+        # Neither survived being checked: the build fails first, so the
+        # step never runs, and it catches unreferenced files anyway.
         run: npm run build
-
-      - name: Typecheck
-        # After the build, and that ordering is load-bearing. Next
-        # generates next-env.d.ts, which is what declares the asset
-        # modules -- `import logo from "@/assets/openzro.svg"` and the
-        # rest. That file is gitignored, so a clean checkout does not
-        # have it and a typecheck run first fails on every asset import.
-        #
-        # Found the honest way: it passed on a developer machine, where a
-        # previous build had left the file behind, and failed on the
-        # first CI run.
-        #
-        # Still worth running separately even though the build
-        # type-checks: a bare tsc names the file in one line instead of
-        # burying it in build output, and it reaches files the build
-        # tree-shakes away.
-        run: npx tsc --noEmit
