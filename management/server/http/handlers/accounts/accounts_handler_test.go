@@ -7,6 +7,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+
+	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 
@@ -335,6 +338,20 @@ func TestAccounts_AccountsHandler(t *testing.T) {
 			}
 
 			assert.Equal(t, tc.expectedID, actual.Id)
+
+			// The hot-retention hours are deployment information
+			// reported on every account, not settings belonging to one,
+			// so they are checked once and taken out before comparing
+			// what these cases are actually about. Leaving them in would
+			// mean five identical copies of the same expectation.
+			require.NotNil(t, actual.Settings.Extra)
+			require.NotNil(t, actual.Settings.Extra.NetworkTrafficHotRetentionHours,
+				"every account reports the boundary; the traffic page needs it before it queries")
+			actual.Settings.Extra.NetworkTrafficHotRetentionHours = nil
+			if reflect.DeepEqual(*actual.Settings.Extra, api.AccountExtraSettings{}) {
+				actual.Settings.Extra = nil
+			}
+
 			assert.Equal(t, tc.expectedSettings, actual.Settings)
 		})
 	}
