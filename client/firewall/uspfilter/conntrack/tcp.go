@@ -120,6 +120,20 @@ func (t *TCPConnTrack) SetTombstone() {
 	t.tombstone.Store(true)
 }
 
+// IsSupersededBy reports whether this entry has been replaced by the packet
+// carrying the given flags and must no longer be treated as the live flow for
+// its 4-tuple. That is the case once the connection is closed, and when a
+// fresh SYN opens a new connection on a source port whose previous incarnation
+// is still lingering in TIME-WAIT. Entries stay in the table until the next
+// cleanup tick, so without this check a reused port adopts the stale entry:
+// track() creates no new entry and the inbound SYN-ACK is dropped.
+func (t *TCPConnTrack) IsSupersededBy(flags uint8) bool {
+	if t.tombstone.Load() {
+		return true
+	}
+	return flags&TCPSyn != 0 && flags&TCPAck == 0 && TCPState(t.state.Load()) == TCPStateTimeWait
+}
+
 // TCPTracker manages TCP connection states
 type TCPTracker struct {
 	logger        *nblog.Logger
@@ -169,7 +183,7 @@ func (t *TCPTracker) updateIfExists(srcIP, dstIP netip.Addr, srcPort, dstPort ui
 	conn, exists := t.connections[key]
 	t.mutex.RUnlock()
 
-	if exists {
+	if exists && !conn.IsSupersededBy(flags) {
 		t.updateState(key, conn, flags, direction, size)
 		return key, true
 	}
@@ -234,7 +248,7 @@ func (t *TCPTracker) IsValidInbound(srcIP, dstIP netip.Addr, srcPort, dstPort ui
 	conn, exists := t.connections[key]
 	t.mutex.RUnlock()
 
-	if !exists || conn.IsTombstone() {
+	if !exists || conn.IsSupersededBy(flags) {
 		return false
 	}
 
