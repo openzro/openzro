@@ -56,7 +56,7 @@ func startMinIO(t *testing.T) string {
 		ContainerRequest: testcontainers.ContainerRequest{
 			// Pinned rather than :latest, for the reason the existing
 			// MinIO test gives: rolling tags ship behavior changes.
-			Image:        "minio/minio:RELEASE.2025-04-22T22-12-26Z",
+			Image:        "quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z",
 			ExposedPorts: []string{"9000/tcp"},
 			Cmd:          []string{"server", "/data"},
 			Env: map[string]string{
