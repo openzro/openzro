@@ -179,14 +179,19 @@ These rules govern every Go file under `client/`, `management/`, `signal/`,
 The whole tree is **BSD-3-Clause** and stays that way forever.
 
 - The upstream `netbirdio/netbird` repo is **mixed-licensed today**.
-  Only `management/`, `signal/`, `relay/` and `combined/` were
-  relicensed to **AGPLv3** (each dir carries its own `LICENSE`).
+  Only `management/`, `signal/`, `relay/`, `proxy/` and `combined/`
+  were relicensed to **AGPLv3** (each dir carries its own `LICENSE`;
+  verify with `gh api repos/netbirdio/netbird/contents/<dir>/LICENSE`
+  before porting, since the set can grow).
   Everything else — `client/`, `iface/`, `dns/`, `formatter/`,
   shared libraries, etc. — **stays BSD-3-Clause** even on
   upstream `main`.
 - That means:
   - **AGPL territory** — never copy/translate/port from upstream
-    `management/`, `signal/`, `relay/`, `combined/`. For security
+    `management/`, `signal/`, `relay/`, `proxy/`, `combined/`. An
+    upstream PR can span both territories — netbird#5936 touched
+    `client/` and `proxy/` in one change — so check per file, not
+    per PR. For security
     backports there read CVE / GHSA / CWE prose, not the upstream
     patch. Reimplement clean-room. The commit message MUST cite
     the public sources used and confirm no AGPL diff was consulted.
