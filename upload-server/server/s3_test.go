@@ -32,8 +32,10 @@ func Test_S3HandlerGetUploadURL(t *testing.T) {
 	// localstack/localstack:s3-latest, but LocalStack discontinued
 	// the community s3-only image in v2026.03 (March 23, 2026) and
 	// gates the equivalent behind their paid `localstack-pro` SKU.
-	// MinIO is S3-compatible, pure-Go, and the official `minio/minio`
-	// image is freely usable.
+	// MinIO is S3-compatible, pure-Go, and freely usable. The image is
+	// pulled from quay.io: MinIO removed `minio/minio` from Docker Hub in
+	// 2025, and the old reference now fails with "pull access denied" on
+	// any runner without it cached.
 	awsRegion := "us-east-1"
 	const minioAccessKey = "minioadmin"
 	const minioSecretKey = "minioadmin"
@@ -44,7 +46,7 @@ func Test_S3HandlerGetUploadURL(t *testing.T) {
 		// behavior changes (notably the 2025 console-removal flap) on
 		// rolling tags, and we don't want a CI run to surprise us with
 		// a newer image that needs different env vars or endpoints.
-		Image:        "minio/minio:RELEASE.2025-04-22T22-12-26Z",
+		Image:        "quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z",
 		ExposedPorts: []string{"9000/tcp"},
 		Cmd:          []string{"server", "/data"},
 		Env: map[string]string{
