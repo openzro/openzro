@@ -201,8 +201,12 @@ func TestUDPTracker_Cleanup(t *testing.T) {
 		tracker.TrackOutbound(conn.srcIP, conn.dstIP, conn.srcPort, conn.dstPort, 0)
 	}
 
-	// Verify initial connections
-	assert.Len(t, tracker.connections, 2)
+	// Verify initial connections. The cleanup goroutine is already running,
+	// so the map must be read under the same lock cleanup() writes under.
+	tracker.mutex.RLock()
+	initialCount := len(tracker.connections)
+	tracker.mutex.RUnlock()
+	assert.Equal(t, 2, initialCount)
 
 	// Wait for connection timeout and cleanup interval
 	time.Sleep(timeout + 2*cleanupInterval)

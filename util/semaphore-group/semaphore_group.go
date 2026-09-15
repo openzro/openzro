@@ -30,9 +30,12 @@ func (sg *SemaphoreGroup) Add(ctx context.Context) {
 	}
 }
 
-// Done decrements the internal WaitGroup counter and releases a semaphore slot.
+// Done releases a semaphore slot and then decrements the internal WaitGroup
+// counter, in that order, so that Wait returning means every slot has been
+// released as well. Decrementing first left a window in which Wait had
+// returned while the slot was still held.
 func (sg *SemaphoreGroup) Done(ctx context.Context) {
-	sg.waitGroup.Done()
+	defer sg.waitGroup.Done()
 
 	// Release semaphore slot
 	select {
