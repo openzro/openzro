@@ -654,6 +654,11 @@ func getTCPFlags(tcp *layers.TCP) uint8 {
 }
 
 func (m *Manager) trackOutbound(d *decoder, srcIP, dstIP netip.Addr, size int) {
+	// The trackers only exist when the stateful filter is enabled.
+	if !m.stateful {
+		return
+	}
+
 	transport := d.decoded[1]
 	switch transport {
 	case layers.LayerTypeUDP:
@@ -667,6 +672,11 @@ func (m *Manager) trackOutbound(d *decoder, srcIP, dstIP netip.Addr, size int) {
 }
 
 func (m *Manager) trackInbound(d *decoder, srcIP, dstIP netip.Addr, ruleID []byte, size int) {
+	// The trackers only exist when the stateful filter is enabled.
+	if !m.stateful {
+		return
+	}
+
 	transport := d.decoded[1]
 	switch transport {
 	case layers.LayerTypeUDP:
