@@ -144,6 +144,7 @@ type TCPTracker struct {
 	timeout       time.Duration
 	waitTimeout   time.Duration
 	flowLogger    nftypes.FlowLogger
+	maxEntries    int
 }
 
 // NewTCPTracker creates a new TCP connection tracker
@@ -165,6 +166,7 @@ func NewTCPTracker(timeout time.Duration, logger *nblog.Logger, flowLogger nftyp
 		timeout:       timeout,
 		waitTimeout:   waitTimeout,
 		flowLogger:    flowLogger,
+		maxEntries:    envInt(logger, EnvTCPMaxEntries, DefaultMaxTCPEntries),
 	}
 
 	go tracker.cleanupRoutine(ctx)
@@ -235,6 +237,9 @@ func (t *TCPTracker) track(srcIP, dstIP netip.Addr, srcPort, dstPort uint16, fla
 	t.updateState(key, conn, flags, direction, size)
 
 	t.mutex.Lock()
+	if t.maxEntries > 0 && len(t.connections) >= t.maxEntries {
+		t.evictOneLocked()
+	}
 	t.connections[key] = conn
 	t.mutex.Unlock()
 
@@ -504,6 +509,23 @@ func isValidFlagCombination(flags uint8) bool {
 	}
 
 	return true
+}
+
+// evictOneLocked drops one entry to make room for a new one; the caller
+// holds t.mutex. A tombstoned or TIME-WAIT entry has already emitted its TypeEnd, so only a still-live flow gets one here.
+func (t *TCPTracker) evictOneLocked() {
+	key, ok := evictCandidate(t.connections,
+		func(c *TCPConnTrack) int64 { return c.lastSeen.Load() },
+		func(c *TCPConnTrack) bool { return c.IsTombstone() })
+	if !ok {
+		return
+	}
+	evicted := t.connections[key]
+	delete(t.connections, key)
+	t.logger.Warn("TCPTracker table full (%d entries), evicted %s", t.maxEntries, key)
+	if st := evicted.GetState(); st != TCPStateTimeWait && !evicted.IsTombstone() {
+		t.sendEvent(nftypes.TypeEnd, evicted, nil)
+	}
 }
 
 func (t *TCPTracker) sendEvent(typ nftypes.Type, conn *TCPConnTrack, ruleID []byte) {
