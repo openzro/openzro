@@ -210,6 +210,12 @@ func (t *TCPTracker) track(srcIP, dstIP netip.Addr, srcPort, dstPort uint16, fla
 	if exists || flags&TCPSyn == 0 {
 		return
 	}
+	// SYN+FIN, SYN+RST and the like are never the start of a real flow.
+	// Creating an entry for them wastes a table slot and, once the table
+	// is capped, lets a forger evict live connections with garbage.
+	if !isValidFlagCombination(flags) {
+		return
+	}
 
 	conn := &TCPConnTrack{
 		BaseConnTrack: BaseConnTrack{
@@ -252,11 +258,19 @@ func (t *TCPTracker) IsValidInbound(srcIP, dstIP netip.Addr, srcPort, dstPort ui
 		return false
 	}
 
+	// An illegal combination belongs to no legitimate flow in any state.
+	// This has to come before the per-state check: that check used to fall
+	// back to "allow everything on Established", which admitted exactly
+	// these segments.
+	if !isValidFlagCombination(flags) {
+		t.logger.Warn("TCP illegal flag combination %x for connection %s (state %s)", flags, key, conn.GetState())
+		return false
+	}
+
 	currentState := conn.GetState()
 	if !t.isValidStateForFlags(currentState, flags) {
 		t.logger.Warn("TCP state %s is not valid with flags %x for connection %s", currentState, flags, key)
-		// allow all flags for established for now
-		return currentState == TCPStateEstablished
+		return false
 	}
 
 	t.updateState(key, conn, flags, nftypes.Ingress, size)
@@ -265,8 +279,16 @@ func (t *TCPTracker) IsValidInbound(srcIP, dstIP netip.Addr, srcPort, dstPort ui
 
 // updateState updates the TCP connection state based on flags
 func (t *TCPTracker) updateState(key ConnKey, conn *TCPConnTrack, flags uint8, packetDir nftypes.Direction, size int) {
-	conn.UpdateLastSeen()
 	conn.UpdateCounters(packetDir, size)
+
+	// A forged segment with an illegal flag combination must not count as
+	// activity: refreshing lastSeen here would let a stream of garbage keep
+	// a dead flow alive past its timeout, and driving state from it would
+	// let the forger tear the flow down.
+	if !isValidFlagCombination(flags) {
+		return
+	}
+	conn.UpdateLastSeen()
 
 	currentState := conn.GetState()
 
