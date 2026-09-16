@@ -307,76 +307,7 @@ func (t *TCPTracker) updateState(key ConnKey, conn *TCPConnTrack, flags uint8, p
 		return
 	}
 
-	var newState TCPState
-	switch currentState {
-	case TCPStateNew:
-		if flags&TCPSyn != 0 && flags&TCPAck == 0 {
-			if conn.Direction == nftypes.Egress {
-				newState = TCPStateSynSent
-			} else {
-				newState = TCPStateSynReceived
-			}
-		}
-
-	case TCPStateSynSent:
-		if flags&TCPSyn != 0 && flags&TCPAck != 0 {
-			if packetDir != conn.Direction {
-				newState = TCPStateEstablished
-			} else {
-				// Simultaneous open
-				newState = TCPStateSynReceived
-			}
-		}
-
-	case TCPStateSynReceived:
-		if flags&TCPAck != 0 && flags&TCPSyn == 0 {
-			if packetDir == conn.Direction {
-				newState = TCPStateEstablished
-			}
-		}
-
-	case TCPStateEstablished:
-		if flags&TCPFin != 0 {
-			if packetDir == conn.Direction {
-				newState = TCPStateFinWait1
-			} else {
-				newState = TCPStateCloseWait
-			}
-		}
-
-	case TCPStateFinWait1:
-		if packetDir != conn.Direction {
-			switch {
-			case flags&TCPFin != 0 && flags&TCPAck != 0:
-				newState = TCPStateClosing
-			case flags&TCPFin != 0:
-				newState = TCPStateClosing
-			case flags&TCPAck != 0:
-				newState = TCPStateFinWait2
-			}
-		}
-
-	case TCPStateFinWait2:
-		if flags&TCPFin != 0 {
-			newState = TCPStateTimeWait
-		}
-
-	case TCPStateClosing:
-		if flags&TCPAck != 0 {
-			newState = TCPStateTimeWait
-		}
-
-	case TCPStateCloseWait:
-		if flags&TCPFin != 0 {
-			newState = TCPStateLastAck
-		}
-
-	case TCPStateLastAck:
-		if flags&TCPAck != 0 {
-			newState = TCPStateClosed
-		}
-	}
-
+	newState := nextState(currentState, conn.Direction, packetDir, flags)
 	if newState != 0 && conn.CompareAndSwapState(currentState, newState) {
 		t.logger.Trace("TCP connection %s transitioned from %s to %s (dir: %s)", key, currentState, newState, packetDir)
 
@@ -393,49 +324,6 @@ func (t *TCPTracker) updateState(key ConnKey, conn *TCPConnTrack, flags uint8, p
 			t.sendEvent(nftypes.TypeEnd, conn, nil)
 		}
 	}
-}
-
-// isValidStateForFlags checks if the TCP flags are valid for the current connection state
-func (t *TCPTracker) isValidStateForFlags(state TCPState, flags uint8) bool {
-	if !isValidFlagCombination(flags) {
-		return false
-	}
-	if flags&TCPRst != 0 {
-		if state == TCPStateSynSent {
-			return flags&TCPAck != 0
-		}
-		return true
-	}
-
-	switch state {
-	case TCPStateNew:
-		return flags&TCPSyn != 0 && flags&TCPAck == 0
-	case TCPStateSynSent:
-		// TODO: support simultaneous open
-		return flags&TCPSyn != 0 && flags&TCPAck != 0
-	case TCPStateSynReceived:
-		return flags&TCPAck != 0
-	case TCPStateEstablished:
-		return flags&TCPAck != 0
-	case TCPStateFinWait1:
-		return flags&TCPFin != 0 || flags&TCPAck != 0
-	case TCPStateFinWait2:
-		return flags&TCPFin != 0 || flags&TCPAck != 0
-	case TCPStateClosing:
-		// In CLOSING state, we should accept the final ACK
-		return flags&TCPAck != 0
-	case TCPStateTimeWait:
-		// In TIME_WAIT, we might see retransmissions
-		return flags&TCPAck != 0
-	case TCPStateCloseWait:
-		return flags&TCPFin != 0 || flags&TCPAck != 0
-	case TCPStateLastAck:
-		return flags&TCPAck != 0
-	case TCPStateClosed:
-		// Accept retransmitted ACKs in closed state, the final ACK might be lost and the peer will retransmit their FIN-ACK
-		return flags&TCPAck != 0
-	}
-	return false
 }
 
 func (t *TCPTracker) cleanupRoutine(ctx context.Context) {
@@ -495,20 +383,6 @@ func (t *TCPTracker) Close() {
 	t.mutex.Lock()
 	t.connections = nil
 	t.mutex.Unlock()
-}
-
-func isValidFlagCombination(flags uint8) bool {
-	// Invalid: SYN+FIN
-	if flags&TCPSyn != 0 && flags&TCPFin != 0 {
-		return false
-	}
-
-	// Invalid: RST with SYN or FIN
-	if flags&TCPRst != 0 && (flags&TCPSyn != 0 || flags&TCPFin != 0) {
-		return false
-	}
-
-	return true
 }
 
 // evictOneLocked drops one entry to make room for a new one; the caller
