@@ -298,6 +298,13 @@ func (t *TCPTracker) updateState(key ConnKey, conn *TCPConnTrack, flags uint8, p
 	currentState := conn.GetState()
 
 	if flags&TCPRst != 0 {
+		// TIME-WAIT exists to absorb late segments, and a RST is the one
+		// segment that would otherwise turn "accept retransmits" into
+		// "reject everything". Without sequence tracking we cannot tell a
+		// late RST from a forged one, so neither gets to end TIME-WAIT.
+		if currentState == TCPStateTimeWait {
+			return
+		}
 		if conn.CompareAndSwapState(currentState, TCPStateClosed) {
 			conn.SetTombstone()
 			t.logger.Trace("TCP connection reset: %s (dir: %s) [in: %d Pkts/%d B, out: %d Pkts/%d B]",

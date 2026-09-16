@@ -117,3 +117,21 @@ func TestTCPFinWait1PeerFinAckGoesStraightToTimeWait(t *testing.T) {
 	h.peers(TCPFin | TCPAck)
 	require.Equal(t, TCPStateTimeWait, h.state(), "FIN+ACK in FinWait1 goes straight to TimeWait")
 }
+
+func TestTCPTimeWaitAbsorbsLateRst(t *testing.T) {
+	h := newCloseHarness(t)
+	h.ours(TCPFin | TCPAck)
+	h.peers(TCPFin | TCPAck)
+	require.Equal(t, TCPStateTimeWait, h.state())
+
+	// TIME-WAIT exists to absorb late segments. A RST arriving now -- late,
+	// or forged -- must not tombstone the entry: that would turn the
+	// "accept retransmits" window into "reject everything".
+	h.peers(TCPRst | TCPAck)
+	require.Equal(t, TCPStateTimeWait, h.state(), "late RST must not leave TimeWait")
+
+	h.tracker.mutex.RLock()
+	tomb := h.tracker.connections[h.key].IsTombstone()
+	h.tracker.mutex.RUnlock()
+	require.False(t, tomb, "late RST must not tombstone a TimeWait entry")
+}
