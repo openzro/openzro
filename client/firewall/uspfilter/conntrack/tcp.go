@@ -144,6 +144,7 @@ type TCPTracker struct {
 	timeout       time.Duration
 	waitTimeout   time.Duration
 	flowLogger    nftypes.FlowLogger
+	maxEntries    int
 }
 
 // NewTCPTracker creates a new TCP connection tracker
@@ -165,6 +166,7 @@ func NewTCPTracker(timeout time.Duration, logger *nblog.Logger, flowLogger nftyp
 		timeout:       timeout,
 		waitTimeout:   waitTimeout,
 		flowLogger:    flowLogger,
+		maxEntries:    envInt(logger, EnvTCPMaxEntries, DefaultMaxTCPEntries),
 	}
 
 	go tracker.cleanupRoutine(ctx)
@@ -210,6 +212,12 @@ func (t *TCPTracker) track(srcIP, dstIP netip.Addr, srcPort, dstPort uint16, fla
 	if exists || flags&TCPSyn == 0 {
 		return
 	}
+	// SYN+FIN, SYN+RST and the like are never the start of a real flow.
+	// Creating an entry for them wastes a table slot and, once the table
+	// is capped, lets a forger evict live connections with garbage.
+	if !isValidFlagCombination(flags) {
+		return
+	}
 
 	conn := &TCPConnTrack{
 		BaseConnTrack: BaseConnTrack{
@@ -229,6 +237,9 @@ func (t *TCPTracker) track(srcIP, dstIP netip.Addr, srcPort, dstPort uint16, fla
 	t.updateState(key, conn, flags, direction, size)
 
 	t.mutex.Lock()
+	if t.maxEntries > 0 && len(t.connections) >= t.maxEntries {
+		t.evictOneLocked()
+	}
 	t.connections[key] = conn
 	t.mutex.Unlock()
 
@@ -252,11 +263,19 @@ func (t *TCPTracker) IsValidInbound(srcIP, dstIP netip.Addr, srcPort, dstPort ui
 		return false
 	}
 
+	// An illegal combination belongs to no legitimate flow in any state.
+	// This has to come before the per-state check: that check used to fall
+	// back to "allow everything on Established", which admitted exactly
+	// these segments.
+	if !isValidFlagCombination(flags) {
+		t.logger.Warn("TCP illegal flag combination %x for connection %s (state %s)", flags, key, conn.GetState())
+		return false
+	}
+
 	currentState := conn.GetState()
 	if !t.isValidStateForFlags(currentState, flags) {
 		t.logger.Warn("TCP state %s is not valid with flags %x for connection %s", currentState, flags, key)
-		// allow all flags for established for now
-		return currentState == TCPStateEstablished
+		return false
 	}
 
 	t.updateState(key, conn, flags, nftypes.Ingress, size)
@@ -265,12 +284,27 @@ func (t *TCPTracker) IsValidInbound(srcIP, dstIP netip.Addr, srcPort, dstPort ui
 
 // updateState updates the TCP connection state based on flags
 func (t *TCPTracker) updateState(key ConnKey, conn *TCPConnTrack, flags uint8, packetDir nftypes.Direction, size int) {
-	conn.UpdateLastSeen()
 	conn.UpdateCounters(packetDir, size)
+
+	// A forged segment with an illegal flag combination must not count as
+	// activity: refreshing lastSeen here would let a stream of garbage keep
+	// a dead flow alive past its timeout, and driving state from it would
+	// let the forger tear the flow down.
+	if !isValidFlagCombination(flags) {
+		return
+	}
+	conn.UpdateLastSeen()
 
 	currentState := conn.GetState()
 
 	if flags&TCPRst != 0 {
+		// TIME-WAIT exists to absorb late segments, and a RST is the one
+		// segment that would otherwise turn "accept retransmits" into
+		// "reject everything". Without sequence tracking we cannot tell a
+		// late RST from a forged one, so neither gets to end TIME-WAIT.
+		if currentState == TCPStateTimeWait {
+			return
+		}
 		if conn.CompareAndSwapState(currentState, TCPStateClosed) {
 			conn.SetTombstone()
 			t.logger.Trace("TCP connection reset: %s (dir: %s) [in: %d Pkts/%d B, out: %d Pkts/%d B]",
@@ -280,76 +314,7 @@ func (t *TCPTracker) updateState(key ConnKey, conn *TCPConnTrack, flags uint8, p
 		return
 	}
 
-	var newState TCPState
-	switch currentState {
-	case TCPStateNew:
-		if flags&TCPSyn != 0 && flags&TCPAck == 0 {
-			if conn.Direction == nftypes.Egress {
-				newState = TCPStateSynSent
-			} else {
-				newState = TCPStateSynReceived
-			}
-		}
-
-	case TCPStateSynSent:
-		if flags&TCPSyn != 0 && flags&TCPAck != 0 {
-			if packetDir != conn.Direction {
-				newState = TCPStateEstablished
-			} else {
-				// Simultaneous open
-				newState = TCPStateSynReceived
-			}
-		}
-
-	case TCPStateSynReceived:
-		if flags&TCPAck != 0 && flags&TCPSyn == 0 {
-			if packetDir == conn.Direction {
-				newState = TCPStateEstablished
-			}
-		}
-
-	case TCPStateEstablished:
-		if flags&TCPFin != 0 {
-			if packetDir == conn.Direction {
-				newState = TCPStateFinWait1
-			} else {
-				newState = TCPStateCloseWait
-			}
-		}
-
-	case TCPStateFinWait1:
-		if packetDir != conn.Direction {
-			switch {
-			case flags&TCPFin != 0 && flags&TCPAck != 0:
-				newState = TCPStateClosing
-			case flags&TCPFin != 0:
-				newState = TCPStateClosing
-			case flags&TCPAck != 0:
-				newState = TCPStateFinWait2
-			}
-		}
-
-	case TCPStateFinWait2:
-		if flags&TCPFin != 0 {
-			newState = TCPStateTimeWait
-		}
-
-	case TCPStateClosing:
-		if flags&TCPAck != 0 {
-			newState = TCPStateTimeWait
-		}
-
-	case TCPStateCloseWait:
-		if flags&TCPFin != 0 {
-			newState = TCPStateLastAck
-		}
-
-	case TCPStateLastAck:
-		if flags&TCPAck != 0 {
-			newState = TCPStateClosed
-		}
-	}
-
+	newState := nextState(currentState, conn.Direction, packetDir, flags)
 	if newState != 0 && conn.CompareAndSwapState(currentState, newState) {
 		t.logger.Trace("TCP connection %s transitioned from %s to %s (dir: %s)", key, currentState, newState, packetDir)
 
@@ -366,49 +331,6 @@ func (t *TCPTracker) updateState(key ConnKey, conn *TCPConnTrack, flags uint8, p
 			t.sendEvent(nftypes.TypeEnd, conn, nil)
 		}
 	}
-}
-
-// isValidStateForFlags checks if the TCP flags are valid for the current connection state
-func (t *TCPTracker) isValidStateForFlags(state TCPState, flags uint8) bool {
-	if !isValidFlagCombination(flags) {
-		return false
-	}
-	if flags&TCPRst != 0 {
-		if state == TCPStateSynSent {
-			return flags&TCPAck != 0
-		}
-		return true
-	}
-
-	switch state {
-	case TCPStateNew:
-		return flags&TCPSyn != 0 && flags&TCPAck == 0
-	case TCPStateSynSent:
-		// TODO: support simultaneous open
-		return flags&TCPSyn != 0 && flags&TCPAck != 0
-	case TCPStateSynReceived:
-		return flags&TCPAck != 0
-	case TCPStateEstablished:
-		return flags&TCPAck != 0
-	case TCPStateFinWait1:
-		return flags&TCPFin != 0 || flags&TCPAck != 0
-	case TCPStateFinWait2:
-		return flags&TCPFin != 0 || flags&TCPAck != 0
-	case TCPStateClosing:
-		// In CLOSING state, we should accept the final ACK
-		return flags&TCPAck != 0
-	case TCPStateTimeWait:
-		// In TIME_WAIT, we might see retransmissions
-		return flags&TCPAck != 0
-	case TCPStateCloseWait:
-		return flags&TCPFin != 0 || flags&TCPAck != 0
-	case TCPStateLastAck:
-		return flags&TCPAck != 0
-	case TCPStateClosed:
-		// Accept retransmitted ACKs in closed state, the final ACK might be lost and the peer will retransmit their FIN-ACK
-		return flags&TCPAck != 0
-	}
-	return false
 }
 
 func (t *TCPTracker) cleanupRoutine(ctx context.Context) {
@@ -470,18 +392,21 @@ func (t *TCPTracker) Close() {
 	t.mutex.Unlock()
 }
 
-func isValidFlagCombination(flags uint8) bool {
-	// Invalid: SYN+FIN
-	if flags&TCPSyn != 0 && flags&TCPFin != 0 {
-		return false
+// evictOneLocked drops one entry to make room for a new one; the caller
+// holds t.mutex. A tombstoned or TIME-WAIT entry has already emitted its TypeEnd, so only a still-live flow gets one here.
+func (t *TCPTracker) evictOneLocked() {
+	key, ok := evictCandidate(t.connections,
+		func(c *TCPConnTrack) int64 { return c.lastSeen.Load() },
+		func(c *TCPConnTrack) bool { return c.IsTombstone() })
+	if !ok {
+		return
 	}
-
-	// Invalid: RST with SYN or FIN
-	if flags&TCPRst != 0 && (flags&TCPSyn != 0 || flags&TCPFin != 0) {
-		return false
+	evicted := t.connections[key]
+	delete(t.connections, key)
+	t.logger.Warn("TCPTracker table full (%d entries), evicted %s", t.maxEntries, key)
+	if st := evicted.GetState(); st != TCPStateTimeWait && !evicted.IsTombstone() {
+		t.sendEvent(nftypes.TypeEnd, evicted, nil)
 	}
-
-	return true
 }
 
 func (t *TCPTracker) sendEvent(typ nftypes.Type, conn *TCPConnTrack, ruleID []byte) {

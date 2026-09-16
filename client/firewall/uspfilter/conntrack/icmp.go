@@ -53,6 +53,7 @@ type ICMPTracker struct {
 	tickerCancel  context.CancelFunc
 	mutex         sync.RWMutex
 	flowLogger    nftypes.FlowLogger
+	maxEntries    int
 }
 
 // ICMPInfo holds ICMP type, code, and payload for lazy string formatting in logs
@@ -136,6 +137,7 @@ func NewICMPTracker(timeout time.Duration, logger *nblog.Logger, flowLogger nfty
 		cleanupTicker: time.NewTicker(ICMPCleanupInterval),
 		tickerCancel:  cancel,
 		flowLogger:    flowLogger,
+		maxEntries:    envInt(logger, EnvICMPMaxEntries, DefaultMaxICMPEntries),
 	}
 
 	go tracker.cleanupRoutine(ctx)
@@ -240,6 +242,9 @@ func (t *ICMPTracker) track(
 	conn.UpdateCounters(direction, size)
 
 	t.mutex.Lock()
+	if t.maxEntries > 0 && len(t.connections) >= t.maxEntries {
+		t.evictOneLocked()
+	}
 	t.connections[key] = conn
 	t.mutex.Unlock()
 
@@ -308,6 +313,21 @@ func (t *ICMPTracker) Close() {
 	t.mutex.Lock()
 	t.connections = nil
 	t.mutex.Unlock()
+}
+
+// evictOneLocked drops one entry to make room for a new one; the caller
+// holds t.mutex. ICMP has no terminal state, so the evicted flow ends here, as it would on cleanup.
+func (t *ICMPTracker) evictOneLocked() {
+	key, ok := evictCandidate(t.connections,
+		func(c *ICMPConnTrack) int64 { return c.lastSeen.Load() },
+		func(c *ICMPConnTrack) bool { return false })
+	if !ok {
+		return
+	}
+	evicted := t.connections[key]
+	delete(t.connections, key)
+	t.logger.Warn("ICMPTracker table full (%d entries), evicted %s", t.maxEntries, key)
+	t.sendEvent(nftypes.TypeEnd, evicted, nil)
 }
 
 func (t *ICMPTracker) sendEvent(typ nftypes.Type, conn *ICMPConnTrack, ruleID []byte) {

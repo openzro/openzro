@@ -35,6 +35,7 @@ type UDPTracker struct {
 	tickerCancel  context.CancelFunc
 	mutex         sync.RWMutex
 	flowLogger    nftypes.FlowLogger
+	maxEntries    int
 }
 
 // NewUDPTracker creates a new UDP connection tracker
@@ -52,6 +53,7 @@ func NewUDPTracker(timeout time.Duration, logger *nblog.Logger, flowLogger nftyp
 		cleanupTicker: time.NewTicker(UDPCleanupInterval),
 		tickerCancel:  cancel,
 		flowLogger:    flowLogger,
+		maxEntries:    envInt(logger, EnvUDPMaxEntries, DefaultMaxUDPEntries),
 	}
 
 	go tracker.cleanupRoutine(ctx)
@@ -113,6 +115,9 @@ func (t *UDPTracker) track(srcIP netip.Addr, dstIP netip.Addr, srcPort uint16, d
 	conn.UpdateCounters(direction, size)
 
 	t.mutex.Lock()
+	if t.maxEntries > 0 && len(t.connections) >= t.maxEntries {
+		t.evictOneLocked()
+	}
 	t.connections[key] = conn
 	t.mutex.Unlock()
 
@@ -199,6 +204,21 @@ func (t *UDPTracker) GetConnection(srcIP netip.Addr, srcPort uint16, dstIP netip
 // Timeout returns the configured timeout duration for the tracker
 func (t *UDPTracker) Timeout() time.Duration {
 	return t.timeout
+}
+
+// evictOneLocked drops one entry to make room for a new one; the caller
+// holds t.mutex. UDP has no terminal state, so the evicted flow ends here, as it would on cleanup.
+func (t *UDPTracker) evictOneLocked() {
+	key, ok := evictCandidate(t.connections,
+		func(c *UDPConnTrack) int64 { return c.lastSeen.Load() },
+		func(c *UDPConnTrack) bool { return false })
+	if !ok {
+		return
+	}
+	evicted := t.connections[key]
+	delete(t.connections, key)
+	t.logger.Warn("UDPTracker table full (%d entries), evicted %s", t.maxEntries, key)
+	t.sendEvent(nftypes.TypeEnd, evicted, nil)
 }
 
 func (t *UDPTracker) sendEvent(typ nftypes.Type, conn *UDPConnTrack, ruleID []byte) {
