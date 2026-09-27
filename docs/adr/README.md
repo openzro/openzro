@@ -2,6 +2,18 @@
 
 This directory contains the ADRs for openzro. Each ADR captures a single decision, the context that drove it, and the consequences we accept by making it. ADRs are append-only — when a decision is reversed, a new ADR supersedes the old one (the old one stays, marked `Superseded by`).
 
+## Keep each ADR self-contained
+
+An ADR must stand on its own when read years later. When the problem
+statement, discussion, or scope sign-off lives in a GitHub issue or PR,
+summarize the parts the decision depends on inline — the problem, the
+constraints, and the scope that was agreed — in a few sentences. The link
+stays, as provenance, not as a substitute for the summary.
+
+Issues are mutable (edited, re-scoped, buried under later comments) and
+live outside the repository; the ADR is the record. A reader should be able
+to understand *what* was decided and *why* without opening the issue.
+
 | #     | Title                                       | Status     |
 |-------|---------------------------------------------|------------|
 | [0001](./0001-openzro-foundation.md) | openzro foundation (fork rationale, license posture, technical strategy) | Accepted |
