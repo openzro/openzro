@@ -83,10 +83,14 @@ The full reasoning is captured in [ADR-0001](docs/adr/0001-openzro-foundation.md
 
 ### HA modes (pick one — only required for ≥2 instances)
 
+All three brokers satisfy the same contract (TTL-bound distributed locks +
+at-most-once pub/sub), so none gives stronger guarantees than the others.
+Pick the one that matches what you already operate.
+
 | Mode | What you run | When it fits |
 |---|---|---|
 | **None (single-instance)** | management + signal + Postgres/MySQL | Default. Works out of the box. |
-| **Valkey** *(recommended)* | + Valkey 8 (or Redis 5+, or Dragonfly) | Same license family as openZro. |
+| **Valkey** | + Valkey 8 (or Redis 5+, or Dragonfly) | Already running a Redis-compatible service. Valkey is BSD-3, like openZro. |
 | **NATS (external)** | + a NATS 2.7+ broker with JetStream | Already running NATS for other workloads. |
 | **NATS (embedded)** | nothing extra; each openZro instance starts an in-process NATS server | Zero infra outside openZro itself. |
 
