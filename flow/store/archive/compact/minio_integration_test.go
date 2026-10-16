@@ -54,9 +54,9 @@ func startMinIO(t *testing.T) string {
 	ctx := context.Background()
 	c, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			// Pinned rather than :latest, for the reason the existing
-			// MinIO test gives: rolling tags ship behavior changes.
-			Image:        "quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z",
+			// Same image and digest pin as upload-server/server/s3_test.go,
+			// which explains why: upstream MinIO images need auth now.
+			Image:        "cgr.dev/chainguard/minio:latest@sha256:2136d593beacf4461187035eca949fe49abd589d5079735025c711ca58fee0c8",
 			ExposedPorts: []string{"9000/tcp"},
 			Cmd:          []string{"server", "/data"},
 			Env: map[string]string{
