@@ -535,7 +535,7 @@ func (s *SqlStore) SaveUsers(ctx context.Context, lockStrength LockingStrength, 
 	}
 
 	return s.transaction(ctx, s.db, func(tx *gorm.DB) error {
-		if err := guardLocalUserWrites(tx, users); err != nil {
+		if err := guardLocalUserWrites(tx, users, true); err != nil {
 			return err
 		}
 		result := tx.Clauses(clause.Locking{Strength: string(lockStrength)}, clause.OnConflict{UpdateAll: true}).Create(&users)
@@ -550,7 +550,7 @@ func (s *SqlStore) SaveUsers(ctx context.Context, lockStrength LockingStrength, 
 // SaveUser saves the given user to the database.
 func (s *SqlStore) SaveUser(ctx context.Context, lockStrength LockingStrength, user *types.User) error {
 	return s.transaction(ctx, s.db, func(tx *gorm.DB) error {
-		if err := guardLocalUserWrites(tx, []*types.User{user}); err != nil {
+		if err := guardLocalUserWrites(tx, []*types.User{user}, true); err != nil {
 			return err
 		}
 		result := tx.Clauses(clause.Locking{Strength: string(lockStrength)}).Save(user)

@@ -14,10 +14,6 @@ import (
 	"github.com/openzro/openzro/management/server/types"
 )
 
-// blockedFor is how long a contender must stay blocked to count as waiting
-// on the other replica's lock rather than racing past it.
-const blockedFor = 500 * time.Millisecond
-
 // holdInTx runs op inside a transaction on s, then keeps the transaction (and
 // every lock op took) open until release is closed. started is closed once op
 // has returned.
@@ -39,15 +35,44 @@ func holdInTx(t *testing.T, s store.Store, op func(tx store.Store) error) (start
 	return started, release, errCh
 }
 
-// requireBlockedThenResult asserts the contender is still waiting after
-// blockedFor, releases the holder, and returns the contender's result.
-func requireBlockedThenResult(t *testing.T, contender <-chan error, release chan struct{}, holder <-chan error) error {
+// lockWaiters counts transactions currently blocked on a row lock, as the
+// database itself reports it.
+func lockWaiters(t *testing.T, s store.Store) int64 {
 	t.Helper()
-	select {
-	case err := <-contender:
-		close(release)
-		t.Fatalf("contender did not wait for the holder's lock (returned %v)", err)
-	case <-time.After(blockedFor):
+	db := s.(*store.SqlStore).GetDB()
+	var n int64
+	var err error
+	switch s.GetStoreEngine() {
+	case types.PostgresStoreEngine:
+		err = db.Raw("SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND datname = current_database()").Scan(&n).Error
+	case types.MysqlStoreEngine:
+		// performance_schema reports every InnoDB lock wait, including an
+		// INSERT ... ON DUPLICATE KEY waiting on a row lock, which
+		// information_schema.innodb_trx does not show as LOCK WAIT.
+		err = db.Raw("SELECT count(*) FROM performance_schema.data_lock_waits").Scan(&n).Error
+	default:
+		t.Fatalf("lock-wait probe not supported on %s", s.GetStoreEngine())
+	}
+	require.NoError(t, err)
+	return n
+}
+
+// requireBlockedThenResult waits until the database reports the contender
+// blocked on a lock (not a timing guess), asserts it has not returned,
+// releases the holder, and returns the contender's result.
+func requireBlockedThenResult(t *testing.T, probe store.Store, contender <-chan error, release chan struct{}, holder <-chan error) error {
+	t.Helper()
+	deadline := time.After(barrierTimeout)
+	for lockWaiters(t, probe) == 0 {
+		select {
+		case err := <-contender:
+			close(release)
+			t.Fatalf("contender did not wait for the holder's lock (returned %v)", err)
+		case <-deadline:
+			close(release)
+			t.Fatal("the database never reported the contender waiting on a lock")
+		case <-time.After(20 * time.Millisecond):
+		}
 	}
 	close(release)
 	require.NoError(t, <-holder)
@@ -87,7 +112,7 @@ func TestLocalUser_ReservationWaitsForConcurrentSaveAccount(t *testing.T) {
 	contender := make(chan error, 1)
 	go func() { contender <- r.B.Store.CreatePendingLocalUser(ctx, localUserFor(accountID, "ana")) }()
 
-	require.NoError(t, requireBlockedThenResult(t, contender, release, holder),
+	require.NoError(t, requireBlockedThenResult(t, r.A.Store, contender, release, holder),
 		"a reservation racing SaveAccount must not fail with a spurious account-not-found")
 	u, err := r.B.Store.GetUserByUserID(ctx, store.LockingStrengthShare, "ana")
 	require.NoError(t, err)
@@ -113,7 +138,7 @@ func TestLocalUser_StaleSaveAccountWaitsForReservation(t *testing.T) {
 	contender := make(chan error, 1)
 	go func() { contender <- r.A.Store.SaveAccount(ctx, stale) }()
 
-	err = requireBlockedThenResult(t, contender, release, holder)
+	err = requireBlockedThenResult(t, r.A.Store, contender, release, holder)
 	sErr, ok := status.FromError(err)
 	require.True(t, ok && err != nil, "expected a status error, got %v", err)
 	require.Equal(t, status.PreconditionFailed, sErr.Type())
@@ -145,7 +170,7 @@ func TestLocalUser_ConcurrentSaveAccountsKeepLocalUser(t *testing.T) {
 	contender := make(chan error, 1)
 	go func() { contender <- r.B.Store.SaveAccount(ctx, stale) }()
 
-	err = requireBlockedThenResult(t, contender, release, holder)
+	err = requireBlockedThenResult(t, r.A.Store, contender, release, holder)
 	sErr, ok := status.FromError(err)
 	require.True(t, ok && err != nil, "expected a status error, got %v", err)
 	require.Equal(t, status.PreconditionFailed, sErr.Type())
@@ -217,52 +242,32 @@ func TestLocalUser_ReservationsSurviveSaveAccountChurn(t *testing.T) {
 	}
 }
 
-// #213 review: SCIM and group flows lock accounts(A) and then a user, while
-// SaveAccount locked account_locks, then users (in the guard), and only then
-// the accounts row. That inverted order deadlocks: SCIM holds the account
-// and waits for the user, SaveAccount holds the user and waits for the
-// account. SaveAccount must take accounts before any user row.
-func TestLocalUser_SaveAccountKeepsAccountBeforeUserLockOrder(t *testing.T) {
+// A stale SaveAccount must not undo a concurrent terminal transition: the
+// snapshot still says "active", the database says "deactivated". Every
+// local-state operation serializes on the same account lock as SaveAccount,
+// which then refuses the stale snapshot.
+func TestLocalUser_SaveAccountCannotRevertConcurrentTermination(t *testing.T) {
 	r := newTwoReplicas(t)
 	ctx := context.Background()
 	accountID, err := r.A.GetAccountIDByUserID(ctx, "owner", "")
 	require.NoError(t, err)
 	require.NoError(t, r.A.Store.CreatePendingLocalUser(ctx, localUserFor(accountID, "ana")))
-	snapshot, err := r.B.Store.GetAccount(ctx, accountID)
+	require.NoError(t, r.A.Store.FinalizeLocalUser(ctx, accountID, "ana"))
+	stale, err := r.B.Store.GetAccount(ctx, accountID)
 	require.NoError(t, err)
 
-	accountLocked, saveUser := make(chan struct{}), make(chan struct{})
-	scim := make(chan error, 1)
-	go func() {
-		scim <- r.A.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
-			if err := tx.LockAccount(ctx, store.LockingStrengthUpdate, accountID); err != nil {
-				close(accountLocked)
-				return err
-			}
-			close(accountLocked)
-			<-saveUser
-			u, err := tx.GetUserByUserID(ctx, store.LockingStrengthUpdate, "owner")
-			if err != nil {
-				return err
-			}
-			u.AutoGroups = append(u.AutoGroups, "g-scim")
-			return tx.SaveUser(ctx, store.LockingStrengthUpdate, u)
-		})
-	}()
-	<-accountLocked
+	started, release, holder := holdInTx(t, r.A.Store, func(tx store.Store) error {
+		return tx.MarkLocalUserTerminal(ctx, accountID, "ana", types.LocalCredentialDeactivated)
+	})
+	<-started
 
-	save := make(chan error, 1)
-	go func() { save <- r.B.Store.SaveAccount(ctx, snapshot) }()
-	// Give SaveAccount time to run as far as it can before it blocks.
-	time.Sleep(blockedFor)
-	close(saveUser)
+	contender := make(chan error, 1)
+	go func() { contender <- r.B.Store.SaveAccount(ctx, stale) }()
 
-	for name, ch := range map[string]chan error{"scim": scim, "save": save} {
-		select {
-		case err := <-ch:
-			require.NoError(t, err, "%s transaction failed; a lock-order inversion makes the database abort one side", name)
-		case <-time.After(barrierTimeout):
-			t.Fatalf("%s transaction never returned", name)
-		}
-	}
+	require.Error(t, requireBlockedThenResult(t, r.A.Store, contender, release, holder),
+		"a snapshot taken before the deactivation must be refused")
+	u, err := r.A.Store.GetUserByUserID(ctx, store.LockingStrengthShare, "ana")
+	require.NoError(t, err)
+	require.Equal(t, types.LocalCredentialDeactivated, u.LocalCredentialState)
+	require.True(t, u.Blocked)
 }

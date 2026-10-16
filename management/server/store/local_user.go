@@ -42,7 +42,13 @@ type persistedLocalState struct {
 //
 // Those transitions belong to the dedicated conditional operations below.
 // There is deliberately no flag to bypass this check.
-func guardLocalUserWrites(tx *gorm.DB, users []*types.User) error {
+//
+// lockRows makes the state read a locking read (FOR UPDATE). Generic user
+// saves need it. SaveAccount does not: it already holds the account mutex
+// that every local-state operation takes, and locking user rows ahead of
+// its own statements would add lock-order edges (users before accounts)
+// that its whole-tree rewrite does not otherwise have.
+func guardLocalUserWrites(tx *gorm.DB, users []*types.User, lockRows bool) error {
 	if len(users) == 0 {
 		return nil
 	}
@@ -59,8 +65,11 @@ func guardLocalUserWrites(tx *gorm.DB, users []*types.User) error {
 	for start := 0; start < len(ids); start += localGuardBatchSize {
 		end := min(start+localGuardBatchSize, len(ids))
 		var rows []persistedLocalState
-		result := tx.Clauses(clause.Locking{Strength: string(LockingStrengthUpdate)}).
-			Model(&types.User{}).
+		read := tx
+		if lockRows {
+			read = tx.Clauses(clause.Locking{Strength: string(LockingStrengthUpdate)})
+		}
+		result := read.Model(&types.User{}).
 			Select("id", colLocalUserState, colLocalUserCleanup).
 			Where("id IN ?", ids[start:end]).
 			Order("id").
@@ -152,26 +161,19 @@ func lockAccount(tx *gorm.DB, accountID string) error {
 
 // guardAccountSnapshot protects local users from SaveAccount, which deletes
 // and re-inserts every user of the account from an in-memory snapshot
-// (ADR-0024 D3). Lock order is account_locks -> accounts -> users. Under
-// those locks it refuses a snapshot that is
-// missing any persisted local user: deleting one would leave its Dex
-// credential without a user record. The users present in the snapshot then
-// go through guardLocalUserWrites. A new account (SaveAccount also creates
-// accounts) simply has no local users.
+// (ADR-0024 D3). It takes the account mutex and nothing else up front: every
+// operation that changes local user state takes the same mutex, so the
+// state read here is stable without row locks. SaveAccount's own statements
+// then lock rows exactly as they do without local users, so this adds no
+// lock-order edge beyond a leading mutex no other flow holds while waiting.
+//
+// It refuses a snapshot missing any persisted local user (deleting one
+// would leave its Dex credential without a user record), and checks the
+// snapshot's local users with guardLocalUserWrites. A new account
+// (SaveAccount also creates accounts) simply has no local users.
 func guardAccountSnapshot(tx *gorm.DB, account *types.Account) error {
 	if err := lockAccount(tx, account.Id); err != nil {
 		return err
-	}
-	// Then the account row itself, before any user row: SCIM and group
-	// flows lock accounts and then users (LockAccount, then SaveUser), so
-	// locking users first here would invert that order and deadlock. The
-	// account_locks mutex already excludes other SaveAccounts, so this row
-	// is not being deleted under us; a new account has no row yet, which is
-	// fine.
-	var existing []string
-	if result := tx.Clauses(clause.Locking{Strength: string(LockingStrengthUpdate)}).
-		Model(&types.Account{}).Where(idQueryCondition, account.Id).Pluck("id", &existing); result.Error != nil {
-		return status.Errorf(status.Internal, "failed to lock account %s: %v", account.Id, result.Error)
 	}
 	var localIDs []string
 	result := tx.Model(&types.User{}).
@@ -186,7 +188,7 @@ func guardAccountSnapshot(tx *gorm.DB, account *types.Account) error {
 				"account %s snapshot is stale: it is missing local user %s", account.Id, id)
 		}
 	}
-	return guardLocalUserWrites(tx, snapshotUsers(account))
+	return guardLocalUserWrites(tx, snapshotUsers(account), false)
 }
 
 func snapshotUsers(account *types.Account) []*types.User {
@@ -200,22 +202,41 @@ func snapshotUsers(account *types.Account) []*types.User {
 // DeletePendingLocalUser discards a reservation that never became a user.
 // It only deletes a record that is still pending.
 func (s *SqlStore) DeletePendingLocalUser(ctx context.Context, accountID, userID string) error {
-	result := s.db.WithContext(ctx).
-		Where(accountAndIDQueryCondition+" AND "+colLocalUserState+" = ?",
+	return s.underAccountLock(ctx, accountID, func(tx *gorm.DB) error {
+		result := tx.Where(accountAndIDQueryCondition+" AND "+colLocalUserState+" = ?",
 			accountID, userID, types.LocalCredentialPending).
-		Delete(&types.User{})
-	return fencedResult(ctx, result, "delete pending local user", userID)
+			Delete(&types.User{})
+		return fencedResult(ctx, result, "delete pending local user", userID)
+	})
+}
+
+// underAccountLock runs op in a transaction holding the account mutex. Every
+// operation that changes local user state goes through it, which is what
+// lets SaveAccount read that state without row locks.
+//
+// The mutex must be the first lock a transaction takes: a caller that runs
+// one of these operations inside an outer transaction must not already hold
+// user or account row locks, or it inverts the order SaveAccount relies on.
+func (s *SqlStore) underAccountLock(ctx context.Context, accountID string, op func(tx *gorm.DB) error) error {
+	return s.transaction(ctx, s.db, func(tx *gorm.DB) error {
+		if err := lockAccount(tx, accountID); err != nil {
+			return err
+		}
+		return op(tx)
+	})
 }
 
 // FinalizeLocalUser completes a create (ADR-0024 D4 step 4): pending and
 // blocked becomes active and unblocked. It is the only operation that may
 // unblock a local user.
 func (s *SqlStore) FinalizeLocalUser(ctx context.Context, accountID, userID string) error {
-	result := s.db.WithContext(ctx).Model(&types.User{}).
-		Where(accountAndIDQueryCondition+" AND "+colLocalUserState+" = ? AND blocked = ? AND "+
-			colLocalUserCleanup+" = ?", accountID, userID, types.LocalCredentialPending, true, false).
-		Updates(map[string]any{colLocalUserState: types.LocalCredentialActive, "blocked": false})
-	return fencedResult(ctx, result, "finalize local user", userID)
+	return s.underAccountLock(ctx, accountID, func(tx *gorm.DB) error {
+		result := tx.Model(&types.User{}).
+			Where(accountAndIDQueryCondition+" AND "+colLocalUserState+" = ? AND blocked = ? AND "+
+				colLocalUserCleanup+" = ?", accountID, userID, types.LocalCredentialPending, true, false).
+			Updates(map[string]any{colLocalUserState: types.LocalCredentialActive, "blocked": false})
+		return fencedResult(ctx, result, "finalize local user", userID)
+	})
 }
 
 // MarkLocalUserTerminal starts a terminal transition (ADR-0024 D7 step 1):
@@ -231,21 +252,25 @@ func (s *SqlStore) MarkLocalUserTerminal(ctx context.Context, accountID, userID 
 	default:
 		return status.Errorf(status.InvalidArgument, "%q is not a terminal local user state", to)
 	}
-	result := s.db.WithContext(ctx).Model(&types.User{}).
-		Where(accountAndIDQueryCondition+" AND "+colLocalUserState+" IN ?", accountID, userID, from).
-		Updates(map[string]any{colLocalUserState: to, "blocked": true, colLocalUserCleanup: true})
-	return fencedResult(ctx, result, fmt.Sprintf("mark local user %s", to), userID)
+	return s.underAccountLock(ctx, accountID, func(tx *gorm.DB) error {
+		result := tx.Model(&types.User{}).
+			Where(accountAndIDQueryCondition+" AND "+colLocalUserState+" IN ?", accountID, userID, from).
+			Updates(map[string]any{colLocalUserState: to, "blocked": true, colLocalUserCleanup: true})
+		return fencedResult(ctx, result, fmt.Sprintf("mark local user %s", to), userID)
+	})
 }
 
 // ClearLocalUserCleanup records that the cleanup of a terminal transition
 // converged (ADR-0024 D7 step 6). It is fenced on the expected state and on
 // a cleanup actually being pending.
 func (s *SqlStore) ClearLocalUserCleanup(ctx context.Context, accountID, userID string, state types.LocalCredentialState) error {
-	result := s.db.WithContext(ctx).Model(&types.User{}).
-		Where(accountAndIDQueryCondition+" AND "+colLocalUserState+" = ? AND "+colLocalUserCleanup+" = ?",
-			accountID, userID, state, true).
-		Update(colLocalUserCleanup, false)
-	return fencedResult(ctx, result, "clear local user cleanup", userID)
+	return s.underAccountLock(ctx, accountID, func(tx *gorm.DB) error {
+		result := tx.Model(&types.User{}).
+			Where(accountAndIDQueryCondition+" AND "+colLocalUserState+" = ? AND "+colLocalUserCleanup+" = ?",
+				accountID, userID, state, true).
+			Update(colLocalUserCleanup, false)
+		return fencedResult(ctx, result, "clear local user cleanup", userID)
+	})
 }
 
 // fencedResult maps a conditional write's outcome: a database error is
