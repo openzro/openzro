@@ -2,8 +2,10 @@
 
 ## Status
 
-**Proposed**. Design gate for
-[openzro/openzro#207](https://github.com/openzro/openzro/issues/207).
+**Accepted**. Implemented in
+[openzro/openzro#208](https://github.com/openzro/openzro/pull/208), with a
+retry refinement in [#209](https://github.com/openzro/openzro/pull/209).
+Design gate for [#207](https://github.com/openzro/openzro/issues/207).
 Companion to [ADR-0024](./0024-scim-provisioned-local-users.md)
 (SCIM-provisioned local users), but independent: either can ship without the
 other.
@@ -49,14 +51,22 @@ depend on per-connector configuration.
 
 `types.Settings.AllowedEmailDomains []string` (gorm JSON serializer), exposed
 as `settings.allowed_email_domains` on `GET/PUT /api/accounts/{id}`. An
-empty or absent list means **off**, which is today's behavior byte-for-byte.
+empty list means **off**, which is today's behavior byte-for-byte.
+
+On `PUT`, an **omitted** field keeps the stored list and an explicit `[]`
+clears it. The merge happens inside the settings transaction, under the
+row lock, so a client that predates the field cannot overwrite a concurrent
+allowlist change (lost update) or silently disable the control.
 
 ### D2 — Normalization and validation (on write)
 
 Each entry is trimmed and lowercased, and a leading `@` is stripped. The
-result must be a syntactically valid DNS name. Duplicates are removed. The
-list holds at most 100 entries. Wildcards are rejected (`*.example.com` is
-not a domain). Invalid input → 400 `InvalidArgument`.
+result must be a syntactically valid DNS name within DNS wire limits (at
+most 253 characters, labels at most 63). Duplicates are removed. The list
+holds at most 100 entries, counted **before** de-duplication so an oversized
+payload is rejected without processing it. Wildcards are rejected
+(`*.example.com` is not a domain). Invalid input → `InvalidArgument`
+(HTTP 422 on the REST API).
 
 ### D3 — Matching
 
@@ -70,8 +80,15 @@ from the list alone.
 | Path | Behavior when the list is non-empty |
 |---|---|
 | `addNewUserToDomainAccount` (first login, HTTP and gRPC) | Deny unless the token's email is **verified** and its domain matches. On deny, no user record is created. |
-| SCIM `POST /Users`, `PUT`/`PATCH` changing `userName` | 400 `invalidValue` unless `userName` is an email with an allowed domain. |
-| `POST /api/users` invite (IdP-manager deployments) | 400 unless the invited email's domain matches. |
+| SCIM `POST /Users`, `PUT`/`PATCH` changing `userName` | `BadRequest` (HTTP 400) unless `userName` is an email with an allowed domain. "Changing" compares case-insensitively (SCIM `userName` is `caseExact=false`), so re-sending an existing `userName` in another case is not a change. |
+| `POST /api/users` invite (IdP-manager deployments) | `BadRequest` (HTTP 400) unless the invited email's domain matches. Checked after the permission check, before any IdP call. |
+
+On the **agent** (gRPC) login path the deny surfaces as
+`codes.PermissionDenied` and is **not retried**. The server-side login retry
+covers only transient errors (`Internal`, and `NotFound` from the IdP cache
+race fixed in 1bfb26cc), skips the wait after the final attempt, and honors
+RPC cancellation. A deny therefore produces exactly one log line and one
+audit event.
 
 **Not enforced:** existing users (the list is not retroactive; use
 `is_blocked`), service users and PATs (no email), and account creation by
@@ -93,13 +110,18 @@ with this setting. It is opt-in, and the deny is logged with the reason.
 - **Login deny:** returns `status.PermissionDenied` with the message
   `email domain not allowed for this account`. The same message is used for
   the unverified case, so an attacker cannot tell which check failed.
-- **Log:** one `Warnf` line per deny, with the user id, the email domain, and
-  the reason (`domain` / `unverified` / `missing`). The full email address is
-  not logged.
+- **Log:** one `Warnf` line per deny, with the account id, the email domain
+  and the reason (`domain` / `unverified` / `missing`). The user id is
+  deliberately omitted: a deployment may configure the email claim as the
+  user id, which would leak the full address.
 - **Audit:** an activity event `UserJoinDeniedByDomain`
   (`user.join.denied_domain`) is recorded on the account, with the domain and
-  reason as metadata. Security teams can then see rejected join attempts
-  without reading server logs.
+  reason as metadata. The initiator is `SystemInitiator`, because the denied
+  identity has no user record to reference. Security teams can see rejected
+  join attempts without reading server logs.
+- **Setting changes:** `account.setting.allowed_email_domains.update` carries
+  the new list. It is recorded as soon as the settings transaction commits, so
+  a later failure in a separate settings backend cannot suppress it.
 
 ### D7 — License posture
 

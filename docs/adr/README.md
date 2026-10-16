@@ -40,4 +40,4 @@ to understand *what* was decided and *why* without opening the issue.
 | [0022](./0022-custom-dns-zones.md) | Custom DNS Zones: private authoritative zones with group-based distribution | Proposed |
 | [0023](./0023-policy-based-multi-resolver-dns.md) | Policy-based DNS response selection for multi-resolver zones | Proposed |
 | [0024](./0024-scim-provisioned-local-users.md) | SCIM-provisioned local users (password credentials in embedded Dex) | Proposed |
-| [0025](./0025-allowed-email-domains.md) | Account-level allowlist of email domains for new users | Proposed |
+| [0025](./0025-allowed-email-domains.md) | Account-level allowlist of email domains for new users | Accepted |
