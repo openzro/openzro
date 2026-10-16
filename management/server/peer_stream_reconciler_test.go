@@ -51,7 +51,10 @@ func TestPeerStreamReconcileInterval(t *testing.T) {
 		want time.Duration
 	}{
 		{env: "", want: defaultPeerStreamReconcileInterval},
-		{env: "0", want: 0},
+		// The reconciler is the safety boundary for lost disconnects; it cannot
+		// be switched off, so 0 is rejected like any other invalid value.
+		{env: "0", want: defaultPeerStreamReconcileInterval},
+		{env: "-5", want: defaultPeerStreamReconcileInterval},
 		{env: "2", want: minPeerStreamReconcileInterval},
 		{env: "45", want: 45 * time.Second},
 		{env: "bogus", want: defaultPeerStreamReconcileInterval},
