@@ -231,6 +231,11 @@ const (
 	DNSRecordUpdated Activity = 105
 	DNSRecordDeleted Activity = 106
 
+	// UserJoinDeniedByDomain records a first login refused by the
+	// account's email-domain allowlist (ADR-0025). Meta carries the
+	// email domain and the reason (domain / unverified / missing).
+	UserJoinDeniedByDomain Activity = 107
+
 	AccountDeleted Activity = 99999
 )
 
@@ -352,6 +357,8 @@ var activityMap = map[Activity]Code{
 	DNSRecordCreated: {"DNS record created", "dns.record.add"},
 	DNSRecordUpdated: {"DNS record updated", "dns.record.update"},
 	DNSRecordDeleted: {"DNS record deleted", "dns.record.delete"},
+
+	UserJoinDeniedByDomain: {"User join denied by email domain", "user.join.denied_domain"},
 }
 
 // StringCode returns a string code of the activity

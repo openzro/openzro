@@ -1454,6 +1454,10 @@ func (am *DefaultAccountManager) addNewUserToDomainAccount(ctx context.Context, 
 	unlockAccount := am.Store.AcquireWriteLockByUID(ctx, domainAccountID)
 	defer unlockAccount()
 
+	if err := am.checkJoinEmailDomain(ctx, domainAccountID, userAuth); err != nil {
+		return "", err
+	}
+
 	newUser := types.NewRegularUser(userAuth.UserId)
 	newUser.AccountID = domainAccountID
 	err := am.Store.SaveUser(ctx, store.LockingStrengthUpdate, newUser)
