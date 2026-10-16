@@ -248,7 +248,11 @@ run the same cleanup under the identity lock:
    the guarantee comes from each replica's stream reconciler, which closes
    the local streams of expired or deleted peers from persisted state at
    least every reconcile interval (default 30 s,
-   `OPENZRO_PEER_STREAM_RECONCILE_INTERVAL_SECONDS`).
+   `OPENZRO_PEER_STREAM_RECONCILE_INTERVAL_SECONDS`, floor 5 s). The
+   reconciler cannot be disabled: `0` is rejected and falls back to the
+   default. During a store outage it skips its passes instead of
+   disconnecting everyone, so the bound is one interval **after the first
+   successful pass** once the store recovers.
 3. **Delete the user's PATs.**
 4. **Revoke refresh tokens**: `ListRefresh(sub)` → `RevokeRefresh` per
    client.
@@ -258,7 +262,8 @@ run the same cleanup under the identity lock:
 
 The response is a success only after step 6. At that point API access, new
 peer logins and the Dex credential are cut, and any still-open peer stream
-closes within one reconcile interval (step 2). If any of steps 2–5 fails, the
+closes within one reconcile interval (step 2), measured from the first
+successful reconcile pass if the store is failing. If any of steps 2–5 fails, the
 record stays blocked and the response is **500**. The IGA retries
 the same request, which resumes the remaining steps. Specifically:
 
