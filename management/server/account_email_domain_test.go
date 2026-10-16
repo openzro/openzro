@@ -185,7 +185,9 @@ func TestUpdateAccountSettings_AllowedEmailDomains(t *testing.T) {
 	// Nil means the API field was omitted. The manager must merge the
 	// current value while holding the row lock rather than trusting a stale
 	// value read by the HTTP handler.
-	got, err = manager.UpdateAccountSettings(context.Background(), accountID, userID, base(nil))
+	omitted := base(nil)
+	omitted.PeerLoginExpirationEnabled = true
+	got, err = manager.UpdateAccountSettings(context.Background(), accountID, userID, omitted)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"example.com", "eng.example.com"}, got.AllowedEmailDomains)
 
