@@ -108,6 +108,9 @@ func NewSqlStore(ctx context.Context, db *gorm.DB, storeEngine types.Engine, met
 		// DNSZone owns the cascade-delete via foreignKey:ZoneID on
 		// its DNSRecord + DNSZoneGroup children.
 		&types.DNSZone{}, &types.DNSRecord{}, &types.DNSZoneGroup{},
+		// Per-account mutex rows for SaveAccount vs local user
+		// reservations (ADR-0024); see accountLock.
+		&accountLock{},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("auto migratePreAuto: %w", err)
@@ -249,6 +252,10 @@ func (s *SqlStore) SaveAccount(ctx context.Context, account *types.Account) erro
 	generateAccountSQLTypes(account)
 
 	err := s.transaction(ctx, s.db, func(tx *gorm.DB) error {
+		if err := guardAccountSnapshot(tx, account); err != nil {
+			return err
+		}
+
 		result := tx.Select(clause.Associations).Delete(account.Policies, "account_id = ?", account.Id)
 		if result.Error != nil {
 			return result.Error
@@ -527,22 +534,32 @@ func (s *SqlStore) SaveUsers(ctx context.Context, lockStrength LockingStrength, 
 		return nil
 	}
 
-	result := s.db.Clauses(clause.Locking{Strength: string(lockStrength)}, clause.OnConflict{UpdateAll: true}).Create(&users)
-	if result.Error != nil {
-		log.WithContext(ctx).Errorf("failed to save users to store: %s", result.Error)
-		return status.Errorf(status.Internal, "failed to save users to store")
-	}
-	return nil
+	return s.transaction(ctx, s.db, func(tx *gorm.DB) error {
+		if err := guardLocalUserWrites(tx, users, true); err != nil {
+			return err
+		}
+		result := tx.Clauses(clause.Locking{Strength: string(lockStrength)}, clause.OnConflict{UpdateAll: true}).Create(&users)
+		if result.Error != nil {
+			log.WithContext(ctx).Errorf("failed to save users to store: %s", result.Error)
+			return status.Errorf(status.Internal, "failed to save users to store")
+		}
+		return nil
+	})
 }
 
 // SaveUser saves the given user to the database.
 func (s *SqlStore) SaveUser(ctx context.Context, lockStrength LockingStrength, user *types.User) error {
-	result := s.db.Clauses(clause.Locking{Strength: string(lockStrength)}).Save(user)
-	if result.Error != nil {
-		log.WithContext(ctx).Errorf("failed to save user to store: %s", result.Error)
-		return status.Errorf(status.Internal, "failed to save user to store")
-	}
-	return nil
+	return s.transaction(ctx, s.db, func(tx *gorm.DB) error {
+		if err := guardLocalUserWrites(tx, []*types.User{user}, true); err != nil {
+			return err
+		}
+		result := tx.Clauses(clause.Locking{Strength: string(lockStrength)}).Save(user)
+		if result.Error != nil {
+			log.WithContext(ctx).Errorf("failed to save user to store: %s", result.Error)
+			return status.Errorf(status.Internal, "failed to save user to store")
+		}
+		return nil
+	})
 }
 
 // SaveGroups saves the given list of groups to the database.

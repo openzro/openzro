@@ -170,6 +170,13 @@ type Store interface {
 	GetPeerByID(ctx context.Context, lockStrength LockingStrength, accountID string, peerID string) (*nbpeer.Peer, error)
 	GetPeersByIDs(ctx context.Context, lockStrength LockingStrength, accountID string, peerIDs []string) (map[string]*nbpeer.Peer, error)
 	GetSyncablePeerIDs(ctx context.Context, peerIDs []string) (map[string]struct{}, error)
+	// Local user lifecycle (ADR-0024). The only operations that may change
+	// LocalCredentialState; each is fenced on the expected current state.
+	CreatePendingLocalUser(ctx context.Context, user *types.User) error
+	DeletePendingLocalUser(ctx context.Context, accountID, userID string) error
+	FinalizeLocalUser(ctx context.Context, accountID, userID string) error
+	MarkLocalUserTerminal(ctx context.Context, accountID, userID string, to types.LocalCredentialState) error
+	ClearLocalUserCleanup(ctx context.Context, accountID, userID string, state types.LocalCredentialState) error
 	GetAccountPeersWithExpiration(ctx context.Context, lockStrength LockingStrength, accountID string) ([]*nbpeer.Peer, error)
 	GetAccountPeersWithInactivity(ctx context.Context, lockStrength LockingStrength, accountID string) ([]*nbpeer.Peer, error)
 	GetAllEphemeralPeers(ctx context.Context, lockStrength LockingStrength) ([]*nbpeer.Peer, error)

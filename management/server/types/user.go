@@ -117,6 +117,48 @@ type User struct {
 	// when present it lets operators correlate back from openZro to
 	// their directory.
 	SCIMExternalID string `gorm:"size:255;index"`
+
+	// LocalCredentialState tracks a password-backed local user provisioned
+	// through SCIM (ADR-0024). Empty for every other user; the column default
+	// keeps rows that predate it non-NULL so SQL predicates see them too. It only changes
+	// through the store's dedicated local-user operations; generic user
+	// saves refuse to change it.
+	LocalCredentialState LocalCredentialState `gorm:"size:16;default:''"`
+
+	// LocalCleanupPending marks a terminal transition (deactivation or
+	// delete) whose revocation steps have not converged yet (ADR-0024 D7).
+	LocalCleanupPending bool `gorm:"default:false"`
+}
+
+// LocalCredentialState is the lifecycle state of a password-backed local
+// user (ADR-0024 D3).
+type LocalCredentialState string
+
+const (
+	// LocalCredentialNone is every user that is not a local password user.
+	LocalCredentialNone LocalCredentialState = ""
+	// LocalCredentialPending is a create in progress or interrupted; the
+	// user is always blocked.
+	LocalCredentialPending LocalCredentialState = "pending"
+	// LocalCredentialActive is a provisioned, usable local user.
+	LocalCredentialActive LocalCredentialState = "active"
+	// LocalCredentialDeactivated is terminal: deactivated via SCIM
+	// active=false, always blocked, still visible to SCIM.
+	LocalCredentialDeactivated LocalCredentialState = "deactivated"
+	// LocalCredentialTombstoned is terminal: deleted via SCIM, always
+	// blocked, hidden from SCIM.
+	LocalCredentialTombstoned LocalCredentialState = "tombstoned"
+)
+
+// MustStayBlocked reports whether a user in this state may never be
+// unblocked by a generic user save (ADR-0024 D3).
+func (s LocalCredentialState) MustStayBlocked() bool {
+	switch s {
+	case LocalCredentialPending, LocalCredentialDeactivated, LocalCredentialTombstoned:
+		return true
+	default:
+		return false
+	}
 }
 
 // IsBlocked returns true if the user is blocked, false otherwise
@@ -262,6 +304,8 @@ func (u *User) Copy() *User {
 		SCIMUserName:         u.SCIMUserName,
 		SCIMDisplayName:      u.SCIMDisplayName,
 		SCIMExternalID:       u.SCIMExternalID,
+		LocalCredentialState: u.LocalCredentialState,
+		LocalCleanupPending:  u.LocalCleanupPending,
 	}
 }
 
