@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -115,6 +116,9 @@ func (am *DefaultAccountManager) SCIMReplaceUser(ctx context.Context, accountID,
 	am.StoreEvent(ctx, callerID, user.Id, accountID, activity.UserBlocked, map[string]any{
 		"scim": "replace", "username": input.UserName,
 	})
+	if err := am.expireBlockedUserPeers(ctx, accountID, user); err != nil {
+		return nil, err
+	}
 	return user, nil
 }
 
@@ -176,6 +180,9 @@ func (am *DefaultAccountManager) SCIMPatchUser(ctx context.Context, accountID, c
 			"scim": "patch",
 		})
 	}
+	if err := am.expireBlockedUserPeers(ctx, accountID, user); err != nil {
+		return nil, err
+	}
 	return user, nil
 }
 
@@ -199,17 +206,18 @@ func (am *DefaultAccountManager) SCIMDeactivateUser(ctx context.Context, account
 		return status.NewUserNotFoundError(userID)
 	}
 
-	if user.Blocked {
-		return nil // already deactivated; idempotent
+	if !user.Blocked {
+		user.Blocked = true
+		if err := am.Store.SaveUser(ctx, store.LockingStrengthUpdate, user); err != nil {
+			return err
+		}
+		am.StoreEvent(ctx, callerID, user.Id, accountID, activity.UserBlocked, map[string]any{
+			"scim": "delete",
+		})
 	}
-	user.Blocked = true
-	if err := am.Store.SaveUser(ctx, store.LockingStrengthUpdate, user); err != nil {
-		return err
-	}
-	am.StoreEvent(ctx, callerID, user.Id, accountID, activity.UserBlocked, map[string]any{
-		"scim": "delete",
-	})
-	return nil
+	// Runs even when the user was already blocked: a repeated DELETE must
+	// still converge on cutting off any peer left connected (#211).
+	return am.expireBlockedUserPeers(ctx, accountID, user)
 }
 
 // SCIMListUsers returns SCIM-provisioned users in the account.
@@ -314,3 +322,24 @@ var (
 	ErrSCIMUserAlreadyExists = errors.New("scim: user with this userName already exists")
 	ErrSCIMUserNotFound      = errors.New("scim: user not found")
 )
+
+// expireBlockedUserPeers cuts off every peer of a blocked user: it marks
+// them login-expired, closes their update channels and refreshes the
+// account's network map, the same way the REST block path does.
+// Blocked=true alone only gates new activity, so without this a SCIM
+// deprovisioning left already-connected peers on the network (#211).
+// It is a no-op for active users and idempotent for blocked ones
+// (expireAndUpdatePeers skips peers that are already expired).
+func (am *DefaultAccountManager) expireBlockedUserPeers(ctx context.Context, accountID string, user *types.User) error {
+	if !user.Blocked {
+		return nil
+	}
+	peers, err := am.Store.GetUserPeers(ctx, store.LockingStrengthShare, accountID, user.Id)
+	if err != nil {
+		return fmt.Errorf("get peers of blocked user %s: %w", user.Id, err)
+	}
+	if err := am.expireAndUpdatePeers(ctx, accountID, peers); err != nil {
+		return fmt.Errorf("expire peers of blocked user %s: %w", user.Id, err)
+	}
+	return nil
+}
