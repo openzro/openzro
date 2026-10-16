@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/openzro/openzro/management/server/store"
 )
 
 // requireClosed waits for ch to be closed, draining any updates queued
@@ -91,4 +93,39 @@ func TestPeersUpdateManager_DisconnectPeersPublishFailure(t *testing.T) {
 	err := m.DisconnectPeers(context.Background(), []string{"p1"})
 	require.Error(t, err)
 	requireClosed(t, ch, "the local close must still happen when the publish fails")
+}
+
+// #212 review: expireAndUpdatePeers skipped already-expired peers entirely,
+// so after a failed disconnect broadcast a retry (an expiry job re-finding
+// the peer, or a repeated block) never disconnected it again. Every peer
+// handed in must be disconnected; only the status write and the event are
+// skipped for peers that are already expired.
+func TestExpireAndUpdatePeers_RetryDisconnectsAlreadyExpiredPeer(t *testing.T) {
+	manager, accountID, user, peerID, _ := setupSCIMUserWithPeer(t)
+	ctx := context.Background()
+
+	// First attempt: the status is persisted, the broadcast fails.
+	manager.peersUpdateManager = NewPeersUpdateManagerWithCluster(nil, failingCoordinator{newFakeCoordinator()})
+	t.Cleanup(manager.peersUpdateManager.Stop)
+	peers, err := manager.Store.GetUserPeers(ctx, store.LockingStrengthShare, accountID, user.Id)
+	require.NoError(t, err)
+	require.Error(t, manager.expireAndUpdatePeers(ctx, accountID, peers))
+
+	// The stream lives on another replica that never got the broadcast.
+	coord := newFakeCoordinator()
+	manager.peersUpdateManager = NewPeersUpdateManagerWithCluster(nil, coord)
+	t.Cleanup(manager.peersUpdateManager.Stop)
+	replicaB := NewPeersUpdateManagerWithCluster(nil, coord)
+	t.Cleanup(replicaB.Stop)
+	onB := replicaB.CreateChannel(ctx, peerID)
+	require.Eventually(t, func() bool {
+		return manager.peersUpdateManager.disconnectSubscribed() && replicaB.disconnectSubscribed()
+	}, 2*time.Second, 10*time.Millisecond)
+
+	// Retry with the peers re-read from the store (already LoginExpired).
+	peers, err = manager.Store.GetUserPeers(ctx, store.LockingStrengthShare, accountID, user.Id)
+	require.NoError(t, err)
+	require.True(t, peers[0].Status.LoginExpired)
+	require.NoError(t, manager.expireAndUpdatePeers(ctx, accountID, peers))
+	requireClosed(t, onB, "retry did not disconnect the already-expired peer")
 }

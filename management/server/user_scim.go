@@ -339,23 +339,9 @@ func (am *DefaultAccountManager) expireBlockedUserPeers(ctx context.Context, acc
 		return fmt.Errorf("get peers of blocked user %s: %w", user.Id, err)
 	}
 
-	// expireAndUpdatePeers skips peers already marked expired, but the
-	// mark is not proof of disconnection: the close may have been lost on
-	// another replica or interrupted. Disconnect those explicitly so a
-	// retried request converges. Collected first because the call below
-	// mutates peer.Status.
-	var alreadyExpired []string
-	for _, peer := range peers {
-		if peer.Status != nil && peer.Status.LoginExpired {
-			alreadyExpired = append(alreadyExpired, peer.ID)
-		}
-	}
-
+	// Disconnects already-expired peers too, so a retried block converges.
 	if err := am.expireAndUpdatePeers(ctx, accountID, peers); err != nil {
 		return fmt.Errorf("expire peers of blocked user %s: %w", user.Id, err)
-	}
-	if err := am.peersUpdateManager.DisconnectPeers(ctx, alreadyExpired); err != nil {
-		return fmt.Errorf("disconnect expired peers of blocked user %s: %w", user.Id, err)
 	}
 	return nil
 }
