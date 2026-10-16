@@ -127,6 +127,15 @@ Idempotency comes from the persisted attempt: a retried create finds its own
 `LocalCleanupPending` marks a terminal transition whose cleanup (D7) has not
 converged yet.
 
+**Terminal means terminal on every path.** The store-level user save
+(`SaveUser`, and through it the REST `SaveOrAddUser(s)` used by the dashboard
+and any internal caller) refuses `Blocked=false` when
+`LocalCredentialState` is `pending`, `deactivated` or `tombstoned`. Only the
+create saga's own finalize step may unblock a `pending` record. Enforcing
+this only in the SCIM handlers would let an administrator or the dashboard
+unblock the same record and revive access tokens issued before the
+deactivation.
+
 Invariant: **a Dex credential never exists for a `sub` that has no openZro
 user record**, and every non-`active` record is `Blocked`. Because a record
 with that `sub` exists, `getAccountIDWithAuthorizationClaims` never takes
@@ -151,7 +160,10 @@ without access, and compensation is only an optimization.
      There is no re-creation in v1.
 3. **Credential preflight**: `ListPasswords`, then find the entry by
    case-insensitive email:
-   - no entry → `CreatePassword(email, hash, user_id)`;
+   - no entry → `CreatePassword(email, hash, user_id)`. If it nonetheless
+     returns `AlreadyExists` (a writer slipped in after the preflight), run
+     the ownership check again and return **409**. This path never adopts the
+     entry automatically;
    - an entry whose `user_id` equals this record's, **and** the record existed
      as `pending` before this request (a resumed attempt) → `UpdatePassword`;
    - anything else → **409**, credential untouched. That covers another
@@ -163,8 +175,9 @@ without access, and compensation is only an optimization.
    `Blocked=false`. A create with `active: false` is rejected (400). An
    inactive local user is a terminal state, not an initial one.
 
-Any failure returns 500, meaning "outcome unknown, retry". The same request
-resumes at step 2 and converges.
+Validation and conflicts are reported as 400 and 409, as stated in each
+step. Any internal failure after the reservation returns 500, meaning
+"outcome unknown, retry". The same request resumes at step 2 and converges.
 
 ### D5 — Credential ownership is verified, never assumed
 
@@ -215,8 +228,10 @@ run the same cleanup under the identity lock:
 1. **Mark** (one transaction): `deactivated` or `tombstoned`, `Blocked=true`,
    `LocalCleanupPending=true`.
 2. **Expire peers**: the `expireAndUpdatePeers` path (#211). Connected peers
-   are marked `LoginExpired`, their channels are closed, and the account is
-   updated.
+   are marked `LoginExpired` and their Sync streams are ended **on every
+   replica** through the cluster-wide `DisconnectPeers` broadcast. Peers that
+   were already expired are disconnected again, because the mark alone does
+   not prove disconnection (#212). A failed broadcast fails the step.
 3. **Delete the user's PATs.**
 4. **Revoke refresh tokens**: `ListRefresh(sub)` → `RevokeRefresh` per
    client.
@@ -237,7 +252,8 @@ the same request, which resumes the remaining steps. Specifically:
   `tombstoned`.
 
 Re-activation (`active: true` on a `deactivated` user) → 400 with an explicit
-"not supported for local users" message. `DELETE /api/users/{id}` on a
+"not supported for local users" message. The same rule holds on the REST
+path (D3). `DELETE /api/users/{id}` on a
 password-backed user follows the same cleanup instead of removing the row,
 so the REST path cannot reopen JIT.
 
@@ -262,7 +278,11 @@ so the REST path cannot reopen JIT.
 replicas. Every saga in D4, D6 and D7 runs under a **deployment-wide identity
 lock**:
 
-- key: `scim-local:` + hex(SHA-256(accountID + "/" + lower(email))). It is
+- key: `scim-local:` + hex(SHA-256(`"dex-password\x00"` + lower(email))). It
+  is **global per email, not per account**, because the Dex password DB is
+  unique per email across the whole deployment: two accounts creating the
+  same email concurrently must contend for one lock. The `dex-password\x00`
+  prefix provides domain separation from any other hashed key. It is still
   per identity, so independent users don't serialize on bcrypt and the
   `ListPasswords` scan, and no plaintext email appears in the key;
 - primitive: the existing `cluster.Coordinator.Lock` (TTL with heartbeat), so
@@ -399,8 +419,16 @@ following before it can ship. These were established in the #206 review.
 - **Peers (D7):** a connected peer is expired and its channel closed on
   `active: false` and on DELETE.
 - **HA (D9)**, with the two-replica harness: concurrent create/create (exactly
-  one 201 and one 409; the stored hash matches the winner), reset/delete, and
+  one 201 and one 409; the stored hash matches the winner), the same email in
+  **two different accounts** on two replicas (one wins, the other gets 409
+  and never updates or deletes the winner's credential), reset/delete, and
   deactivate/delete.
+- **Terminal state (D3):** `Blocked=false` through the REST user update, and
+  through a direct `SaveUser`, is refused for `pending`, `deactivated` and
+  `tombstoned` records.
+- **Disconnect (D7):** a peer stream held by the other replica is closed on
+  deactivate and DELETE, and a retried request closes an already-expired peer
+  whose stream is still open.
 - **Integration** (testcontainers, real Dex with `enablePasswordDB`):
   - SCIM create with password → password-grant login against Dex → the
     token's `sub` equals the SCIM `id` → `GET /api/users/current` returns the
