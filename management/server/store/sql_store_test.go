@@ -3647,3 +3647,25 @@ func TestSqlStore_GetAnyAccountID(t *testing.T) {
 		assert.Empty(t, accountID)
 	})
 }
+
+// ADR-0025: the email-domain allowlist must survive a store round-trip
+// (new JSON column added by AutoMigrate on an existing schema).
+func TestSqlStore_SaveAccountSettings_AllowedEmailDomains(t *testing.T) {
+	store, cleanup, err := NewTestStoreFromSQL(context.Background(), "../testdata/store.sql", t.TempDir())
+	t.Cleanup(cleanup)
+	require.NoError(t, err)
+
+	accountID := "bf1c8084-ba50-4ce7-9439-34653001fc3b"
+
+	settings, err := store.GetAccountSettings(context.Background(), LockingStrengthShare, accountID)
+	require.NoError(t, err)
+	require.Empty(t, settings.AllowedEmailDomains)
+
+	settings.AllowedEmailDomains = []string{"example.com", "eng.example.com"}
+	err = store.SaveAccountSettings(context.Background(), LockingStrengthUpdate, accountID, settings)
+	require.NoError(t, err)
+
+	saved, err := store.GetAccountSettings(context.Background(), LockingStrengthShare, accountID)
+	require.NoError(t, err)
+	require.Equal(t, []string{"example.com", "eng.example.com"}, saved.AllowedEmailDomains)
+}

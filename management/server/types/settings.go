@@ -146,6 +146,12 @@ type Settings struct {
 	// Default: false. Most operators won't need this; turn it on when
 	// the threat model treats the IdP as a separate trust domain.
 	MFAEnforceFederated bool `gorm:"default:false"`
+
+	// AllowedEmailDomains, when non-empty, restricts which users may join
+	// the account on first login (and via SCIM / invite) to those whose
+	// verified email domain is listed exactly. Empty disables the check.
+	// Existing users are never affected. See ADR-0025.
+	AllowedEmailDomains []string `gorm:"serializer:json"`
 }
 
 // Copy copies the Settings struct
@@ -170,6 +176,7 @@ func (s *Settings) Copy() *Settings {
 		AdmissionExemptGroups:           append([]string(nil), s.AdmissionExemptGroups...),
 		MFAEnforceLocal:                 s.MFAEnforceLocal,
 		MFAEnforceFederated:             s.MFAEnforceFederated,
+		AllowedEmailDomains:             append([]string(nil), s.AllowedEmailDomains...),
 
 		ClientUpdateTargetVersion: s.ClientUpdateTargetVersion,
 		ClientUpdateForce:         s.ClientUpdateForce,
