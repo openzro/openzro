@@ -836,11 +836,16 @@ func (am *DefaultAccountManager) GetOrCreateAccountByUser(ctx context.Context, u
 	userObj := account.Users[userID]
 
 	if lowerDomain != "" && account.Domain != lowerDomain && userObj.Role == types.UserRoleOwner {
-		account.Domain = lowerDomain
-		err = am.Store.SaveAccount(ctx, account)
+		// A targeted update of the account row, not SaveAccount: rewriting
+		// the whole account tree to change one column deadlocks with flows
+		// that lock the account and then a user, such as SCIM group
+		// membership (#214).
+		err = am.Store.UpdateAccountDomainAttributes(ctx, account.Id, lowerDomain,
+			account.DomainCategory, account.IsDomainPrimaryAccount)
 		if err != nil {
 			return nil, status.Errorf(status.Internal, "failed updating account with domain")
 		}
+		account.Domain = lowerDomain
 	}
 
 	return account, nil
