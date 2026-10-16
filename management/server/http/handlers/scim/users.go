@@ -11,6 +11,7 @@ import (
 
 	"github.com/openzro/openzro/management/server/account"
 	nbcontext "github.com/openzro/openzro/management/server/context"
+	"github.com/openzro/openzro/management/server/status"
 	"github.com/openzro/openzro/management/server/types"
 )
 
@@ -395,9 +396,29 @@ func parsePaging(q map[string][]string) (startIndex, count int) {
 // matters because many IdP retry loops back off on 409 but treat
 // 500 as a hard outage.
 func mapErrorStatus(err error) int {
-	switch {
-	case err == nil:
+	if err == nil {
 		return http.StatusOK
+	}
+	// Typed errors from the account manager carry their class; map it
+	// before falling back to the message match below, which only exists
+	// for the plain sentinels this package cannot import (cycle).
+	if sErr, ok := status.FromError(err); ok {
+		switch sErr.Type() {
+		case status.InvalidArgument, status.BadRequest, status.PreconditionFailed:
+			return http.StatusBadRequest
+		case status.PermissionDenied:
+			return http.StatusForbidden
+		case status.NotFound:
+			return http.StatusNotFound
+		case status.AlreadyExists, status.UserAlreadyExists:
+			return http.StatusConflict
+		case status.Unauthenticated, status.Unauthorized:
+			return http.StatusUnauthorized
+		default:
+			return http.StatusInternalServerError
+		}
+	}
+	switch {
 	case strings.Contains(err.Error(), "already exists"):
 		return http.StatusConflict
 	case strings.Contains(err.Error(), "not found"):
