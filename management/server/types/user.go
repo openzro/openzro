@@ -119,14 +119,15 @@ type User struct {
 	SCIMExternalID string `gorm:"size:255;index"`
 
 	// LocalCredentialState tracks a password-backed local user provisioned
-	// through SCIM (ADR-0024). Empty for every other user. It only changes
+	// through SCIM (ADR-0024). Empty for every other user; the column default
+	// keeps rows that predate it non-NULL so SQL predicates see them too. It only changes
 	// through the store's dedicated local-user operations; generic user
 	// saves refuse to change it.
-	LocalCredentialState LocalCredentialState `gorm:"size:16"`
+	LocalCredentialState LocalCredentialState `gorm:"size:16;default:''"`
 
 	// LocalCleanupPending marks a terminal transition (deactivation or
 	// delete) whose revocation steps have not converged yet (ADR-0024 D7).
-	LocalCleanupPending bool
+	LocalCleanupPending bool `gorm:"default:false"`
 }
 
 // LocalCredentialState is the lifecycle state of a password-backed local

@@ -143,3 +143,16 @@ func TestSqlStore_GenericSavesCannotReviveLocalUsers(t *testing.T) {
 		require.False(t, getUser(t, s, "plain").Blocked)
 	})
 }
+
+// Rows that predate the local-user columns must read as "not a local
+// user" in SQL predicates too, not only in Go: the columns carry a default
+// so existing rows are not NULL.
+func TestSqlStore_LegacyUsersHaveEmptyLocalState(t *testing.T) {
+	runTestForAllEngines(t, "../testdata/store.sql", func(t *testing.T, s Store) {
+		var nullRows int64
+		require.NoError(t, s.(*SqlStore).db.Model(&types.User{}).
+			Where(colLocalUserState+" IS NULL OR "+colLocalUserCleanup+" IS NULL").
+			Count(&nullRows).Error)
+		require.Zero(t, nullRows)
+	})
+}
