@@ -987,9 +987,14 @@ func (am *DefaultAccountManager) expireAndUpdatePeers(ctx context.Context, accou
 	}
 
 	if len(peerIDs) != 0 {
-		// this will trigger peer disconnect from the management service
-		am.peersUpdateManager.CloseChannels(ctx, peerIDs)
+		// Ends the peers' Sync streams on every replica, not just this one:
+		// in HA the stream may live on another instance. A failed broadcast
+		// is returned after the network-map update so callers can retry.
+		disconnectErr := am.peersUpdateManager.DisconnectPeers(ctx, peerIDs)
 		am.UpdateAccountPeers(ctx, accountID)
+		if disconnectErr != nil {
+			return fmt.Errorf("disconnect expired peers: %w", disconnectErr)
+		}
 	}
 	return nil
 }
