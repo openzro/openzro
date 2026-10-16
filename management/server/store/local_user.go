@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	log "github.com/sirupsen/logrus"
 	"gorm.io/gorm"
@@ -46,10 +47,14 @@ func guardLocalUserWrites(tx *gorm.DB, users []*types.User) error {
 	if len(users) == 0 {
 		return nil
 	}
+	// Sorted and de-duplicated so overlapping batches from concurrent saves
+	// lock rows in the same order, which keeps deadlocks unlikely.
 	ids := make([]string, 0, len(users))
 	for _, u := range users {
 		ids = append(ids, u.Id)
 	}
+	slices.Sort(ids)
+	ids = slices.Compact(ids)
 
 	persisted := make(map[string]persistedLocalState, len(ids))
 	for start := 0; start < len(ids); start += localGuardBatchSize {
