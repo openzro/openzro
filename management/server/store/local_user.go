@@ -14,8 +14,8 @@ import (
 
 // Column names of the local-credential fields on the users table.
 const (
-	colLocalCredentialState = "local_credential_state"
-	colLocalCleanupPending  = "local_cleanup_pending"
+	colLocalUserState   = "local_credential_state"
+	colLocalUserCleanup = "local_cleanup_pending"
 )
 
 // persistedLocalState is the slice of a user row the generic-save guard
@@ -48,7 +48,7 @@ func guardLocalUserWrites(tx *gorm.DB, users []*types.User) error {
 	var rows []persistedLocalState
 	result := tx.Clauses(clause.Locking{Strength: string(LockingStrengthUpdate)}).
 		Model(&types.User{}).
-		Select("id", colLocalCredentialState, colLocalCleanupPending).
+		Select("id", colLocalUserState, colLocalUserCleanup).
 		Where("id IN ?", ids).
 		Find(&rows)
 	if result.Error != nil {
@@ -97,7 +97,7 @@ func (s *SqlStore) CreatePendingLocalUser(ctx context.Context, user *types.User)
 // It only deletes a record that is still pending.
 func (s *SqlStore) DeletePendingLocalUser(ctx context.Context, accountID, userID string) error {
 	result := s.db.WithContext(ctx).
-		Where(accountAndIDQueryCondition+" AND "+colLocalCredentialState+" = ?",
+		Where(accountAndIDQueryCondition+" AND "+colLocalUserState+" = ?",
 			accountID, userID, types.LocalCredentialPending).
 		Delete(&types.User{})
 	return fencedResult(ctx, result, "delete pending local user", userID)
@@ -108,9 +108,9 @@ func (s *SqlStore) DeletePendingLocalUser(ctx context.Context, accountID, userID
 // unblock a local user.
 func (s *SqlStore) FinalizeLocalUser(ctx context.Context, accountID, userID string) error {
 	result := s.db.WithContext(ctx).Model(&types.User{}).
-		Where(accountAndIDQueryCondition+" AND "+colLocalCredentialState+" = ? AND blocked = ? AND "+
-			colLocalCleanupPending+" = ?", accountID, userID, types.LocalCredentialPending, true, false).
-		Updates(map[string]any{colLocalCredentialState: types.LocalCredentialActive, "blocked": false})
+		Where(accountAndIDQueryCondition+" AND "+colLocalUserState+" = ? AND blocked = ? AND "+
+			colLocalUserCleanup+" = ?", accountID, userID, types.LocalCredentialPending, true, false).
+		Updates(map[string]any{colLocalUserState: types.LocalCredentialActive, "blocked": false})
 	return fencedResult(ctx, result, "finalize local user", userID)
 }
 
@@ -128,8 +128,8 @@ func (s *SqlStore) MarkLocalUserTerminal(ctx context.Context, accountID, userID 
 		return status.Errorf(status.InvalidArgument, "%q is not a terminal local user state", to)
 	}
 	result := s.db.WithContext(ctx).Model(&types.User{}).
-		Where(accountAndIDQueryCondition+" AND "+colLocalCredentialState+" IN ?", accountID, userID, from).
-		Updates(map[string]any{colLocalCredentialState: to, "blocked": true, colLocalCleanupPending: true})
+		Where(accountAndIDQueryCondition+" AND "+colLocalUserState+" IN ?", accountID, userID, from).
+		Updates(map[string]any{colLocalUserState: to, "blocked": true, colLocalUserCleanup: true})
 	return fencedResult(ctx, result, fmt.Sprintf("mark local user %s", to), userID)
 }
 
@@ -138,9 +138,9 @@ func (s *SqlStore) MarkLocalUserTerminal(ctx context.Context, accountID, userID 
 // a cleanup actually being pending.
 func (s *SqlStore) ClearLocalUserCleanup(ctx context.Context, accountID, userID string, state types.LocalCredentialState) error {
 	result := s.db.WithContext(ctx).Model(&types.User{}).
-		Where(accountAndIDQueryCondition+" AND "+colLocalCredentialState+" = ? AND "+colLocalCleanupPending+" = ?",
+		Where(accountAndIDQueryCondition+" AND "+colLocalUserState+" = ? AND "+colLocalUserCleanup+" = ?",
 			accountID, userID, state, true).
-		Update(colLocalCleanupPending, false)
+		Update(colLocalUserCleanup, false)
 	return fencedResult(ctx, result, "clear local user cleanup", userID)
 }
 
