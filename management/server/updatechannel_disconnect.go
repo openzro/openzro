@@ -16,6 +16,10 @@ import (
 // and instances that predate it simply never subscribe.
 const peerDisconnectTopic = "mgmt.peers.disconnect"
 
+// peerDisconnectBatchSize caps the peer IDs carried by one disconnect
+// message so a large disconnect never becomes an unbounded broker payload.
+const peerDisconnectBatchSize = 500
+
 // disconnectResubscribeMax caps the backoff between attempts to
 // (re)establish the disconnect subscription after a broker failure.
 const disconnectResubscribeMax = 30 * time.Second
@@ -53,12 +57,15 @@ func (p *PeersUpdateManager) DisconnectPeers(ctx context.Context, peerIDs []stri
 	if p.coordinator == nil {
 		return nil
 	}
-	payload, err := json.Marshal(peerDisconnectMessage{PeerIDs: peerIDs})
-	if err != nil {
-		return fmt.Errorf("marshal peer disconnect: %w", err)
-	}
-	if err := p.coordinator.Publish(ctx, peerDisconnectTopic, payload); err != nil {
-		return fmt.Errorf("publish peer disconnect: %w", err)
+	for start := 0; start < len(peerIDs); start += peerDisconnectBatchSize {
+		end := min(start+peerDisconnectBatchSize, len(peerIDs))
+		payload, err := json.Marshal(peerDisconnectMessage{PeerIDs: peerIDs[start:end]})
+		if err != nil {
+			return fmt.Errorf("marshal peer disconnect: %w", err)
+		}
+		if err := p.coordinator.Publish(ctx, peerDisconnectTopic, payload); err != nil {
+			return fmt.Errorf("publish peer disconnect: %w", err)
+		}
 	}
 	return nil
 }

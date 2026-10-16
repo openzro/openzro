@@ -2,12 +2,16 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
+	nbpeer "github.com/openzro/openzro/management/server/peer"
 	"github.com/openzro/openzro/management/server/store"
 )
 
@@ -95,37 +99,97 @@ func TestPeersUpdateManager_DisconnectPeersPublishFailure(t *testing.T) {
 	requireClosed(t, ch, "the local close must still happen when the publish fails")
 }
 
-// #212 review: expireAndUpdatePeers skipped already-expired peers entirely,
-// so after a failed disconnect broadcast a retry (an expiry job re-finding
-// the peer, or a repeated block) never disconnected it again. Every peer
-// handed in must be disconnected; only the status write and the event are
-// skipped for peers that are already expired.
-func TestExpireAndUpdatePeers_RetryDisconnectsAlreadyExpiredPeer(t *testing.T) {
+// countingCoordinator records the peer-disconnect publishes.
+type countingCoordinator struct {
+	*fakeCoordinator
+	mu      sync.Mutex
+	batches [][]string
+}
+
+func (c *countingCoordinator) Publish(ctx context.Context, topic string, payload []byte) error {
+	if topic == peerDisconnectTopic {
+		var msg peerDisconnectMessage
+		if err := json.Unmarshal(payload, &msg); err != nil {
+			return err
+		}
+		c.mu.Lock()
+		c.batches = append(c.batches, msg.PeerIDs)
+		c.mu.Unlock()
+	}
+	return c.fakeCoordinator.Publish(ctx, topic, payload)
+}
+
+func (c *countingCoordinator) published() [][]string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([][]string(nil), c.batches...)
+}
+
+// #212 review: expiry jobs re-select every peer whose login is past due,
+// including long-expired ones. Broadcasting all of them on each run made
+// the payload and the channel-lock work grow with the account's history.
+// Only newly expired peers are broadcast; the reconciler covers the rest.
+func TestExpireAndUpdatePeers_DoesNotRebroadcastExpiredHistory(t *testing.T) {
+	manager, accountID, _, _, _ := setupSCIMUserWithPeer(t)
+	coord := &countingCoordinator{fakeCoordinator: newFakeCoordinator()}
+	manager.peersUpdateManager = NewPeersUpdateManagerWithCluster(nil, coord)
+	t.Cleanup(manager.peersUpdateManager.Stop)
+
+	history := make([]*nbpeer.Peer, 0, 1000)
+	for i := 0; i < 1000; i++ {
+		history = append(history, &nbpeer.Peer{
+			ID:     fmt.Sprintf("expired-%d", i),
+			Status: &nbpeer.PeerStatus{LoginExpired: true},
+		})
+	}
+
+	require.NoError(t, manager.expireAndUpdatePeers(context.Background(), accountID, history))
+	require.Empty(t, coord.published(), "already-expired peers must not be re-broadcast")
+}
+
+// A large disconnect is split so no single broker message grows without
+// bound.
+func TestPeersUpdateManager_DisconnectPeersBatches(t *testing.T) {
+	coord := &countingCoordinator{fakeCoordinator: newFakeCoordinator()}
+	m := NewPeersUpdateManagerWithCluster(nil, coord)
+	t.Cleanup(m.Stop)
+
+	ids := make([]string, 2*peerDisconnectBatchSize+1)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("p%d", i)
+	}
+	require.NoError(t, m.DisconnectPeers(context.Background(), ids))
+
+	batches := coord.published()
+	require.Len(t, batches, 3)
+	total := 0
+	for _, b := range batches {
+		require.LessOrEqual(t, len(b), peerDisconnectBatchSize)
+		total += len(b)
+	}
+	require.Equal(t, len(ids), total)
+}
+
+// A lost broadcast must still converge. The retry no longer re-broadcasts
+// already-expired peers; the reconciler on the replica holding the stream
+// closes it from persisted state.
+func TestExpireAndUpdatePeers_LostBroadcastConvergesViaReconciler(t *testing.T) {
 	manager, accountID, user, peerID, _ := setupSCIMUserWithPeer(t)
 	ctx := context.Background()
 
-	// First attempt: the status is persisted, the broadcast fails.
+	// The status is persisted, the broadcast fails.
 	manager.peersUpdateManager = NewPeersUpdateManagerWithCluster(nil, failingCoordinator{newFakeCoordinator()})
 	t.Cleanup(manager.peersUpdateManager.Stop)
 	peers, err := manager.Store.GetUserPeers(ctx, store.LockingStrengthShare, accountID, user.Id)
 	require.NoError(t, err)
 	require.Error(t, manager.expireAndUpdatePeers(ctx, accountID, peers))
 
-	// The stream lives on another replica that never got the broadcast.
-	coord := newFakeCoordinator()
-	manager.peersUpdateManager = NewPeersUpdateManagerWithCluster(nil, coord)
-	t.Cleanup(manager.peersUpdateManager.Stop)
-	replicaB := NewPeersUpdateManagerWithCluster(nil, coord)
+	// Replica B holds the stream and never got the broadcast; its next
+	// reconcile pass (same database) closes it.
+	replicaB := NewPeersUpdateManagerWithCluster(nil, newFakeCoordinator())
 	t.Cleanup(replicaB.Stop)
 	onB := replicaB.CreateChannel(ctx, peerID)
-	require.Eventually(t, func() bool {
-		return manager.peersUpdateManager.disconnectSubscribed() && replicaB.disconnectSubscribed()
-	}, 2*time.Second, 10*time.Millisecond)
-
-	// Retry with the peers re-read from the store (already LoginExpired).
-	peers, err = manager.Store.GetUserPeers(ctx, store.LockingStrengthShare, accountID, user.Id)
-	require.NoError(t, err)
-	require.True(t, peers[0].Status.LoginExpired)
-	require.NoError(t, manager.expireAndUpdatePeers(ctx, accountID, peers))
-	requireClosed(t, onB, "retry did not disconnect the already-expired peer")
+	manager.peersUpdateManager = replicaB
+	manager.reconcilePeerStreamsOnce(ctx)
+	requireClosed(t, onB, "reconciler did not close the stream the broadcast missed")
 }

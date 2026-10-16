@@ -959,11 +959,12 @@ func (am *DefaultAccountManager) BuildUserInfosForAccount(ctx context.Context, a
 
 // expireAndUpdatePeers expires all peers of the given user and updates them in the account.
 //
-// Every peer handed in is disconnected, including peers already marked
-// LoginExpired: the mark is persisted before the disconnect, so it is not
-// proof that the stream was closed (a broadcast can fail or be lost). Only
-// the status write and the PeerLoginExpired event are skipped for those, so
-// a retry converges without duplicating either.
+// Only peers that expire in this call are disconnected. Expiry jobs
+// re-select every peer whose login is past due, including long-expired
+// ones, so re-broadcasting those would grow with the account's history.
+// A peer whose earlier disconnect was lost keeps its persisted
+// LoginExpired mark, and the per-replica reconciler closes its stream from
+// that state (runPeerStreamReconciler).
 func (am *DefaultAccountManager) expireAndUpdatePeers(ctx context.Context, accountID string, peers []*nbpeer.Peer) error {
 	settings, err := am.Store.GetAccountSettings(ctx, store.LockingStrengthShare, accountID)
 	if err != nil {
@@ -972,9 +973,7 @@ func (am *DefaultAccountManager) expireAndUpdatePeers(ctx context.Context, accou
 	dnsDomain := am.GetDNSDomain(settings)
 
 	var peerIDs []string
-	newlyExpired := false
 	for _, peer := range peers {
-		peerIDs = append(peerIDs, peer.ID)
 		if peer.Status.LoginExpired {
 			continue
 		}
@@ -990,7 +989,7 @@ func (am *DefaultAccountManager) expireAndUpdatePeers(ctx context.Context, accou
 			peer.UserID, peer.ID, accountID,
 			activity.PeerLoginExpired, peer.EventMeta(dnsDomain),
 		)
-		newlyExpired = true
+		peerIDs = append(peerIDs, peer.ID)
 	}
 
 	if len(peerIDs) == 0 {
@@ -998,12 +997,10 @@ func (am *DefaultAccountManager) expireAndUpdatePeers(ctx context.Context, accou
 	}
 	// Ends the peers' Sync streams on every replica, not just this one: in
 	// HA the stream may live on another instance. The broadcast is the fast
-	// path; reconcilePeerStreams bounds the delay if it is lost. A failed
-	// publish is returned after the network-map update so callers can retry.
+	// path; the reconciler bounds the delay if it is lost. A failed publish
+	// is returned after the network-map update so callers can retry.
 	disconnectErr := am.peersUpdateManager.DisconnectPeers(ctx, peerIDs)
-	if newlyExpired {
-		am.UpdateAccountPeers(ctx, accountID)
-	}
+	am.UpdateAccountPeers(ctx, accountID)
 	if disconnectErr != nil {
 		return fmt.Errorf("disconnect expired peers: %w", disconnectErr)
 	}

@@ -339,9 +339,21 @@ func (am *DefaultAccountManager) expireBlockedUserPeers(ctx context.Context, acc
 		return fmt.Errorf("get peers of blocked user %s: %w", user.Id, err)
 	}
 
-	// Disconnects already-expired peers too, so a retried block converges.
+	// expireAndUpdatePeers only disconnects peers it newly expires. A
+	// repeated SCIM block is an explicit retry, so also re-send the fast-path
+	// disconnect for this user's already-expired peers: the set is bounded
+	// by one user's devices, and the reconciler remains the guarantee.
+	var alreadyExpired []string
+	for _, peer := range peers {
+		if peer.Status != nil && peer.Status.LoginExpired {
+			alreadyExpired = append(alreadyExpired, peer.ID)
+		}
+	}
 	if err := am.expireAndUpdatePeers(ctx, accountID, peers); err != nil {
 		return fmt.Errorf("expire peers of blocked user %s: %w", user.Id, err)
+	}
+	if err := am.peersUpdateManager.DisconnectPeers(ctx, alreadyExpired); err != nil {
+		return fmt.Errorf("disconnect expired peers of blocked user %s: %w", user.Id, err)
 	}
 	return nil
 }
