@@ -32,21 +32,22 @@ func Test_S3HandlerGetUploadURL(t *testing.T) {
 	// localstack/localstack:s3-latest, but LocalStack discontinued
 	// the community s3-only image in v2026.03 (March 23, 2026) and
 	// gates the equivalent behind their paid `localstack-pro` SKU.
-	// MinIO is S3-compatible, pure-Go, and freely usable. The image is
-	// pulled from quay.io: MinIO removed `minio/minio` from Docker Hub in
-	// 2025, and the old reference now fails with "pull access denied" on
-	// any runner without it cached.
+	// MinIO is S3-compatible, pure-Go, and freely usable. Upstream no
+	// longer serves anonymous pulls: `minio/minio` left Docker Hub in
+	// 2025 and quay.io/minio/minio now requires authentication. We use
+	// Chainguard's MinIO build (same `minio` entrypoint) instead.
 	awsRegion := "us-east-1"
 	const minioAccessKey = "minioadmin"
 	const minioSecretKey = "minioadmin"
 
 	ctx := context.Background()
 	containerRequest := testcontainers.ContainerRequest{
-		// Pin to a specific release rather than `:latest` — MinIO ships
-		// behavior changes (notably the 2025 console-removal flap) on
-		// rolling tags, and we don't want a CI run to surprise us with
-		// a newer image that needs different env vars or endpoints.
-		Image:        "quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z",
+		// Pinned by digest: Chainguard's free tier only publishes
+		// `:latest`, and MinIO ships behavior changes (notably the 2025
+		// console-removal flap) on rolling tags, so we don't want a CI
+		// run to pick up a newer image that needs different env vars or
+		// endpoints. Bump the digest deliberately.
+		Image:        "cgr.dev/chainguard/minio:latest@sha256:2136d593beacf4461187035eca949fe49abd589d5079735025c711ca58fee0c8",
 		ExposedPorts: []string{"9000/tcp"},
 		Cmd:          []string{"server", "/data"},
 		Env: map[string]string{

@@ -633,22 +633,31 @@ func (s *GRPCServer) prepareLoginResponse(ctx context.Context, peer *nbpeer.Peer
 func (s *GRPCServer) processJwtToken(ctx context.Context, loginReq *proto.LoginRequest, peerKey wgtypes.Key) (string, error) {
 	userID := ""
 	if loginReq.GetJwtToken() != "" {
+		const maxAttempts = 3
 		var err error
-		for i := 0; i < 3; i++ {
+		for i := 0; i < maxAttempts; i++ {
 			userID, err = s.validateToken(ctx, loginReq.GetJwtToken())
 			if err == nil {
 				break
 			}
-			// Only an internal/cache failure can plausibly recover inside this
-			// short retry window. In particular, retrying a domain-policy deny
-			// creates duplicate audit events and turns a deliberate rejection
-			// into unnecessary load and latency.
-			if status.Code(err) != codes.Internal {
+			// Only transient failures can recover inside this short window:
+			// Internal, and NotFound from redeemInvite while the IdP cache
+			// catches up (1bfb26cc). Deterministic rejections (invalid token,
+			// domain-policy deny, failed precondition) fail fast; retrying a
+			// deny would also duplicate its audit event.
+			if code := status.Code(err); code != codes.Internal && code != codes.NotFound {
+				break
+			}
+			if i == maxAttempts-1 {
 				break
 			}
 			log.WithContext(ctx).Warnf("failed validating JWT token sent from peer %s with error %v. "+
 				"Trying again as it may be due to the IdP cache issue", peerKey.String(), err)
-			time.Sleep(200 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				return "", status.FromContextError(ctx.Err()).Err()
+			case <-time.After(200 * time.Millisecond):
+			}
 		}
 		if err != nil {
 			return "", err
