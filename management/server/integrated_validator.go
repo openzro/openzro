@@ -49,24 +49,21 @@ func (am *DefaultAccountManager) UpdateIntegratedValidator(ctx context.Context, 
 	unlock := am.Store.AcquireWriteLockByUID(ctx, accountID)
 	defer unlock()
 
+	// Only the account's settings change, so update just those columns
+	// rather than rewriting the whole account through SaveAccount, which
+	// deadlocks with flows that lock the account and then a user (#214).
 	return am.Store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
-		a, err := transaction.GetAccount(ctx, accountID)
+		settings, err := transaction.GetAccountSettings(ctx, store.LockingStrengthUpdate, accountID)
 		if err != nil {
 			return err
 		}
 
-		var extra *types.ExtraSettings
-
-		if a.Settings.Extra != nil {
-			extra = a.Settings.Extra
-		} else {
-			extra = &types.ExtraSettings{}
-			a.Settings.Extra = extra
+		if settings.Extra == nil {
+			settings.Extra = &types.ExtraSettings{}
 		}
-
-		extra.IntegratedValidator = validator
-		extra.IntegratedValidatorGroups = groups
-		return transaction.SaveAccount(ctx, a)
+		settings.Extra.IntegratedValidator = validator
+		settings.Extra.IntegratedValidatorGroups = groups
+		return transaction.SaveAccountSettings(ctx, store.LockingStrengthUpdate, accountID, settings)
 	})
 }
 
