@@ -633,8 +633,9 @@ func (s *GRPCServer) prepareLoginResponse(ctx context.Context, peer *nbpeer.Peer
 func (s *GRPCServer) processJwtToken(ctx context.Context, loginReq *proto.LoginRequest, peerKey wgtypes.Key) (string, error) {
 	userID := ""
 	if loginReq.GetJwtToken() != "" {
+		const maxAttempts = 3
 		var err error
-		for i := 0; i < 3; i++ {
+		for i := 0; i < maxAttempts; i++ {
 			userID, err = s.validateToken(ctx, loginReq.GetJwtToken())
 			if err == nil {
 				break
@@ -647,9 +648,16 @@ func (s *GRPCServer) processJwtToken(ctx context.Context, loginReq *proto.LoginR
 			if code := status.Code(err); code != codes.Internal && code != codes.NotFound {
 				break
 			}
+			if i == maxAttempts-1 {
+				break
+			}
 			log.WithContext(ctx).Warnf("failed validating JWT token sent from peer %s with error %v. "+
 				"Trying again as it may be due to the IdP cache issue", peerKey.String(), err)
-			time.Sleep(200 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				return "", status.FromContextError(ctx.Err()).Err()
+			case <-time.After(200 * time.Millisecond):
+			}
 		}
 		if err != nil {
 			return "", err

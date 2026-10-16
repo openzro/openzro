@@ -98,3 +98,26 @@ func TestProcessJWTToken_InvalidTokenNotRetried(t *testing.T) {
 	require.Equal(t, codes.InvalidArgument, grpcstatus.Code(err))
 	require.Equal(t, 1, parses)
 }
+
+func TestProcessJWTToken_CanceledWhileWaitingToRetry(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	calls := 0
+	server := &GRPCServer{
+		accountManager: &mock_server.MockAccountManager{
+			GetAccountIDFromUserAuthFunc: func(context.Context, nbcontext.UserAuth) (string, string, error) {
+				calls++
+				cancel()
+				return "", "", internalstatus.Errorf(internalstatus.NotFound, "user not yet in IdP cache")
+			},
+		},
+		authManager: &auth.MockManager{
+			ValidateAndParseTokenFunc: func(context.Context, string) (nbcontext.UserAuth, *jwt.Token, error) {
+				return nbcontext.UserAuth{UserId: "u"}, &jwt.Token{}, nil
+			},
+		},
+	}
+
+	_, err := server.processJwtToken(ctx, &proto.LoginRequest{JwtToken: "token"}, wgtypes.Key{})
+	require.Equal(t, codes.Canceled, grpcstatus.Code(err))
+	require.Equal(t, 1, calls)
+}
