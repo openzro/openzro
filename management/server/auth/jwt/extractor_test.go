@@ -119,3 +119,34 @@ func TestParseDexSubConnector(t *testing.T) {
 		})
 	}
 }
+
+// The email-domain allowlist (ADR-0025) only trusts an email the IdP
+// asserts as verified, and fails closed when the assertion is absent.
+func TestClaimsExtractor_EmailVerified(t *testing.T) {
+	tests := []struct {
+		name   string
+		claims jwt.MapClaims
+		want   bool
+	}{
+		{name: "bool true", claims: jwt.MapClaims{"sub": "u", "email_verified": true}, want: true},
+		{name: "bool false", claims: jwt.MapClaims{"sub": "u", "email_verified": false}, want: false},
+		{name: "absent", claims: jwt.MapClaims{"sub": "u"}, want: false},
+		// Some IdPs (e.g. AWS Cognito) serialize the claim as a string.
+		{name: "string true", claims: jwt.MapClaims{"sub": "u", "email_verified": "true"}, want: true},
+		{name: "string false", claims: jwt.MapClaims{"sub": "u", "email_verified": "false"}, want: false},
+		{name: "unexpected type", claims: jwt.MapClaims{"sub": "u", "email_verified": 1}, want: false},
+	}
+
+	extractor := NewClaimsExtractor()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			userAuth, err := extractor.ToUserAuth(&jwt.Token{Claims: tc.claims})
+			if err != nil {
+				t.Fatalf("ToUserAuth: %v", err)
+			}
+			if userAuth.EmailVerified != tc.want {
+				t.Fatalf("EmailVerified: got %v want %v", userAuth.EmailVerified, tc.want)
+			}
+		})
+	}
+}

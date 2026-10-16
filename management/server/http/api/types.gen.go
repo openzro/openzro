@@ -390,6 +390,9 @@ type AccountSettings struct {
 	// AdmissionPostureChecks Posture check IDs evaluated as the admission gate when admission_enforcement_enabled is true. ALL listed checks must pass for the peer to be admitted.
 	AdmissionPostureChecks *[]string `json:"admission_posture_checks,omitempty"`
 
+	// AllowedEmailDomains Email domains allowed to join the account on first login, via SCIM, or by invite (ADR-0025). A user joins only with a verified email whose domain matches an entry exactly; subdomains are not implied. Entries are normalized (trimmed, lowercased, leading @ stripped, de-duplicated); wildcards and single labels are rejected; at most 100. Empty disables the check. Existing users are never affected. Omit to keep the current list.
+	AllowedEmailDomains *[]string `json:"allowed_email_domains,omitempty"`
+
 	// ClientUpdateExcludeGroups Subset targeting (openZro #5 Q2): member peers NEVER receive the directive, even if listed in client_update_target_peers. Motivating case mirrors admission_exempt_groups — routing/gateway/server peers that must never silently self-update.
 	ClientUpdateExcludeGroups *[]string `json:"client_update_exclude_groups,omitempty"`
 

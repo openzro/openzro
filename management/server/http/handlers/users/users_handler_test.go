@@ -451,6 +451,33 @@ func TestCreateUser(t *testing.T) {
 	}
 }
 
+func TestCreateUser_EmailDomainBadRequestReturns400(t *testing.T) {
+	name := "Eve"
+	email := "eve@evil.com"
+	body, err := json.Marshal(api.UserCreateRequest{
+		AutoGroups: []string{},
+		Email:      &email,
+		Name:       &name,
+		Role:       "user",
+	})
+	require.NoError(t, err)
+
+	userHandler := initUsersTestData()
+	userHandler.accountManager.(*mock_server.MockAccountManager).CreateUserFunc =
+		func(context.Context, string, string, *types.UserInfo) (*types.UserInfo, error) {
+			return nil, status.Errorf(status.BadRequest, "email domain %q is not allowed for this account", "evil.com")
+		}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/users", bytes.NewReader(body))
+	req = nbcontext.SetUserAuthInRequest(req, nbcontext.UserAuth{
+		UserId: existingUserID, AccountId: existingAccountID,
+	})
+	recorder := httptest.NewRecorder()
+	userHandler.createUser(recorder, req)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+}
+
 func TestInviteUser(t *testing.T) {
 	tt := []struct {
 		name           string

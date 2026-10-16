@@ -130,6 +130,14 @@ func (h *handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 		settings.MFAEnforceFederated = existing.MFAEnforceFederated
 	}
 
+	// Email-domain allowlist (ADR-0025). Leave nil when omitted so the
+	// account manager can preserve the current value inside the same
+	// transaction that writes the other settings. This avoids a lost update
+	// if a legacy client saves concurrently with an allowlist change.
+	if req.Settings.AllowedEmailDomains != nil {
+		settings.AllowedEmailDomains = *req.Settings.AllowedEmailDomains
+	}
+
 	if req.Settings.Extra != nil {
 		var groups []string
 		if req.Settings.Extra.NetworkTrafficLogsGroups != nil {
@@ -306,6 +314,11 @@ func toAccountResponse(accountID string, settings *types.Settings, meta *types.A
 		jwtAllowGroups = []string{}
 	}
 
+	allowedEmailDomains := settings.AllowedEmailDomains
+	if allowedEmailDomains == nil {
+		allowedEmailDomains = []string{}
+	}
+
 	admissionPostureChecks := settings.AdmissionPostureChecks
 	if admissionPostureChecks == nil {
 		admissionPostureChecks = []string{}
@@ -354,6 +367,7 @@ func toAccountResponse(accountID string, settings *types.Settings, meta *types.A
 		ClientUpdateRolloutPercent:      settings.ClientUpdateRolloutPercent,
 		MfaEnforceLocal:                 &settings.MFAEnforceLocal,
 		MfaEnforceFederated:             &settings.MFAEnforceFederated,
+		AllowedEmailDomains:             &allowedEmailDomains,
 	}
 
 	apiOnboarding := api.AccountOnboarding{

@@ -105,6 +105,7 @@ func (c *ClaimsExtractor) ToUserAuth(token *jwt.Token) (nbcontext.UserAuth, erro
 	if email, ok := claims["email"].(string); ok {
 		userAuth.Email = email
 	}
+	userAuth.EmailVerified = parseEmailVerified(claims["email_verified"])
 	if name, ok := claims["name"].(string); ok {
 		userAuth.Name = name
 	} else if pu, ok := claims["preferred_username"].(string); ok {
@@ -233,4 +234,18 @@ func (c *ClaimsExtractor) ToGroups(token *jwt.Token, claimName string) []string 
 	}
 
 	return userJWTGroups
+}
+
+// parseEmailVerified reads the OIDC `email_verified` claim. Most IdPs
+// emit a JSON bool; some (e.g. AWS Cognito) emit the string "true".
+// Anything else, including an absent claim, is treated as unverified.
+func parseEmailVerified(v any) bool {
+	switch val := v.(type) {
+	case bool:
+		return val
+	case string:
+		return val == "true"
+	default:
+		return false
+	}
 }

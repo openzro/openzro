@@ -34,8 +34,15 @@ func (am *DefaultAccountManager) SCIMCreateUser(ctx context.Context, accountID, 
 	if err := validateSCIMUserInput(&input); err != nil {
 		return nil, err
 	}
+	if err := am.checkProvisionedEmailDomain(ctx, accountID, input.UserName); err != nil {
+		return nil, err
+	}
 
-	if existing, err := am.findSCIMUserByUserName(ctx, accountID, input.UserName); err == nil && existing != nil {
+	existing, err := am.findSCIMUserByUserName(ctx, accountID, input.UserName)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
 		return nil, ErrSCIMUserAlreadyExists
 	}
 
@@ -86,6 +93,13 @@ func (am *DefaultAccountManager) SCIMReplaceUser(ctx context.Context, accountID,
 	if user.AccountID != accountID {
 		return nil, status.NewUserNotFoundError(userID)
 	}
+	// SCIM userName has caseExact=false. A case-only re-send is the same
+	// identifier and must retain the legacy-user compatibility exception.
+	if !strings.EqualFold(input.UserName, user.SCIMUserName) {
+		if err := am.checkProvisionedEmailDomain(ctx, accountID, input.UserName); err != nil {
+			return nil, err
+		}
+	}
 
 	user.SCIMUserName = input.UserName
 	user.SCIMDisplayName = input.DisplayName
@@ -125,6 +139,14 @@ func (am *DefaultAccountManager) SCIMPatchUser(ctx context.Context, accountID, c
 	wasBlocked := user.Blocked
 
 	if patch.UserName != nil {
+		if err := validateSCIMUserInput(&account.SCIMUserInput{UserName: *patch.UserName}); err != nil {
+			return nil, err
+		}
+		if !strings.EqualFold(*patch.UserName, user.SCIMUserName) {
+			if err := am.checkProvisionedEmailDomain(ctx, accountID, *patch.UserName); err != nil {
+				return nil, err
+			}
+		}
 		user.SCIMUserName = *patch.UserName
 	}
 	if patch.DisplayName != nil {

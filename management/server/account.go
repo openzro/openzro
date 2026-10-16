@@ -537,6 +537,13 @@ func (am *DefaultAccountManager) UpdateAccountSettings(ctx context.Context, acco
 	if err != nil {
 		return nil, err
 	}
+	// Record the allowlist change as soon as its transaction commits. Extra
+	// settings are updated by a separate backend below and may fail; that must
+	// not suppress the audit record for a change already persisted here.
+	if !slices.Equal(oldSettings.AllowedEmailDomains, newSettings.AllowedEmailDomains) {
+		am.StoreEvent(ctx, userID, accountID, accountID, activity.AccountAllowedEmailDomainsUpdated,
+			map[string]any{"domains": newSettings.AllowedEmailDomains})
+	}
 
 	extraSettingsChanged, err := am.settingsManager.UpdateExtraSettings(ctx, accountID, userID, newSettings.Extra)
 	if err != nil {
@@ -555,7 +562,6 @@ func (am *DefaultAccountManager) UpdateAccountSettings(ctx context.Context, acco
 	if oldSettings.DNSDomain != newSettings.DNSDomain {
 		am.StoreEvent(ctx, userID, accountID, accountID, activity.AccountDNSDomainUpdated, nil)
 	}
-
 	if updateAccountPeers || extraSettingsChanged || groupChangesAffectPeers {
 		go am.UpdateAccountPeers(ctx, accountID)
 	}
@@ -576,6 +582,21 @@ func (am *DefaultAccountManager) validateSettingsUpdate(ctx context.Context, tra
 	if newSettings.DNSDomain != "" && !isDomainValid(newSettings.DNSDomain) {
 		return status.Errorf(status.InvalidArgument, "invalid domain \"%s\" provided for DNS domain", newSettings.DNSDomain)
 	}
+
+	// A nil list represents an API client that omitted the optional field.
+	// Merge it with the current value while the settings row is locked so a
+	// concurrent allowlist update cannot be overwritten by a legacy client.
+	// A non-nil empty slice remains an explicit request to clear the list.
+	if newSettings.AllowedEmailDomains == nil {
+		newSettings.AllowedEmailDomains = append([]string(nil), oldSettings.AllowedEmailDomains...)
+	}
+
+	// Normalize in place so the stored list is canonical (ADR-0025 D2).
+	allowedEmailDomains, err := types.NormalizeAllowedEmailDomains(newSettings.AllowedEmailDomains)
+	if err != nil {
+		return err
+	}
+	newSettings.AllowedEmailDomains = allowedEmailDomains
 
 	peers, err := transaction.GetAccountPeers(ctx, store.LockingStrengthShare, accountID, "", "")
 	if err != nil {
@@ -1453,6 +1474,10 @@ func (am *DefaultAccountManager) addNewPrivateAccount(ctx context.Context, domai
 func (am *DefaultAccountManager) addNewUserToDomainAccount(ctx context.Context, domainAccountID string, userAuth nbcontext.UserAuth) (string, error) {
 	unlockAccount := am.Store.AcquireWriteLockByUID(ctx, domainAccountID)
 	defer unlockAccount()
+
+	if err := am.checkJoinEmailDomain(ctx, domainAccountID, userAuth); err != nil {
+		return "", err
+	}
 
 	newUser := types.NewRegularUser(userAuth.UserId)
 	newUser.AccountID = domainAccountID

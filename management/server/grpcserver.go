@@ -349,7 +349,7 @@ func (s *GRPCServer) validateToken(ctx context.Context, jwtToken string) (string
 	// we need to call this method because if user is new, we will automatically add it to existing or create a new account
 	accountId, _, err := s.accountManager.GetAccountIDFromUserAuth(ctx, userAuth)
 	if err != nil {
-		return "", status.Errorf(codes.Internal, "unable to fetch account with claims, err: %v", err)
+		return "", mapError(ctx, err)
 	}
 
 	if userAuth.AccountId != accountId {
@@ -637,6 +637,13 @@ func (s *GRPCServer) processJwtToken(ctx context.Context, loginReq *proto.LoginR
 		for i := 0; i < 3; i++ {
 			userID, err = s.validateToken(ctx, loginReq.GetJwtToken())
 			if err == nil {
+				break
+			}
+			// Only an internal/cache failure can plausibly recover inside this
+			// short retry window. In particular, retrying a domain-policy deny
+			// creates duplicate audit events and turns a deliberate rejection
+			// into unnecessary load and latency.
+			if status.Code(err) != codes.Internal {
 				break
 			}
 			log.WithContext(ctx).Warnf("failed validating JWT token sent from peer %s with error %v. "+
