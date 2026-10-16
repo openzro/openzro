@@ -235,6 +235,9 @@ const (
 	// account's email-domain allowlist (ADR-0025). Meta carries the
 	// email domain and the reason (domain / unverified / missing).
 	UserJoinDeniedByDomain Activity = 107
+	// AccountAllowedEmailDomainsUpdated records a change to the
+	// account's email-domain allowlist (ADR-0025).
+	AccountAllowedEmailDomainsUpdated Activity = 108
 
 	AccountDeleted Activity = 99999
 )
@@ -358,7 +361,8 @@ var activityMap = map[Activity]Code{
 	DNSRecordUpdated: {"DNS record updated", "dns.record.update"},
 	DNSRecordDeleted: {"DNS record deleted", "dns.record.delete"},
 
-	UserJoinDeniedByDomain: {"User join denied by email domain", "user.join.denied_domain"},
+	UserJoinDeniedByDomain:            {"User join denied by email domain", "user.join.denied_domain"},
+	AccountAllowedEmailDomainsUpdated: {"Account allowed email domains updated", "account.setting.allowed_email_domains.update"},
 }
 
 // StringCode returns a string code of the activity

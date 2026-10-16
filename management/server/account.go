@@ -555,6 +555,10 @@ func (am *DefaultAccountManager) UpdateAccountSettings(ctx context.Context, acco
 	if oldSettings.DNSDomain != newSettings.DNSDomain {
 		am.StoreEvent(ctx, userID, accountID, accountID, activity.AccountDNSDomainUpdated, nil)
 	}
+	if !slices.Equal(oldSettings.AllowedEmailDomains, newSettings.AllowedEmailDomains) {
+		am.StoreEvent(ctx, userID, accountID, accountID, activity.AccountAllowedEmailDomainsUpdated,
+			map[string]any{"domains": newSettings.AllowedEmailDomains})
+	}
 
 	if updateAccountPeers || extraSettingsChanged || groupChangesAffectPeers {
 		go am.UpdateAccountPeers(ctx, accountID)
@@ -576,6 +580,13 @@ func (am *DefaultAccountManager) validateSettingsUpdate(ctx context.Context, tra
 	if newSettings.DNSDomain != "" && !isDomainValid(newSettings.DNSDomain) {
 		return status.Errorf(status.InvalidArgument, "invalid domain \"%s\" provided for DNS domain", newSettings.DNSDomain)
 	}
+
+	// Normalized in place so the stored list is canonical (ADR-0025 D2).
+	allowedEmailDomains, err := types.NormalizeAllowedEmailDomains(newSettings.AllowedEmailDomains)
+	if err != nil {
+		return err
+	}
+	newSettings.AllowedEmailDomains = allowedEmailDomains
 
 	peers, err := transaction.GetAccountPeers(ctx, store.LockingStrengthShare, accountID, "", "")
 	if err != nil {

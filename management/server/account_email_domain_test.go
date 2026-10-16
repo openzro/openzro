@@ -118,3 +118,52 @@ func TestGetAccountIDFromUserAuth_AllowedEmailDomains_ExistingUser(t *testing.T)
 	assert.Equal(t, emailDomainAccountID, accountID)
 	assert.Equal(t, emailDomainOwnerID, userID)
 }
+
+// ADR-0025 D2: the allowlist is normalized on write, invalid entries are
+// rejected, and a change is audited.
+func TestUpdateAccountSettings_AllowedEmailDomains(t *testing.T) {
+	manager, err := createManager(t)
+	require.NoError(t, err)
+	accountID, err := manager.GetAccountIDByUserID(context.Background(), userID, "")
+	require.NoError(t, err)
+
+	base := func(domains []string) *types.Settings {
+		return &types.Settings{
+			PeerLoginExpiration: time.Hour,
+			AllowedEmailDomains: domains,
+			Extra:               &types.ExtraSettings{},
+		}
+	}
+
+	got, err := manager.UpdateAccountSettings(context.Background(), accountID, userID,
+		base([]string{" @Example.COM", "example.com", "eng.example.com"}))
+	require.NoError(t, err)
+	assert.Equal(t, []string{"example.com", "eng.example.com"}, got.AllowedEmailDomains)
+
+	stored, err := manager.Store.GetAccountSettings(context.Background(), store.LockingStrengthShare, accountID)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"example.com", "eng.example.com"}, stored.AllowedEmailDomains)
+
+	assert.Eventually(t, func() bool {
+		events, err := manager.eventStore.Get(context.Background(), accountID, 0, 100, false)
+		if err != nil {
+			return false
+		}
+		for _, e := range events {
+			if e.Activity == activity.AccountAllowedEmailDomainsUpdated {
+				return true
+			}
+		}
+		return false
+	}, 2*time.Second, 20*time.Millisecond, "allowlist change must be audited")
+
+	_, err = manager.UpdateAccountSettings(context.Background(), accountID, userID, base([]string{"*.example.com"}))
+	sErr, ok := status.FromError(err)
+	require.True(t, ok && err != nil, "expected a status error, got %v", err)
+	assert.Equal(t, status.InvalidArgument, sErr.Type())
+
+	stored, err = manager.Store.GetAccountSettings(context.Background(), store.LockingStrengthShare, accountID)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"example.com", "eng.example.com"}, stored.AllowedEmailDomains,
+		"a rejected update must not change the stored list")
+}
