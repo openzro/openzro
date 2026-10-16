@@ -216,3 +216,53 @@ func TestLocalUser_ReservationsSurviveSaveAccountChurn(t *testing.T) {
 		require.Equal(t, types.LocalCredentialPending, u.LocalCredentialState)
 	}
 }
+
+// #213 review: SCIM and group flows lock accounts(A) and then a user, while
+// SaveAccount locked account_locks, then users (in the guard), and only then
+// the accounts row. That inverted order deadlocks: SCIM holds the account
+// and waits for the user, SaveAccount holds the user and waits for the
+// account. SaveAccount must take accounts before any user row.
+func TestLocalUser_SaveAccountKeepsAccountBeforeUserLockOrder(t *testing.T) {
+	r := newTwoReplicas(t)
+	ctx := context.Background()
+	accountID, err := r.A.GetAccountIDByUserID(ctx, "owner", "")
+	require.NoError(t, err)
+	require.NoError(t, r.A.Store.CreatePendingLocalUser(ctx, localUserFor(accountID, "ana")))
+	snapshot, err := r.B.Store.GetAccount(ctx, accountID)
+	require.NoError(t, err)
+
+	accountLocked, saveUser := make(chan struct{}), make(chan struct{})
+	scim := make(chan error, 1)
+	go func() {
+		scim <- r.A.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
+			if err := tx.LockAccount(ctx, store.LockingStrengthUpdate, accountID); err != nil {
+				close(accountLocked)
+				return err
+			}
+			close(accountLocked)
+			<-saveUser
+			u, err := tx.GetUserByUserID(ctx, store.LockingStrengthUpdate, "owner")
+			if err != nil {
+				return err
+			}
+			u.AutoGroups = append(u.AutoGroups, "g-scim")
+			return tx.SaveUser(ctx, store.LockingStrengthUpdate, u)
+		})
+	}()
+	<-accountLocked
+
+	save := make(chan error, 1)
+	go func() { save <- r.B.Store.SaveAccount(ctx, snapshot) }()
+	// Give SaveAccount time to run as far as it can before it blocks.
+	time.Sleep(blockedFor)
+	close(saveUser)
+
+	for name, ch := range map[string]chan error{"scim": scim, "save": save} {
+		select {
+		case err := <-ch:
+			require.NoError(t, err, "%s transaction failed; a lock-order inversion makes the database abort one side", name)
+		case <-time.After(barrierTimeout):
+			t.Fatalf("%s transaction never returned", name)
+		}
+	}
+}

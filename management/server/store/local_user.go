@@ -152,7 +152,8 @@ func lockAccount(tx *gorm.DB, accountID string) error {
 
 // guardAccountSnapshot protects local users from SaveAccount, which deletes
 // and re-inserts every user of the account from an in-memory snapshot
-// (ADR-0024 D3). Under the account lock it refuses a snapshot that is
+// (ADR-0024 D3). Lock order is account_locks -> accounts -> users. Under
+// those locks it refuses a snapshot that is
 // missing any persisted local user: deleting one would leave its Dex
 // credential without a user record. The users present in the snapshot then
 // go through guardLocalUserWrites. A new account (SaveAccount also creates
@@ -160,6 +161,17 @@ func lockAccount(tx *gorm.DB, accountID string) error {
 func guardAccountSnapshot(tx *gorm.DB, account *types.Account) error {
 	if err := lockAccount(tx, account.Id); err != nil {
 		return err
+	}
+	// Then the account row itself, before any user row: SCIM and group
+	// flows lock accounts and then users (LockAccount, then SaveUser), so
+	// locking users first here would invert that order and deadlock. The
+	// account_locks mutex already excludes other SaveAccounts, so this row
+	// is not being deleted under us; a new account has no row yet, which is
+	// fine.
+	var existing []string
+	if result := tx.Clauses(clause.Locking{Strength: string(LockingStrengthUpdate)}).
+		Model(&types.Account{}).Where(idQueryCondition, account.Id).Pluck("id", &existing); result.Error != nil {
+		return status.Errorf(status.Internal, "failed to lock account %s: %v", account.Id, result.Error)
 	}
 	var localIDs []string
 	result := tx.Model(&types.User{}).
