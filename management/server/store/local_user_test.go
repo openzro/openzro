@@ -180,14 +180,31 @@ func TestSqlStore_SaveAccountRefusesSnapshotMissingLocalUsers(t *testing.T) {
 }
 
 // Rows that predate the local-user columns must read as "not a local
-// user" in SQL predicates too, not only in Go: the columns carry a default
-// so existing rows are not NULL.
-func TestSqlStore_LegacyUsersHaveEmptyLocalState(t *testing.T) {
+// user" in SQL predicates too, not only in Go. This drives the real
+// migration on every engine: drop the columns, write a legacy row, let
+// AutoMigrate add them back, and require the default to have filled the
+// existing row instead of NULL.
+func TestSqlStore_LegacyUsersMigrateToEmptyLocalState(t *testing.T) {
 	runTestForAllEngines(t, "../testdata/store.sql", func(t *testing.T, s Store) {
+		db := s.(*SqlStore).db
+		migrator := db.Migrator()
+		require.NoError(t, migrator.DropColumn(&types.User{}, colLocalUserState))
+		require.NoError(t, migrator.DropColumn(&types.User{}, colLocalUserCleanup))
+
+		legacy := newLocalUser("legacy")
+		require.NoError(t, db.Omit(colLocalUserState, colLocalUserCleanup).Create(legacy).Error)
+
+		require.NoError(t, db.AutoMigrate(&types.User{}))
+
 		var nullRows int64
-		require.NoError(t, s.(*SqlStore).db.Model(&types.User{}).
+		require.NoError(t, db.Model(&types.User{}).
 			Where(colLocalUserState+" IS NULL OR "+colLocalUserCleanup+" IS NULL").
 			Count(&nullRows).Error)
-		require.Zero(t, nullRows)
+		require.Zero(t, nullRows, "legacy rows must get the column defaults, not NULL")
+
+		var localCount int64
+		require.NoError(t, db.Model(&types.User{}).
+			Where(colLocalUserState+" <> ?", types.LocalCredentialNone).Count(&localCount).Error)
+		require.Zero(t, localCount, "a legacy row must not look like a local user")
 	})
 }
