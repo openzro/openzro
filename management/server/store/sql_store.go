@@ -1728,6 +1728,34 @@ func (s *SqlStore) GetPeersByIDs(ctx context.Context, lockStrength LockingStreng
 	return peersMap, nil
 }
 
+// syncablePeerIDsBatch bounds the IN list of GetSyncablePeerIDs so large
+// replicas stay under driver placeholder limits.
+const syncablePeerIDsBatch = 500
+
+// GetSyncablePeerIDs returns the subset of peerIDs, across all accounts,
+// that still exist and whose login is not expired — the peers allowed to
+// hold a Sync stream. It backs the per-replica stream reconciler, which
+// closes local streams of every other peer.
+func (s *SqlStore) GetSyncablePeerIDs(ctx context.Context, peerIDs []string) (map[string]struct{}, error) {
+	syncable := make(map[string]struct{}, len(peerIDs))
+	for start := 0; start < len(peerIDs); start += syncablePeerIDsBatch {
+		end := min(start+syncablePeerIDsBatch, len(peerIDs))
+		var ids []string
+		result := s.db.Model(&nbpeer.Peer{}).
+			Where("id IN ? AND (peer_status_login_expired = ? OR peer_status_login_expired IS NULL)",
+				peerIDs[start:end], false).
+			Pluck("id", &ids)
+		if result.Error != nil {
+			log.WithContext(ctx).Errorf("failed to get syncable peer IDs from the store: %s", result.Error)
+			return nil, status.Errorf(status.Internal, "failed to get syncable peer IDs from the store")
+		}
+		for _, id := range ids {
+			syncable[id] = struct{}{}
+		}
+	}
+	return syncable, nil
+}
+
 // GetAccountPeersWithExpiration retrieves a list of peers that have login expiration enabled and added by a user.
 func (s *SqlStore) GetAccountPeersWithExpiration(ctx context.Context, lockStrength LockingStrength, accountID string) ([]*nbpeer.Peer, error) {
 	tx := s.db

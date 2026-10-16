@@ -34,6 +34,13 @@ type peerDisconnectMessage struct {
 // peer reconnected elsewhere ends the new stream as well. It is
 // idempotent, and a peer without a channel anywhere is a no-op.
 //
+// The broadcast is the fast path only. Coordinator pub/sub is
+// at-most-once, and a replica can be between subscriptions, so a nil error
+// does not prove every replica closed the stream. The per-replica
+// reconciler (runPeerStreamReconciler) is the convergent boundary: it
+// closes streams of expired or deleted peers from persisted state, so a
+// missed broadcast is bounded by its interval.
+//
 // The error reports a failed cluster publish; the local close has already
 // happened. Callers that confirm a deprovisioning should fail the request
 // so the client retries.
