@@ -46,8 +46,8 @@ func guardLocalUserWrites(tx *gorm.DB, users []*types.User) error {
 	if len(users) == 0 {
 		return nil
 	}
-	// Sorted and de-duplicated so overlapping batches from concurrent saves
-	// lock rows in the same order, which keeps deadlocks unlikely.
+	// Sorted and de-duplicated, and each batch read ORDER BY id, so
+	// overlapping concurrent saves acquire row locks in the same order.
 	ids := make([]string, 0, len(users))
 	for _, u := range users {
 		ids = append(ids, u.Id)
@@ -63,6 +63,7 @@ func guardLocalUserWrites(tx *gorm.DB, users []*types.User) error {
 			Model(&types.User{}).
 			Select("id", colLocalUserState, colLocalUserCleanup).
 			Where("id IN ?", ids[start:end]).
+			Order("id").
 			Find(&rows)
 		if result.Error != nil {
 			return status.Errorf(status.Internal, "failed to read local user state: %v", result.Error)
@@ -101,9 +102,16 @@ func (s *SqlStore) CreatePendingLocalUser(ctx context.Context, user *types.User)
 	user.Blocked = true
 	return s.transaction(ctx, s.db, func(tx *gorm.DB) error {
 		// Serializes against SaveAccount, which rewrites the account's users
-		// from a snapshot under the same row lock (guardAccountSnapshot).
-		if err := lockAccountRow(tx, user.AccountID); err != nil {
+		// from a snapshot under the same lock (guardAccountSnapshot).
+		if err := lockAccount(tx, user.AccountID); err != nil {
 			return err
+		}
+		var accounts int64
+		if result := tx.Model(&types.Account{}).Where(idQueryCondition, user.AccountID).Count(&accounts); result.Error != nil {
+			return status.Errorf(status.Internal, "failed to read account %s: %v", user.AccountID, result.Error)
+		}
+		if accounts == 0 {
+			return status.NewAccountNotFoundError(user.AccountID)
 		}
 		if result := tx.Create(user); result.Error != nil {
 			log.WithContext(ctx).Errorf("failed to create pending local user %s: %s", user.Id, result.Error)
@@ -113,51 +121,45 @@ func (s *SqlStore) CreatePendingLocalUser(ctx context.Context, user *types.User)
 	})
 }
 
-// lockAccountAttempts bounds how often lockAccountRow re-reads an account
-// row that vanished while it waited for the lock.
-const lockAccountAttempts = 3
+// accountLock is the per-account mutex row that serializes SaveAccount
+// against local user reservations (ADR-0024 D3). It lives in its own table
+// because SaveAccount deletes and re-inserts the account row itself: a lock
+// waiting on that row wakes, under Postgres READ COMMITTED, to a deleted
+// tuple and finds nothing, so it cannot be the serialization point. Rows
+// here are never deleted by SaveAccount.
+type accountLock struct {
+	AccountID string `gorm:"primaryKey;size:255"`
+}
 
-// lockAccountRow takes a row lock on the account, the serialization point
-// between SaveAccount and local user reservations.
-//
-// SaveAccount deletes and re-inserts the very row it locked. Under Postgres
-// READ COMMITTED a SELECT ... FOR UPDATE that waited on it wakes to the
-// deleted tuple and returns no row, although the account exists again as a
-// new tuple. Each retry is a new statement with a fresh snapshot, which sees
-// (and locks) the re-inserted row. Only when every attempt finds nothing is
-// the account treated as absent; reading a vanished row as "new account"
-// would let a stale SaveAccount skip the local-user check.
-func lockAccountRow(tx *gorm.DB, accountID string) error {
-	for attempt := 0; attempt < lockAccountAttempts; attempt++ {
-		var ids []string
-		result := tx.Clauses(clause.Locking{Strength: string(LockingStrengthUpdate)}).
-			Model(&types.Account{}).Where(idQueryCondition, accountID).Pluck("id", &ids)
-		if result.Error != nil {
-			return status.Errorf(status.Internal, "failed to lock account %s: %v", accountID, result.Error)
-		}
-		if len(ids) > 0 {
-			return nil
-		}
+// TableName pins the table name.
+func (accountLock) TableName() string { return "account_locks" }
+
+// lockAccount takes the account's mutex row, creating it on first use.
+// Concurrent first inserts of the same key wait on each other and the loser
+// does nothing, so both sides end up locking the same committed row.
+func lockAccount(tx *gorm.DB, accountID string) error {
+	if result := tx.Clauses(clause.OnConflict{DoNothing: true}).
+		Create(&accountLock{AccountID: accountID}); result.Error != nil {
+		return status.Errorf(status.Internal, "failed to create lock for account %s: %v", accountID, result.Error)
 	}
-	return status.NewAccountNotFoundError(accountID)
+	var row accountLock
+	if result := tx.Clauses(clause.Locking{Strength: string(LockingStrengthUpdate)}).
+		Where("account_id = ?", accountID).Take(&row); result.Error != nil {
+		return status.Errorf(status.Internal, "failed to lock account %s: %v", accountID, result.Error)
+	}
+	return nil
 }
 
 // guardAccountSnapshot protects local users from SaveAccount, which deletes
 // and re-inserts every user of the account from an in-memory snapshot
-// (ADR-0024 D3). Under the account row lock it refuses a snapshot that is
+// (ADR-0024 D3). Under the account lock it refuses a snapshot that is
 // missing any persisted local user: deleting one would leave its Dex
 // credential without a user record. The users present in the snapshot then
-// go through guardLocalUserWrites.
-//
-// The local-user check runs even when the account row is not found.
-// SaveAccount also creates accounts, and a new account simply has no local
-// users; but a row that kept vanishing under concurrent SaveAccounts must
-// not be mistaken for a new account and skip the check.
+// go through guardLocalUserWrites. A new account (SaveAccount also creates
+// accounts) simply has no local users.
 func guardAccountSnapshot(tx *gorm.DB, account *types.Account) error {
-	if err := lockAccountRow(tx, account.Id); err != nil {
-		if sErr, ok := status.FromError(err); !ok || sErr.Type() != status.NotFound {
-			return err
-		}
+	if err := lockAccount(tx, account.Id); err != nil {
+		return err
 	}
 	var localIDs []string
 	result := tx.Model(&types.User{}).

@@ -108,6 +108,9 @@ func NewSqlStore(ctx context.Context, db *gorm.DB, storeEngine types.Engine, met
 		// DNSZone owns the cascade-delete via foreignKey:ZoneID on
 		// its DNSRecord + DNSZoneGroup children.
 		&types.DNSZone{}, &types.DNSRecord{}, &types.DNSZoneGroup{},
+		// Per-account mutex rows for SaveAccount vs local user
+		// reservations (ADR-0024); see accountLock.
+		&accountLock{},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("auto migratePreAuto: %w", err)

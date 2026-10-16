@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -151,4 +153,66 @@ func TestLocalUser_ConcurrentSaveAccountsKeepLocalUser(t *testing.T) {
 	u, err := r.B.Store.GetUserByUserID(ctx, store.LockingStrengthShare, "ana")
 	require.NoError(t, err, "the stale snapshot must not have deleted the local user")
 	require.Equal(t, types.LocalCredentialPending, u.LocalCredentialState)
+}
+
+// #213 review: under heavy contention a bounded retry on the account row
+// eventually let SaveAccount proceed unlocked. The lock now lives in a row
+// SaveAccount never deletes, so this asserts the invariants under churn:
+// every reservation survives and succeeds, and every SaveAccount either
+// succeeds or is refused as stale — never anything else.
+func TestLocalUser_ReservationsSurviveSaveAccountChurn(t *testing.T) {
+	r := newTwoReplicas(t)
+	ctx := context.Background()
+	accountID, err := r.A.GetAccountIDByUserID(ctx, "owner", "")
+	require.NoError(t, err)
+
+	const savers, rounds, reservations = 4, 8, 12
+	var wg sync.WaitGroup
+	saveErrs := make(chan error, savers*rounds)
+	reserveErrs := make(chan error, reservations)
+
+	for i := 0; i < savers; i++ {
+		replica := []*DefaultAccountManager{r.A, r.B}[i%2]
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < rounds; j++ {
+				snapshot, err := replica.Store.GetAccount(ctx, accountID)
+				if err != nil {
+					saveErrs <- err
+					continue
+				}
+				saveErrs <- replica.Store.SaveAccount(ctx, snapshot)
+			}
+		}()
+	}
+	for i := 0; i < reservations; i++ {
+		replica := []*DefaultAccountManager{r.A, r.B}[i%2]
+		id := fmt.Sprintf("churn-%d", i)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			reserveErrs <- replica.Store.CreatePendingLocalUser(ctx, localUserFor(accountID, id))
+		}()
+	}
+	wg.Wait()
+	close(saveErrs)
+	close(reserveErrs)
+
+	for err := range reserveErrs {
+		require.NoError(t, err, "a reservation must not fail because SaveAccount churned the account row")
+	}
+	for err := range saveErrs {
+		if err == nil {
+			continue
+		}
+		sErr, ok := status.FromError(err)
+		require.True(t, ok && sErr.Type() == status.PreconditionFailed,
+			"SaveAccount may only succeed or be refused as stale, got %v", err)
+	}
+	for i := 0; i < reservations; i++ {
+		u, err := r.A.Store.GetUserByUserID(ctx, store.LockingStrengthShare, fmt.Sprintf("churn-%d", i))
+		require.NoError(t, err, "a stale snapshot deleted reservation churn-%d", i)
+		require.Equal(t, types.LocalCredentialPending, u.LocalCredentialState)
+	}
 }

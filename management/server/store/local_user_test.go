@@ -88,6 +88,11 @@ func TestSqlStore_LocalUserLifecycle(t *testing.T) {
 		requireStatus(t, s.MarkLocalUserTerminal(ctx, localTestAccountID, "cid", types.LocalCredentialTombstoned),
 			status.PreconditionFailed)
 
+		// A reservation needs an existing account.
+		missing := newLocalUser("orphan")
+		missing.AccountID = "no-such-account"
+		requireStatus(t, s.CreatePendingLocalUser(ctx, missing), status.NotFound)
+
 		// The account scope is part of the fence.
 		requireStatus(t, s.FinalizeLocalUser(ctx, "other-account", "cid"), status.PreconditionFailed)
 	})
