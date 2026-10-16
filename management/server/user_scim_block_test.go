@@ -132,3 +132,45 @@ func TestSCIMUpdate_ActiveUserKeepsPeers(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, peer.Status.LoginExpired)
 }
+
+// #212 review: a peer can already be LoginExpired while its stream is still
+// open — the expiry was persisted but the close ran on another replica or
+// was interrupted. A repeated DELETE must still close it; expiry status
+// alone is not proof of disconnection.
+func TestSCIMBlock_RetryClosesAlreadyExpiredPeer(t *testing.T) {
+	manager, accountID, user, peerID, ch := setupSCIMUserWithPeer(t)
+
+	stored, err := manager.Store.GetUserByUserID(context.Background(), store.LockingStrengthShare, user.Id)
+	require.NoError(t, err)
+	stored.Blocked = true
+	require.NoError(t, manager.Store.SaveUser(context.Background(), store.LockingStrengthUpdate, stored))
+
+	peer, err := manager.Store.GetPeerByID(context.Background(), store.LockingStrengthShare, accountID, peerID)
+	require.NoError(t, err)
+	peer.MarkLoginExpired(true)
+	require.NoError(t, manager.Store.SavePeerStatus(context.Background(), store.LockingStrengthUpdate, accountID, peerID, *peer.Status))
+
+	require.NoError(t, manager.SCIMDeactivateUser(context.Background(), accountID, userID, user.Id))
+	requirePeerCutOff(t, manager, accountID, peerID, ch)
+}
+
+// #212 review: in HA the peer's Sync stream may live on another replica.
+// Blocking the user on replica A must close the channel held by replica B.
+func TestSCIMBlock_ClosesPeerStreamOnOtherReplica(t *testing.T) {
+	coord := newFakeCoordinator()
+	manager, accountID, user, peerID, _ := setupSCIMUserWithPeer(t)
+
+	// Replica A: the manager under test, now cluster-aware.
+	manager.peersUpdateManager = NewPeersUpdateManagerWithCluster(nil, coord)
+	t.Cleanup(manager.peersUpdateManager.Stop)
+	// Replica B: holds the peer's stream.
+	replicaB := NewPeersUpdateManagerWithCluster(nil, coord)
+	t.Cleanup(replicaB.Stop)
+	onB := replicaB.CreateChannel(context.Background(), peerID)
+	require.Eventually(t, func() bool {
+		return manager.peersUpdateManager.disconnectSubscribed() && replicaB.disconnectSubscribed()
+	}, 2*time.Second, 10*time.Millisecond)
+
+	require.NoError(t, manager.SCIMDeactivateUser(context.Background(), accountID, userID, user.Id))
+	requireClosed(t, onB, "peer stream on the other replica was not closed")
+}
