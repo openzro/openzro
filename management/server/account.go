@@ -417,6 +417,10 @@ func BuildManager(
 	// flips post-connect would keep its session indefinitely.
 	go am.runAdmissionRevalidator(ctx)
 
+	// Bounds how long a peer stays connected when its cluster disconnect
+	// broadcast was lost (at-most-once pub/sub).
+	go am.runPeerStreamReconciler(ctx)
+
 	return am, nil
 }
 

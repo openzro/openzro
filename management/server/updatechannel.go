@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -95,6 +96,9 @@ type PeersUpdateManager struct {
 	// Stop) tears every per-peer subscription down at once.
 	parentCtx    context.Context
 	parentCancel context.CancelFunc
+	// disconnectReady is true while the cluster-wide disconnect
+	// subscription is live (see watchDisconnects).
+	disconnectReady atomic.Bool
 }
 
 // NewPeersUpdateManager returns a new instance of PeersUpdateManager in
@@ -108,7 +112,7 @@ func NewPeersUpdateManager(metrics telemetry.AppMetrics) *PeersUpdateManager {
 // Pass coordinator=nil for single-instance behavior.
 func NewPeersUpdateManagerWithCluster(metrics telemetry.AppMetrics, coordinator cluster.Coordinator) *PeersUpdateManager {
 	parentCtx, cancel := context.WithCancel(context.Background())
-	return &PeersUpdateManager{
+	p := &PeersUpdateManager{
 		peerChannels: make(map[string]chan *UpdateMessage),
 		channelsMux:  &sync.RWMutex{},
 		metrics:      metrics,
@@ -117,6 +121,10 @@ func NewPeersUpdateManagerWithCluster(metrics telemetry.AppMetrics, coordinator 
 		parentCtx:    parentCtx,
 		parentCancel: cancel,
 	}
+	if coordinator != nil {
+		go p.watchDisconnects()
+	}
+	return p
 }
 
 // Stop tears down every cluster subscription. Safe to call once at

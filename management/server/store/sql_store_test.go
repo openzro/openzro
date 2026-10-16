@@ -3669,3 +3669,31 @@ func TestSqlStore_SaveAccountSettings_AllowedEmailDomains(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{"example.com", "eng.example.com"}, saved.AllowedEmailDomains)
 }
+
+// GetSyncablePeerIDs backs the per-replica stream reconciler (#212): a
+// peer may hold a Sync stream only if it still exists and its login is not
+// expired.
+func TestSqlStore_GetSyncablePeerIDs(t *testing.T) {
+	runTestForAllEngines(t, "../testdata/store.sql", func(t *testing.T, store Store) {
+		ctx := context.Background()
+		accountID := "bf1c8084-ba50-4ce7-9439-34653001fc3b"
+		peerID := "ct286bi7qv930dsrrug0"
+
+		got, err := store.GetSyncablePeerIDs(ctx, []string{peerID, "deleted-peer"})
+		require.NoError(t, err)
+		require.Equal(t, map[string]struct{}{peerID: {}}, got)
+
+		peer, err := store.GetPeerByID(ctx, LockingStrengthShare, accountID, peerID)
+		require.NoError(t, err)
+		peer.Status.LoginExpired = true
+		require.NoError(t, store.SavePeerStatus(ctx, LockingStrengthUpdate, accountID, peerID, *peer.Status))
+
+		got, err = store.GetSyncablePeerIDs(ctx, []string{peerID})
+		require.NoError(t, err)
+		require.Empty(t, got)
+
+		got, err = store.GetSyncablePeerIDs(ctx, nil)
+		require.NoError(t, err)
+		require.Empty(t, got)
+	})
+}
