@@ -4,13 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,7 +16,6 @@ import (
 	nbcontext "github.com/openzro/openzro/management/server/context"
 	"github.com/openzro/openzro/management/server/http/api"
 	"github.com/openzro/openzro/management/server/mock_server"
-	"github.com/openzro/openzro/management/server/settings"
 	"github.com/openzro/openzro/management/server/types"
 )
 
@@ -70,7 +67,12 @@ func TestAccounts_PutAllowedEmailDomains(t *testing.T) {
 			var captured *types.Settings
 			h.accountManager.(*mock_server.MockAccountManager).UpdateAccountSettingsFunc =
 				func(_ context.Context, _, _ string, newSettings *types.Settings) (*types.Settings, error) {
-					captured = newSettings
+					captured = newSettings.Copy()
+					// Mirror the real manager's transactional preserve-on-omit
+					// behavior so the handler response contains the stored value.
+					if newSettings.AllowedEmailDomains == nil {
+						newSettings.AllowedEmailDomains = append([]string(nil), tc.existing...)
+					}
 					return newSettings, nil
 				}
 
@@ -79,7 +81,12 @@ func TestAccounts_PutAllowedEmailDomains(t *testing.T) {
 			require.Equal(t, http.StatusOK, recorder.Code, "body=%s", recorder.Body.String())
 
 			require.NotNil(t, captured, "UpdateAccountSettings was not called")
-			assert.ElementsMatch(t, tc.want, captured.AllowedEmailDomains)
+			if tc.field == "" {
+				assert.Nil(t, captured.AllowedEmailDomains,
+					"omission must reach the manager as nil for transactional preservation")
+			} else {
+				assert.ElementsMatch(t, tc.want, captured.AllowedEmailDomains)
+			}
 
 			var got api.Account
 			require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &got))
@@ -87,34 +94,4 @@ func TestAccounts_PutAllowedEmailDomains(t *testing.T) {
 			assert.ElementsMatch(t, tc.want, *got.Settings.AllowedEmailDomains)
 		})
 	}
-}
-
-// ADR-0025: if the stored list cannot be read, an update that omits the
-// field must fail rather than store an empty (disabled) allowlist.
-func TestAccounts_PutAllowedEmailDomains_LookupFailureAborts(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	t.Cleanup(ctrl.Finish)
-	settingsMock := settings.NewMockManager(ctrl)
-	settingsMock.EXPECT().GetSettings(gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(nil, errors.New("store unavailable")).AnyTimes()
-
-	adminUser := types.NewAdminUser("test_user")
-	h := initAccountsTestData(t, &types.Account{
-		Id:       emailDomainsAccountID,
-		Network:  types.NewNetwork(),
-		Users:    map[string]*types.User{adminUser.Id: adminUser},
-		Settings: &types.Settings{PeerLoginExpiration: time.Hour, Extra: &types.ExtraSettings{}},
-	})
-	h.settingsManager = settingsMock
-
-	updated := false
-	h.accountManager.(*mock_server.MockAccountManager).UpdateAccountSettingsFunc =
-		func(_ context.Context, _, _ string, s *types.Settings) (*types.Settings, error) {
-			updated = true
-			return s, nil
-		}
-
-	recorder := putAccountSettings(t, h, `{"settings":{"peer_login_expiration":3600,"peer_login_expiration_enabled":false}}`)
-	assert.NotEqual(t, http.StatusOK, recorder.Code)
-	assert.False(t, updated, "settings must not be written when the allowlist could not be preserved")
 }

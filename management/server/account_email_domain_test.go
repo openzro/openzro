@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -20,6 +21,18 @@ const (
 	emailDomainOwnerID   = "owner-email-domain"
 	emailDomainDomain    = "example.com"
 )
+
+type failingAccountSettingsStore struct {
+	store.Store
+}
+
+func (s *failingAccountSettingsStore) ExecuteInTransaction(ctx context.Context, f func(store.Store) error) error {
+	return f(s)
+}
+
+func (s *failingAccountSettingsStore) GetAccountSettings(context.Context, store.LockingStrength, string) (*types.Settings, error) {
+	return nil, errors.New("store unavailable")
+}
 
 // setupEmailDomainAccount creates the primary private-domain account a new
 // user joins on first login, with the given allowlist.
@@ -98,6 +111,8 @@ func TestGetAccountIDFromUserAuth_AllowedEmailDomains(t *testing.T) {
 				}
 				for _, e := range events {
 					if e.Activity == activity.UserJoinDeniedByDomain && e.Meta["reason"] == tc.wantReason {
+						assert.Equal(t, activity.SystemInitiator, e.InitiatorID)
+						assert.Equal(t, emailDomainAccountID, e.TargetID)
 						return true
 					}
 				}
@@ -166,4 +181,21 @@ func TestUpdateAccountSettings_AllowedEmailDomains(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"example.com", "eng.example.com"}, stored.AllowedEmailDomains,
 		"a rejected update must not change the stored list")
+
+	// Nil means the API field was omitted. The manager must merge the
+	// current value while holding the row lock rather than trusting a stale
+	// value read by the HTTP handler.
+	got, err = manager.UpdateAccountSettings(context.Background(), accountID, userID, base(nil))
+	require.NoError(t, err)
+	assert.Equal(t, []string{"example.com", "eng.example.com"}, got.AllowedEmailDomains)
+
+	// If that transactional read fails, the update aborts rather than
+	// treating omission as an explicit clear.
+	workingStore := manager.Store
+	manager.Store = &failingAccountSettingsStore{Store: workingStore}
+	_, err = manager.UpdateAccountSettings(context.Background(), accountID, userID, base(nil))
+	require.ErrorContains(t, err, "store unavailable")
+	stored, err = workingStore.GetAccountSettings(context.Background(), store.LockingStrengthShare, accountID)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"example.com", "eng.example.com"}, stored.AllowedEmailDomains)
 }

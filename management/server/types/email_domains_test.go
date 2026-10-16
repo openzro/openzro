@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/openzro/openzro/management/server/status"
@@ -14,6 +16,8 @@ func TestNormalizeAllowedEmailDomains(t *testing.T) {
 	for i := range tooMany {
 		tooMany[i] = fmt.Sprintf("d%d.example.com", i)
 	}
+	longLabel := strings.Repeat("a", 64) + ".example.com"
+	longDomain := strings.Repeat("a.", 126) + "aaa"
 
 	tests := []struct {
 		name    string
@@ -32,7 +36,10 @@ func TestNormalizeAllowedEmailDomains(t *testing.T) {
 		{name: "empty entry rejected", in: []string{"   "}, wantErr: true},
 		{name: "email rejected", in: []string{"user@example.com"}, wantErr: true},
 		{name: "leading hyphen label rejected", in: []string{"-a.example.com"}, wantErr: true},
+		{name: "label longer than DNS limit rejected", in: []string{longLabel}, wantErr: true},
+		{name: "domain longer than DNS limit rejected", in: []string{longDomain}, wantErr: true},
 		{name: "too many rejected", in: tooMany, wantErr: true},
+		{name: "too many duplicates rejected before normalization", in: slices.Repeat([]string{"example.com"}, MaxAllowedEmailDomains+1), wantErr: true},
 	}
 
 	for _, tc := range tests {

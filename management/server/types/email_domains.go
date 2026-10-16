@@ -20,11 +20,16 @@ var emailDomainRegexp = regexp.MustCompile(`^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,
 // longer than MaxAllowedEmailDomains. An empty input normalizes to nil,
 // which disables the allowlist.
 func NormalizeAllowedEmailDomains(domains []string) ([]string, error) {
+	if len(domains) > MaxAllowedEmailDomains {
+		return nil, status.Errorf(status.InvalidArgument,
+			"too many email domains: %d, maximum is %d", len(domains), MaxAllowedEmailDomains)
+	}
+
 	var out []string
 	seen := make(map[string]struct{}, len(domains))
 	for _, raw := range domains {
 		d := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(raw)), "@")
-		if !emailDomainRegexp.MatchString(d) {
+		if !validEmailDomain(d) {
 			return nil, status.Errorf(status.InvalidArgument, "invalid email domain %q", raw)
 		}
 		if _, dup := seen[d]; dup {
@@ -33,11 +38,22 @@ func NormalizeAllowedEmailDomains(domains []string) ([]string, error) {
 		seen[d] = struct{}{}
 		out = append(out, d)
 	}
-	if len(out) > MaxAllowedEmailDomains {
-		return nil, status.Errorf(status.InvalidArgument,
-			"too many email domains: %d, maximum is %d", len(out), MaxAllowedEmailDomains)
-	}
 	return out, nil
+}
+
+// validEmailDomain applies the DNS wire limits in addition to the lexical
+// rules above. Without these bounds a syntactically-shaped, multi-megabyte
+// value could be stored in settings and loaded on every join attempt.
+func validEmailDomain(domain string) bool {
+	if len(domain) == 0 || len(domain) > 253 || !emailDomainRegexp.MatchString(domain) {
+		return false
+	}
+	for label := range strings.SplitSeq(domain, ".") {
+		if len(label) > 63 {
+			return false
+		}
+	}
+	return true
 }
 
 // EmailDomainAllowed reports whether email may join the account under

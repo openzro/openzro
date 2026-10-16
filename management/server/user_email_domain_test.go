@@ -30,12 +30,12 @@ func setupProvisioningAccount(t *testing.T, allowed []string) (*DefaultAccountMa
 	return manager, accountID
 }
 
-func requireInvalidArgument(t *testing.T, err error) {
+func requireDomainBadRequest(t *testing.T, err error) {
 	t.Helper()
 	require.Error(t, err)
 	sErr, ok := status.FromError(err)
 	require.True(t, ok, "expected a status error, got %v", err)
-	assert.Equal(t, status.InvalidArgument, sErr.Type())
+	assert.Equal(t, status.BadRequest, sErr.Type())
 }
 
 // ADR-0025 D4: SCIM can only provision userNames in an allowed domain.
@@ -58,7 +58,7 @@ func TestSCIMCreateUser_AllowedEmailDomains(t *testing.T) {
 			user, err := manager.SCIMCreateUser(context.Background(), accountID, userID,
 				account.SCIMUserInput{UserName: tc.userName, Active: true})
 			if tc.wantErr {
-				requireInvalidArgument(t, err)
+				requireDomainBadRequest(t, err)
 				return
 			}
 			require.NoError(t, err)
@@ -88,22 +88,36 @@ func TestSCIMUpdateUser_AllowedEmailDomains(t *testing.T) {
 	_, err = manager.SCIMPatchUser(context.Background(), accountID, userID, legacy.Id,
 		account.SCIMUserPatch{UserName: &same})
 	require.NoError(t, err)
+	caseOnly := "OLD@LEGACY.COM"
+	updated, err := manager.SCIMPatchUser(context.Background(), accountID, userID, legacy.Id,
+		account.SCIMUserPatch{UserName: &caseOnly})
+	require.NoError(t, err, "SCIM userName is case-insensitive; a case-only re-send is unchanged")
+	assert.Equal(t, caseOnly, updated.SCIMUserName)
 
 	// Changed to an unlisted domain: rejected on both.
 	_, err = manager.SCIMReplaceUser(context.Background(), accountID, userID, legacy.Id,
 		account.SCIMUserInput{UserName: "eve@evil.com", Active: true})
-	requireInvalidArgument(t, err)
+	requireDomainBadRequest(t, err)
 	evil := "eve@evil.com"
 	_, err = manager.SCIMPatchUser(context.Background(), accountID, userID, legacy.Id,
 		account.SCIMUserPatch{UserName: &evil})
-	requireInvalidArgument(t, err)
+	requireDomainBadRequest(t, err)
 
 	// Changed to a listed domain: allowed.
 	good := "ana@example.com"
-	updated, err := manager.SCIMPatchUser(context.Background(), accountID, userID, legacy.Id,
+	updated, err = manager.SCIMPatchUser(context.Background(), accountID, userID, legacy.Id,
 		account.SCIMUserPatch{UserName: &good})
 	require.NoError(t, err)
 	assert.Equal(t, good, updated.SCIMUserName)
+
+	// PATCH must not bypass the existing create/replace validation.
+	empty := ""
+	_, err = manager.SCIMPatchUser(context.Background(), accountID, userID, legacy.Id,
+		account.SCIMUserPatch{UserName: &empty})
+	require.Error(t, err)
+	sErr, ok := status.FromError(err)
+	require.True(t, ok)
+	assert.Equal(t, status.InvalidArgument, sErr.Type())
 }
 
 // ADR-0025 D4: the IdP-manager invite rejects unlisted domains before any
@@ -117,5 +131,5 @@ func TestInviteUser_AllowedEmailDomains(t *testing.T) {
 		Name:  "Eve",
 		Role:  string(types.UserRoleUser),
 	})
-	requireInvalidArgument(t, err)
+	requireDomainBadRequest(t, err)
 }

@@ -51,9 +51,13 @@ func (am *DefaultAccountManager) checkJoinEmailDomain(ctx context.Context, accou
 	}
 
 	domain := emailDomainOf(userAuth.Email)
-	log.WithContext(ctx).Warnf("denied first login of user %s to account %s: email domain %q (%s)",
-		userAuth.UserId, accountID, domain, reason)
-	am.StoreEvent(ctx, userAuth.UserId, userAuth.UserId, accountID, activity.UserJoinDeniedByDomain,
+	// Do not include UserId here: deployments may configure the email claim
+	// itself as the user ID, which would defeat the no-full-address logging
+	// guarantee. A denied identity has no persisted user record to reference,
+	// so record the decision as a system event on the account instead.
+	log.WithContext(ctx).Warnf("denied first login to account %s: email domain %q (%s)",
+		accountID, domain, reason)
+	am.StoreEvent(ctx, activity.SystemInitiator, accountID, accountID, activity.UserJoinDeniedByDomain,
 		map[string]any{"domain": domain, "reason": reason})
 
 	return status.Errorf(status.PermissionDenied, errEmailDomainNotAllowed)
@@ -72,8 +76,8 @@ func emailDomainOf(email string) string {
 
 // checkProvisionedEmailDomain enforces AllowedEmailDomains on an email an
 // admin provisions explicitly (SCIM userName, IdP-manager invite). Unlike
-// the login gate this is a caller error, so it returns InvalidArgument and
-// names the rejected domain.
+// the login gate this is a caller error, so it returns BadRequest (HTTP 400
+// in both APIs) and names the rejected domain.
 func (am *DefaultAccountManager) checkProvisionedEmailDomain(ctx context.Context, accountID, email string) error {
 	settings, err := am.Store.GetAccountSettings(ctx, store.LockingStrengthShare, accountID)
 	if err != nil {
@@ -82,5 +86,5 @@ func (am *DefaultAccountManager) checkProvisionedEmailDomain(ctx context.Context
 	if settings.EmailDomainAllowed(email) {
 		return nil
 	}
-	return status.Errorf(status.InvalidArgument, "email domain %q is not allowed for this account", emailDomainOf(email))
+	return status.Errorf(status.BadRequest, "email domain %q is not allowed for this account", emailDomainOf(email))
 }
