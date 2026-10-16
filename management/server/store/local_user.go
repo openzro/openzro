@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 
@@ -114,19 +113,33 @@ func (s *SqlStore) CreatePendingLocalUser(ctx context.Context, user *types.User)
 	})
 }
 
+// lockAccountAttempts bounds how often lockAccountRow re-reads an account
+// row that vanished while it waited for the lock.
+const lockAccountAttempts = 3
+
 // lockAccountRow takes a row lock on the account, the serialization point
 // between SaveAccount and local user reservations.
+//
+// SaveAccount deletes and re-inserts the very row it locked. Under Postgres
+// READ COMMITTED a SELECT ... FOR UPDATE that waited on it wakes to the
+// deleted tuple and returns no row, although the account exists again as a
+// new tuple. Each retry is a new statement with a fresh snapshot, which sees
+// (and locks) the re-inserted row. Only when every attempt finds nothing is
+// the account treated as absent; reading a vanished row as "new account"
+// would let a stale SaveAccount skip the local-user check.
 func lockAccountRow(tx *gorm.DB, accountID string) error {
-	var id string
-	result := tx.Clauses(clause.Locking{Strength: string(LockingStrengthUpdate)}).
-		Model(&types.Account{}).Select("id").Where(idQueryCondition, accountID).Take(&id)
-	if result.Error != nil {
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return status.NewAccountNotFoundError(accountID)
+	for attempt := 0; attempt < lockAccountAttempts; attempt++ {
+		var ids []string
+		result := tx.Clauses(clause.Locking{Strength: string(LockingStrengthUpdate)}).
+			Model(&types.Account{}).Where(idQueryCondition, accountID).Pluck("id", &ids)
+		if result.Error != nil {
+			return status.Errorf(status.Internal, "failed to lock account %s: %v", accountID, result.Error)
 		}
-		return status.Errorf(status.Internal, "failed to lock account %s: %v", accountID, result.Error)
+		if len(ids) > 0 {
+			return nil
+		}
 	}
-	return nil
+	return status.NewAccountNotFoundError(accountID)
 }
 
 // guardAccountSnapshot protects local users from SaveAccount, which deletes
@@ -135,15 +148,16 @@ func lockAccountRow(tx *gorm.DB, accountID string) error {
 // missing any persisted local user: deleting one would leave its Dex
 // credential without a user record. The users present in the snapshot then
 // go through guardLocalUserWrites.
+//
+// The local-user check runs even when the account row is not found.
+// SaveAccount also creates accounts, and a new account simply has no local
+// users; but a row that kept vanishing under concurrent SaveAccounts must
+// not be mistaken for a new account and skip the check.
 func guardAccountSnapshot(tx *gorm.DB, account *types.Account) error {
 	if err := lockAccountRow(tx, account.Id); err != nil {
-		// SaveAccount also creates accounts. A new account has no local
-		// users to protect, and a concurrent reservation for it fails on
-		// the same missing row.
-		if sErr, ok := status.FromError(err); ok && sErr.Type() == status.NotFound {
-			return guardLocalUserWrites(tx, snapshotUsers(account))
+		if sErr, ok := status.FromError(err); !ok || sErr.Type() != status.NotFound {
+			return err
 		}
-		return err
 	}
 	var localIDs []string
 	result := tx.Model(&types.User{}).
@@ -158,7 +172,6 @@ func guardAccountSnapshot(tx *gorm.DB, account *types.Account) error {
 				"account %s snapshot is stale: it is missing local user %s", account.Id, id)
 		}
 	}
-
 	return guardLocalUserWrites(tx, snapshotUsers(account))
 }
 
