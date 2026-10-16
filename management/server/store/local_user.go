@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	log "github.com/sirupsen/logrus"
@@ -12,7 +13,12 @@ import (
 	"github.com/openzro/openzro/management/server/types"
 )
 
-// Column names of the local-credential fields on the users table.
+// localGuardBatchSize bounds the IN list of the guard's state read, so a
+// SaveAccount over a very large account stays under driver placeholder
+// limits.
+const localGuardBatchSize = 400
+
+// Column names of the local-user fields on the users table.
 const (
 	colLocalUserState   = "local_credential_state"
 	colLocalUserCleanup = "local_cleanup_pending"
@@ -45,18 +51,21 @@ func guardLocalUserWrites(tx *gorm.DB, users []*types.User) error {
 		ids = append(ids, u.Id)
 	}
 
-	var rows []persistedLocalState
-	result := tx.Clauses(clause.Locking{Strength: string(LockingStrengthUpdate)}).
-		Model(&types.User{}).
-		Select("id", colLocalUserState, colLocalUserCleanup).
-		Where("id IN ?", ids).
-		Find(&rows)
-	if result.Error != nil {
-		return status.Errorf(status.Internal, "failed to read local user state: %v", result.Error)
-	}
-	persisted := make(map[string]persistedLocalState, len(rows))
-	for _, r := range rows {
-		persisted[r.ID] = r
+	persisted := make(map[string]persistedLocalState, len(ids))
+	for start := 0; start < len(ids); start += localGuardBatchSize {
+		end := min(start+localGuardBatchSize, len(ids))
+		var rows []persistedLocalState
+		result := tx.Clauses(clause.Locking{Strength: string(LockingStrengthUpdate)}).
+			Model(&types.User{}).
+			Select("id", colLocalUserState, colLocalUserCleanup).
+			Where("id IN ?", ids[start:end]).
+			Find(&rows)
+		if result.Error != nil {
+			return status.Errorf(status.Internal, "failed to read local user state: %v", result.Error)
+		}
+		for _, r := range rows {
+			persisted[r.ID] = r
+		}
 	}
 
 	for _, u := range users {
@@ -86,11 +95,74 @@ func (s *SqlStore) CreatePendingLocalUser(ctx context.Context, user *types.User)
 	user.LocalCredentialState = types.LocalCredentialPending
 	user.LocalCleanupPending = false
 	user.Blocked = true
-	if result := s.db.WithContext(ctx).Create(user); result.Error != nil {
-		log.WithContext(ctx).Errorf("failed to create pending local user %s: %s", user.Id, result.Error)
-		return status.Errorf(status.Internal, "failed to create pending local user")
+	return s.transaction(ctx, s.db, func(tx *gorm.DB) error {
+		// Serializes against SaveAccount, which rewrites the account's users
+		// from a snapshot under the same row lock (guardAccountSnapshot).
+		if err := lockAccountRow(tx, user.AccountID); err != nil {
+			return err
+		}
+		if result := tx.Create(user); result.Error != nil {
+			log.WithContext(ctx).Errorf("failed to create pending local user %s: %s", user.Id, result.Error)
+			return status.Errorf(status.Internal, "failed to create pending local user")
+		}
+		return nil
+	})
+}
+
+// lockAccountRow takes a row lock on the account, the serialization point
+// between SaveAccount and local user reservations.
+func lockAccountRow(tx *gorm.DB, accountID string) error {
+	var id string
+	result := tx.Clauses(clause.Locking{Strength: string(LockingStrengthUpdate)}).
+		Model(&types.Account{}).Select("id").Where(idQueryCondition, accountID).Take(&id)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return status.NewAccountNotFoundError(accountID)
+		}
+		return status.Errorf(status.Internal, "failed to lock account %s: %v", accountID, result.Error)
 	}
 	return nil
+}
+
+// guardAccountSnapshot protects local users from SaveAccount, which deletes
+// and re-inserts every user of the account from an in-memory snapshot
+// (ADR-0024 D3). Under the account row lock it refuses a snapshot that is
+// missing any persisted local user: deleting one would leave its Dex
+// credential without a user record. The users present in the snapshot then
+// go through guardLocalUserWrites.
+func guardAccountSnapshot(tx *gorm.DB, account *types.Account) error {
+	if err := lockAccountRow(tx, account.Id); err != nil {
+		// SaveAccount also creates accounts. A new account has no local
+		// users to protect, and a concurrent reservation for it fails on
+		// the same missing row.
+		if sErr, ok := status.FromError(err); ok && sErr.Type() == status.NotFound {
+			return guardLocalUserWrites(tx, snapshotUsers(account))
+		}
+		return err
+	}
+	var localIDs []string
+	result := tx.Model(&types.User{}).
+		Where("account_id = ? AND "+colLocalUserState+" <> ?", account.Id, types.LocalCredentialNone).
+		Pluck("id", &localIDs)
+	if result.Error != nil {
+		return status.Errorf(status.Internal, "failed to read local users of account %s: %v", account.Id, result.Error)
+	}
+	for _, id := range localIDs {
+		if _, ok := account.Users[id]; !ok {
+			return status.Errorf(status.PreconditionFailed,
+				"account %s snapshot is stale: it is missing local user %s", account.Id, id)
+		}
+	}
+
+	return guardLocalUserWrites(tx, snapshotUsers(account))
+}
+
+func snapshotUsers(account *types.Account) []*types.User {
+	users := make([]*types.User, 0, len(account.Users))
+	for _, u := range account.Users {
+		users = append(users, u)
+	}
+	return users
 }
 
 // DeletePendingLocalUser discards a reservation that never became a user.

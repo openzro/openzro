@@ -144,6 +144,41 @@ func TestSqlStore_GenericSavesCannotReviveLocalUsers(t *testing.T) {
 	})
 }
 
+// #213 review: SaveAccount deletes and re-inserts the whole account tree
+// from an in-memory snapshot. A snapshot read before another replica
+// reserved a local user does not contain it, and deleting it would leave
+// a Dex credential without a user record (ADR-0024 D3/D4). SaveAccount must
+// refuse such a stale snapshot instead of deleting local users.
+func TestSqlStore_SaveAccountRefusesSnapshotMissingLocalUsers(t *testing.T) {
+	runTestForAllEngines(t, "../testdata/store.sql", func(t *testing.T, s Store) {
+		ctx := context.Background()
+
+		// Replica A reads its snapshot...
+		snapshot, err := s.GetAccount(ctx, localTestAccountID)
+		require.NoError(t, err)
+		// ...then replica B reserves a local user.
+		require.NoError(t, s.CreatePendingLocalUser(ctx, newLocalUser("pending")))
+
+		requireStatus(t, s.SaveAccount(ctx, snapshot), status.PreconditionFailed)
+		pending := getUser(t, s, "pending")
+		require.Equal(t, types.LocalCredentialPending, pending.LocalCredentialState)
+
+		// The same holds for an active local user dropped from a snapshot.
+		require.NoError(t, s.FinalizeLocalUser(ctx, localTestAccountID, "pending"))
+		snapshot, err = s.GetAccount(ctx, localTestAccountID)
+		require.NoError(t, err)
+		delete(snapshot.Users, "pending")
+		requireStatus(t, s.SaveAccount(ctx, snapshot), status.PreconditionFailed)
+		require.Equal(t, types.LocalCredentialActive, getUser(t, s, "pending").LocalCredentialState)
+
+		// A fresh, complete snapshot still saves.
+		snapshot, err = s.GetAccount(ctx, localTestAccountID)
+		require.NoError(t, err)
+		require.NoError(t, s.SaveAccount(ctx, snapshot))
+		require.Equal(t, types.LocalCredentialActive, getUser(t, s, "pending").LocalCredentialState)
+	})
+}
+
 // Rows that predate the local-user columns must read as "not a local
 // user" in SQL predicates too, not only in Go: the columns carry a default
 // so existing rows are not NULL.

@@ -249,11 +249,7 @@ func (s *SqlStore) SaveAccount(ctx context.Context, account *types.Account) erro
 	generateAccountSQLTypes(account)
 
 	err := s.transaction(ctx, s.db, func(tx *gorm.DB) error {
-		accountUsers := make([]*types.User, 0, len(account.Users))
-		for _, u := range account.Users {
-			accountUsers = append(accountUsers, u)
-		}
-		if err := guardLocalUserWrites(tx, accountUsers); err != nil {
+		if err := guardAccountSnapshot(tx, account); err != nil {
 			return err
 		}
 
