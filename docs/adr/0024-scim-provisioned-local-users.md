@@ -127,14 +127,26 @@ Idempotency comes from the persisted attempt: a retried create finds its own
 `LocalCleanupPending` marks a terminal transition whose cleanup (D7) has not
 converged yet.
 
-**Terminal means terminal on every path.** The store-level user save
-(`SaveUser`, and through it the REST `SaveOrAddUser(s)` used by the dashboard
-and any internal caller) refuses `Blocked=false` when
-`LocalCredentialState` is `pending`, `deactivated` or `tombstoned`. Only the
-create saga's own finalize step may unblock a `pending` record. Enforcing
-this only in the SCIM handlers would let an administrator or the dashboard
-unblock the same record and revive access tokens issued before the
-deactivation.
+**Terminal means terminal on every path.** The rule lives in the store,
+where every write path converges, not in the handlers:
+
+- both user writes, `SqlStore.SaveUser` and `SqlStore.SaveUsers` (the batch
+  upsert behind the REST `SaveOrAddUser(s)` used by the dashboard), run one
+  shared check inside their transaction. It reads the **persisted**
+  `LocalCredentialState` and `Blocked` of each user, and refuses the write if
+  it would set `Blocked=false` on a record that is `pending`, `deactivated`
+  or `tombstoned`, or if it would change `LocalCredentialState` at all. The
+  generic saves never move a user between credential states;
+- the only state transitions go through narrow conditional operations used
+  by the sagas. For example, `FinalizeLocalUser` updates
+  `WHERE id = ? AND local_credential_state = 'pending' AND blocked = true`
+  plus the fencing fields (D9), and fails if no row matched. There is no
+  generic "allow unblock" flag, which would only move the bypass to another
+  caller.
+
+Enforcing this only in the SCIM handlers would let an administrator, the
+dashboard or an internal caller unblock the same record and revive access
+tokens issued before the deactivation.
 
 Invariant: **a Dex credential never exists for a `sub` that has no openZro
 user record**, and every non-`active` record is `Blocked`. Because a record
@@ -227,11 +239,16 @@ run the same cleanup under the identity lock:
 
 1. **Mark** (one transaction): `deactivated` or `tombstoned`, `Blocked=true`,
    `LocalCleanupPending=true`.
-2. **Expire peers**: the `expireAndUpdatePeers` path (#211). Connected peers
-   are marked `LoginExpired` and their Sync streams are ended **on every
-   replica** through the cluster-wide `DisconnectPeers` broadcast. Peers that
-   were already expired are disconnected again, because the mark alone does
-   not prove disconnection (#212). A failed broadcast fails the step.
+2. **Expire peers**: the `expireAndUpdatePeers` path (#211, #212). Every
+   peer of the user is persisted `LoginExpired`, and a disconnect is
+   broadcast to all replicas, including for peers that were already expired.
+   The step succeeds when the status is persisted and the broadcast is
+   published; a failed publish fails the step. Stream closure is
+   **bounded-eventual**, not synchronous. The broadcast is at-most-once, so
+   the guarantee comes from each replica's stream reconciler, which closes
+   the local streams of expired or deleted peers from persisted state at
+   least every reconcile interval (default 30 s,
+   `OPENZRO_PEER_STREAM_RECONCILE_INTERVAL_SECONDS`).
 3. **Delete the user's PATs.**
 4. **Revoke refresh tokens**: `ListRefresh(sub)` → `RevokeRefresh` per
    client.
@@ -239,9 +256,10 @@ run the same cleanup under the identity lock:
    `NotFound` counts as success.
 6. Clear `LocalCleanupPending`.
 
-The response is a success only after step 6. If any of steps 2–5 fails, the
-record stays blocked (access is already denied at the API, at peer login, and
-for any peer already expired) and the response is **500**. The IGA retries
+The response is a success only after step 6. At that point API access, new
+peer logins and the Dex credential are cut, and any still-open peer stream
+closes within one reconcile interval (step 2). If any of steps 2–5 fails, the
+record stays blocked and the response is **500**. The IGA retries
 the same request, which resumes the remaining steps. Specifically:
 
 - `DELETE` on a tombstone with cleanup pending resumes and returns 204;
@@ -423,12 +441,16 @@ following before it can ship. These were established in the #206 review.
   **two different accounts** on two replicas (one wins, the other gets 409
   and never updates or deletes the winner's credential), reset/delete, and
   deactivate/delete.
-- **Terminal state (D3):** `Blocked=false` through the REST user update, and
-  through a direct `SaveUser`, is refused for `pending`, `deactivated` and
-  `tombstoned` records.
+- **Terminal state (D3):** `Blocked=false`, and any change of
+  `LocalCredentialState`, are refused for `pending`, `deactivated` and
+  `tombstoned` records through the REST user update endpoint, a direct
+  `SaveUser`, and a direct `SaveUsers`. `FinalizeLocalUser` fails when the
+  row is not `pending` and blocked, or when the fencing fields changed.
 - **Disconnect (D7):** a peer stream held by the other replica is closed on
-  deactivate and DELETE, and a retried request closes an already-expired peer
-  whose stream is still open.
+  deactivate and DELETE; a retried request closes an already-expired peer
+  whose stream is still open; and, with the broadcast dropped or the owning
+  replica not subscribed, the reconciler closes the stream within one
+  interval.
 - **Integration** (testcontainers, real Dex with `enablePasswordDB`):
   - SCIM create with password → password-grant login against Dex → the
     token's `sub` equals the SCIM `id` → `GET /api/users/current` returns the
