@@ -69,3 +69,18 @@ func emailDomainOf(email string) string {
 	}
 	return strings.ToLower(email[at+1:])
 }
+
+// checkProvisionedEmailDomain enforces AllowedEmailDomains on an email an
+// admin provisions explicitly (SCIM userName, IdP-manager invite). Unlike
+// the login gate this is a caller error, so it returns InvalidArgument and
+// names the rejected domain.
+func (am *DefaultAccountManager) checkProvisionedEmailDomain(ctx context.Context, accountID, email string) error {
+	settings, err := am.Store.GetAccountSettings(ctx, store.LockingStrengthShare, accountID)
+	if err != nil {
+		return fmt.Errorf("get account settings: %w", err)
+	}
+	if settings.EmailDomainAllowed(email) {
+		return nil
+	}
+	return status.Errorf(status.InvalidArgument, "email domain %q is not allowed for this account", emailDomainOf(email))
+}

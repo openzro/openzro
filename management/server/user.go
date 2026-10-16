@@ -95,6 +95,10 @@ func (am *DefaultAccountManager) inviteNewUser(ctx context.Context, accountID, u
 		return nil, status.NewPermissionDeniedError()
 	}
 
+	if err := am.checkProvisionedEmailDomain(ctx, accountID, invite.Email); err != nil {
+		return nil, err
+	}
+
 	initiatorUser, err := am.Store.GetUserByUserID(ctx, store.LockingStrengthShare, userID)
 	if err != nil {
 		return nil, err

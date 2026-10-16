@@ -34,6 +34,9 @@ func (am *DefaultAccountManager) SCIMCreateUser(ctx context.Context, accountID, 
 	if err := validateSCIMUserInput(&input); err != nil {
 		return nil, err
 	}
+	if err := am.checkProvisionedEmailDomain(ctx, accountID, input.UserName); err != nil {
+		return nil, err
+	}
 
 	if existing, err := am.findSCIMUserByUserName(ctx, accountID, input.UserName); err == nil && existing != nil {
 		return nil, ErrSCIMUserAlreadyExists
@@ -86,6 +89,11 @@ func (am *DefaultAccountManager) SCIMReplaceUser(ctx context.Context, accountID,
 	if user.AccountID != accountID {
 		return nil, status.NewUserNotFoundError(userID)
 	}
+	if input.UserName != user.SCIMUserName {
+		if err := am.checkProvisionedEmailDomain(ctx, accountID, input.UserName); err != nil {
+			return nil, err
+		}
+	}
 
 	user.SCIMUserName = input.UserName
 	user.SCIMDisplayName = input.DisplayName
@@ -125,6 +133,11 @@ func (am *DefaultAccountManager) SCIMPatchUser(ctx context.Context, accountID, c
 	wasBlocked := user.Blocked
 
 	if patch.UserName != nil {
+		if *patch.UserName != user.SCIMUserName {
+			if err := am.checkProvisionedEmailDomain(ctx, accountID, *patch.UserName); err != nil {
+				return nil, err
+			}
+		}
 		user.SCIMUserName = *patch.UserName
 	}
 	if patch.DisplayName != nil {
