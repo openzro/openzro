@@ -2,7 +2,7 @@
 
 ## Status
 
-**Proposed** (revised after review on #206). Design gate for
+**Proposed** (revised after two review rounds on #206). Design gate for
 [openzro/openzro#205](https://github.com/openzro/openzro/issues/205);
 **no code lands with this ADR.** Extends the
 SCIM 2.0 surface (`/scim/v2`) and the embedded Dex integration of
@@ -45,7 +45,14 @@ dashboard.
   `UpdatePassword` and `DeletePassword` are keyed by email only and never read
   or change `user_id`. `ListPasswords` returns `user_id` (not the hash).
   `ListRefresh` / `RevokeRefresh` take the token `sub` (plus `client_id` for
-  revoke).
+  revoke). `ListPasswords` also returns `staticPasswords` entries, which Dex
+  treats as read-only (writes to them are rejected).
+- `Blocked=true` gates new activity only. The REST block path also expires the
+  user's peers (`expireAndUpdatePeers`). The SCIM block paths do not, so
+  connected peers keep access (#211). PATs are removed only by the hard
+  `DeleteUser` path.
+- `AcquireWriteLockByUID` is a process-local mutex, not a deployment-wide
+  lock. `cluster.Coordinator.Lock` is the HA primitive.
 - `ServiceProviderConfig` advertises `changePassword: false`
   (`management/server/http/handlers/scim/discovery.go`).
 - Local credentials live only in Dex: `staticPasswords` in
@@ -77,120 +84,143 @@ model (PAT of an admin service user) is already in place. A
 `password` field on `POST /api/users` is a non-goal for v1 (it can reuse
 the same internal function later).
 
-### D2 — Identity binding: precomputed Dex `sub`
+### D2 — Identity binding: one fresh `sub` per provisioning
 
-On create with a `password`, management:
+Each provisioning of a local user gets a **new identity**:
 
-1. derives `user_id = UUIDv5(ns, accountID + "/" + lower(email))`, where `ns`
-   is a fixed openZro namespace UUID;
-2. computes `sub = base64.RawURLEncoding(proto{1: user_id, 2: "local"})` with
-   an encoder placed next to `parseDexSubConnector`;
-3. stores the `types.User` with `Id = sub`.
+1. management generates a random `user_id` (UUIDv4) when it reserves the user
+   (D4 step 2) and persists it on the `pending` record;
+2. it computes `sub = base64.RawURLEncoding(proto{1: user_id, 2: "local"})`
+   with an encoder placed next to `parseDexSubConnector`;
+3. the `types.User` is stored with `Id = sub`.
 
 On first login, `GetAccountIDByUserID(sub)` finds the pre-provisioned user,
 with role and `AutoGroups` already set. No JIT user is created.
 
-The `user_id` is **deterministic** (not random) so a retried create after a
-partial failure converges on the same identity instead of minting a second
-one (see D4).
+A `sub` is **never reused**. Re-creating a user after `DELETE` mints a new
+`sub` and leaves the old one tombstoned forever (D6). Nothing bound to the
+old identity can attach to the new one: access tokens issued before the
+delete, PATs, MFA enrollment, peers and Dex refresh tokens. Idempotency
+comes from the persisted attempt, not from deriving the id: a retried create
+finds its own `pending` record by `userName` and resumes with the `user_id`
+stored there.
 
 ### D3 — Local credential state on the user record
 
-`types.User` gains `LocalCredentialState`:
+`types.User` gains `LocalCredentialState` and `LocalCleanupPending`:
 
-| State | Meaning | Login | Visible to SCIM / `GET /api/users` |
+| State | Meaning | Access | Visible to SCIM / `GET /api/users` |
 |---|---|---|---|
 | `""` | not a password-backed user (every existing user) | as today | as today |
-| `pending` | create in progress or interrupted | denied (`Blocked=true`) | no |
+| `pending` | create in progress or interrupted | none (`Blocked=true`) | no |
 | `active` | provisioned; `Blocked` follows SCIM `active` | per `active` | yes |
-| `tombstoned` | deleted via SCIM | denied (`Blocked=true`) | no (404, excluded from lists) |
+| `tombstoned` | deleted via SCIM; permanent deny for this `sub` | none (`Blocked=true`) | no (404, excluded from lists, does not block a new create) |
 
-The invariant every step preserves: **a Dex credential never exists for a
-`sub` that has no openZro user record.** A local record that is `pending` or
-`tombstoned` is always `Blocked`. Because a record with that `sub` exists,
-`getAccountIDWithAuthorizationClaims` never takes the JIT path for it. An
-authenticated but blocked identity is refused by `ValidateUserPermissions`
-(`permissions/manager.go`) and by the peer-login owner check (`peer.go`).
-This is what makes the design fail-closed under crashes. Compensation is an
-optimization, not the safety mechanism.
+`LocalCleanupPending` is set when a revocation step (D6) has not completed
+yet. **No transition to `Blocked=false` is allowed while it is set.** The
+cleanup must first be re-run successfully.
+
+Invariant: **a Dex credential never exists for a `sub` that has no openZro
+user record.** A record that is `pending` or `tombstoned` is always
+`Blocked`. Because a record with that `sub` exists,
+`getAccountIDWithAuthorizationClaims` never takes the JIT path for it. Note
+that `Blocked=true` on its own only gates **new** activity (API permission
+checks and peer login). Every transition to blocked in this ADR therefore
+also expires the user's peers (D6). Today's SCIM block path does not do this
+for legacy users either; that is fixed separately in #211.
 
 ### D4 — Create saga (fail-closed, idempotent)
 
-`POST /Users` with `password`:
+`POST /Users` with `password`, entirely under the identity lock (D10):
 
 1. **Validate**: Dex wired, `userName` is an email in the account's
-   allowlist (ADR-0025), password policy (D7). Derive `user_id` and `sub`
-   (D2).
-2. **Reserve locally** (one transaction) by looking up the record with
-   `Id = sub`:
-   - absent → insert it as `pending`, `Blocked=true`, with the requested
-     attributes;
-   - `pending` → resume (a retried create after a crash or 500);
-   - `tombstoned` → re-provision: switch to `pending`, `Blocked=true`, and
-     apply the new attributes;
+   allowlist (ADR-0025), password policy (D7).
+2. **Reserve locally** (one transaction): look up the live (non-tombstoned)
+   record with this `userName` in the account:
+   - absent → insert `pending`, `Blocked=true`, a fresh `user_id`/`sub` (D2),
+     and the requested attributes;
+   - `pending` → resume with its stored `user_id`;
    - `active` → SCIM **409** `uniqueness`; nothing else happens.
-3. **Credential**: `CreatePassword(email, hash, user_id)`. On `AlreadyExists`,
-   run the ownership check (D5). If the existing entry carries the derived
-   `user_id`, it is a leftover from an earlier attempt for this same identity:
-   overwrite it with `UpdatePassword`. Otherwise return **409** and leave the
-   credential untouched. If this request inserted the `pending` record in
-   step 2, delete it; a failed delete leaves it blocked and hidden, which is
-   harmless.
-4. **Finalize** (one transaction): `active`, with `Blocked = !active` as
-   requested.
+3. **Credential preflight**: `ListPasswords`, then find the entry by
+   case-insensitive email:
+   - no entry → `CreatePassword(email, hash, user_id)`;
+   - entry whose `user_id` equals this record's `user_id`, **and** the record
+     existed as `pending` before this request (a resumed attempt) →
+     `UpdatePassword`;
+   - entry whose `user_id` belongs to a **tombstone of this account with the
+     same `userName`** (leftover cleanup) → `DeletePassword`, then
+     `CreatePassword`;
+   - anything else → **409**, credential untouched. That covers another
+     account, a read-only `staticPasswords` entry, an unknown writer, or a
+     matching `user_id` on a reservation created in this very request. If
+     this request created the reservation, delete it. A failed delete leaves
+     it blocked and hidden, which is harmless.
+4. **Finalize** (one transaction, fenced as in D10): `active`, and
+   `Blocked = !active` as requested.
 
 A crash or error after step 2 leaves a blocked `pending` record, with or
-without a credential. Neither state can authenticate into openZro, and
-retrying the same request resumes at step 2 and converges. The derived
-`user_id` is deterministic for exactly this reason. Any failure returns 500,
-meaning "outcome unknown, retry", which is standard SCIM client behavior.
+without a credential. Neither can authenticate into openZro. A retry of the
+same request resumes at step 2 and converges. Any failure returns 500,
+meaning "outcome unknown, retry".
 
 ### D5 — Credential ownership is verified, never assumed
 
 The Dex password DB is keyed by lowercased email. `UpdatePassword` and
 `DeletePassword` take only the email and neither read nor change `user_id`.
-So "no openZro user has this `sub`" does **not** prove that an existing entry
-is ours. It may belong to another account (a different derived `user_id`) or
-to an operator-created entry.
+Every Dex password write is therefore preceded by the `ListPasswords`
+preflight, and the write proceeds only if the entry's `user_id` is one this
+saga owns (D4 step 3, D6 step 5). On update or delete, a mismatch → 500, no
+Dex write, and an `Errorf` naming the user id: it indicates out-of-band
+tampering and is not "fixed" automatically.
 
-Before every `UpdatePassword` or `DeletePassword`, management calls
-`ListPasswords`, finds the entry by case-insensitive email, and requires
-`entry.user_id == derived user_id`:
+`ListPasswords` also returns the read-only `staticPasswords` entries (Dex
+rejects writes to them), so a collision with the bootstrap admin email is
+detected by the same preflight and surfaces as 409.
 
-- on create, a mismatch → **409**, credential untouched (D4 step 3);
-- on update or delete, a mismatch → **500**, no Dex write, and an `Errorf`
-  naming the user id. It indicates out-of-band tampering, so it must not be
-  "fixed" automatically.
+**Assumption:** openZro is the only writer of the Dex password DB. The
+identity lock (D10) closes the window between `ListPasswords` and the write
+against openZro's own replicas. A third party writing to Dex concurrently is
+out of scope; the worst case is a 500 or 409 on the next request, never a
+credential for an unowned `sub`.
 
 `ListPasswords` is a full scan. That is acceptable at the expected number of
-local users. If it becomes a bottleneck, the fix is a Dex-side lookup, not
-skipping the check.
+local users.
 
 ### D6 — Delete and deactivate (password-backed users only)
 
-`DELETE /Users/{id}` on a user with `LocalCredentialState != ""`:
+`DELETE /Users/{id}` on a user with `LocalCredentialState != ""`, under the
+identity lock:
 
-1. **Tombstone** (one transaction): `tombstoned`, `Blocked=true`. From this
-   commit on, SCIM `GET` returns 404, the user is excluded from lists, and a
-   new `POST` with the same `userName` re-provisions it (D4 step 2), as
-   RFC 7644 §3.6 requires. Access tokens issued before the delete are still
-   valid JWTs, but they hit an existing, blocked record: no JIT, no access.
-2. **Revoke sessions**: `ListRefresh(sub)` → `RevokeRefresh(sub, client_id)`
+1. **Tombstone** (one transaction): `tombstoned`, `Blocked=true`,
+   `LocalCleanupPending=true`. From this commit on, the user is hidden from
+   SCIM and a new `POST` with the same `userName` creates a new identity
+   (D2).
+2. **Expire peers**: the same `expireAndUpdatePeers` path the REST block
+   uses. Connected peers are marked `LoginExpired`, their channels are closed,
+   and the account is updated.
+3. **Delete the user's PATs** and its MFA enrollment.
+4. **Revoke sessions**: `ListRefresh(sub)` → `RevokeRefresh(sub, client_id)`
    for each client.
-3. **Remove the credential**: `DeletePassword(email)` after the ownership
-   check (D5). `NotFound` counts as success.
+5. **Remove the credential**: preflight (D5), then `DeletePassword(email)`.
+   `NotFound` counts as success.
+6. Clear `LocalCleanupPending`.
 
-The response is 204 once step 1 commits, because access is closed at that
-point. Steps 2–3 are best effort and logged on failure. They are re-run on
-any later `DELETE` of the tombstone (still 404 to SCIM, but cleanup is
-retried) and implicitly by re-provisioning. The tombstone is kept
-indefinitely: it is the permanent deny for that `sub` until an explicit
-re-provision. `DELETE /api/users/{id}` on a password-backed user follows the
-same steps instead of removing the row, so the REST path cannot reopen JIT
-either.
+The response is **204 only after step 6**. If any of steps 2–5 fails, the
+tombstone stays (access is already denied) and the response is **500**. The
+IGA retries the `DELETE`: a `DELETE` on a tombstone with
+`LocalCleanupPending` resumes the remaining steps and returns 204 once they
+converge. A `DELETE` on a fully cleaned tombstone returns 404, as RFC 7644
+requires for an already-deleted resource. Access tokens issued before the
+delete stay valid JWTs until they expire, but they carry the old `sub`, which
+maps to a blocked tombstone forever.
 
-`active: false` sets `Blocked=true`, revokes refresh tokens (step 2 above) and
-**keeps** the credential, so reactivation needs no new password.
+`active: false` runs steps 2 and 4 (expire peers, revoke refresh tokens) and
+**keeps** the credential and PATs, so reactivation needs no new password.
+Failure → 500 with `LocalCleanupPending` set, and per D3 the user cannot be
+re-activated until a later request completes the cleanup.
+
+`DELETE /api/users/{id}` on a password-backed user follows the same steps
+instead of removing the row, so the REST path cannot reopen JIT either.
 
 ### D7 — Password policy
 
@@ -209,23 +239,28 @@ either.
 ### D8 — Password change: ordering and partial failure
 
 `PATCH` may touch `password` only with `replace` (`add`/`remove` → 400). A
-`PUT` or `PATCH` carrying `password` runs in a fixed, restrictive-first order:
+`PUT` or `PATCH` carrying `password` runs under the identity lock in three
+phases, so a failure can never leave access wider than either the old or the
+requested state:
 
-1. Commit every non-password change **except** a re-activation (an `active`
-   change from false to true is held back). This includes deactivation and
-   group removals, so restrictions take effect before anything else.
-2. Ownership check (D5) → `UpdatePassword`, then revoke refresh tokens, so a
-   password change ends existing sessions.
-3. Commit the held-back re-activation, if any.
+1. **Restrictions**: deactivation (with D6's peer expiry and refresh
+   revocation), group and role removals.
+2. **Credential**: preflight (D5) → `UpdatePassword` → revoke refresh tokens.
+3. **Expansions**: re-activation (only if `LocalCleanupPending` is clear),
+   group and role additions.
 
-Every step is idempotent: attribute replacement, set-based group membership,
-and re-hashing the same password. Any failure returns 500 and leaves the
-user at a prefix of this sequence. `UpdatePassword` does not return the
-previous hash, so no rollback is attempted. The contract is instead that
-**after a 500, the password may be old or new and the client must retry the
-same request**, which converges. Because re-activation is always last, a
-partial failure can never leave a user newly active with an unintended
-credential.
+Every step is idempotent: attribute replacement, set-based membership,
+re-hashing the same password. Any failure returns 500 and leaves the user at
+a prefix of this sequence. `UpdatePassword` does not return the previous
+hash, so no rollback is attempted. The contract is that **after a 500, the
+password may be old or new, expansions have not been applied, and the client
+must retry the same request**, which converges.
+
+**What a password change does not do.** Revoking refresh tokens stops
+renewal only. Access tokens already issued stay valid until their TTL, and
+connected peers keep their WireGuard sessions, because those are bound to the
+peer key, not the password. A password change is therefore not an access
+cut. To remove access immediately, the client sends `active: false` (D6).
 
 `changePassword` is advertised as `true` in `ServiceProviderConfig` only
 when the Dex client is wired.
@@ -240,13 +275,33 @@ when the Dex client is wired.
   byte-for-byte, **including** today's `DELETE` semantics (soft delete:
   `Blocked=true`, still returned by `GET`). That legacy behavior deviates
   from RFC 7644 §3.6 and is tracked in
-  [#210](https://github.com/openzro/openzro/issues/210). It is not changed here, so
-  existing IdP integrations see no difference.
+  [#210](https://github.com/openzro/openzro/issues/210). The legacy block path
+  not expiring peers is a security fix tracked in
+  [#211](https://github.com/openzro/openzro/issues/211), independent of this
+  ADR.
 - `userName` must be an email on the password path. Changing `userName` on a
-  password-backed user is rejected in v1: Dex cannot re-key a password entry,
-  and the derived `sub` depends on it.
+  password-backed user is rejected in v1: Dex cannot re-key a password entry.
 
-### D10 — Groups and MFA: no new mechanism
+### D10 — Concurrency across replicas
+
+`AcquireWriteLockByUID` is a process-local `sync.RWMutex`
+(`store/sql_store.go`), so on its own it does not serialize a saga across HA
+replicas. Every saga in D4, D6 and D8 runs under a **deployment-wide identity
+lock**:
+
+- key: `scim-local:` + hex(SHA-256(accountID + "/" + lower(email))). It is
+  per identity, so independent users don't serialize on bcrypt and the
+  `ListPasswords` scan, and the plaintext email never appears in the key;
+- primitive: `cluster.Coordinator.Lock` (TTL with heartbeat). Single-replica
+  deployments without a coordinator fall back to the process-local lock,
+  which is sufficient there.
+
+**Fencing.** Each local transaction re-reads the record and compares the
+expected `(Id, LocalCredentialState, LocalCleanupPending)` before writing. A
+mismatch aborts the saga with 500 and issues no further Dex writes. This
+protects against a lock lost mid-saga (an expired TTL during a stall).
+
+### D11 — Groups and MFA: no new mechanism
 
 Groups are assigned through SCIM `/Groups` `members` (existing
 `applySCIMGroupMembers` → `AutoGroups`), or through the `AutoGroups` input
@@ -254,12 +309,12 @@ on the user. Operators are advised to enable **Require 2FA for local
 accounts** (`mfa_enforce_local`), because the Dex password connector has
 no MFA of its own.
 
-### D11 — Permissions
+### D12 — Permissions
 
 Unchanged: `requireSCIMPermission` (Users module), meaning a PAT of an
 admin service user.
 
-### D12 — License posture
+### D13 — License posture
 
 NetBird v0.62 shipped "built-in local users" over an embedded IdP inside
 upstream `management/`, which is **AGPLv3**. That code and its diffs are not
@@ -287,19 +342,23 @@ are already in the module graph.
 - **Plaintext password in transit.** This is inherent to SCIM provisioning.
   TLS on the management endpoint is required (it already is for the PAT).
 - **Global email uniqueness.** One Dex instance serves the deployment, so a
-  local email is unique deployment-wide, not per account. This is acceptable
-  for self-hosted single-account deployments.
-- **Leftover Dex state.** A `pending` or `tombstoned` user may still have a
-  Dex credential or refresh token after a failed step. It can obtain Dex
-  tokens, but openZro refuses them (blocked record, no JIT). Cleanup is
-  retried on the next create or delete.
+  local email is unique deployment-wide, not per account. A second account
+  provisioning the same email gets 409 (D4 step 3).
+- **Access-token TTL window.** A password change does not invalidate access
+  tokens already issued (D8). Deactivation and delete do close access
+  immediately, through blocked-record checks and peer expiry.
+- **Leftover Dex state.** A `pending` record may carry a Dex credential after
+  a failed step. It can obtain Dex tokens, but openZro refuses them (blocked
+  record, no JIT), and the next retry adopts or replaces it.
 - **Tombstones accumulate.** One row per deleted password-backed user, kept
-  as a permanent deny until re-provisioned. The cost is negligible.
+  forever as the deny for that `sub`. The cost is negligible.
 - **`ListPasswords` is a full scan** on every credential write (D5).
   Acceptable at the expected number of local users.
-- **An email equal to a `staticPasswords` entry** (the bootstrap admin) is
-  shadowed by the static entry at login. Management cannot see Dex's YAML, so
-  this is documented rather than enforced.
+- **Third-party writers to the Dex password DB** are outside the model (D5).
+- **Lock lost mid-saga.** If the identity lock's TTL expires during a stall,
+  fencing (D10) stops the local finalize, but a Dex write issued just before
+  the stall can still race with the new holder. The outcome is a 500 or 409
+  and a retry, never access for an unowned `sub`.
 
 ## Verification
 
@@ -307,29 +366,39 @@ are already in the module graph.
   - the `sub` encoder round-trips through `parseDexSubConnector`;
   - table-driven create, patch, put and delete against a fake Dex client and
     store with fault injection **at every saga step** (D4, D6, D8), asserting
-    the resulting `LocalCredentialState` and `Blocked`, and that the same
-    request retried converges;
-  - no-Dex gating;
-  - `add`/`remove` on `password` rejected.
+    `LocalCredentialState`, `LocalCleanupPending` and `Blocked`, and that the
+    same request retried converges;
+  - DELETE returns 500 while cleanup is incomplete, 204 once it converges,
+    and 404 afterwards;
+  - re-activation is refused while `LocalCleanupPending` is set;
+  - a phase-2 failure in D8 never applies phase-3 expansions;
+  - no-Dex gating; `add`/`remove` on `password` rejected.
 - **Ownership (D5):**
-  - the same email provisioned in two accounts → 409 for the second, and the
-    first account's credential still logs in;
-  - an `AlreadyExists` entry with a foreign `user_id` is never updated or
-    deleted;
+  - the same email in two accounts → 409 for the second, and the first
+    account's credential still logs in;
+  - a `staticPasswords` email → 409;
+  - a matching `user_id` on a reservation created in the same request → 409;
   - an update or delete with mismatched ownership → 500 and no Dex write.
 - **Password policy (D7):** exactly 72 bytes accepted; 73 bytes rejected;
-  multi-byte UTF-8 at the boundary (e.g. 24 three-byte characters = 72 bytes
+  multi-byte UTF-8 at the boundary (24 three-byte characters = 72 bytes
   accepted, 25 rejected); 11 code points rejected; 12 accepted.
+- **No identity resurrection (D2, D6):** DELETE then `POST` with the same
+  `userName` → the new `id` differs. Every credential bound to the old
+  identity is refused **after** the new user is active: a pre-delete access
+  token, a refresh token, a PAT, the MFA enrollment, and a peer.
+- **Peers (D3, D6):** a connected peer is expired and its channel closed on
+  both `active:false` and DELETE.
+- **HA (D10)**, with the two-replica harness: concurrent create/create
+  (exactly one 201, one 409; the stored hash matches the winner),
+  delete/recreate (no active user without a credential; no 204 for a
+  resource the other replica re-created), and update/delete.
 - **Integration** (testcontainers, real Dex with `enablePasswordDB`):
   - SCIM create with password → password-grant login against Dex → the
     token's `sub` equals the SCIM `id` → `GET /api/users/current` returns the
     pre-set role and groups, and no second user exists;
   - kill between D4 steps 3 and 4 → a login with the new credential is
     refused and no JIT user appears → retry finalizes;
-  - `DELETE` → an access token obtained before the delete is refused and does
-    not re-create the user → refresh tokens are revoked → `GET` is 404 →
-    `POST` with the same `userName` re-provisions;
-  - a password change revokes existing refresh tokens.
+  - DELETE revokes refresh tokens; a password change revokes them too.
 - **Regression:** SCIM create, `DELETE` and `GET` **without** password behave
   exactly as before (soft delete still returned).
 - **Log scan in tests:** the plaintext password never appears in log output
