@@ -639,11 +639,12 @@ func (s *GRPCServer) processJwtToken(ctx context.Context, loginReq *proto.LoginR
 			if err == nil {
 				break
 			}
-			// Only an internal/cache failure can plausibly recover inside this
-			// short retry window. In particular, retrying a domain-policy deny
-			// creates duplicate audit events and turns a deliberate rejection
-			// into unnecessary load and latency.
-			if status.Code(err) != codes.Internal {
+			// Only transient failures can recover inside this short window:
+			// Internal, and NotFound from redeemInvite while the IdP cache
+			// catches up (1bfb26cc). Deterministic rejections (invalid token,
+			// domain-policy deny, failed precondition) fail fast; retrying a
+			// deny would also duplicate its audit event.
+			if code := status.Code(err); code != codes.Internal && code != codes.NotFound {
 				break
 			}
 			log.WithContext(ctx).Warnf("failed validating JWT token sent from peer %s with error %v. "+
