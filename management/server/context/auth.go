@@ -33,6 +33,10 @@ type UserAuth struct {
 	// or generic OIDC where there's no directory API to look up
 	// user metadata after the fact).
 	Email string
+	// EmailVerified mirrors the OIDC `email_verified` claim. False when
+	// the claim is absent, so callers that gate on the email domain
+	// (ADR-0025) fail closed.
+	EmailVerified bool
 	// Name from the JWT `name` claim, falling back to
 	// `preferred_username` when `name` is absent. Same back-fill
 	// rationale as Email.
