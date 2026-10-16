@@ -200,6 +200,12 @@ components:
           description: "When true, users authenticating via any federated provider (connector_id != \"local\") must also complete an openZro-side TOTP challenge AFTER their IdP-side login. The IdP's own MFA still runs first; this is a REDUNDANCY layer for operators wanting defense-in-depth against IdP misconfiguration, social engineering, or a compromised IdP key. Users enter two codes per login. Default false; turn on when the threat model treats the IdP as a separate trust domain (openZro #31)."
           type: boolean
           example: false
+        allowed_email_domains:
+          description: "Email domains allowed to join the account on first login, via SCIM, or by invite (ADR-0025). A user joins only with a verified email whose domain matches an entry exactly; subdomains are not implied. Entries are normalized (trimmed, lowercased, leading @ stripped, de-duplicated); wildcards and single labels are rejected; at most 100. Empty disables the check. Existing users are never affected. Omit to keep the current list."
+          type: array
+          items:
+            type: string
+          example: ["example.com"]
       required:
         - peer_login_expiration_enabled
         - peer_login_expiration

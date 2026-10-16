@@ -130,6 +130,22 @@ func (h *handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 		settings.MFAEnforceFederated = existing.MFAEnforceFederated
 	}
 
+	// Email-domain allowlist (ADR-0025). Same preserve-on-omit rule as
+	// the MFA toggles: a client that doesn't know the field must not
+	// silently clear the list and reopen the account to every domain.
+	// Unlike those toggles, a failed lookup aborts the update instead of
+	// falling back to "empty", which would disable the control.
+	if req.Settings.AllowedEmailDomains != nil {
+		settings.AllowedEmailDomains = *req.Settings.AllowedEmailDomains
+	} else {
+		existing, err := h.settingsManager.GetSettings(r.Context(), accountID, userID)
+		if err != nil {
+			util.WriteError(r.Context(), err, w)
+			return
+		}
+		settings.AllowedEmailDomains = existing.AllowedEmailDomains
+	}
+
 	if req.Settings.Extra != nil {
 		var groups []string
 		if req.Settings.Extra.NetworkTrafficLogsGroups != nil {
@@ -306,6 +322,11 @@ func toAccountResponse(accountID string, settings *types.Settings, meta *types.A
 		jwtAllowGroups = []string{}
 	}
 
+	allowedEmailDomains := settings.AllowedEmailDomains
+	if allowedEmailDomains == nil {
+		allowedEmailDomains = []string{}
+	}
+
 	admissionPostureChecks := settings.AdmissionPostureChecks
 	if admissionPostureChecks == nil {
 		admissionPostureChecks = []string{}
@@ -354,6 +375,7 @@ func toAccountResponse(accountID string, settings *types.Settings, meta *types.A
 		ClientUpdateRolloutPercent:      settings.ClientUpdateRolloutPercent,
 		MfaEnforceLocal:                 &settings.MFAEnforceLocal,
 		MfaEnforceFederated:             &settings.MFAEnforceFederated,
+		AllowedEmailDomains:             &allowedEmailDomains,
 	}
 
 	apiOnboarding := api.AccountOnboarding{
