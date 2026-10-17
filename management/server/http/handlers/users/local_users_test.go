@@ -163,17 +163,15 @@ func TestLocalUserConfig(t *testing.T) {
 	}
 }
 
-// ADR-0026 D2: pending reservations and tombstones are not users for an
-// operator, and local users carry their state.
+// ADR-0026 D2: local users carry their state. The manager drops pending
+// reservations and tombstones before the list reaches the handler.
 func TestGetUsers_LocalUsers(t *testing.T) {
 	am := &mock_server.MockAccountManager{
 		GetUsersFromAccountFunc: func(context.Context, string, string) (map[string]*types.UserInfo, error) {
 			return map[string]*types.UserInfo{
-				"plain":   {ID: "plain", Role: "user"},
-				"active":  {ID: "active", Role: "user", LocalCredentialState: string(types.LocalCredentialActive)},
-				"deact":   {ID: "deact", Role: "user", IsBlocked: true, LocalCredentialState: string(types.LocalCredentialDeactivated)},
-				"pending": {ID: "pending", Role: "user", IsBlocked: true, LocalCredentialState: string(types.LocalCredentialPending)},
-				"tomb":    {ID: "tomb", Role: "user", IsBlocked: true, LocalCredentialState: string(types.LocalCredentialTombstoned)},
+				"plain":  {ID: "plain", Role: "user"},
+				"active": {ID: "active", Role: "user", LocalCredentialState: string(types.LocalCredentialActive)},
+				"deact":  {ID: "deact", Role: "user", IsBlocked: true, LocalCredentialState: string(types.LocalCredentialDeactivated)},
 			}, nil
 		},
 	}
@@ -186,7 +184,7 @@ func TestGetUsers_LocalUsers(t *testing.T) {
 	for _, u := range got {
 		states[u.Id] = u.LocalCredentialState
 	}
-	assert.Len(t, states, 3, "pending and tombstoned users are omitted")
+	assert.Len(t, states, 3)
 	assert.Nil(t, states["plain"])
 	require.NotNil(t, states["active"])
 	assert.Equal(t, api.UserLocalCredentialStateActive, *states["active"])

@@ -212,7 +212,7 @@ func (h *handler) getAllUsers(w http.ResponseWriter, r *http.Request) {
 
 	users := make([]*api.User, 0)
 	for _, d := range data {
-		if d.NonDeletable || isHiddenLocalUser(d) {
+		if d.NonDeletable {
 			continue
 		}
 		if serviceUser == "" {
@@ -357,11 +357,4 @@ func localCredentialStateResponse(state string) *api.UserLocalCredentialState {
 	default:
 		return nil
 	}
-}
-
-// isHiddenLocalUser reports a pending reservation or a tombstone: not users
-// from an operator's point of view (ADR-0026 D2, ADR-0024 D3).
-func isHiddenLocalUser(u *types.UserInfo) bool {
-	state := types.LocalCredentialState(u.LocalCredentialState)
-	return state == types.LocalCredentialPending || state == types.LocalCredentialTombstoned
 }

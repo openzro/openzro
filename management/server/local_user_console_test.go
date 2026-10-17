@@ -2,12 +2,15 @@ package server
 
 import (
 	"context"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/openzro/openzro/management/server/account"
+	"github.com/openzro/openzro/management/server/idp"
 	"github.com/openzro/openzro/management/server/status"
 	"github.com/openzro/openzro/management/server/store"
 	"github.com/openzro/openzro/management/server/types"
@@ -125,4 +128,54 @@ func TestRESTDeleteLocalUser_ByHumanAdmin(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, types.LocalCredentialTombstoned, stored.LocalCredentialState)
 	assert.Nil(t, creds.entry("ana@example.com"))
+}
+
+// recordingUserCache answers every external-cache lookup and records the
+// keys, to show which users the list enrichment touched.
+type recordingUserCache struct {
+	mu   sync.Mutex
+	keys []string
+}
+
+func (c *recordingUserCache) Get(_ context.Context, key string) (*idp.UserData, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.keys = append(c.keys, key)
+	return &idp.UserData{}, nil
+}
+
+func (c *recordingUserCache) Set(context.Context, string, *idp.UserData, time.Duration) error {
+	return nil
+}
+
+func (c *recordingUserCache) Delete(context.Context, string) error { return nil }
+
+// ADR-0026 D2: pending reservations and tombstones are dropped before the
+// list is enriched, so GET /users costs what the visible users cost, not
+// the account's permanent delete history.
+func TestGetUsersFromAccount_HidesLocalHistoryBeforeEnrichment(t *testing.T) {
+	m, accountID, _ := setupLocalUsers(t)
+	ctx := context.Background()
+	active := createLocal(t, m, accountID, "ana@example.com")
+	gone := createLocal(t, m, accountID, "bea@example.com")
+	require.NoError(t, m.DeleteUser(ctx, accountID, userID, gone.Id))
+	pending := &types.User{Id: "pending-local", AccountID: accountID, Role: types.UserRoleUser,
+		Issued: types.UserIssuedIntegration, SCIMUserName: "cid@example.com", Blocked: true,
+		LocalCredentialState: types.LocalCredentialPending, AutoGroups: []string{}}
+	require.NoError(t, m.Store.CreatePendingLocalUser(ctx, pending))
+
+	cache := &recordingUserCache{}
+	m.idpManager = &idp.MockIDP{}
+	m.externalCacheManager = cache
+
+	infos, err := m.GetUsersFromAccount(ctx, accountID, userID)
+	require.NoError(t, err)
+	assert.Contains(t, infos, active.Id)
+	assert.NotContains(t, infos, gone.Id)
+	assert.NotContains(t, infos, pending.Id)
+	for _, key := range cache.keys {
+		assert.NotContains(t, key, gone.Id, "a tombstone must not reach the IdP lookup")
+		assert.NotContains(t, key, pending.Id, "a reservation must not reach the IdP lookup")
+	}
+	assert.NotEmpty(t, cache.keys, "the visible local user is still enriched")
 }
