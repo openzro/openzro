@@ -38,9 +38,22 @@ and it does not say which users are local.
 No saga logic is duplicated: the handlers translate the body and call the
 same manager methods, so locks, fencing, ownership checks and error mapping
 are identical to SCIM. Permissions are the same Users-module checks the
-sagas already perform. Because deactivation and delete cannot be undone,
-both refuse to act on the caller's own account or on an owner; ownership
-has to move first, as for a regular delete. Creation stays behind `OPENZRO_SCIM_LOCAL_USERS_ENABLED`
+sagas already perform.
+
+Because deactivation and delete cannot be undone, the account must never be
+left without a usable owner:
+
+- The console refuses to deactivate or delete the caller's own account.
+- No channel (console, SCIM `active=false`, SCIM `DELETE`) terminates an
+  owner; ownership has to move first, as for a regular delete. The terminal
+  store transition enforces this in its fenced `UPDATE`, so it holds even
+  when an ownership transfer commits concurrently.
+- The owner role is never given to a user who stays blocked, which includes
+  every deactivated local user. The store guard enforces this on the locked
+  rows of the transfer's transaction.
+
+Whichever of a transfer and a termination commits first, the other fails
+with 403. Creation stays behind `OPENZRO_SCIM_LOCAL_USERS_ENABLED`
 (which gates creation only, ADR-0024 D10) and Dex on Postgres.
 
 ### D2 — The REST user model says which users are local
