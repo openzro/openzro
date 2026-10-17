@@ -152,7 +152,13 @@ func (h *Handler) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input := body.toInput()
-	created, err := h.accountManager.SCIMCreateUser(r.Context(), userAuth.AccountId, userAuth.UserId, input)
+	var created *types.User
+	if body.Password != nil {
+		created, err = h.accountManager.SCIMCreateLocalUser(r.Context(), userAuth.AccountId, userAuth.UserId,
+			input, *body.Password)
+	} else {
+		created, err = h.accountManager.SCIMCreateUser(r.Context(), userAuth.AccountId, userAuth.UserId, input)
+	}
 	if err != nil {
 		writeError(w, mapErrorStatus(err), err.Error())
 		return
@@ -172,6 +178,10 @@ func (h *Handler) handleReplaceUser(w http.ResponseWriter, r *http.Request) {
 	body, err := decodeUserBody(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if body.Password != nil {
+		writeError(w, http.StatusBadRequest, errPasswordChangeUnsupported)
 		return
 	}
 	updated, err := h.accountManager.SCIMReplaceUser(r.Context(), userAuth.AccountId, userAuth.UserId, id, body.toInput())
@@ -224,11 +234,19 @@ func (h *Handler) handlePatchUser(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		if path == "password" {
+			writeError(w, http.StatusBadRequest, errPasswordChangeUnsupported)
+			return
+		}
 		if path == "" {
 			// Whole-resource value: parse as an attribute bag.
 			var bag map[string]json.RawMessage
 			if err := json.Unmarshal(op.Value, &bag); err != nil {
 				continue
+			}
+			if bagHasPassword(bag) {
+				writeError(w, http.StatusBadRequest, errPasswordChangeUnsupported)
+				return
 			}
 			applyPatchBag(&patch, bag)
 			continue
@@ -259,6 +277,20 @@ func (h *Handler) handlePatchUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, fromUser(updated))
+}
+
+// errPasswordChangeUnsupported is returned for a password in PUT or PATCH:
+// a password change is a separate operation not wired yet (ADR-0024 D6),
+// and it must be refused rather than silently dropped.
+const errPasswordChangeUnsupported = "changing a password is not supported yet"
+
+func bagHasPassword(bag map[string]json.RawMessage) bool {
+	for k := range bag {
+		if strings.EqualFold(k, "password") {
+			return true
+		}
+	}
+	return false
 }
 
 // applyPatchBag handles the "single replace with a JSON object" form
@@ -311,6 +343,9 @@ type userBody struct {
 	DisplayName string      `json:"displayName"`
 	Name        *userName   `json:"name"`
 	Emails      []userEmail `json:"emails"`
+	// Password is the RFC 7643 §4.1.1 writeOnly attribute. Only a create
+	// accepts it (a local user, ADR-0024); it is never returned.
+	Password *string `json:"password"`
 }
 
 func (b userBody) toInput() account.SCIMUserInput {
