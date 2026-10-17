@@ -13,6 +13,7 @@ import (
 
 	"github.com/openzro/openzro/management/server/account"
 	"github.com/openzro/openzro/management/server/mock_server"
+	"github.com/openzro/openzro/management/server/status"
 	"github.com/openzro/openzro/management/server/types"
 )
 
@@ -197,4 +198,40 @@ func TestPatchUser_MalformedRecognizedValueIsRejected(t *testing.T) {
 	require.Len(t, got, 1)
 	require.NotNil(t, got[0].Active)
 	assert.False(t, *got[0].Active)
+}
+
+// #217 review: group member operations must report failures. Adding a
+// hidden or unknown user returned 200 with the group unchanged, so an IGA
+// believed it succeeded.
+func TestPatchGroup_MemberErrorsArePropagated(t *testing.T) {
+	notFound := status.NewUserNotFoundError("hidden")
+	am := &mock_server.MockAccountManager{
+		SCIMAddGroupMemberFunc: func(_ context.Context, _, _, _, userID string) error {
+			if userID == "hidden" {
+				return notFound
+			}
+			return nil
+		},
+		SCIMRemoveGroupMemberFunc: func(_ context.Context, _, _, _, _ string) error { return notFound },
+		SCIMGetGroupFunc: func(_ context.Context, _, _, groupID string) (*types.Group, []string, error) {
+			return &types.Group{ID: groupID, Name: "g"}, nil, nil
+		},
+	}
+	srv := newTestServer(am, "acct", "caller")
+	patch := func(op map[string]any) *httptest.ResponseRecorder {
+		return doSCIM(t, srv, http.MethodPatch, "/scim/v2/Groups/g", map[string]any{"Operations": []map[string]any{op}})
+	}
+
+	rec := patch(map[string]any{"op": "add", "path": "members", "value": []map[string]any{{"value": "hidden"}}})
+	assert.Equal(t, http.StatusNotFound, rec.Code, "adding a hidden user must not report success")
+
+	rec = patch(map[string]any{"op": "add", "path": "members", "value": "not-a-list"})
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	rec = patch(map[string]any{"op": "replace", "path": "displayName", "value": 42})
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	// Removing a member that no longer exists is idempotent, so an IGA
+	// cleaning up after a delete does not retry forever.
+	rec = patch(map[string]any{"op": "remove", "path": `members[value eq "gone"]`})
+	assert.Equal(t, http.StatusOK, rec.Code)
 }
