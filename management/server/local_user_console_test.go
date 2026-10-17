@@ -203,3 +203,32 @@ func TestLocalTermination_OwnerFenceIsAtomic(t *testing.T) {
 	requireStatusType(t, m.SCIMDeactivateUser(ctx, accountID, userID, owner.Id), status.PermissionDenied)
 	requireStillActive(t, m, creds, owner)
 }
+
+// Ownership never moves to a blocked user: a deactivated local user is
+// blocked for good, so the transfer would leave the account without a
+// usable owner. The store guard refuses it inside the transfer's
+// transaction, so the previous owner keeps the role.
+func TestOwnershipTransfer_RefusesBlockedTarget(t *testing.T) {
+	m, accountID, _ := setupLocalUsers(t)
+	ctx := context.Background()
+	u := createLocal(t, m, accountID, "ana@example.com")
+	_, err := m.DeactivateLocalUser(ctx, accountID, userID, u.Id)
+	require.NoError(t, err)
+	stored, err := m.Store.GetUserByUserID(ctx, store.LockingStrengthShare, u.Id)
+	require.NoError(t, err)
+
+	update := stored.Copy()
+	update.Role = types.UserRoleOwner
+	_, err = m.SaveUser(ctx, accountID, userID, update)
+	requireStatusType(t, err, status.PermissionDenied)
+
+	// The store refuses it too, for writers that skip the manager checks.
+	requireStatusType(t, m.Store.SaveUser(ctx, store.LockingStrengthUpdate, update), status.PermissionDenied)
+
+	owner, err := m.Store.GetUserByUserID(ctx, store.LockingStrengthShare, userID)
+	require.NoError(t, err)
+	assert.Equal(t, types.UserRoleOwner, owner.Role, "the previous owner keeps the role")
+	stored, err = m.Store.GetUserByUserID(ctx, store.LockingStrengthShare, u.Id)
+	require.NoError(t, err)
+	assert.Equal(t, types.UserRoleUser, stored.Role)
+}

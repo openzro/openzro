@@ -795,6 +795,9 @@ func validateUserUpdate(groupsMap map[string]*types.Group, initiatorUser, oldUse
 	if initiatorUser.Role == types.UserRoleAdmin && update.Role == types.UserRoleOwner && update.Role != oldUser.Role {
 		return status.Errorf(status.PermissionDenied, "only owners can add owner role to other users")
 	}
+	if update.Role == types.UserRoleOwner && oldUser.Role != types.UserRoleOwner && update.IsBlocked() {
+		return status.Errorf(status.PermissionDenied, "can't transfer ownership to a blocked user")
+	}
 	if oldUser.IsServiceUser && update.Role == types.UserRoleOwner {
 		return status.Errorf(status.PermissionDenied, "can't update a service user with owner role")
 	}

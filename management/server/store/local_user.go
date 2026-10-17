@@ -31,6 +31,7 @@ type persistedLocalState struct {
 	LocalCredentialState types.LocalCredentialState
 	LocalCleanupPending  bool
 	Blocked              bool
+	Role                 types.UserRole
 }
 
 // guardLocalUserWrites enforces ADR-0024 D3 on every generic user write
@@ -40,6 +41,7 @@ type persistedLocalState struct {
 //   - unblock a pending, deactivated or tombstoned local user, or
 //   - change LocalCredentialState or LocalCleanupPending at all, including
 //     inserting a new user with a non-empty state.
+//   - give the owner role to a user that stays blocked (ADR-0026 D1).
 //
 // Those transitions belong to the dedicated conditional operations below.
 // There is deliberately no flag to bypass this check.
@@ -71,7 +73,7 @@ func guardLocalUserWrites(tx *gorm.DB, users []*types.User, lockRows bool) error
 			read = tx.Clauses(clause.Locking{Strength: string(LockingStrengthUpdate)})
 		}
 		result := read.Model(&types.User{}).
-			Select("id", colLocalUserState, colLocalUserCleanup, "blocked").
+			Select("id", colLocalUserState, colLocalUserCleanup, "blocked", "role").
 			Where("id IN ?", ids[start:end]).
 			Order("id").
 			Find(&rows)
@@ -87,6 +89,13 @@ func guardLocalUserWrites(tx *gorm.DB, users []*types.User, lockRows bool) error
 		p, exists := persisted[u.Id]
 		if !exists {
 			p = persistedLocalState{ID: u.Id}
+		}
+		// Ownership never moves to a blocked user, which would leave the
+		// account without a usable owner; a terminal local user is blocked
+		// for good. Checked here, on the locked rows, so it holds against a
+		// concurrent terminal transition (ADR-0026 D1).
+		if u.Role == types.UserRoleOwner && p.Role != types.UserRoleOwner && u.Blocked {
+			return status.Errorf(status.PermissionDenied, "can't transfer ownership to blocked user %s", u.Id)
 		}
 		if u.LocalCredentialState != p.LocalCredentialState || u.LocalCleanupPending != p.LocalCleanupPending {
 			log.Errorf("refused generic save changing local credential state of user %s (%q -> %q)",
