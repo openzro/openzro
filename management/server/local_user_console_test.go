@@ -259,3 +259,25 @@ func TestSaveUser_DoesNotEnrichUnrelatedUsers(t *testing.T) {
 		assert.Contains(t, key, u.Id, "only the updated user is enriched")
 	}
 }
+
+// A transfer built from a snapshot taken before a concurrent deactivation
+// carries Blocked=false. It must still lose with 403, the documented
+// contract, not with the 400 of the re-activation guard.
+func TestOwnershipTransfer_StaleSnapshotLosesWith403(t *testing.T) {
+	m, accountID, _ := setupLocalUsers(t)
+	ctx := context.Background()
+	u := createLocal(t, m, accountID, "ana@example.com")
+	stale, err := m.Store.GetUserByUserID(ctx, store.LockingStrengthShare, u.Id)
+	require.NoError(t, err)
+	update := stale.Copy()
+	update.Role = types.UserRoleOwner
+
+	_, err = m.DeactivateLocalUser(ctx, accountID, userID, u.Id)
+	require.NoError(t, err)
+
+	_, err = m.SaveUser(ctx, accountID, userID, update)
+	requireStatusType(t, err, status.PermissionDenied)
+	owner, err := m.Store.GetUserByUserID(ctx, store.LockingStrengthShare, userID)
+	require.NoError(t, err)
+	assert.Equal(t, types.UserRoleOwner, owner.Role, "the previous owner keeps the role")
+}

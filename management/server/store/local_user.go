@@ -93,8 +93,13 @@ func guardLocalUserWrites(tx *gorm.DB, users []*types.User, lockRows bool) error
 		// Ownership never moves to a blocked user, which would leave the
 		// account without a usable owner; a terminal local user is blocked
 		// for good. Checked here, on the locked rows, so it holds against a
-		// concurrent terminal transition (ADR-0026 D1).
-		if u.Role == types.UserRoleOwner && p.Role != types.UserRoleOwner && u.Blocked {
+		// concurrent terminal transition (ADR-0026 D1). The persisted state
+		// counts too: a transfer built before a deactivation carries
+		// Blocked=false and must still lose with 403, ahead of the
+		// re-activation refusal below. An ordinary blocked user can still be
+		// unblocked and promoted in one write.
+		if u.Role == types.UserRoleOwner && p.Role != types.UserRoleOwner &&
+			(u.Blocked || p.LocalCredentialState.MustStayBlocked()) {
 			return status.Errorf(status.PermissionDenied, "can't transfer ownership to blocked user %s", u.Id)
 		}
 		if u.LocalCredentialState != p.LocalCredentialState || u.LocalCleanupPending != p.LocalCleanupPending {
