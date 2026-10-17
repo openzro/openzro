@@ -281,6 +281,13 @@ func (am *DefaultAccountManager) deleteLocalUserViaREST(ctx context.Context, acc
 	if !initiator.IsServiceUser {
 		return status.Errorf(status.PermissionDenied, "only integration service user can delete this user")
 	}
+	target, err := am.Store.GetUserByUserID(ctx, store.LockingStrengthShare, targetUserID)
+	if err != nil {
+		return err
+	}
+	if err := checkLocalTermination(initiatorUserID, target); err != nil {
+		return err
+	}
 	return am.terminateLocalUser(ctx, accountID, initiatorUserID, targetUserID, types.LocalCredentialTombstoned)
 }
 
@@ -298,10 +305,27 @@ func (am *DefaultAccountManager) DeactivateLocalUser(ctx context.Context, accoun
 	if user.LocalCredentialState == types.LocalCredentialNone {
 		return nil, status.Errorf(status.BadRequest, "only local users can be deactivated this way")
 	}
+	if err := checkLocalTermination(callerID, user); err != nil {
+		return nil, err
+	}
 	if err := am.terminateLocalUser(ctx, accountID, callerID, userID, types.LocalCredentialDeactivated); err != nil {
 		return nil, err
 	}
 	return am.Store.GetUserByUserID(ctx, store.LockingStrengthShare, userID)
+}
+
+// checkLocalTermination applies the self and owner protections of the
+// regular user paths before a console deactivation or delete, which cannot
+// be undone: nobody terminates their own account, and an owner is never
+// terminated, so ownership has to move first.
+func checkLocalTermination(initiatorUserID string, target *types.User) error {
+	if initiatorUserID == target.Id {
+		return status.Errorf(status.PermissionDenied, "users can't deactivate or delete themselves")
+	}
+	if target.Role == types.UserRoleOwner {
+		return status.Errorf(status.PermissionDenied, "can't deactivate or delete a user with the owner role")
+	}
+	return nil
 }
 
 // LocalUserCreationEnabled reports whether this deployment can create local

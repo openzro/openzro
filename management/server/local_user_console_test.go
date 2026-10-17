@@ -63,3 +63,51 @@ func TestGetUsersFromAccount_ExposesLocalState(t *testing.T) {
 	assert.Equal(t, string(types.LocalCredentialActive), infos[u.Id].LocalCredentialState)
 	assert.Empty(t, infos[userID].LocalCredentialState)
 }
+
+// setLocalRole gives a local user a role the way an ownership transfer or a
+// role update would, for the termination guards below.
+func setLocalRole(t *testing.T, m *DefaultAccountManager, u *types.User, role types.UserRole) {
+	t.Helper()
+	stored, err := m.Store.GetUserByUserID(context.Background(), store.LockingStrengthUpdate, u.Id)
+	require.NoError(t, err)
+	stored.Role = role
+	require.NoError(t, m.Store.SaveUser(context.Background(), store.LockingStrengthUpdate, stored))
+}
+
+func requireStillActive(t *testing.T, m *DefaultAccountManager, creds *fakeLocalCredentials, u *types.User) {
+	t.Helper()
+	stored, err := m.Store.GetUserByUserID(context.Background(), store.LockingStrengthShare, u.Id)
+	require.NoError(t, err)
+	assert.Equal(t, types.LocalCredentialActive, stored.LocalCredentialState)
+	assert.NotNil(t, creds.entry(u.SCIMUserName), "the credential is untouched")
+}
+
+// The console's irreversible paths keep the protections of the regular
+// user paths: nobody terminates their own account, and an owner is never
+// terminated (ownership has to move first).
+func TestConsoleTermination_RefusesSelfAndOwner(t *testing.T) {
+	m, accountID, creds := setupLocalUsers(t)
+	ctx := context.Background()
+
+	admin := createLocal(t, m, accountID, "admin@example.com")
+	setLocalRole(t, m, admin, types.UserRoleAdmin)
+	_, err := m.DeactivateLocalUser(ctx, accountID, admin.Id, admin.Id)
+	requireStatusType(t, err, status.PermissionDenied)
+	requireStillActive(t, m, creds, admin)
+
+	owner := createLocal(t, m, accountID, "owner@example.com")
+	setLocalRole(t, m, owner, types.UserRoleOwner)
+	for name, caller := range map[string]string{"owner": userID, "admin": admin.Id} {
+		_, err = m.DeactivateLocalUser(ctx, accountID, caller, owner.Id)
+		requireStatusType(t, err, status.PermissionDenied)
+		require.Error(t, m.DeleteUser(ctx, accountID, caller, owner.Id), name)
+		requireStillActive(t, m, creds, owner)
+	}
+
+	svc, err := m.CreateUser(ctx, accountID, userID, &types.UserInfo{
+		Name: "iga", Role: string(types.UserRoleAdmin), IsServiceUser: true, Issued: types.UserIssuedAPI,
+	})
+	require.NoError(t, err)
+	requireStatusType(t, m.DeleteUser(ctx, accountID, svc.ID, owner.Id), status.PermissionDenied)
+	requireStillActive(t, m, creds, owner)
+}
