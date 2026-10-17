@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/openzro/openzro/management/server"
 	"github.com/openzro/openzro/management/server/account"
 	nbcontext "github.com/openzro/openzro/management/server/context"
 	"github.com/openzro/openzro/management/server/http/api"
@@ -83,6 +84,9 @@ func TestCreateLocalUser_ErrorsMapToStatus(t *testing.T) {
 		"policy":   {status.Errorf(status.BadRequest, "password policy"), http.StatusBadRequest},
 		"conflict": {status.Errorf(status.AlreadyExists, "exists"), http.StatusConflict},
 		"disabled": {status.Errorf(status.BadRequest, "creating local users is not enabled"), http.StatusBadRequest},
+		// The sentinel the manager really returns for a used email, not a
+		// stand-in, so the mapping is tested end to end.
+		"used email": {server.ErrSCIMUserAlreadyExists, http.StatusConflict},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
