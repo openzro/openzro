@@ -663,6 +663,7 @@ var (
 				} else {
 					accountManager.EnableLocalUsers(dexClient)
 					log.WithContext(ctx).Infof("SCIM local users enabled")
+					log.WithContext(ctx).Warn(server.LocalUsersDexStorageWarning)
 				}
 			}
 
