@@ -13,12 +13,15 @@ import (
 	"testing"
 	"time"
 
+	apiv2 "github.com/dexidp/dex/api/v2"
+
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/openzro/openzro/management/server/account"
 	nbcontext "github.com/openzro/openzro/management/server/context"
 	"github.com/openzro/openzro/management/server/dex_proxy"
 	"github.com/openzro/openzro/management/server/store"
@@ -50,6 +53,13 @@ staticClients:
 // startDex runs a real Dex with its password DB and gRPC API, and returns
 // a dex_proxy client plus the base URL of its HTTP endpoints.
 func startDex(t *testing.T) (*dex_proxy.Client, string) {
+	client, baseURL, _ := startDexWithAPI(t)
+	return client, baseURL
+}
+
+// startDexWithAPI also returns the raw Dex API client, for assertions the
+// openZro client does not expose (listing refresh tokens).
+func startDexWithAPI(t *testing.T) (*dex_proxy.Client, string, apiv2.DexClient) {
 	t.Helper()
 	ctx := context.Background()
 	c, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
@@ -82,7 +92,7 @@ func startDex(t *testing.T) (*dex_proxy.Client, string) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
 
-	return dex_proxy.NewWithConn(conn), fmt.Sprintf("http://%s:%s/dex", host, httpPort.Port())
+	return dex_proxy.NewWithConn(conn), fmt.Sprintf("http://%s:%s/dex", host, httpPort.Port()), apiv2.NewDexClient(conn)
 }
 
 // passwordGrant logs in through Dex's resource-owner password grant and
@@ -160,4 +170,100 @@ func TestSCIMCreateLocalUser_RealDexLogin(t *testing.T) {
 	after, err := manager.Store.GetAccountUsers(ctx, store.LockingStrengthShare, accountID)
 	require.NoError(t, err)
 	require.Len(t, after, len(before), "the first login must not create a second (JIT) user")
+}
+
+// tokenGrant posts a grant to Dex's token endpoint and returns the decoded
+// response (id_token claims merged with refresh_token) or the status.
+func tokenGrant(t *testing.T, baseURL string, form url.Values) (map[string]any, int) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/token", strings.NewReader(form.Encode()))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth("openzro-test", "openzro-test-secret")
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, resp.StatusCode
+	}
+	var body map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	return body, resp.StatusCode
+}
+
+func loginWithRefresh(t *testing.T, baseURL, email, password string) (string, int) {
+	t.Helper()
+	body, code := tokenGrant(t, baseURL, url.Values{
+		"grant_type": {"password"}, "username": {email}, "password": {password},
+		"scope": {"openid email offline_access"},
+	})
+	if code != http.StatusOK {
+		return "", code
+	}
+	refresh, _ := body["refresh_token"].(string)
+	require.NotEmpty(t, refresh, "offline_access must yield a refresh token")
+	return refresh, code
+}
+
+func refreshTokenCount(t *testing.T, api apiv2.DexClient, sub string) int {
+	t.Helper()
+	resp, err := api.ListRefresh(context.Background(), &apiv2.ListRefreshReq{UserId: sub})
+	require.NoError(t, err)
+	return len(resp.GetRefreshTokens())
+}
+
+// ADR-0024 D6/D7 against a real Dex: a reset replaces the credential and
+// revokes refresh tokens; deactivation removes the credential and revokes
+// them again, so the user can no longer log in or hold a session.
+//
+// Revocation is checked through Dex's ListRefresh API rather than by
+// redeeming a refresh token: on SQLite and memory storage, Dex v2.45-v2.46
+// deadlocks its token endpoint on the first refresh of a password-DB user
+// (dexidp/dex#4209, fix pending in #4991), which is why local users require
+// Dex on Postgres for now.
+func TestLocalUserLifecycle_RealDex(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test; needs a container runtime")
+	}
+	if runtime.GOOS != "linux" && os.Getenv("CI") == "true" {
+		t.Skip("container tests run on Linux CI only")
+	}
+	dex, baseURL, api := startDexWithAPI(t)
+
+	manager, err := createManager(t)
+	require.NoError(t, err)
+	ctx := context.Background()
+	accountID, err := manager.GetAccountIDByUserID(ctx, userID, "")
+	require.NoError(t, err)
+	manager.EnableLocalUsers(dex)
+
+	user, err := manager.SCIMCreateLocalUser(ctx, accountID, userID, localInput("ana@example.com"), goodPassword)
+	require.NoError(t, err)
+	_, code := loginWithRefresh(t, baseURL, "ana@example.com", goodPassword)
+	require.Equal(t, http.StatusOK, code)
+	require.Positive(t, refreshTokenCount(t, api, user.Id), "offline_access must create a refresh token")
+
+	// Reset.
+	_, err = manager.SCIMResetLocalPassword(ctx, accountID, userID, user.Id, newPassword, nil)
+	require.NoError(t, err)
+	require.Zero(t, refreshTokenCount(t, api, user.Id), "a reset revokes existing refresh tokens")
+	_, code = passwordGrant(t, baseURL, "ana@example.com", goodPassword)
+	require.NotEqual(t, http.StatusOK, code, "the old password must stop working")
+	_, code = loginWithRefresh(t, baseURL, "ana@example.com", newPassword)
+	require.Equal(t, http.StatusOK, code, "the new password must work")
+	require.Positive(t, refreshTokenCount(t, api, user.Id))
+
+	// Deactivate.
+	inactive := false
+	_, err = manager.SCIMPatchUser(ctx, accountID, userID, user.Id, account.SCIMUserPatch{Active: &inactive})
+	require.NoError(t, err)
+	require.Zero(t, refreshTokenCount(t, api, user.Id), "deactivation revokes refresh tokens")
+	_, code = passwordGrant(t, baseURL, "ana@example.com", newPassword)
+	require.NotEqual(t, http.StatusOK, code, "a deactivated local user cannot log in")
+
+	entries, err := dex.ListPasswords(ctx)
+	require.NoError(t, err)
+	for _, e := range entries {
+		require.NotEqual(t, "ana@example.com", e.Email, "the Dex credential must be gone")
+	}
 }
