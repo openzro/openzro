@@ -35,3 +35,36 @@
 //     }
 //   }
 // }
+// login signs in through the local dev Dex (`make dev.idp.up`) and caches
+// the session, so specs that need an authenticated dashboard run against
+// the real stack. Defaults to the seeded dev owner.
+Cypress.Commands.add(
+  "login",
+  (email = "admin@openzro.dev", password = "openzro") => {
+    cy.session([email], () => {
+      cy.visit("/peers");
+      cy.origin(
+        "http://localhost:5556",
+        { args: { email, password } },
+        ({ email, password }) => {
+          cy.get("input[name=login]").type(email);
+          cy.get("input[name=password]").type(password, { log: false });
+          cy.get("button[type=submit]").click();
+        },
+      );
+      cy.location("origin").should("eq", "http://localhost:3000");
+      cy.contains("Peers");
+    });
+  },
+);
+
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace Cypress {
+    interface Chainable {
+      login(email?: string, password?: string): Chainable<void>;
+    }
+  }
+}
+
+export {};
