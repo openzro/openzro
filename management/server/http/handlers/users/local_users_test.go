@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -102,7 +103,7 @@ func TestCreateLocalUser_ErrorsMapToStatus(t *testing.T) {
 	am := &mock_server.MockAccountManager{
 		SCIMCreateLocalUserFunc: func(context.Context, string, string, account.SCIMUserInput, string) (*types.User, error) {
 			called = true
-			return nil, nil
+			return nil, errors.New("unreachable")
 		},
 	}
 	rec := doJSON(t, localUsersRouter(am), http.MethodPost, "/users/local", "not-an-object")
