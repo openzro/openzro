@@ -209,6 +209,12 @@ const (
 	ScheduleCheckActionDeny  ScheduleCheckAction = "deny"
 )
 
+// Defines values for UserLocalCredentialState.
+const (
+	UserLocalCredentialStateActive      UserLocalCredentialState = "active"
+	UserLocalCredentialStateDeactivated UserLocalCredentialState = "deactivated"
+)
+
 // Defines values for UserStatus.
 const (
 	UserStatusActive  UserStatus = "active"
@@ -906,6 +912,33 @@ type IngressPortAllocationRequestPortRange struct {
 
 // IngressPortAllocationRequestPortRangeProtocol The protocol accepted by the port range
 type IngressPortAllocationRequestPortRangeProtocol string
+
+// LocalUserConfig defines model for LocalUserConfig.
+type LocalUserConfig struct {
+	// CreationEnabled Whether this deployment allows creating local users (OPENZRO_SCIM_LOCAL_USERS_ENABLED and Dex configured).
+	CreationEnabled bool `json:"creation_enabled"`
+}
+
+// LocalUserCreateRequest defines model for LocalUserCreateRequest.
+type LocalUserCreateRequest struct {
+	// AutoGroups Group IDs to assign
+	AutoGroups []string `json:"auto_groups"`
+
+	// Email Email address; also the login name. It cannot be changed later.
+	Email string `json:"email"`
+
+	// Name Display name
+	Name *string `json:"name,omitempty"`
+
+	// Password Initial password, 12 characters to 72 bytes of UTF-8. Never returned.
+	Password string `json:"password"`
+}
+
+// LocalUserPasswordRequest defines model for LocalUserPasswordRequest.
+type LocalUserPasswordRequest struct {
+	// Password New password, 12 characters to 72 bytes of UTF-8. Never returned.
+	Password string `json:"password"`
+}
 
 // Location Describe geographical location information
 type Location struct {
@@ -2076,6 +2109,9 @@ type User struct {
 	// LastLogin Last time this user performed a login to the dashboard
 	LastLogin *time.Time `json:"last_login,omitempty"`
 
+	// LocalCredentialState Set for local users (email and password accounts in the embedded Dex, ADR-0024). Omitted for every other user.
+	LocalCredentialState *UserLocalCredentialState `json:"local_credential_state,omitempty"`
+
 	// Name User's name from idp provider
 	Name        string           `json:"name"`
 	Permissions *UserPermissions `json:"permissions,omitempty"`
@@ -2086,6 +2122,9 @@ type User struct {
 	// Status User's status
 	Status UserStatus `json:"status"`
 }
+
+// UserLocalCredentialState Set for local users (email and password accounts in the embedded Dex, ADR-0024). Omitted for every other user.
+type UserLocalCredentialState string
 
 // UserStatus User's status
 type UserStatus string
@@ -2283,8 +2322,14 @@ type PutApiSetupKeysKeyIdJSONRequestBody = SetupKeyRequest
 // PostApiUsersJSONRequestBody defines body for PostApiUsers for application/json ContentType.
 type PostApiUsersJSONRequestBody = UserCreateRequest
 
+// PostApiUsersLocalJSONRequestBody defines body for PostApiUsersLocal for application/json ContentType.
+type PostApiUsersLocalJSONRequestBody = LocalUserCreateRequest
+
 // PutApiUsersUserIdJSONRequestBody defines body for PutApiUsersUserId for application/json ContentType.
 type PutApiUsersUserIdJSONRequestBody = UserRequest
+
+// PostApiUsersUserIdPasswordJSONRequestBody defines body for PostApiUsersUserIdPassword for application/json ContentType.
+type PostApiUsersUserIdPasswordJSONRequestBody = LocalUserPasswordRequest
 
 // PostApiUsersUserIdTokensJSONRequestBody defines body for PostApiUsersUserIdTokens for application/json ContentType.
 type PostApiUsersUserIdTokensJSONRequestBody = PersonalAccessTokenRequest

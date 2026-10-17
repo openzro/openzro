@@ -133,6 +133,9 @@ func (am *DefaultAccountManager) terminateLocalUser(ctx context.Context, account
 		return nil
 	case user.LocalCredentialState != to:
 		if err := am.Store.MarkLocalUserTerminal(ctx, accountID, userID, to); err != nil {
+			if sErr, ok := status.FromError(err); ok && sErr.Type() == status.PermissionDenied {
+				return err
+			}
 			return status.Errorf(status.Internal, "mark local user %s: %v", to, err)
 		}
 		event := activity.UserBlocked
@@ -264,8 +267,7 @@ func sameStringSet(a, b []string) bool {
 }
 
 // deleteLocalUserViaREST applies the REST delete's authorization to a local
-// user and then tombstones it. Local users are integration-issued, so only
-// a service user may delete them, as for any SCIM-provisioned user.
+// user and then tombstones it.
 func (am *DefaultAccountManager) deleteLocalUserViaREST(ctx context.Context, accountID, initiatorUserID, targetUserID string) error {
 	allowed, err := am.permissionsManager.ValidateUserPermissions(ctx, accountID, initiatorUserID, modules.Users, operations.Delete)
 	if err != nil {
@@ -274,12 +276,55 @@ func (am *DefaultAccountManager) deleteLocalUserViaREST(ctx context.Context, acc
 	if !allowed {
 		return status.NewPermissionDeniedError()
 	}
-	initiator, err := am.Store.GetUserByUserID(ctx, store.LockingStrengthShare, initiatorUserID)
+	// Unlike other integration-issued users, a local user is not restricted
+	// to service-user deletes: no external IdP re-provisions it, and the
+	// console manages it (ADR-0026 D1).
+	target, err := am.Store.GetUserByUserID(ctx, store.LockingStrengthShare, targetUserID)
 	if err != nil {
 		return err
 	}
-	if !initiator.IsServiceUser {
-		return status.Errorf(status.PermissionDenied, "only integration service user can delete this user")
+	if err := checkLocalTermination(initiatorUserID, target); err != nil {
+		return err
 	}
 	return am.terminateLocalUser(ctx, accountID, initiatorUserID, targetUserID, types.LocalCredentialTombstoned)
+}
+
+// DeactivateLocalUser permanently deactivates a local user from the console
+// (ADR-0026): the same terminal saga as SCIM active=false. It is called
+// without the account write lock, per the lock discipline above.
+func (am *DefaultAccountManager) DeactivateLocalUser(ctx context.Context, accountID, callerID, userID string) (*types.User, error) {
+	if err := am.requireSCIMPermission(ctx, accountID, callerID, operations.Update); err != nil {
+		return nil, err
+	}
+	user, err := am.getSCIMVisibleUser(ctx, accountID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user.LocalCredentialState == types.LocalCredentialNone {
+		return nil, status.Errorf(status.BadRequest, "only local users can be deactivated this way")
+	}
+	if err := checkLocalTermination(callerID, user); err != nil {
+		return nil, err
+	}
+	if err := am.terminateLocalUser(ctx, accountID, callerID, userID, types.LocalCredentialDeactivated); err != nil {
+		return nil, err
+	}
+	return am.Store.GetUserByUserID(ctx, store.LockingStrengthShare, userID)
+}
+
+// checkLocalTermination refuses a console deactivation or delete of the
+// caller's own account, which cannot be undone. The owner rule is not
+// checked here: MarkLocalUserTerminal enforces it atomically on every
+// channel, which a read before the saga could not (ADR-0026 D1).
+func checkLocalTermination(initiatorUserID string, target *types.User) error {
+	if initiatorUserID == target.Id {
+		return status.Errorf(status.PermissionDenied, "users can't deactivate or delete themselves")
+	}
+	return nil
+}
+
+// LocalUserCreationEnabled reports whether this deployment can create local
+// users: Dex is wired and the operator opted in (ADR-0024 D10).
+func (am *DefaultAccountManager) LocalUserCreationEnabled() bool {
+	return am.localCreds != nil && am.localUserCreationEnabled
 }

@@ -352,9 +352,11 @@ func validateSCIMUserInput(in *account.SCIMUserInput) error {
 }
 
 // Sentinel errors translated to SCIM-specific HTTP statuses by the
-// handler layer.
+// handler layer. ErrSCIMUserAlreadyExists is a typed AlreadyExists error so
+// every handler maps it to 409 (ADR-0026 D1); errors.Is still matches it by
+// identity.
 var (
-	ErrSCIMUserAlreadyExists = errors.New("scim: user with this userName already exists")
+	ErrSCIMUserAlreadyExists = status.Errorf(status.AlreadyExists, "scim: user with this userName already exists")
 	ErrSCIMUserNotFound      = errors.New("scim: user not found")
 )
 

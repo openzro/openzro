@@ -390,6 +390,11 @@ components:
           description: How user was issued by API or Integration
           type: string
           example: api
+        local_credential_state:
+          description: Set for local users (email and password accounts in the embedded Dex, ADR-0024). Omitted for every other user.
+          type: string
+          enum: [ "active", "deactivated" ]
+          example: active
         permissions:
           $ref: '#/components/schemas/UserPermissions'
       required:
@@ -400,6 +405,42 @@ components:
         - auto_groups
         - status
         - is_blocked
+    LocalUserCreateRequest:
+      type: object
+      properties:
+        email:
+          description: Email address; also the login name. It cannot be changed later.
+          type: string
+          example: ana@example.com
+        name:
+          description: Display name
+          type: string
+          example: Ana
+        password:
+          description: Initial password, 12 characters to 72 bytes of UTF-8. Never returned.
+          type: string
+          format: password
+        auto_groups:
+          description: Group IDs to assign
+          type: array
+          items:
+            type: string
+      required: [ email, password, auto_groups ]
+    LocalUserPasswordRequest:
+      type: object
+      properties:
+        password:
+          description: New password, 12 characters to 72 bytes of UTF-8. Never returned.
+          type: string
+          format: password
+      required: [ password ]
+    LocalUserConfig:
+      type: object
+      properties:
+        creation_enabled:
+          description: Whether this deployment allows creating local users (OPENZRO_SCIM_LOCAL_USERS_ENABLED and Dex configured).
+          type: boolean
+      required: [ creation_enabled ]
     UserPermissions:
       type: object
       properties:
@@ -2872,6 +2913,134 @@ paths:
           "$ref": "#/components/responses/requires_authentication"
         '403':
           "$ref": "#/components/responses/forbidden"
+        '500':
+          "$ref": "#/components/responses/internal_error"
+  /api/users/local:
+    post:
+      summary: Create a local user
+      description: Create a local user (email and password account in the embedded Dex, ADR-0024/0026). Requires local user creation to be enabled.
+      tags: [ Users ]
+      security:
+        - BearerAuth: [ ]
+        - TokenAuth: [ ]
+      requestBody:
+        description: Local user to create
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/LocalUserCreateRequest'
+      responses:
+        '200':
+          description: The created user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          "$ref": "#/components/responses/bad_request"
+        '401':
+          "$ref": "#/components/responses/requires_authentication"
+        '403':
+          "$ref": "#/components/responses/forbidden"
+        '404':
+          "$ref": "#/components/responses/not_found"
+        '409':
+          description: Conflict
+          content: { }
+        '500':
+          "$ref": "#/components/responses/internal_error"
+  /api/users/local/config:
+    get:
+      summary: Local user configuration
+      description: Whether this deployment allows creating local users.
+      tags: [ Users ]
+      security:
+        - BearerAuth: [ ]
+        - TokenAuth: [ ]
+      responses:
+        '200':
+          description: Local user configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocalUserConfig'
+        '401':
+          "$ref": "#/components/responses/requires_authentication"
+        '403':
+          "$ref": "#/components/responses/forbidden"
+  /api/users/{userId}/password:
+    post:
+      summary: Reset a local user's password
+      description: Replace a local user's password and revoke its refresh tokens. Already issued access tokens and connected peers are not cut off; deactivate the user for that.
+      tags: [ Users ]
+      security:
+        - BearerAuth: [ ]
+        - TokenAuth: [ ]
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+          description: The unique identifier of a user
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/LocalUserPasswordRequest'
+      responses:
+        '200':
+          description: The user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          "$ref": "#/components/responses/bad_request"
+        '401':
+          "$ref": "#/components/responses/requires_authentication"
+        '403':
+          "$ref": "#/components/responses/forbidden"
+        '404':
+          "$ref": "#/components/responses/not_found"
+        '409':
+          description: Conflict
+          content: { }
+        '500':
+          "$ref": "#/components/responses/internal_error"
+  /api/users/{userId}/deactivate:
+    post:
+      summary: Deactivate a local user
+      description: Permanently deactivate a local user. Its devices are disconnected, its tokens and Dex credential removed. It cannot be re-activated.
+      tags: [ Users ]
+      security:
+        - BearerAuth: [ ]
+        - TokenAuth: [ ]
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+          description: The unique identifier of a user
+      responses:
+        '200':
+          description: The deactivated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          "$ref": "#/components/responses/bad_request"
+        '401':
+          "$ref": "#/components/responses/requires_authentication"
+        '403':
+          "$ref": "#/components/responses/forbidden"
+        '404':
+          "$ref": "#/components/responses/not_found"
+        '409':
+          description: Conflict
+          content: { }
         '500':
           "$ref": "#/components/responses/internal_error"
   /api/users/current:

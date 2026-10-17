@@ -27,6 +27,10 @@ func AddEndpoints(accountManager account.Manager, router *mux.Router) {
 	userHandler := newHandler(accountManager)
 	router.HandleFunc("/users", userHandler.getAllUsers).Methods("GET", "OPTIONS")
 	router.HandleFunc("/users/current", userHandler.getCurrentUser).Methods("GET", "OPTIONS")
+	router.HandleFunc("/users/local", userHandler.createLocalUser).Methods("POST", "OPTIONS")
+	router.HandleFunc("/users/local/config", userHandler.getLocalUserConfig).Methods("GET", "OPTIONS")
+	router.HandleFunc("/users/{userId}/password", userHandler.resetLocalUserPassword).Methods("POST", "OPTIONS")
+	router.HandleFunc("/users/{userId}/deactivate", userHandler.deactivateLocalUser).Methods("POST", "OPTIONS")
 	router.HandleFunc("/users/{userId}", userHandler.updateUser).Methods("PUT", "OPTIONS")
 	router.HandleFunc("/users/{userId}", userHandler.deleteUser).Methods("DELETE", "OPTIONS")
 	router.HandleFunc("/users", userHandler.createUser).Methods("POST", "OPTIONS")
@@ -335,5 +339,22 @@ func toUserResponse(user *types.UserInfo, currenUserID string) *api.User {
 		IsBlocked:     user.IsBlocked,
 		LastLogin:     &user.LastLogin,
 		Issued:        &user.Issued,
+
+		LocalCredentialState: localCredentialStateResponse(user.LocalCredentialState),
+	}
+}
+
+// localCredentialStateResponse exposes the state of a visible local user
+// (ADR-0026 D2); nil for every other user.
+func localCredentialStateResponse(state string) *api.UserLocalCredentialState {
+	switch types.LocalCredentialState(state) {
+	case types.LocalCredentialActive:
+		v := api.UserLocalCredentialStateActive
+		return &v
+	case types.LocalCredentialDeactivated:
+		v := api.UserLocalCredentialStateDeactivated
+		return &v
+	default:
+		return nil
 	}
 }

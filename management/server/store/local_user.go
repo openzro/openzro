@@ -31,6 +31,7 @@ type persistedLocalState struct {
 	LocalCredentialState types.LocalCredentialState
 	LocalCleanupPending  bool
 	Blocked              bool
+	Role                 types.UserRole
 }
 
 // guardLocalUserWrites enforces ADR-0024 D3 on every generic user write
@@ -40,6 +41,7 @@ type persistedLocalState struct {
 //   - unblock a pending, deactivated or tombstoned local user, or
 //   - change LocalCredentialState or LocalCleanupPending at all, including
 //     inserting a new user with a non-empty state.
+//   - give the owner role to a user that stays blocked (ADR-0026 D1).
 //
 // Those transitions belong to the dedicated conditional operations below.
 // There is deliberately no flag to bypass this check.
@@ -71,7 +73,7 @@ func guardLocalUserWrites(tx *gorm.DB, users []*types.User, lockRows bool) error
 			read = tx.Clauses(clause.Locking{Strength: string(LockingStrengthUpdate)})
 		}
 		result := read.Model(&types.User{}).
-			Select("id", colLocalUserState, colLocalUserCleanup, "blocked").
+			Select("id", colLocalUserState, colLocalUserCleanup, "blocked", "role").
 			Where("id IN ?", ids[start:end]).
 			Order("id").
 			Find(&rows)
@@ -87,6 +89,18 @@ func guardLocalUserWrites(tx *gorm.DB, users []*types.User, lockRows bool) error
 		p, exists := persisted[u.Id]
 		if !exists {
 			p = persistedLocalState{ID: u.Id}
+		}
+		// Ownership never moves to a blocked user, which would leave the
+		// account without a usable owner; a terminal local user is blocked
+		// for good. Checked here, on the locked rows, so it holds against a
+		// concurrent terminal transition (ADR-0026 D1). The persisted state
+		// counts too: a transfer built before a deactivation carries
+		// Blocked=false and must still lose with 403, ahead of the
+		// re-activation refusal below. An ordinary blocked user can still be
+		// unblocked and promoted in one write.
+		if u.Role == types.UserRoleOwner && p.Role != types.UserRoleOwner &&
+			(u.Blocked || p.LocalCredentialState.MustStayBlocked()) {
+			return status.Errorf(status.PermissionDenied, "can't transfer ownership to blocked user %s", u.Id)
 		}
 		if u.LocalCredentialState != p.LocalCredentialState || u.LocalCleanupPending != p.LocalCleanupPending {
 			log.Errorf("refused generic save changing local credential state of user %s (%q -> %q)",
@@ -261,11 +275,35 @@ func (s *SqlStore) MarkLocalUserTerminal(ctx context.Context, accountID, userID 
 		return status.Errorf(status.InvalidArgument, "%q is not a terminal local user state", to)
 	}
 	return s.underAccountLock(ctx, accountID, func(tx *gorm.DB) error {
+		// The owner fence is part of the UPDATE, so an ownership transfer
+		// that commits after any earlier read still cannot leave the account
+		// with a permanently blocked owner (ADR-0026 D1).
 		result := tx.Model(&types.User{}).
-			Where(accountAndIDQueryCondition+" AND "+colLocalUserState+" IN ?", accountID, userID, from).
+			Where(accountAndIDQueryCondition+" AND "+colLocalUserState+" IN ? AND role <> ?",
+				accountID, userID, from, types.UserRoleOwner).
 			Updates(map[string]any{colLocalUserState: to, "blocked": true, colLocalUserCleanup: true})
+		if result.Error == nil && result.RowsAffected == 0 {
+			if err := refuseOwnerTermination(tx, accountID, userID); err != nil {
+				return err
+			}
+		}
 		return fencedResult(ctx, result, fmt.Sprintf("mark local user %s", to), userID)
 	})
+}
+
+// refuseOwnerTermination explains a terminal UPDATE that matched no row:
+// when the user is an owner, the refusal is a permission error rather than
+// a fencing failure.
+func refuseOwnerTermination(tx *gorm.DB, accountID, userID string) error {
+	var roles []types.UserRole
+	result := tx.Model(&types.User{}).Where(accountAndIDQueryCondition, accountID, userID).Pluck("role", &roles)
+	if result.Error != nil {
+		return status.Errorf(status.Internal, "failed to read the role of user %s: %v", userID, result.Error)
+	}
+	if len(roles) == 1 && roles[0] == types.UserRoleOwner {
+		return status.Errorf(status.PermissionDenied, "can't deactivate or delete a user with the owner role")
+	}
+	return nil
 }
 
 // ClearLocalUserCleanup records that the cleanup of a terminal transition

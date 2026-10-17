@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -599,7 +600,9 @@ func (am *DefaultAccountManager) SaveOrAddUsers(ctx context.Context, accountID, 
 
 	var updatedUsersInfo = make([]*types.UserInfo, 0, len(updates))
 
-	userInfos, err := am.GetUsersFromAccount(ctx, accountID, initiatorUserID)
+	// Enrich only the saved users, so an update's cost and failure surface
+	// do not grow with the account's other users or its delete history.
+	userInfos, err := am.BuildUserInfosForAccount(ctx, accountID, initiatorUserID, usersToSave)
 	if err != nil {
 		return nil, err
 	}
@@ -794,6 +797,9 @@ func validateUserUpdate(groupsMap map[string]*types.Group, initiatorUser, oldUse
 	if initiatorUser.Role == types.UserRoleAdmin && update.Role == types.UserRoleOwner && update.Role != oldUser.Role {
 		return status.Errorf(status.PermissionDenied, "only owners can add owner role to other users")
 	}
+	if update.Role == types.UserRoleOwner && oldUser.Role != types.UserRoleOwner && update.IsBlocked() {
+		return status.Errorf(status.PermissionDenied, "can't transfer ownership to a blocked user")
+	}
 	if oldUser.IsServiceUser && update.Role == types.UserRoleOwner {
 		return status.Errorf(status.PermissionDenied, "can't update a service user with owner role")
 	}
@@ -889,6 +895,10 @@ func (am *DefaultAccountManager) GetUsersFromAccount(ctx context.Context, accoun
 		return map[string]*types.UserInfo{}, nil
 	}
 
+	// Pending local-user reservations and tombstones are dropped before
+	// enrichment (ADR-0026 D2), so the cost tracks visible users rather than
+	// the permanent delete history.
+	accountUsers = slices.DeleteFunc(accountUsers, isHiddenFromSCIM)
 	return am.BuildUserInfosForAccount(ctx, accountID, initiatorUserID, accountUsers)
 }
 
@@ -962,6 +972,8 @@ func (am *DefaultAccountManager) BuildUserInfosForAccount(ctx context.Context, a
 				Status:        string(types.UserStatusActive),
 				IsServiceUser: localUser.IsServiceUser,
 				NonDeletable:  localUser.NonDeletable,
+
+				LocalCredentialState: string(localUser.LocalCredentialState),
 			}
 		}
 		userInfosMap[info.ID] = info
