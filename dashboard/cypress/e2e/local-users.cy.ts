@@ -57,4 +57,27 @@ describe("Local users", () => {
     cy.get("[data-cy=reset-local-password]").should("not.exist");
     cy.get("[data-cy=deactivate-local-user]").should("not.exist");
   });
+
+  it("re-enables the form when saving a new group fails", () => {
+    cy.intercept("POST", "/api/groups", { statusCode: 500, body: {} }).as(
+      "group",
+    );
+    cy.intercept("POST", "/api/users/local").as("create");
+
+    cy.visit("/team/users");
+    cy.get("[data-cy=create-local-user]").click();
+    cy.get("[data-cy=local-user-email]").type(`cy-${Date.now()}@example.com`);
+    cy.get("[data-cy=local-user-password]").type(password);
+    cy.get("[data-cy=local-user-password-confirm]").type(password);
+    cy.get("[data-cy=group-selector-open-close]").click();
+    cy.get("[data-cy=group-search-input]").type(
+      `cy-group-${Date.now()}{enter}`,
+    );
+    cy.get("[data-cy=group-selector-open-close]").click();
+
+    cy.get("[data-cy=local-user-create-submit]").click();
+    cy.wait("@group");
+    cy.get("[data-cy=local-user-create-submit]").should("not.be.disabled");
+    cy.get("@create.all").should("have.length", 0);
+  });
 });

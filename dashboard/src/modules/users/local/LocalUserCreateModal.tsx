@@ -44,26 +44,31 @@ export function LocalUserCreateModalContent({ onSuccess }: Readonly<Props>) {
     [submitting, email, password, confirm],
   );
 
-  const create = async () => {
+  // Saving the groups is part of the same promise as the create, so a group
+  // failure surfaces in the toast and every failure re-enables the form.
+  const create = () => {
     setSubmitting(true);
-    const groups = await saveGroups();
-    notify({
-      title: "Local user",
-      description: `${email} can now sign in with the password you set.`,
-      promise: request
-        .post({
+    const created = Promise.resolve()
+      .then(saveGroups)
+      .then((groups) =>
+        request.post({
           email,
           name,
           password,
           auto_groups: groups
             .map((g) => g.id)
             .filter((id): id is string => Boolean(id)),
-        })
-        .then(() => {
-          mutate("/users?service_user=false");
-          onSuccess();
-        })
-        .finally(() => setSubmitting(false)),
+        }),
+      )
+      .then(() => {
+        mutate("/users?service_user=false");
+        onSuccess();
+      })
+      .finally(() => setSubmitting(false));
+    notify({
+      title: "Local user",
+      description: `${email} can now sign in with the password you set.`,
+      promise: created,
       loadingMessage: "Creating the local user...",
     });
   };
