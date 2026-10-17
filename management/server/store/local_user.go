@@ -261,11 +261,35 @@ func (s *SqlStore) MarkLocalUserTerminal(ctx context.Context, accountID, userID 
 		return status.Errorf(status.InvalidArgument, "%q is not a terminal local user state", to)
 	}
 	return s.underAccountLock(ctx, accountID, func(tx *gorm.DB) error {
+		// The owner fence is part of the UPDATE, so an ownership transfer
+		// that commits after any earlier read still cannot leave the account
+		// with a permanently blocked owner (ADR-0026 D1).
 		result := tx.Model(&types.User{}).
-			Where(accountAndIDQueryCondition+" AND "+colLocalUserState+" IN ?", accountID, userID, from).
+			Where(accountAndIDQueryCondition+" AND "+colLocalUserState+" IN ? AND role <> ?",
+				accountID, userID, from, types.UserRoleOwner).
 			Updates(map[string]any{colLocalUserState: to, "blocked": true, colLocalUserCleanup: true})
+		if result.Error == nil && result.RowsAffected == 0 {
+			if err := refuseOwnerTermination(tx, accountID, userID); err != nil {
+				return err
+			}
+		}
 		return fencedResult(ctx, result, fmt.Sprintf("mark local user %s", to), userID)
 	})
+}
+
+// refuseOwnerTermination explains a terminal UPDATE that matched no row:
+// when the user is an owner, the refusal is a permission error rather than
+// a fencing failure.
+func refuseOwnerTermination(tx *gorm.DB, accountID, userID string) error {
+	var roles []types.UserRole
+	result := tx.Model(&types.User{}).Where(accountAndIDQueryCondition, accountID, userID).Pluck("role", &roles)
+	if result.Error != nil {
+		return status.Errorf(status.Internal, "failed to read the role of user %s: %v", userID, result.Error)
+	}
+	if len(roles) == 1 && roles[0] == types.UserRoleOwner {
+		return status.Errorf(status.PermissionDenied, "can't deactivate or delete a user with the owner role")
+	}
+	return nil
 }
 
 // ClearLocalUserCleanup records that the cleanup of a terminal transition

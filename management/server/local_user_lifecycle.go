@@ -133,6 +133,9 @@ func (am *DefaultAccountManager) terminateLocalUser(ctx context.Context, account
 		return nil
 	case user.LocalCredentialState != to:
 		if err := am.Store.MarkLocalUserTerminal(ctx, accountID, userID, to); err != nil {
+			if sErr, ok := status.FromError(err); ok && sErr.Type() == status.PermissionDenied {
+				return err
+			}
 			return status.Errorf(status.Internal, "mark local user %s: %v", to, err)
 		}
 		event := activity.UserBlocked
@@ -309,16 +312,13 @@ func (am *DefaultAccountManager) DeactivateLocalUser(ctx context.Context, accoun
 	return am.Store.GetUserByUserID(ctx, store.LockingStrengthShare, userID)
 }
 
-// checkLocalTermination applies the self and owner protections of the
-// regular user paths before a console deactivation or delete, which cannot
-// be undone: nobody terminates their own account, and an owner is never
-// terminated, so ownership has to move first.
+// checkLocalTermination refuses a console deactivation or delete of the
+// caller's own account, which cannot be undone. The owner rule is not
+// checked here: MarkLocalUserTerminal enforces it atomically on every
+// channel, which a read before the saga could not (ADR-0026 D1).
 func checkLocalTermination(initiatorUserID string, target *types.User) error {
 	if initiatorUserID == target.Id {
 		return status.Errorf(status.PermissionDenied, "users can't deactivate or delete themselves")
-	}
-	if target.Role == types.UserRoleOwner {
-		return status.Errorf(status.PermissionDenied, "can't deactivate or delete a user with the owner role")
 	}
 	return nil
 }

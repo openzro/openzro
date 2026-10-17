@@ -179,3 +179,27 @@ func TestGetUsersFromAccount_HidesLocalHistoryBeforeEnrichment(t *testing.T) {
 	}
 	assert.NotEmpty(t, cache.keys, "the visible local user is still enriched")
 }
+
+// The owner rule is enforced atomically by the terminal transition itself,
+// so it holds on every channel (console, SCIM PATCH active=false, SCIM
+// DELETE) and against an ownership transfer that lands after any earlier
+// read: the fenced UPDATE refuses an owner and reports 403, not 500.
+func TestLocalTermination_OwnerFenceIsAtomic(t *testing.T) {
+	m, accountID, creds := setupLocalUsers(t)
+	ctx := context.Background()
+	owner := createLocal(t, m, accountID, "owner@example.com")
+	setLocalRole(t, m, owner, types.UserRoleOwner)
+
+	for _, to := range []types.LocalCredentialState{types.LocalCredentialDeactivated, types.LocalCredentialTombstoned} {
+		requireStatusType(t, m.Store.MarkLocalUserTerminal(ctx, accountID, owner.Id, to), status.PermissionDenied)
+		// The saga past every pre-check, as when the promotion wins the race.
+		requireStatusType(t, m.terminateLocalUser(ctx, accountID, userID, owner.Id, to), status.PermissionDenied)
+		requireStillActive(t, m, creds, owner)
+	}
+
+	inactive := false
+	_, err := m.SCIMPatchUser(ctx, accountID, userID, owner.Id, account.SCIMUserPatch{Active: &inactive})
+	requireStatusType(t, err, status.PermissionDenied)
+	requireStatusType(t, m.SCIMDeactivateUser(ctx, accountID, userID, owner.Id), status.PermissionDenied)
+	requireStillActive(t, m, creds, owner)
+}
