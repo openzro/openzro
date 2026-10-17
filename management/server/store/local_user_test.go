@@ -213,3 +213,37 @@ func TestSqlStore_LegacyUsersMigrateToEmptyLocalState(t *testing.T) {
 		require.Zero(t, localCount, "a legacy row must not look like a local user")
 	})
 }
+
+// ADR-0024 (#205 prerequisites): until the delete saga exists, legacy
+// destructive paths must refuse local users instead of removing the
+// record and leaving their Dex credential behind; and an active local user
+// can only be blocked through a terminal transition, never by a generic
+// save (which would let REST block/unblock emulate re-activation).
+func TestSqlStore_LegacyPathsRefuseLocalUsers(t *testing.T) {
+	runTestForAllEngines(t, "../testdata/store.sql", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		require.NoError(t, s.CreatePendingLocalUser(ctx, newLocalUser("ana")))
+		require.NoError(t, s.FinalizeLocalUser(ctx, localTestAccountID, "ana"))
+
+		requireStatus(t, s.DeleteUser(ctx, LockingStrengthUpdate, localTestAccountID, "ana"), status.PreconditionFailed)
+		require.Equal(t, types.LocalCredentialActive, getUser(t, s, "ana").LocalCredentialState)
+
+		account, err := s.GetAccount(ctx, localTestAccountID)
+		require.NoError(t, err)
+		requireStatus(t, s.DeleteAccount(ctx, account), status.PreconditionFailed)
+		getUser(t, s, "ana")
+
+		block := getUser(t, s, "ana")
+		block.Blocked = true
+		requireStatus(t, s.SaveUser(ctx, LockingStrengthUpdate, block), status.BadRequest)
+		requireStatus(t, s.SaveUsers(ctx, LockingStrengthUpdate, []*types.User{block}), status.BadRequest)
+		require.False(t, getUser(t, s, "ana").Blocked)
+
+		// Ordinary users are unaffected.
+		plain := newLocalUser("plain")
+		require.NoError(t, s.SaveUser(ctx, LockingStrengthUpdate, plain))
+		plain.Blocked = true
+		require.NoError(t, s.SaveUser(ctx, LockingStrengthUpdate, plain))
+		require.NoError(t, s.DeleteUser(ctx, LockingStrengthUpdate, localTestAccountID, "plain"))
+	})
+}

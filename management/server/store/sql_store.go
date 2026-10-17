@@ -380,6 +380,10 @@ func (s *SqlStore) DeleteAccount(ctx context.Context, account *types.Account) er
 	start := time.Now()
 
 	err := s.transaction(ctx, s.db, func(tx *gorm.DB) error {
+		if err := refuseAccountDeleteWithLocalUsers(tx, account.Id); err != nil {
+			return err
+		}
+
 		result := tx.Select(clause.Associations).Delete(account.Policies, "account_id = ?", account.Id)
 		if result.Error != nil {
 			return result.Error
@@ -751,6 +755,9 @@ func (s *SqlStore) DeleteUserMFA(ctx context.Context, lockStrength LockingStreng
 
 func (s *SqlStore) DeleteUser(ctx context.Context, lockStrength LockingStrength, accountID, userID string) error {
 	err := s.transaction(ctx, s.db, func(tx *gorm.DB) error {
+		if err := refuseLocalUserDelete(tx, accountID, userID); err != nil {
+			return err
+		}
 		result := tx.Clauses(clause.Locking{Strength: string(lockStrength)}).
 			Delete(&types.PersonalAccessToken{}, "user_id = ?", userID)
 		if result.Error != nil {
@@ -761,6 +768,9 @@ func (s *SqlStore) DeleteUser(ctx context.Context, lockStrength LockingStrength,
 			Delete(&types.User{}, accountAndIDQueryCondition, accountID, userID).Error
 	})
 	if err != nil {
+		if sErr, ok := status.FromError(err); ok && sErr.Type() == status.PreconditionFailed {
+			return err
+		}
 		log.WithContext(ctx).Errorf("failed to delete user from the store: %s", err)
 		return status.Errorf(status.Internal, "failed to delete user from store")
 	}
