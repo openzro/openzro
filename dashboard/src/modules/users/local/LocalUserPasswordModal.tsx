@@ -17,7 +17,9 @@ type Props = {
 
 // LocalUserPasswordModalContent replaces a local user's password through
 // POST /api/users/{id}/password (ADR-0026 D1). The server also revokes
-// the user's refresh tokens, so existing sessions must sign in again.
+// the user's refresh tokens, but access tokens already issued stay valid
+// until they expire and connected peers stay up (ADR-0024 D6); the copy
+// says so and points to Deactivate for cutting access now.
 export function LocalUserPasswordModalContent({
   user,
   onSuccess,
@@ -33,7 +35,7 @@ export function LocalUserPasswordModalContent({
       title: "Password reset",
       description: `${
         user.email || user.name
-      } must sign in with the new password.`,
+      } must use the new password for future sign-ins.`,
       promise: request
         .post({ password }, `/${user.id}/password`)
         .then(() => onSuccess())
@@ -47,8 +49,9 @@ export function LocalUserPasswordModalContent({
       <div className="mt-2 flex flex-col items-center text-center">
         <h2 className="my-0 text-lg">Reset password</h2>
         <p className="max-w-xs text-sm text-oz2-text-muted">
-          Set a new password for {user.email || user.name}. Their current
-          sessions are signed out.
+          Set a new password for {user.email || user.name}. Future sign-ins need
+          it, but current sessions and connected devices keep access until their
+          tokens expire. Deactivate the user to cut access now.
         </p>
       </div>
 
