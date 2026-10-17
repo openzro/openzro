@@ -41,3 +41,4 @@ to understand *what* was decided and *why* without opening the issue.
 | [0023](./0023-policy-based-multi-resolver-dns.md) | Policy-based DNS response selection for multi-resolver zones | Proposed |
 | [0024](./0024-scim-provisioned-local-users.md) | SCIM-provisioned local users (password credentials in embedded Dex) | Accepted |
 | [0025](./0025-allowed-email-domains.md) | Account-level allowlist of email domains for new users | Accepted |
+| [0026](./0026-console-local-users-and-email-domains.md) | Console management of local users and the email-domain allowlist | Proposed |
