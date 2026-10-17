@@ -80,7 +80,7 @@ func (am *DefaultAccountManager) SCIMReplaceUser(ctx context.Context, accountID,
 	// A local user's deactivation runs its saga first, outside the account
 	// write lock (see the lock discipline in local_user_lifecycle.go).
 	if !input.Active {
-		if err := am.deactivateIfLocal(ctx, accountID, callerID, userID); err != nil {
+		if err := am.deactivateIfLocal(ctx, accountID, callerID, userID, &input.UserName, &input); err != nil {
 			return nil, err
 		}
 	}
@@ -137,7 +137,7 @@ func (am *DefaultAccountManager) SCIMReplaceUser(ctx context.Context, accountID,
 // sent are applied. Unspecified fields keep their existing values.
 func (am *DefaultAccountManager) SCIMPatchUser(ctx context.Context, accountID, callerID, userID string, patch account.SCIMUserPatch) (*types.User, error) {
 	if patch.Active != nil && !*patch.Active {
-		if err := am.deactivateIfLocal(ctx, accountID, callerID, userID); err != nil {
+		if err := am.deactivateIfLocal(ctx, accountID, callerID, userID, patch.UserName, nil); err != nil {
 			return nil, err
 		}
 	}
@@ -439,13 +439,32 @@ func (am *DefaultAccountManager) isLocalUserOf(ctx context.Context, accountID, u
 
 // deactivateIfLocal runs the terminal deactivation saga when userID is a
 // local user; other users are left to the caller's generic update.
-func (am *DefaultAccountManager) deactivateIfLocal(ctx context.Context, accountID, callerID, userID string) error {
+//
+// The whole request is authorized and validated first: the saga is
+// irreversible in v1, so a request that would be rejected afterwards (a
+// rename, an invalid PUT body) must be rejected before it starts. userName
+// is the requested userName when the request carries one; full is the PUT
+// representation, nil for PATCH.
+func (am *DefaultAccountManager) deactivateIfLocal(ctx context.Context, accountID, callerID, userID string,
+	userName *string, full *account.SCIMUserInput) error {
 	local, err := am.isLocalUserOf(ctx, accountID, userID)
 	if err != nil || !local {
 		return err
 	}
 	if err := am.requireSCIMPermission(ctx, accountID, callerID, operations.Update); err != nil {
 		return err
+	}
+	user, err := am.getSCIMVisibleUser(ctx, accountID, userID)
+	if err != nil {
+		return err
+	}
+	if full != nil {
+		if err := validateSCIMUserInput(full); err != nil {
+			return err
+		}
+	}
+	if userName != nil && !strings.EqualFold(*userName, user.SCIMUserName) {
+		return status.Errorf(status.BadRequest, "the userName of a local user cannot be changed")
 	}
 	return am.terminateLocalUser(ctx, accountID, callerID, userID, types.LocalCredentialDeactivated)
 }
