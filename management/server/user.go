@@ -600,7 +600,9 @@ func (am *DefaultAccountManager) SaveOrAddUsers(ctx context.Context, accountID, 
 
 	var updatedUsersInfo = make([]*types.UserInfo, 0, len(updates))
 
-	userInfos, err := am.getUsersFromAccount(ctx, accountID, initiatorUserID, true)
+	// Enrich only the saved users, so an update's cost and failure surface
+	// do not grow with the account's other users or its delete history.
+	userInfos, err := am.BuildUserInfosForAccount(ctx, accountID, initiatorUserID, usersToSave)
 	if err != nil {
 		return nil, err
 	}
@@ -866,16 +868,6 @@ func (am *DefaultAccountManager) GetOrCreateAccountByUser(ctx context.Context, u
 // GetUsersFromAccount performs a batched request for users from IDP by account ID apply filter on what data to return
 // based on provided user role.
 func (am *DefaultAccountManager) GetUsersFromAccount(ctx context.Context, accountID, initiatorUserID string) (map[string]*types.UserInfo, error) {
-	return am.getUsersFromAccount(ctx, accountID, initiatorUserID, false)
-}
-
-// getUsersFromAccount lists the account's users. Unless includeHidden is
-// set, pending local-user reservations and tombstones are dropped before
-// enrichment (ADR-0026 D2), so the cost tracks visible users rather than
-// the permanent delete history. The update path includes them because it
-// reads back exactly the users it saved.
-func (am *DefaultAccountManager) getUsersFromAccount(ctx context.Context, accountID, initiatorUserID string,
-	includeHidden bool) (map[string]*types.UserInfo, error) {
 	allowed, err := am.permissionsManager.ValidateUserPermissions(ctx, accountID, initiatorUserID, modules.Users, operations.Read)
 	if err != nil {
 		return nil, status.NewPermissionValidationError(err)
@@ -903,9 +895,10 @@ func (am *DefaultAccountManager) getUsersFromAccount(ctx context.Context, accoun
 		return map[string]*types.UserInfo{}, nil
 	}
 
-	if !includeHidden {
-		accountUsers = slices.DeleteFunc(accountUsers, isHiddenFromSCIM)
-	}
+	// Pending local-user reservations and tombstones are dropped before
+	// enrichment (ADR-0026 D2), so the cost tracks visible users rather than
+	// the permanent delete history.
+	accountUsers = slices.DeleteFunc(accountUsers, isHiddenFromSCIM)
 	return am.BuildUserInfosForAccount(ctx, accountID, initiatorUserID, accountUsers)
 }
 

@@ -232,3 +232,30 @@ func TestOwnershipTransfer_RefusesBlockedTarget(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, types.UserRoleUser, stored.Role)
 }
+
+// A user update builds its response from the users it saved, so its cost
+// and failure surface do not grow with the account's delete history.
+func TestSaveUser_DoesNotEnrichUnrelatedUsers(t *testing.T) {
+	m, accountID, _ := setupLocalUsers(t)
+	ctx := context.Background()
+	u := createLocal(t, m, accountID, "ana@example.com")
+	gone := createLocal(t, m, accountID, "bea@example.com")
+	require.NoError(t, m.DeleteUser(ctx, accountID, userID, gone.Id))
+
+	cache := &recordingUserCache{}
+	m.idpManager = &idp.MockIDP{}
+	m.externalCacheManager = cache
+
+	stored, err := m.Store.GetUserByUserID(ctx, store.LockingStrengthShare, u.Id)
+	require.NoError(t, err)
+	update := stored.Copy()
+	update.Role = types.UserRoleAdmin
+	info, err := m.SaveUser(ctx, accountID, userID, update)
+	require.NoError(t, err)
+	assert.Equal(t, u.Id, info.ID)
+	assert.Equal(t, string(types.UserRoleAdmin), info.Role)
+	require.NotEmpty(t, cache.keys)
+	for _, key := range cache.keys {
+		assert.Contains(t, key, u.Id, "only the updated user is enriched")
+	}
+}
