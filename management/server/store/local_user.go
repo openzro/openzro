@@ -30,6 +30,7 @@ type persistedLocalState struct {
 	ID                   string
 	LocalCredentialState types.LocalCredentialState
 	LocalCleanupPending  bool
+	Blocked              bool
 }
 
 // guardLocalUserWrites enforces ADR-0024 D3 on every generic user write
@@ -70,7 +71,7 @@ func guardLocalUserWrites(tx *gorm.DB, users []*types.User, lockRows bool) error
 			read = tx.Clauses(clause.Locking{Strength: string(LockingStrengthUpdate)})
 		}
 		result := read.Model(&types.User{}).
-			Select("id", colLocalUserState, colLocalUserCleanup).
+			Select("id", colLocalUserState, colLocalUserCleanup, "blocked").
 			Where("id IN ?", ids[start:end]).
 			Order("id").
 			Find(&rows)
@@ -97,6 +98,13 @@ func guardLocalUserWrites(tx *gorm.DB, users []*types.User, lockRows bool) error
 			return status.Errorf(status.BadRequest,
 				"local user %s is %s and cannot be unblocked: re-activation is not supported",
 				u.Id, p.LocalCredentialState)
+		}
+		// An active local user is only ever blocked by a terminal
+		// transition (SCIM deactivate/delete). Blocking it through a generic
+		// save would let a later unblock emulate re-activation.
+		if p.LocalCredentialState == types.LocalCredentialActive && u.Blocked != p.Blocked {
+			return status.Errorf(status.BadRequest,
+				"local user %s can only be blocked by deactivating it through SCIM", u.Id)
 		}
 	}
 	return nil
@@ -284,6 +292,53 @@ func fencedResult(ctx context.Context, result *gorm.DB, op, userID string) error
 	}
 	if result.RowsAffected == 0 {
 		return status.Errorf(status.PreconditionFailed, "%s %s: user is not in the expected state", op, userID)
+	}
+	return nil
+}
+
+// refuseLocalUserDelete keeps the generic user delete away from local users
+// until their delete saga exists: removing the record would leave the Dex
+// credential behind and reopen JIT for its sub (ADR-0024, #205). A user's
+// local state is fixed at insert (it never moves between "" and non-empty),
+// so reading it on the row the delete locks anyway is stable and adds no
+// lock-order edge.
+func refuseLocalUserDelete(tx *gorm.DB, accountID, userID string) error {
+	var states []types.LocalCredentialState
+	result := tx.Clauses(clause.Locking{Strength: string(LockingStrengthUpdate)}).
+		Model(&types.User{}).Where(accountAndIDQueryCondition, accountID, userID).
+		Pluck(colLocalUserState, &states)
+	if result.Error != nil {
+		return status.Errorf(status.Internal, "failed to read user %s: %v", userID, result.Error)
+	}
+	if len(states) > 0 && states[0] != types.LocalCredentialNone {
+		return status.Errorf(status.PreconditionFailed,
+			"user %s is a local user: deactivate or delete it through SCIM", userID)
+	}
+	return nil
+}
+
+// refuseAccountDeleteWithLocalUsers refuses to delete an account that still
+// has local users, for the same reason (ADR-0024, #205). It takes the
+// account mutex first and the caller keeps it until the delete commits:
+// CreatePendingLocalUser takes the same mutex, so a reservation either
+// committed before this count (refused here) or waits and then fails on the
+// missing account. Without the mutex a reservation could commit between the
+// count and the account-wide deletes, which would remove the new user and
+// orphan its Dex credential.
+func refuseAccountDeleteWithLocalUsers(tx *gorm.DB, accountID string) error {
+	if err := lockAccount(tx, accountID); err != nil {
+		return err
+	}
+	var n int64
+	result := tx.Model(&types.User{}).
+		Where("account_id = ? AND "+colLocalUserState+" <> ?", accountID, types.LocalCredentialNone).
+		Count(&n)
+	if result.Error != nil {
+		return status.Errorf(status.Internal, "failed to read local users of account %s: %v", accountID, result.Error)
+	}
+	if n > 0 {
+		return status.Errorf(status.PreconditionFailed,
+			"account %s has %d local user(s): delete them through SCIM first", accountID, n)
 	}
 	return nil
 }

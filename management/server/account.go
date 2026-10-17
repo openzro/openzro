@@ -124,6 +124,10 @@ type DefaultAccountManager struct {
 	// working with the in-process fall-back.
 	coordinator cluster.Coordinator
 
+	// localCreds is Dex's password DB, set by EnableLocalUsers when SCIM
+	// local users are switched on (ADR-0024). nil means the feature is off.
+	localCreds localCredentials
+
 	// admissionBypasses owns the per-peer admission bypass store
 	// (ADR-0004 — break-glass overrides for the Device Admission
 	// gate, with mandatory audit trail). When nil, the bypass
@@ -958,6 +962,15 @@ func (am *DefaultAccountManager) isCacheCold(ctx context.Context, store cacheSto
 
 // DeleteAccount deletes an account and all its users from local store and from the remote IDP if the requester is an admin and account owner
 func (am *DefaultAccountManager) DeleteAccount(ctx context.Context, accountID, userID string) error {
+	// Before the snapshot and held to the end: serializes with local-user
+	// creation so a user created concurrently cannot slip past the
+	// local-user preflight below (see lockAccountLifecycle).
+	unlockLifecycle, err := am.lockAccountLifecycle(ctx, accountID)
+	if err != nil {
+		return status.Errorf(status.Internal, "%v", err)
+	}
+	defer unlockLifecycle()
+
 	unlock := am.Store.AcquireWriteLockByUID(ctx, accountID)
 	defer unlock()
 	account, err := am.Store.GetAccount(ctx, accountID)
@@ -972,6 +985,17 @@ func (am *DefaultAccountManager) DeleteAccount(ctx context.Context, accountID, u
 
 	if !allowed {
 		return status.Errorf(status.PermissionDenied, "user is not allowed to delete account. Only account owner can delete account")
+	}
+
+	// Refuse before deleting anything: the users below are removed one by
+	// one, so reaching the store's local-user check at the end would leave
+	// the account half deleted (ADR-0024, #205). The store check still
+	// closes the race with a reservation made after this read.
+	for _, u := range account.Users {
+		if u.LocalCredentialState != types.LocalCredentialNone {
+			return status.Errorf(status.PreconditionFailed,
+				"account %s has SCIM local users: delete them through SCIM first", accountID)
+		}
 	}
 
 	userInfosMap, err := am.BuildUserInfosForAccount(ctx, accountID, userID, maps.Values(account.Users))

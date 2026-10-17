@@ -86,6 +86,9 @@ type Manager interface {
 	// SCIM v2 Users surface — bypasses the IdP roundtrip because the
 	// IdP is the caller. See management/server/user_scim.go.
 	SCIMCreateUser(ctx context.Context, accountID, callerID string, input SCIMUserInput) (*types.User, error)
+	// SCIMCreateLocalUser creates a password-backed local user in the
+	// embedded Dex (ADR-0024).
+	SCIMCreateLocalUser(ctx context.Context, accountID, callerID string, input SCIMUserInput, password string) (*types.User, error)
 	SCIMReplaceUser(ctx context.Context, accountID, callerID, userID string, input SCIMUserInput) (*types.User, error)
 	SCIMPatchUser(ctx context.Context, accountID, callerID, userID string, patch SCIMUserPatch) (*types.User, error)
 	SCIMDeactivateUser(ctx context.Context, accountID, callerID, userID string) error

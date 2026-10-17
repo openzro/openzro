@@ -24,6 +24,7 @@ type fakeDex struct {
 
 	mu          sync.Mutex
 	connectors  []*apiv2.Connector
+	passwords   []*apiv2.Password
 	createErr   error
 	updateErr   error
 	deleteErr   error
