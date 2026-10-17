@@ -264,8 +264,7 @@ func sameStringSet(a, b []string) bool {
 }
 
 // deleteLocalUserViaREST applies the REST delete's authorization to a local
-// user and then tombstones it. Local users are integration-issued, so only
-// a service user may delete them, as for any SCIM-provisioned user.
+// user and then tombstones it.
 func (am *DefaultAccountManager) deleteLocalUserViaREST(ctx context.Context, accountID, initiatorUserID, targetUserID string) error {
 	allowed, err := am.permissionsManager.ValidateUserPermissions(ctx, accountID, initiatorUserID, modules.Users, operations.Delete)
 	if err != nil {
@@ -274,13 +273,9 @@ func (am *DefaultAccountManager) deleteLocalUserViaREST(ctx context.Context, acc
 	if !allowed {
 		return status.NewPermissionDeniedError()
 	}
-	initiator, err := am.Store.GetUserByUserID(ctx, store.LockingStrengthShare, initiatorUserID)
-	if err != nil {
-		return err
-	}
-	if !initiator.IsServiceUser {
-		return status.Errorf(status.PermissionDenied, "only integration service user can delete this user")
-	}
+	// Unlike other integration-issued users, a local user is not restricted
+	// to service-user deletes: no external IdP re-provisions it, and the
+	// console manages it (ADR-0026 D1).
 	target, err := am.Store.GetUserByUserID(ctx, store.LockingStrengthShare, targetUserID)
 	if err != nil {
 		return err

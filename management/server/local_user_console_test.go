@@ -111,3 +111,18 @@ func TestConsoleTermination_RefusesSelfAndOwner(t *testing.T) {
 	requireStatusType(t, m.DeleteUser(ctx, accountID, svc.ID, owner.Id), status.PermissionDenied)
 	requireStillActive(t, m, creds, owner)
 }
+
+// ADR-0026 D1: an administrator deletes a local user from the console. The
+// regular rule that only a service user deletes integration-issued users
+// does not apply: no external IdP re-provisions a local user.
+func TestRESTDeleteLocalUser_ByHumanAdmin(t *testing.T) {
+	m, accountID, creds := setupLocalUsers(t)
+	ctx := context.Background()
+	u := createLocal(t, m, accountID, "ana@example.com")
+
+	require.NoError(t, m.DeleteUser(ctx, accountID, userID, u.Id))
+	stored, err := m.Store.GetUserByUserID(ctx, store.LockingStrengthShare, u.Id)
+	require.NoError(t, err)
+	assert.Equal(t, types.LocalCredentialTombstoned, stored.LocalCredentialState)
+	assert.Nil(t, creds.entry("ana@example.com"))
+}

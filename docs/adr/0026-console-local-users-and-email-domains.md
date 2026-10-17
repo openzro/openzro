@@ -32,13 +32,15 @@ and it does not say which users are local.
 | `POST /api/users/local` `{email, name, password, auto_groups}` | The ADR-0024 create saga, with the same validation, allowlist, policy and opt-in gate. Returns the user. |
 | `POST /api/users/{id}/password` `{password}` | The isolated reset (D6): ownership check, then revoke refresh tokens. |
 | `POST /api/users/{id}/deactivate` | The terminal deactivation (D7). It is permanent. |
-| `DELETE /api/users/{id}` | Unchanged: tombstones a local user (D7). |
+| `DELETE /api/users/{id}` | Tombstones a local user (D7). Any caller with `Users.Delete` may do it, not only a service user as for other integration-issued users: no external IdP re-provisions a local user. |
 | `GET /api/users/local/config` | `{creation_enabled}`, so the console can show or hide the create action. |
 
 No saga logic is duplicated: the handlers translate the body and call the
 same manager methods, so locks, fencing, ownership checks and error mapping
 are identical to SCIM. Permissions are the same Users-module checks the
-sagas already perform. Creation stays behind `OPENZRO_SCIM_LOCAL_USERS_ENABLED`
+sagas already perform. Because deactivation and delete cannot be undone,
+both refuse to act on the caller's own account or on an owner; ownership
+has to move first, as for a regular delete. Creation stays behind `OPENZRO_SCIM_LOCAL_USERS_ENABLED`
 (which gates creation only, ADR-0024 D10) and Dex on Postgres.
 
 ### D2 — The REST user model says which users are local
