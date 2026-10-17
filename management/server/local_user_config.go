@@ -5,10 +5,12 @@ import (
 	"strconv"
 )
 
-// LocalUsersEnabledEnv opts in to SCIM-provisioned local users. Off by
-// default: enable it only once every management replica runs a version
-// with the local-user store guards, because an older replica's
-// SaveAccount does not take the account mutex (#205).
+// LocalUsersEnabledEnv opts in to creating SCIM-provisioned local users.
+// Off by default: enable it only once every management replica runs a
+// version with the local-user store guards, because an older replica's
+// SaveAccount does not take the account mutex (#205). It gates creation
+// only: turning it off later does not disable existing local users, which
+// keep authenticating and stay resettable and deprovisionable.
 const LocalUsersEnabledEnv = "OPENZRO_SCIM_LOCAL_USERS_ENABLED"
 
 // LocalUsersEnabledFromEnv reports whether the operator opted in. Anything

@@ -325,7 +325,11 @@ covers a lock lost mid-saga.
 
 - The password path runs only when `dex_proxy` is configured. A `password`
   sent without Dex → SCIM 400 with an explicit message. It is never silently
-  dropped.
+  dropped. `OPENZRO_SCIM_LOCAL_USERS_ENABLED` is the rollout gate for
+  **creating** local users only. Reset, deactivation and delete stay
+  available for existing local users whenever Dex is configured, because
+  turning the opt-in off does not stop those users from authenticating, so
+  they must remain deprovisionable on every replica.
 - Users with `LocalCredentialState == ""` (every user that exists today, and
   any SCIM user created without `password`) keep their current behavior
   byte-for-byte, including today's soft `DELETE` (`Blocked=true`, still

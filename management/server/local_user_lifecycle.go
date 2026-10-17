@@ -33,7 +33,7 @@ import (
 func (am *DefaultAccountManager) SCIMResetLocalPassword(ctx context.Context, accountID, callerID, userID, password string,
 	replace *account.SCIMUserInput) (*types.User, error) {
 	if am.localCreds == nil {
-		return nil, status.Errorf(status.BadRequest, "local users are not enabled on this deployment")
+		return nil, status.Errorf(status.BadRequest, "Dex is not configured on this deployment")
 	}
 	if err := am.requireSCIMPermission(ctx, accountID, callerID, operations.Update); err != nil {
 		return nil, err
@@ -104,7 +104,7 @@ func (am *DefaultAccountManager) SCIMResetLocalPassword(ctx context.Context, acc
 func (am *DefaultAccountManager) terminateLocalUser(ctx context.Context, accountID, callerID, userID string,
 	to types.LocalCredentialState) error {
 	if am.localCreds == nil {
-		return status.Errorf(status.BadRequest, "local users are not enabled on this deployment")
+		return status.Errorf(status.BadRequest, "Dex is not configured on this deployment")
 	}
 	user, err := am.Store.GetUserByUserID(ctx, store.LockingStrengthShare, userID)
 	if err != nil {

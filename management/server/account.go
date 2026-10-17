@@ -124,9 +124,14 @@ type DefaultAccountManager struct {
 	// working with the in-process fall-back.
 	coordinator cluster.Coordinator
 
-	// localCreds is Dex's password DB, set by EnableLocalUsers when SCIM
-	// local users are switched on (ADR-0024). nil means the feature is off.
+	// localCreds is Dex's password DB, used by every local-user operation
+	// (ADR-0024). It is wired whenever Dex is configured, so existing local
+	// users stay deprovisionable even when creation is off.
 	localCreds localCredentials
+	// localUserCreationEnabled is the opt-in rollout gate for creating new
+	// local users (LocalUsersEnabledEnv). It does not gate the lifecycle of
+	// users that already exist.
+	localUserCreationEnabled bool
 
 	// admissionBypasses owns the per-peer admission bypass store
 	// (ADR-0004 — break-glass overrides for the Device Admission
