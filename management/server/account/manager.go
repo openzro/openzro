@@ -89,6 +89,9 @@ type Manager interface {
 	// SCIMCreateLocalUser creates a password-backed local user in the
 	// embedded Dex (ADR-0024).
 	SCIMCreateLocalUser(ctx context.Context, accountID, callerID string, input SCIMUserInput, password string) (*types.User, error)
+	// SCIMResetLocalPassword replaces a local user's password (ADR-0024 D6).
+	// replace is the rest of a PUT representation, nil for PATCH.
+	SCIMResetLocalPassword(ctx context.Context, accountID, callerID, userID, password string, replace *SCIMUserInput) (*types.User, error)
 	SCIMReplaceUser(ctx context.Context, accountID, callerID, userID string, input SCIMUserInput) (*types.User, error)
 	SCIMPatchUser(ctx context.Context, accountID, callerID, userID string, patch SCIMUserPatch) (*types.User, error)
 	SCIMDeactivateUser(ctx context.Context, accountID, callerID, userID string) error

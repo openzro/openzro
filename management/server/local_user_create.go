@@ -38,14 +38,30 @@ type localCredentials interface {
 	CreatePassword(ctx context.Context, email, username, userID string, hash []byte) error
 	UpdatePassword(ctx context.Context, email string, hash []byte) error
 	ListPasswords(ctx context.Context) ([]dex_proxy.PasswordEntry, error)
+	DeletePassword(ctx context.Context, email string) error
+	RevokeAllRefreshTokens(ctx context.Context, sub string) error
 }
 
-// EnableLocalUsers switches on SCIM-provisioned local users (ADR-0024),
-// backed by Dex's password DB. Call it only when the operator opted in and
-// every management replica runs a version with the local-user store guards
-// (#205); without it, creating a local user is refused.
-func (am *DefaultAccountManager) EnableLocalUsers(creds localCredentials) {
+// UseLocalCredentials wires Dex's password DB for local-user operations.
+// Call it whenever Dex is configured, independently of the creation
+// opt-in: local users that already exist keep authenticating against Dex,
+// so their reset, deactivation and delete must keep working.
+func (am *DefaultAccountManager) UseLocalCredentials(creds localCredentials) {
 	am.localCreds = creds
+}
+
+// EnableLocalUserCreation turns on creating new local users (ADR-0024).
+// Call it only when the operator opted in and every management replica runs
+// a version with the local-user store guards (#205). Creation also needs
+// UseLocalCredentials.
+func (am *DefaultAccountManager) EnableLocalUserCreation() {
+	am.localUserCreationEnabled = true
+}
+
+// EnableLocalUsers wires the credentials and turns creation on.
+func (am *DefaultAccountManager) EnableLocalUsers(creds localCredentials) {
+	am.UseLocalCredentials(creds)
+	am.EnableLocalUserCreation()
 }
 
 // validateLocalPassword applies the ADR-0024 D7 policy. The error never
@@ -78,8 +94,8 @@ func validateLocalUserName(userName string) error {
 // request resumes it with the stored identity.
 func (am *DefaultAccountManager) SCIMCreateLocalUser(ctx context.Context, accountID, callerID string,
 	input account.SCIMUserInput, password string) (*types.User, error) {
-	if am.localCreds == nil {
-		return nil, status.Errorf(status.BadRequest, "local users are not enabled on this deployment")
+	if am.localCreds == nil || !am.localUserCreationEnabled {
+		return nil, status.Errorf(status.BadRequest, "creating local users is not enabled on this deployment")
 	}
 	if err := am.requireSCIMPermission(ctx, accountID, callerID, operations.Create); err != nil {
 		return nil, err

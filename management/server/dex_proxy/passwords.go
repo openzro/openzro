@@ -68,3 +68,41 @@ func (c *Client) ListPasswords(ctx context.Context) ([]PasswordEntry, error) {
 	}
 	return out, nil
 }
+
+// DeletePassword removes the entry for email. Like UpdatePassword it is
+// keyed by email only, so callers verify ownership first. Returns
+// ErrNotFound when no entry matches.
+func (c *Client) DeletePassword(ctx context.Context, email string) error {
+	if email == "" {
+		return errors.New("dex_proxy: email is required")
+	}
+	resp, err := c.dex.DeletePassword(ctx, &apiv2.DeletePasswordReq{Email: email})
+	if err != nil {
+		return mapErr(err)
+	}
+	if resp.GetNotFound() {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// RevokeAllRefreshTokens revokes every refresh token Dex holds for the
+// user, across all clients, so no session can be renewed. sub is the token
+// subject (the openZro user ID). Access tokens already issued stay valid
+// until they expire. A token that disappears between the list and the
+// revoke is not an error.
+func (c *Client) RevokeAllRefreshTokens(ctx context.Context, sub string) error {
+	if sub == "" {
+		return errors.New("dex_proxy: subject is required")
+	}
+	resp, err := c.dex.ListRefresh(ctx, &apiv2.ListRefreshReq{UserId: sub})
+	if err != nil {
+		return mapErr(err)
+	}
+	for _, ref := range resp.GetRefreshTokens() {
+		if _, err := c.dex.RevokeRefresh(ctx, &apiv2.RevokeRefreshReq{UserId: sub, ClientId: ref.GetClientId()}); err != nil {
+			return mapErr(err)
+		}
+	}
+	return nil
+}

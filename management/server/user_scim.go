@@ -77,6 +77,14 @@ func (am *DefaultAccountManager) SCIMCreateUser(ctx context.Context, accountID, 
 // representation. Fields not present in the input revert to their
 // defaults.
 func (am *DefaultAccountManager) SCIMReplaceUser(ctx context.Context, accountID, callerID, userID string, input account.SCIMUserInput) (*types.User, error) {
+	// A local user's deactivation runs its saga first, outside the account
+	// write lock (see the lock discipline in local_user_lifecycle.go).
+	if !input.Active {
+		if err := am.deactivateIfLocal(ctx, accountID, callerID, userID, &input.UserName, &input); err != nil {
+			return nil, err
+		}
+	}
+
 	unlock := am.Store.AcquireWriteLockByUID(ctx, accountID)
 	defer unlock()
 
@@ -128,6 +136,12 @@ func (am *DefaultAccountManager) SCIMReplaceUser(ctx context.Context, accountID,
 // SCIMPatchUser is PATCH /Users/{id}: only the operations the IdP
 // sent are applied. Unspecified fields keep their existing values.
 func (am *DefaultAccountManager) SCIMPatchUser(ctx context.Context, accountID, callerID, userID string, patch account.SCIMUserPatch) (*types.User, error) {
+	if patch.Active != nil && !*patch.Active {
+		if err := am.deactivateIfLocal(ctx, accountID, callerID, userID, patch.UserName, nil); err != nil {
+			return nil, err
+		}
+	}
+
 	unlock := am.Store.AcquireWriteLockByUID(ctx, accountID)
 	defer unlock()
 
@@ -197,6 +211,18 @@ func (am *DefaultAccountManager) SCIMPatchUser(ctx context.Context, accountID, c
 // (active=false) and remains in the directory. Operators wanting a
 // hard delete use the existing /api/users/{id} DELETE.
 func (am *DefaultAccountManager) SCIMDeactivateUser(ctx context.Context, accountID, callerID, userID string) error {
+	// A local user is tombstoned by its saga, outside the account write
+	// lock; this also reaches a tombstone whose cleanup is still pending,
+	// which the hidden-user check below would otherwise turn into 404.
+	if local, err := am.isLocalUserOf(ctx, accountID, userID); err != nil {
+		return err
+	} else if local {
+		if err := am.requireSCIMPermission(ctx, accountID, callerID, operations.Delete); err != nil {
+			return err
+		}
+		return am.terminateLocalUser(ctx, accountID, callerID, userID, types.LocalCredentialTombstoned)
+	}
+
 	unlock := am.Store.AcquireWriteLockByUID(ctx, accountID)
 	defer unlock()
 
@@ -382,7 +408,10 @@ func gateLocalUserUpdate(user *types.User, active *bool, userName *string) error
 	if user.LocalCredentialState == types.LocalCredentialNone {
 		return nil
 	}
-	if active != nil && !*active {
+	// Deactivation has already run its saga (deactivateIfLocal) by the time
+	// the generic update sees the user; an active local user here means it
+	// did not, which must not be applied as a plain block.
+	if active != nil && !*active && user.LocalCredentialState == types.LocalCredentialActive {
 		return errLocalUserDeactivationUnsupported()
 	}
 	if userName != nil && !strings.EqualFold(*userName, user.SCIMUserName) {
@@ -392,5 +421,50 @@ func gateLocalUserUpdate(user *types.User, active *bool, userName *string) error
 }
 
 func errLocalUserDeactivationUnsupported() error {
-	return status.Errorf(status.BadRequest, "deactivating or deleting SCIM local users is not supported yet")
+	return status.Errorf(status.Internal, "a local user can only be deactivated through its cleanup saga")
+}
+
+// isLocalUserOf reports whether userID is a local user of the account. A
+// missing user is not an error here; the caller's own lookup reports it.
+func (am *DefaultAccountManager) isLocalUserOf(ctx context.Context, accountID, userID string) (bool, error) {
+	user, err := am.Store.GetUserByUserID(ctx, store.LockingStrengthShare, userID)
+	if err != nil {
+		if sErr, ok := status.FromError(err); ok && sErr.Type() == status.NotFound {
+			return false, nil
+		}
+		return false, err
+	}
+	return user.AccountID == accountID && user.LocalCredentialState != types.LocalCredentialNone, nil
+}
+
+// deactivateIfLocal runs the terminal deactivation saga when userID is a
+// local user; other users are left to the caller's generic update.
+//
+// The whole request is authorized and validated first: the saga is
+// irreversible in v1, so a request that would be rejected afterwards (a
+// rename, an invalid PUT body) must be rejected before it starts. userName
+// is the requested userName when the request carries one; full is the PUT
+// representation, nil for PATCH.
+func (am *DefaultAccountManager) deactivateIfLocal(ctx context.Context, accountID, callerID, userID string,
+	userName *string, full *account.SCIMUserInput) error {
+	local, err := am.isLocalUserOf(ctx, accountID, userID)
+	if err != nil || !local {
+		return err
+	}
+	if err := am.requireSCIMPermission(ctx, accountID, callerID, operations.Update); err != nil {
+		return err
+	}
+	user, err := am.getSCIMVisibleUser(ctx, accountID, userID)
+	if err != nil {
+		return err
+	}
+	if full != nil {
+		if err := validateSCIMUserInput(full); err != nil {
+			return err
+		}
+	}
+	if userName != nil && !strings.EqualFold(*userName, user.SCIMUserName) {
+		return status.Errorf(status.BadRequest, "the userName of a local user cannot be changed")
+	}
+	return am.terminateLocalUser(ctx, accountID, callerID, userID, types.LocalCredentialDeactivated)
 }

@@ -235,6 +235,14 @@ func (am *DefaultAccountManager) DeleteUser(ctx context.Context, accountID, init
 		return status.Errorf(status.InvalidArgument, "self deletion is not allowed")
 	}
 
+	// A SCIM local user is tombstoned by its cleanup saga instead of being
+	// removed, outside the account write lock (see local_user_lifecycle.go).
+	if local, err := am.isLocalUserOf(ctx, accountID, targetUserID); err != nil {
+		return err
+	} else if local {
+		return am.deleteLocalUserViaREST(ctx, accountID, initiatorUserID, targetUserID)
+	}
+
 	unlock := am.Store.AcquireWriteLockByUID(ctx, accountID)
 	defer unlock()
 

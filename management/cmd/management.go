@@ -654,15 +654,21 @@ var (
 				}
 			}
 
-			// SCIM local users (ADR-0024) need Dex's password DB and an
-			// explicit opt-in; see server.LocalUsersEnabledEnv.
+			// SCIM local users (ADR-0024). The Dex password DB is wired for
+			// the lifecycle of existing local users whenever Dex is
+			// configured; the opt-in only gates creating new ones. See
+			// server.LocalUsersEnabledEnv.
+			if dexClient != nil {
+				accountManager.UseLocalCredentials(dexClient)
+			}
 			if server.LocalUsersEnabledFromEnv() {
 				if dexClient == nil {
-					log.WithContext(ctx).Warnf("%s is set but Dex is not configured (OPENZRO_DEX_GRPC_ADDR); SCIM local users stay disabled",
+					log.WithContext(ctx).Warnf("%s is set but Dex is not configured (OPENZRO_DEX_GRPC_ADDR); SCIM local user creation stays disabled",
 						server.LocalUsersEnabledEnv)
 				} else {
-					accountManager.EnableLocalUsers(dexClient)
-					log.WithContext(ctx).Infof("SCIM local users enabled")
+					accountManager.EnableLocalUserCreation()
+					log.WithContext(ctx).Infof("SCIM local user creation enabled")
+					log.WithContext(ctx).Warn(server.LocalUsersDexStorageWarning)
 				}
 			}
 

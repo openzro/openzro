@@ -2,9 +2,13 @@
 
 ## Status
 
-**Proposed** (v1 scope reduced after two review rounds on #206). Design gate for
-[openzro/openzro#205](https://github.com/openzro/openzro/issues/205);
-**no code lands with this ADR.** Extends the
+**Accepted.** The v1 (MVP) scope is implemented: the foundation in
+[#213](https://github.com/openzro/openzro/pull/213) and
+[#215](https://github.com/openzro/openzro/pull/215), creation in
+[#216](https://github.com/openzro/openzro/pull/216), and password reset plus
+terminal deactivation/delete in [#217](https://github.com/openzro/openzro/pull/217). See the Dex storage
+requirement below before enabling it. Design gate for
+[openzro/openzro#205](https://github.com/openzro/openzro/issues/205). Extends the
 SCIM 2.0 surface (`/scim/v2`) and the embedded Dex integration of
 [ADR-0006](./0006-embed-dex.md).
 
@@ -321,7 +325,11 @@ covers a lock lost mid-saga.
 
 - The password path runs only when `dex_proxy` is configured. A `password`
   sent without Dex → SCIM 400 with an explicit message. It is never silently
-  dropped.
+  dropped. `OPENZRO_SCIM_LOCAL_USERS_ENABLED` is the rollout gate for
+  **creating** local users only. Reset, deactivation and delete stay
+  available for existing local users whenever Dex is configured, because
+  turning the opt-in off does not stop those users from authenticating, so
+  they must remain deprovisionable on every replica.
 - Users with `LocalCredentialState == ""` (every user that exists today, and
   any SCIM user created without `password`) keep their current behavior
   byte-for-byte, including today's soft `DELETE` (`Blocked=true`, still
@@ -387,6 +395,26 @@ following before it can ship. These were established in the #206 review.
 - Self-service password reset, password expiry, configurable complexity policy.
 - Migrating existing `staticPasswords` entries into the password DB.
 - SCIM bulk operations.
+
+## Deployment requirement: Dex on Postgres
+
+Found while implementing the lifecycle. On SQLite or memory storage, Dex
+v2.45.0, v2.45.1 and v2.46.0 deadlock their whole token endpoint on the
+first refresh-token grant of a **password-DB** user. The refresh rotation
+reads the storage from inside the transaction that holds the storage's only
+connection (or mutex), so that request never returns and every later
+`/token` request hangs until Dex restarts. `staticPasswords` users are
+unaffected, and so is Dex on Postgres. This is an upstream bug
+(dexidp/dex#4209, #5017); the fix is pending in dexidp/dex#4991.
+
+Until a Dex release ships that fix, local users require Dex with Postgres
+storage. The Helm chart already points Dex at Postgres when the store
+engine is Postgres; the docker-compose quickstart defaults Dex to SQLite and
+must not enable local users. Management cannot see Dex's storage, so it logs
+this requirement as a warning whenever `OPENZRO_SCIM_LOCAL_USERS_ENABLED` is
+on. The real-Dex integration tests check revocation through Dex's
+`ListRefresh` API instead of redeeming a refresh token, so that they do not
+trip the bug.
 
 ## Risks accepted
 

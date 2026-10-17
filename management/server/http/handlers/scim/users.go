@@ -3,6 +3,7 @@ package scim
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -186,7 +187,21 @@ func (h *Handler) handleReplaceUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.hasPassword() {
-		writeError(w, http.StatusBadRequest, errPasswordChangeUnsupported)
+		// A PUT that carries a password is a password reset; the rest of the
+		// body must match the current representation (checked by the manager).
+		password, ok := body.passwordString()
+		if !ok {
+			writeError(w, http.StatusBadRequest, "password must be a string")
+			return
+		}
+		input := body.toInput()
+		updated, err := h.accountManager.SCIMResetLocalPassword(r.Context(), userAuth.AccountId, userAuth.UserId,
+			id, password, &input)
+		if err != nil {
+			writeError(w, mapErrorStatus(err), err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, fromUser(updated))
 		return
 	}
 	updated, err := h.accountManager.SCIMReplaceUser(r.Context(), userAuth.AccountId, userAuth.UserId, id, body.toInput())
@@ -227,18 +242,26 @@ func (h *Handler) handlePatchUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if password, handled, errMsg := passwordResetFromPatch(body.Operations); handled {
+		if errMsg != "" {
+			writeError(w, http.StatusBadRequest, errMsg)
+			return
+		}
+		updated, err := h.accountManager.SCIMResetLocalPassword(r.Context(), userAuth.AccountId, userAuth.UserId,
+			id, password, nil)
+		if err != nil {
+			writeError(w, mapErrorStatus(err), err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, fromUser(updated))
+		return
+	}
+
 	patch := account.SCIMUserPatch{}
 	for _, op := range body.Operations {
 		// SCIM is case-insensitive on op and path per RFC.
 		opName := strings.ToLower(op.Op)
 		path := strings.ToLower(strings.TrimSpace(op.Path))
-
-		// Checked before the op filter: "remove" on the password must be
-		// refused too, not skipped as an unsupported op.
-		if path == "password" {
-			writeError(w, http.StatusBadRequest, errPasswordChangeUnsupported)
-			return
-		}
 
 		// Most IdPs send `op=replace, path=active, value=true`.
 		// Some send a single op without path and a value object.
@@ -246,35 +269,26 @@ func (h *Handler) handlePatchUser(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if path == "" {
-			// Whole-resource value: parse as an attribute bag.
+			// Whole-resource value: an attribute bag. It must be a JSON
+			// object; null or another type is malformed, not a no-op.
 			var bag map[string]json.RawMessage
-			if err := json.Unmarshal(op.Value, &bag); err != nil {
-				continue
-			}
-			if bagHasPassword(bag) {
-				writeError(w, http.StatusBadRequest, errPasswordChangeUnsupported)
+			if jsonNullOrMissing(op.Value) || json.Unmarshal(op.Value, &bag) != nil {
+				writeError(w, http.StatusBadRequest, "a PATCH operation without a path must carry an attribute object")
 				return
 			}
-			applyPatchBag(&patch, bag)
+			if err := applyPatchBag(&patch, bag); err != nil {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
 			continue
 		}
 
-		switch path {
-		case "active":
-			var v bool
-			if err := json.Unmarshal(op.Value, &v); err == nil {
-				patch.Active = &v
-			}
-		case "username":
-			var v string
-			if err := json.Unmarshal(op.Value, &v); err == nil {
-				patch.UserName = &v
-			}
-		case "displayname", "name.formatted":
-			var v string
-			if err := json.Unmarshal(op.Value, &v); err == nil {
-				patch.DisplayName = &v
-			}
+		// A recognized attribute with a malformed value rejects the whole
+		// request: dropping it would apply the rest (for a local user, an
+		// irreversible deactivation) and report success.
+		if err := applyPatchAttribute(&patch, path, op.Value); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
 		}
 	}
 
@@ -305,12 +319,58 @@ func (b userBody) passwordString() (string, bool) {
 	return v, true
 }
 
-// errPasswordChangeUnsupported is returned for a password in PUT or PATCH:
-// a password change is a separate operation not wired yet (ADR-0024 D6),
-// and it must be refused rather than silently dropped.
-const errPasswordChangeUnsupported = "changing a password is not supported yet"
+// errPasswordNotIsolated is returned when a PATCH mentions the password
+// alongside anything else, or with an op other than replace: a password
+// reset must be an isolated operation (ADR-0024 D6), and a mentioned
+// password is never silently dropped.
+const errPasswordNotIsolated = "a password can only be set by a PATCH whose single operation replaces it"
 
-func bagHasPassword(bag map[string]json.RawMessage) bool {
+// passwordResetFromPatch inspects PATCH operations for the password. handled
+// is false when no operation mentions it. Otherwise either errMsg explains
+// why the request is refused, or password is the value to set: the only
+// accepted shape is a single replace, by path or by an attribute bag that
+// holds nothing but the password.
+func passwordResetFromPatch(ops []patchOp) (password string, handled bool, errMsg string) {
+	mentions := false
+	for _, op := range ops {
+		if strings.EqualFold(strings.TrimSpace(op.Path), "password") || opBagHasPassword(op) {
+			mentions = true
+			break
+		}
+	}
+	if !mentions {
+		return "", false, ""
+	}
+	if len(ops) != 1 || !strings.EqualFold(ops[0].Op, "replace") {
+		return "", true, errPasswordNotIsolated
+	}
+	raw := ops[0].Value
+	if strings.TrimSpace(ops[0].Path) == "" {
+		var bag map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &bag); err != nil || len(bag) != 1 {
+			return "", true, errPasswordNotIsolated
+		}
+		for _, v := range bag {
+			raw = v
+		}
+	}
+	if string(raw) == "null" {
+		return "", true, "password must be a string"
+	}
+	if err := json.Unmarshal(raw, &password); err != nil {
+		return "", true, "password must be a string"
+	}
+	return password, true, ""
+}
+
+func opBagHasPassword(op patchOp) bool {
+	if strings.TrimSpace(op.Path) != "" {
+		return false
+	}
+	var bag map[string]json.RawMessage
+	if err := json.Unmarshal(op.Value, &bag); err != nil {
+		return false
+	}
 	for k := range bag {
 		if strings.EqualFold(k, "password") {
 			return true
@@ -320,27 +380,77 @@ func bagHasPassword(bag map[string]json.RawMessage) bool {
 }
 
 // applyPatchBag handles the "single replace with a JSON object" form
-// that some IdPs (notably older Okta connectors) send.
-func applyPatchBag(out *account.SCIMUserPatch, bag map[string]json.RawMessage) {
+// that some IdPs (notably older Okta connectors) send. Unknown keys are
+// ignored; a recognized key with a malformed value is an error.
+func applyPatchBag(out *account.SCIMUserPatch, bag map[string]json.RawMessage) error {
 	for k, raw := range bag {
-		switch strings.ToLower(k) {
-		case "active":
-			var v bool
-			if err := json.Unmarshal(raw, &v); err == nil {
-				out.Active = &v
-			}
-		case "username":
-			var v string
-			if err := json.Unmarshal(raw, &v); err == nil {
-				out.UserName = &v
-			}
-		case "displayname":
-			var v string
-			if err := json.Unmarshal(raw, &v); err == nil {
-				out.DisplayName = &v
-			}
+		if err := applyPatchAttribute(out, strings.ToLower(k), raw); err != nil {
+			return err
 		}
 	}
+	return nil
+}
+
+// applyPatchAttribute applies one recognized user attribute; other paths
+// are ignored so unknown extensions don't 400.
+func applyPatchAttribute(out *account.SCIMUserPatch, path string, raw json.RawMessage) error {
+	switch path {
+	case "active", "username", "displayname", "name.formatted":
+		// encoding/json decodes null into the zero value without an error,
+		// which would turn "active": null into a deactivation.
+		if jsonNullOrMissing(raw) {
+			return fmt.Errorf("%s must not be null", path)
+		}
+	}
+	switch path {
+	case "active":
+		v, err := parseSCIMBool(raw)
+		if err != nil {
+			return fmt.Errorf("active must be a boolean")
+		}
+		out.Active = &v
+	case "username":
+		var v string
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return fmt.Errorf("userName must be a string")
+		}
+		out.UserName = &v
+	case "displayname", "name.formatted":
+		var v string
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return fmt.Errorf("displayName must be a string")
+		}
+		out.DisplayName = &v
+	}
+	return nil
+}
+
+// jsonNullOrMissing reports a value that is absent or JSON null. Both decode
+// to the zero value without an error, so recognized attributes check it
+// explicitly.
+func jsonNullOrMissing(raw json.RawMessage) bool {
+	t := strings.TrimSpace(string(raw))
+	return t == "" || t == "null"
+}
+
+// parseSCIMBool accepts a JSON boolean or the strings "true"/"false" in any
+// case: Microsoft Entra ID sends booleans as strings in PATCH operations.
+func parseSCIMBool(raw json.RawMessage) (bool, error) {
+	var b bool
+	if err := json.Unmarshal(raw, &b); err == nil {
+		return b, nil
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return false, err
+	}
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	}
+	return false, fmt.Errorf("not a boolean: %q", s)
 }
 
 // handleDeleteUser implements DELETE /Users/{id} as a soft delete

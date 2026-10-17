@@ -33,6 +33,9 @@ type fakeLocalCredentials struct {
 	// though the preflight saw no entry: a writer slipped in between.
 	raceOnCreate bool
 	updates      int
+	deleteErr    error
+	revokeErr    error
+	revoked      []string // subjects whose refresh tokens were revoked
 }
 
 type fakePassword struct {
@@ -85,6 +88,41 @@ func (f *fakeLocalCredentials) ListPasswords(_ context.Context) ([]dex_proxy.Pas
 		out = append(out, dex_proxy.PasswordEntry{Email: email, UserID: e.userID})
 	}
 	return out, nil
+}
+
+func (f *fakeLocalCredentials) DeletePassword(_ context.Context, email string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.deleteErr != nil {
+		return f.deleteErr
+	}
+	if _, ok := f.entries[strings.ToLower(email)]; !ok {
+		return dex_proxy.ErrNotFound
+	}
+	delete(f.entries, strings.ToLower(email))
+	return nil
+}
+
+func (f *fakeLocalCredentials) RevokeAllRefreshTokens(_ context.Context, sub string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.revokeErr != nil {
+		return f.revokeErr
+	}
+	f.revoked = append(f.revoked, sub)
+	return nil
+}
+
+func (f *fakeLocalCredentials) revokedFor(sub string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := 0
+	for _, s := range f.revoked {
+		if s == sub {
+			n++
+		}
+	}
+	return n
 }
 
 func (f *fakeLocalCredentials) entry(email string) *fakePassword {

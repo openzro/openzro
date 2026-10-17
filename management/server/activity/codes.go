@@ -238,6 +238,9 @@ const (
 	// AccountAllowedEmailDomainsUpdated records a change to the
 	// account's email-domain allowlist (ADR-0025).
 	AccountAllowedEmailDomainsUpdated Activity = 108
+	// UserLocalPasswordReset records a password reset of a SCIM local user
+	// (ADR-0024). It never carries the password.
+	UserLocalPasswordReset Activity = 109
 
 	AccountDeleted Activity = 99999
 )
@@ -363,6 +366,7 @@ var activityMap = map[Activity]Code{
 
 	UserJoinDeniedByDomain:            {"User join denied by email domain", "user.join.denied_domain"},
 	AccountAllowedEmailDomainsUpdated: {"Account allowed email domains updated", "account.setting.allowed_email_domains.update"},
+	UserLocalPasswordReset:            {"Local user password reset", "user.password.reset"},
 }
 
 // StringCode returns a string code of the activity

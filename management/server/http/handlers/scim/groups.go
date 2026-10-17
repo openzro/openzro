@@ -192,18 +192,27 @@ func (h *Handler) handlePatchGroup(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case opName == "replace" && path == "displayname":
 			var v string
-			if err := json.Unmarshal(op.Value, &v); err == nil {
-				if _, err := h.accountManager.SCIMRenameGroup(r.Context(), userAuth.AccountId, userAuth.UserId, id, v); err != nil {
-					writeError(w, mapErrorStatus(err), err.Error())
-					return
-				}
+			if jsonNullOrMissing(op.Value) || json.Unmarshal(op.Value, &v) != nil {
+				writeError(w, http.StatusBadRequest, "displayName must be a string")
+				return
+			}
+			if _, err := h.accountManager.SCIMRenameGroup(r.Context(), userAuth.AccountId, userAuth.UserId, id, v); err != nil {
+				writeError(w, mapErrorStatus(err), err.Error())
+				return
 			}
 
 		case opName == "add" && path == "members":
-			var members []memberPatchValue
-			if err := json.Unmarshal(op.Value, &members); err == nil {
-				for _, m := range members {
-					_ = h.accountManager.SCIMAddGroupMember(r.Context(), userAuth.AccountId, userAuth.UserId, id, m.Value)
+			members, ok := parseMemberValues(op.Value)
+			if !ok {
+				writeError(w, http.StatusBadRequest, errMalformedMembers)
+				return
+			}
+			for _, m := range members {
+				// Reported, not swallowed: adding a hidden or unknown user
+				// must not look like it succeeded.
+				if err := h.accountManager.SCIMAddGroupMember(r.Context(), userAuth.AccountId, userAuth.UserId, id, m.Value); err != nil {
+					writeError(w, mapErrorStatus(err), err.Error())
+					return
 				}
 			}
 
@@ -211,14 +220,26 @@ func (h *Handler) handlePatchGroup(w http.ResponseWriter, r *http.Request) {
 			// Two forms: explicit `path=members[value eq "id"]` and
 			// `op=remove path=members value=[{value:id}, ...]`. We
 			// accept both.
+			var uids []string
 			if uid := extractRemoveUserID(path); uid != "" {
-				_ = h.accountManager.SCIMRemoveGroupMember(r.Context(), userAuth.AccountId, userAuth.UserId, id, uid)
+				uids = []string{uid}
 			} else {
-				var members []memberPatchValue
-				if err := json.Unmarshal(op.Value, &members); err == nil {
-					for _, m := range members {
-						_ = h.accountManager.SCIMRemoveGroupMember(r.Context(), userAuth.AccountId, userAuth.UserId, id, m.Value)
-					}
+				members, ok := parseMemberValues(op.Value)
+				if !ok {
+					writeError(w, http.StatusBadRequest, errMalformedMembers)
+					return
+				}
+				for _, m := range members {
+					uids = append(uids, m.Value)
+				}
+			}
+			for _, uid := range uids {
+				// Removing a member that no longer exists is idempotent, so
+				// an IGA cleaning up after a delete does not retry forever.
+				err := h.accountManager.SCIMRemoveGroupMember(r.Context(), userAuth.AccountId, userAuth.UserId, id, uid)
+				if err != nil && mapErrorStatus(err) != http.StatusNotFound {
+					writeError(w, mapErrorStatus(err), err.Error())
+					return
 				}
 			}
 		}
@@ -283,4 +304,26 @@ func extractRemoveUserID(path string) string {
 		return ""
 	}
 	return strings.Trim(strings.Join(parts[2:], " "), "\"'")
+}
+
+const errMalformedMembers = "members must be a list of {value: id} with non-empty ids"
+
+// parseMemberValues decodes a members list and requires every entry to
+// carry a non-empty id. null, a missing list and null/absent/empty values
+// all decode without an error, and would otherwise turn into a no-op 200
+// (or, on remove, pass through the idempotent not-found exception).
+func parseMemberValues(raw json.RawMessage) ([]memberPatchValue, bool) {
+	if jsonNullOrMissing(raw) {
+		return nil, false
+	}
+	var members []memberPatchValue
+	if err := json.Unmarshal(raw, &members); err != nil {
+		return nil, false
+	}
+	for _, m := range members {
+		if strings.TrimSpace(m.Value) == "" {
+			return nil, false
+		}
+	}
+	return members, true
 }
