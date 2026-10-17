@@ -87,3 +87,45 @@ func TestUpdateUser_PasswordIsRefused(t *testing.T) {
 	}
 	assert.False(t, called, "a request carrying a password must not reach the update")
 }
+
+// #216 review: a request that mentions the credential but cannot be
+// executed must not fall through to the legacy behavior. *string could not
+// tell an omitted password from "password": null, and the PATCH op filter
+// dropped "remove" before the password check.
+func TestPasswordPresenceIsNeverSilentlyIgnored(t *testing.T) {
+	calls := 0
+	am := &mock_server.MockAccountManager{
+		SCIMCreateUserFunc: func(_ context.Context, _, _ string, _ account.SCIMUserInput) (*types.User, error) {
+			calls++
+			return &types.User{Id: "plain"}, nil
+		},
+		SCIMCreateLocalUserFunc: func(_ context.Context, _, _ string, _ account.SCIMUserInput, _ string) (*types.User, error) {
+			calls++
+			return &types.User{Id: "local"}, nil
+		},
+		SCIMReplaceUserFunc: func(_ context.Context, _, _, _ string, _ account.SCIMUserInput) (*types.User, error) {
+			calls++
+			return &types.User{Id: "u"}, nil
+		},
+		SCIMPatchUserFunc: func(_ context.Context, _, _, _ string, _ account.SCIMUserPatch) (*types.User, error) {
+			calls++
+			return &types.User{Id: "u"}, nil
+		},
+	}
+	srv := newTestServer(am, "acct", "caller")
+
+	cases := map[string]*httptest.ResponseRecorder{
+		"POST null": doSCIM(t, srv, http.MethodPost, "/scim/v2/Users",
+			map[string]any{"userName": "ana@example.com", "password": nil}),
+		"POST number": doSCIM(t, srv, http.MethodPost, "/scim/v2/Users",
+			map[string]any{"userName": "ana@example.com", "password": 12345}),
+		"PUT null": doSCIM(t, srv, http.MethodPut, "/scim/v2/Users/u",
+			map[string]any{"userName": "ana@example.com", "password": nil}),
+		"PATCH remove": doSCIM(t, srv, http.MethodPatch, "/scim/v2/Users/u", map[string]any{
+			"Operations": []map[string]any{{"op": "remove", "path": "password"}}}),
+	}
+	for name, rec := range cases {
+		assert.Equal(t, http.StatusBadRequest, rec.Code, name)
+	}
+	assert.Zero(t, calls, "no request mentioning a password may reach the legacy paths")
+}

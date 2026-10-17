@@ -153,9 +153,14 @@ func (h *Handler) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	input := body.toInput()
 	var created *types.User
-	if body.Password != nil {
+	if body.hasPassword() {
+		password, ok := body.passwordString()
+		if !ok {
+			writeError(w, http.StatusBadRequest, "password must be a string")
+			return
+		}
 		created, err = h.accountManager.SCIMCreateLocalUser(r.Context(), userAuth.AccountId, userAuth.UserId,
-			input, *body.Password)
+			input, password)
 	} else {
 		created, err = h.accountManager.SCIMCreateUser(r.Context(), userAuth.AccountId, userAuth.UserId, input)
 	}
@@ -180,7 +185,7 @@ func (h *Handler) handleReplaceUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if body.Password != nil {
+	if body.hasPassword() {
 		writeError(w, http.StatusBadRequest, errPasswordChangeUnsupported)
 		return
 	}
@@ -228,15 +233,17 @@ func (h *Handler) handlePatchUser(w http.ResponseWriter, r *http.Request) {
 		opName := strings.ToLower(op.Op)
 		path := strings.ToLower(strings.TrimSpace(op.Path))
 
+		// Checked before the op filter: "remove" on the password must be
+		// refused too, not skipped as an unsupported op.
+		if path == "password" {
+			writeError(w, http.StatusBadRequest, errPasswordChangeUnsupported)
+			return
+		}
+
 		// Most IdPs send `op=replace, path=active, value=true`.
 		// Some send a single op without path and a value object.
 		if opName != "replace" && opName != "add" {
 			continue
-		}
-
-		if path == "password" {
-			writeError(w, http.StatusBadRequest, errPasswordChangeUnsupported)
-			return
 		}
 		if path == "" {
 			// Whole-resource value: parse as an attribute bag.
@@ -277,6 +284,25 @@ func (h *Handler) handlePatchUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, fromUser(updated))
+}
+
+// hasPassword reports whether the request carried the password attribute
+// at all, whatever its value (null included).
+func (b userBody) hasPassword() bool {
+	return len(b.Password) > 0
+}
+
+// passwordString returns the password when it is a JSON string. null and
+// other types are not passwords.
+func (b userBody) passwordString() (string, bool) {
+	if string(b.Password) == "null" {
+		return "", false
+	}
+	var v string
+	if err := json.Unmarshal(b.Password, &v); err != nil {
+		return "", false
+	}
+	return v, true
 }
 
 // errPasswordChangeUnsupported is returned for a password in PUT or PATCH:
@@ -344,8 +370,10 @@ type userBody struct {
 	Name        *userName   `json:"name"`
 	Emails      []userEmail `json:"emails"`
 	// Password is the RFC 7643 §4.1.1 writeOnly attribute. Only a create
-	// accepts it (a local user, ADR-0024); it is never returned.
-	Password *string `json:"password"`
+	// accepts it (a local user, ADR-0024); it is never returned. Raw so an
+	// omitted field can be told apart from one present as null or another
+	// type: any presence must be handled, never silently ignored.
+	Password json.RawMessage `json:"password"`
 }
 
 func (b userBody) toInput() account.SCIMUserInput {
