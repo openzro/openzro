@@ -50,8 +50,8 @@ export function LocalUserPasswordModalContent({
         <h2 className="my-0 text-lg">Reset password</h2>
         <p className="max-w-xs text-sm text-oz2-text-muted">
           Set a new password for {user.email || user.name}. Future sign-ins need
-          it, but current sessions and connected devices keep access until their
-          tokens expire. Deactivate the user to cut access now.
+          it, but access tokens already issued stay valid until they expire, and
+          connected devices stay connected. Deactivate the user to cut both now.
         </p>
       </div>
 
