@@ -33,6 +33,7 @@ import CreateAccessTokenModal from "@/modules/access-tokens/CreateAccessTokenMod
 import useGroupHelper from "@/modules/groups/useGroupHelper";
 import { useGroupIdsToGroups } from "@/modules/groups/useGroupIdsToGroups";
 import MFASection from "@/modules/mfa/MFASection";
+import { isLocalUser } from "@/modules/users/local/LocalUserBadge";
 import UserBlockCell from "@/modules/users/table-cells/UserBlockCell";
 import { UserRoleSelector } from "@/modules/users/UserRoleSelector";
 import UserStatusCellV2 from "@/modules/users/v2/UserStatusCellV2";
@@ -391,7 +392,7 @@ function UserInformationCard({ user }: Readonly<{ user: User }>) {
   });
 
   if (!isServiceUser) {
-    if (!user.is_current && user.role !== Role.Owner) {
+    if (!user.is_current && user.role !== Role.Owner && !isLocalUser(user)) {
       rows.push({
         label: (
           <>

@@ -73,5 +73,8 @@ export interface Account {
     //   the IdP's own MFA. Users enter two codes per login.
     mfa_enforce_local?: boolean;
     mfa_enforce_federated?: boolean;
+    // Email domains allowed to join the account (ADR-0025). Empty
+    // disables the check; the server normalizes and validates entries.
+    allowed_email_domains?: string[];
   };
 }

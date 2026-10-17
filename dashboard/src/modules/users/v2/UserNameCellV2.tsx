@@ -3,6 +3,9 @@ import { Ban, Clock, Cog } from "lucide-react";
 import React from "react";
 import { User, UserIssued } from "@/interfaces/User";
 import SCIMBadge from "@/modules/common/SCIMBadge";
+import LocalUserBadge, {
+  isLocalUser,
+} from "@/modules/users/local/LocalUserBadge";
 
 // UserNameCellV2 — handoff (screens-2.jsx, TeamScreen) take on the
 // user identity cell: gradient avatar (violet → pink) with 2-letter
@@ -82,7 +85,14 @@ export default function UserNameCellV2({ user }: Readonly<Props>) {
               You
             </span>
           )}
-          {user.issued === UserIssued.INTEGRATION && <SCIMBadge />}
+          {/* Local users are also issued by the integration path, but
+              no external IdP overwrites them, so they get their own
+              badge instead of the SCIM one. */}
+          {isLocalUser(user) ? (
+            <LocalUserBadge user={user} />
+          ) : (
+            user.issued === UserIssued.INTEGRATION && <SCIMBadge />
+          )}
         </span>
         {user.email && (
           <span className="truncate text-[12.5px] text-oz2-text-muted">
