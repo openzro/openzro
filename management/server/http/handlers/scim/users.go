@@ -3,6 +3,7 @@ package scim
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -273,26 +274,19 @@ func (h *Handler) handlePatchUser(w http.ResponseWriter, r *http.Request) {
 			if err := json.Unmarshal(op.Value, &bag); err != nil {
 				continue
 			}
-			applyPatchBag(&patch, bag)
+			if err := applyPatchBag(&patch, bag); err != nil {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
 			continue
 		}
 
-		switch path {
-		case "active":
-			var v bool
-			if err := json.Unmarshal(op.Value, &v); err == nil {
-				patch.Active = &v
-			}
-		case "username":
-			var v string
-			if err := json.Unmarshal(op.Value, &v); err == nil {
-				patch.UserName = &v
-			}
-		case "displayname", "name.formatted":
-			var v string
-			if err := json.Unmarshal(op.Value, &v); err == nil {
-				patch.DisplayName = &v
-			}
+		// A recognized attribute with a malformed value rejects the whole
+		// request: dropping it would apply the rest (for a local user, an
+		// irreversible deactivation) and report success.
+		if err := applyPatchAttribute(&patch, path, op.Value); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
 		}
 	}
 
@@ -384,27 +378,61 @@ func opBagHasPassword(op patchOp) bool {
 }
 
 // applyPatchBag handles the "single replace with a JSON object" form
-// that some IdPs (notably older Okta connectors) send.
-func applyPatchBag(out *account.SCIMUserPatch, bag map[string]json.RawMessage) {
+// that some IdPs (notably older Okta connectors) send. Unknown keys are
+// ignored; a recognized key with a malformed value is an error.
+func applyPatchBag(out *account.SCIMUserPatch, bag map[string]json.RawMessage) error {
 	for k, raw := range bag {
-		switch strings.ToLower(k) {
-		case "active":
-			var v bool
-			if err := json.Unmarshal(raw, &v); err == nil {
-				out.Active = &v
-			}
-		case "username":
-			var v string
-			if err := json.Unmarshal(raw, &v); err == nil {
-				out.UserName = &v
-			}
-		case "displayname":
-			var v string
-			if err := json.Unmarshal(raw, &v); err == nil {
-				out.DisplayName = &v
-			}
+		if err := applyPatchAttribute(out, strings.ToLower(k), raw); err != nil {
+			return err
 		}
 	}
+	return nil
+}
+
+// applyPatchAttribute applies one recognized user attribute; other paths
+// are ignored so unknown extensions don't 400.
+func applyPatchAttribute(out *account.SCIMUserPatch, path string, raw json.RawMessage) error {
+	switch path {
+	case "active":
+		v, err := parseSCIMBool(raw)
+		if err != nil {
+			return fmt.Errorf("active must be a boolean")
+		}
+		out.Active = &v
+	case "username":
+		var v string
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return fmt.Errorf("userName must be a string")
+		}
+		out.UserName = &v
+	case "displayname", "name.formatted":
+		var v string
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return fmt.Errorf("displayName must be a string")
+		}
+		out.DisplayName = &v
+	}
+	return nil
+}
+
+// parseSCIMBool accepts a JSON boolean or the strings "true"/"false" in any
+// case: Microsoft Entra ID sends booleans as strings in PATCH operations.
+func parseSCIMBool(raw json.RawMessage) (bool, error) {
+	var b bool
+	if err := json.Unmarshal(raw, &b); err == nil {
+		return b, nil
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return false, err
+	}
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	}
+	return false, fmt.Errorf("not a boolean: %q", s)
 }
 
 // handleDeleteUser implements DELETE /Users/{id} as a soft delete

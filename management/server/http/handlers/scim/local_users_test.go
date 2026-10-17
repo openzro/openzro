@@ -159,3 +159,42 @@ func TestPasswordPresenceIsNeverSilentlyIgnored(t *testing.T) {
 	}
 	assert.Zero(t, calls, "no request mentioning a password may reach the legacy paths")
 }
+
+// #217 review: a recognized attribute with a malformed value must reject
+// the whole PATCH. Dropping it silently let "active:false + userName:123"
+// reach the manager as a plain deactivation, which is irreversible for a
+// local user, and return 200.
+func TestPatchUser_MalformedRecognizedValueIsRejected(t *testing.T) {
+	var got []account.SCIMUserPatch
+	am := &mock_server.MockAccountManager{
+		SCIMPatchUserFunc: func(_ context.Context, _, _, _ string, p account.SCIMUserPatch) (*types.User, error) {
+			got = append(got, p)
+			return &types.User{Id: "u"}, nil
+		},
+	}
+	srv := newTestServer(am, "acct", "caller")
+	ops := func(o ...map[string]any) map[string]any { return map[string]any{"Operations": o} }
+
+	rejected := map[string]map[string]any{
+		"userName number": ops(
+			map[string]any{"op": "replace", "path": "active", "value": false},
+			map[string]any{"op": "replace", "path": "userName", "value": 123}),
+		"bag userName number": ops(map[string]any{"op": "replace", "value": map[string]any{"active": false, "userName": 123}}),
+		"active number":       ops(map[string]any{"op": "replace", "path": "active", "value": 5}),
+		"active bad string":   ops(map[string]any{"op": "replace", "path": "active", "value": "maybe"}),
+		"displayName object":  ops(map[string]any{"op": "replace", "path": "displayName", "value": map[string]any{}}),
+	}
+	for name, body := range rejected {
+		rec := doSCIM(t, srv, http.MethodPatch, "/scim/v2/Users/u", body)
+		assert.Equal(t, http.StatusBadRequest, rec.Code, name)
+	}
+	assert.Empty(t, got, "a malformed PATCH must not reach the manager")
+
+	// Microsoft Entra ID sends active as a string; that keeps working.
+	rec := doSCIM(t, srv, http.MethodPatch, "/scim/v2/Users/u",
+		ops(map[string]any{"op": "replace", "path": "active", "value": "False"}))
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, got, 1)
+	require.NotNil(t, got[0].Active)
+	assert.False(t, *got[0].Active)
+}
