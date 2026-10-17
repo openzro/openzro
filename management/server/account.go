@@ -124,6 +124,10 @@ type DefaultAccountManager struct {
 	// working with the in-process fall-back.
 	coordinator cluster.Coordinator
 
+	// localCreds is Dex's password DB, set by EnableLocalUsers when SCIM
+	// local users are switched on (ADR-0024). nil means the feature is off.
+	localCreds localCredentials
+
 	// admissionBypasses owns the per-peer admission bypass store
 	// (ADR-0004 — break-glass overrides for the Device Admission
 	// gate, with mandatory audit trail). When nil, the bypass
