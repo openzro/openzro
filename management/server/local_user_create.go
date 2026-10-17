@@ -38,6 +38,8 @@ type localCredentials interface {
 	CreatePassword(ctx context.Context, email, username, userID string, hash []byte) error
 	UpdatePassword(ctx context.Context, email string, hash []byte) error
 	ListPasswords(ctx context.Context) ([]dex_proxy.PasswordEntry, error)
+	DeletePassword(ctx context.Context, email string) error
+	RevokeAllRefreshTokens(ctx context.Context, sub string) error
 }
 
 // EnableLocalUsers switches on SCIM-provisioned local users (ADR-0024),

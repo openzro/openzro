@@ -61,13 +61,14 @@ type MockAccountManager struct {
 	ListPoliciesFunc         func(ctx context.Context, accountID, userID string) ([]*types.Policy, error)
 	GetUsersFromAccountFunc  func(ctx context.Context, accountID, userID string) (map[string]*types.UserInfo, error)
 
-	SCIMCreateUserFunc      func(ctx context.Context, accountID, callerID string, input account.SCIMUserInput) (*types.User, error)
-	SCIMCreateLocalUserFunc func(ctx context.Context, accountID, callerID string, input account.SCIMUserInput, password string) (*types.User, error)
-	SCIMReplaceUserFunc     func(ctx context.Context, accountID, callerID, userID string, input account.SCIMUserInput) (*types.User, error)
-	SCIMPatchUserFunc       func(ctx context.Context, accountID, callerID, userID string, patch account.SCIMUserPatch) (*types.User, error)
-	SCIMDeactivateUserFunc  func(ctx context.Context, accountID, callerID, userID string) error
-	SCIMListUsersFunc       func(ctx context.Context, accountID, callerID, userNameFilter string, startIndex, count int) ([]*types.User, int, error)
-	SCIMGetUserFunc         func(ctx context.Context, accountID, callerID, userID string) (*types.User, error)
+	SCIMCreateUserFunc         func(ctx context.Context, accountID, callerID string, input account.SCIMUserInput) (*types.User, error)
+	SCIMCreateLocalUserFunc    func(ctx context.Context, accountID, callerID string, input account.SCIMUserInput, password string) (*types.User, error)
+	SCIMResetLocalPasswordFunc func(ctx context.Context, accountID, callerID, userID, password string, replace *account.SCIMUserInput) (*types.User, error)
+	SCIMReplaceUserFunc        func(ctx context.Context, accountID, callerID, userID string, input account.SCIMUserInput) (*types.User, error)
+	SCIMPatchUserFunc          func(ctx context.Context, accountID, callerID, userID string, patch account.SCIMUserPatch) (*types.User, error)
+	SCIMDeactivateUserFunc     func(ctx context.Context, accountID, callerID, userID string) error
+	SCIMListUsersFunc          func(ctx context.Context, accountID, callerID, userNameFilter string, startIndex, count int) ([]*types.User, int, error)
+	SCIMGetUserFunc            func(ctx context.Context, accountID, callerID, userID string) (*types.User, error)
 
 	SCIMCreateGroupFunc                   func(ctx context.Context, accountID, callerID, displayName string, memberUserIDs []string) (*types.Group, error)
 	SCIMReplaceGroupFunc                  func(ctx context.Context, accountID, callerID, groupID, displayName string, memberUserIDs []string) (*types.Group, error)
@@ -219,6 +220,13 @@ func (am *MockAccountManager) GetUsersFromAccount(ctx context.Context, accountID
 		return am.GetUsersFromAccountFunc(ctx, accountID, userID)
 	}
 	return nil, status.Errorf(codes.Unimplemented, "method GetUsersFromAccount is not implemented")
+}
+
+func (am *MockAccountManager) SCIMResetLocalPassword(ctx context.Context, accountID, callerID, userID, password string, replace *account.SCIMUserInput) (*types.User, error) {
+	if am.SCIMResetLocalPasswordFunc != nil {
+		return am.SCIMResetLocalPasswordFunc(ctx, accountID, callerID, userID, password, replace)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method SCIMResetLocalPassword is not implemented")
 }
 
 func (am *MockAccountManager) SCIMCreateLocalUser(ctx context.Context, accountID, callerID string, input account.SCIMUserInput, password string) (*types.User, error) {

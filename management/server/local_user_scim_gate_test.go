@@ -12,27 +12,17 @@ import (
 	"github.com/openzro/openzro/management/server/store"
 )
 
-// #205 prerequisites: until the deactivation/delete saga lands, the legacy
-// SCIM paths refuse to block a local user (which would skip the Dex and
-// session cleanup) or rename it (Dex cannot re-key a credential), with an
-// explicit message. Other edits keep working.
+// ADR-0024 D9: Dex cannot re-key a credential, so a local user's userName
+// cannot change. Other edits, and a case-only re-send of userName, work.
+// (Deactivation and delete run their saga; see local_user_lifecycle_test.go.)
 func TestSCIMLegacyPathsGateLocalUsers(t *testing.T) {
 	m, accountID, _ := setupLocalUsers(t)
 	ctx := context.Background()
 	user, err := m.SCIMCreateLocalUser(ctx, accountID, userID, localInput("ana@example.com"), goodPassword)
 	require.NoError(t, err)
 
-	requireStatusType(t, m.SCIMDeactivateUser(ctx, accountID, userID, user.Id), status.BadRequest)
-
-	_, err = m.SCIMReplaceUser(ctx, accountID, userID, user.Id,
-		account.SCIMUserInput{UserName: "ana@example.com", Active: false})
-	requireStatusType(t, err, status.BadRequest)
 	_, err = m.SCIMReplaceUser(ctx, accountID, userID, user.Id,
 		account.SCIMUserInput{UserName: "ana2@example.com", Active: true})
-	requireStatusType(t, err, status.BadRequest)
-
-	inactive := false
-	_, err = m.SCIMPatchUser(ctx, accountID, userID, user.Id, account.SCIMUserPatch{Active: &inactive})
 	requireStatusType(t, err, status.BadRequest)
 	renamed := "ana2@example.com"
 	_, err = m.SCIMPatchUser(ctx, accountID, userID, user.Id, account.SCIMUserPatch{UserName: &renamed})
@@ -43,7 +33,6 @@ func TestSCIMLegacyPathsGateLocalUsers(t *testing.T) {
 	require.False(t, stored.Blocked)
 	require.Equal(t, "ana@example.com", stored.SCIMUserName)
 
-	// A display-name change and a case-only re-send of userName still work.
 	display := "Ana B."
 	_, err = m.SCIMPatchUser(ctx, accountID, userID, user.Id, account.SCIMUserPatch{DisplayName: &display})
 	require.NoError(t, err)
