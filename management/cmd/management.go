@@ -654,6 +654,18 @@ var (
 				}
 			}
 
+			// SCIM local users (ADR-0024) need Dex's password DB and an
+			// explicit opt-in; see server.LocalUsersEnabledEnv.
+			if server.LocalUsersEnabledFromEnv() {
+				if dexClient == nil {
+					log.WithContext(ctx).Warnf("%s is set but Dex is not configured (OPENZRO_DEX_GRPC_ADDR); SCIM local users stay disabled",
+						server.LocalUsersEnabledEnv)
+				} else {
+					accountManager.EnableLocalUsers(dexClient)
+					log.WithContext(ctx).Infof("SCIM local users enabled")
+				}
+			}
+
 			httpAPIHandler, err := nbhttp.NewAPIHandler(ctx, accountManager, networksManager, resourcesManager, routersManager, groupsManager, geo, authManager, appMetrics, integratedPeerValidator, proxyController, permissionsManager, peersManager, settingsManager, flowStore, flowExportsStore, flowExportsManager, mdmStore, mdmManager, activityExportersStore, activityExportersManager, admissionBypassStore, bypassEmitter, dexClient, postureEvalStore)
 
 			if err != nil {
