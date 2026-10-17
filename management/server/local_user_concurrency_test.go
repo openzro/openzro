@@ -351,15 +351,22 @@ func waitForLockWaiters(t *testing.T, probe store.Store, n int64) {
 }
 
 // lockingCoordinator is a cluster.Coordinator whose Lock really excludes,
-// shared by the managers of both replicas to stand in for the broker.
+// shared by the managers of both replicas to stand in for the broker. It
+// counts waiters per key so a test can observe a contender blocking on a
+// lock instead of guessing with a sleep.
 type lockingCoordinator struct {
 	*fakeCoordinator
-	mu    sync.Mutex
-	locks map[string]*sync.Mutex
+	mu      sync.Mutex
+	locks   map[string]*sync.Mutex
+	waiting map[string]int
 }
 
 func newLockingCoordinator() *lockingCoordinator {
-	return &lockingCoordinator{fakeCoordinator: newFakeCoordinator(), locks: map[string]*sync.Mutex{}}
+	return &lockingCoordinator{
+		fakeCoordinator: newFakeCoordinator(),
+		locks:           map[string]*sync.Mutex{},
+		waiting:         map[string]int{},
+	}
 }
 
 func (c *lockingCoordinator) Lock(_ context.Context, name string) (func(), error) {
@@ -369,9 +376,39 @@ func (c *lockingCoordinator) Lock(_ context.Context, name string) (func(), error
 		m = &sync.Mutex{}
 		c.locks[name] = m
 	}
+	c.waiting[name]++
 	c.mu.Unlock()
+
 	m.Lock()
+
+	c.mu.Lock()
+	c.waiting[name]--
+	c.mu.Unlock()
 	return m.Unlock, nil
+}
+
+func (c *lockingCoordinator) waiters(name string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.waiting[name]
+}
+
+// pausingStore pauses the first GetAccount right after it returned its
+// snapshot, until released: the moment a stale-snapshot race opens.
+type pausingStore struct {
+	store.Store
+	once     sync.Once
+	snapshot chan struct{}
+	proceed  chan struct{}
+}
+
+func (p *pausingStore) GetAccount(ctx context.Context, accountID string) (*types.Account, error) {
+	account, err := p.Store.GetAccount(ctx, accountID)
+	p.once.Do(func() {
+		close(p.snapshot)
+		<-p.proceed
+	})
+	return account, err
 }
 
 // #216 review: the manager's DeleteAccount read its snapshot before any lock
@@ -381,6 +418,9 @@ func (c *lockingCoordinator) Lock(_ context.Context, name string) (func(), error
 // serialize before the snapshot, with one of two linear outcomes: the
 // delete wins and the create fails, or the create wins and the delete is
 // refused before deleting anyone.
+//
+// The delete is paused right after its GetAccount snapshot, with no table
+// locks involved, and the create runs meanwhile on the other replica.
 func TestLocalUser_DeleteAccountAndCreateAreLinearizable(t *testing.T) {
 	r := newTwoReplicas(t)
 	ctx := context.Background()
@@ -392,34 +432,38 @@ func TestLocalUser_DeleteAccountAndCreateAreLinearizable(t *testing.T) {
 
 	accountID, err := r.A.GetAccountIDByUserID(ctx, "owner", "")
 	require.NoError(t, err)
-	bea, err := r.A.SCIMCreateUser(ctx, accountID, "owner", account.SCIMUserInput{UserName: "bea@example.com", Active: true})
+	_, err = r.A.SCIMCreateUser(ctx, accountID, "owner", account.SCIMUserInput{UserName: "bea@example.com", Active: true})
 	require.NoError(t, err)
 
-	// C holds bea's row. The manager's delete loop removes the other users
-	// before the owner, so it stops on bea right after reading its snapshot
-	// while the owner still exists, which is when a concurrent create can
-	// slip in.
-	started, releaseC, holderC := holdInTx(t, r.A.Store, func(tx store.Store) error {
-		_, err := tx.GetUserByUserID(ctx, store.LockingStrengthUpdate, bea.Id)
-		return err
-	})
-	<-started
+	paused := &pausingStore{Store: r.B.Store, snapshot: make(chan struct{}), proceed: make(chan struct{})}
+	r.B.Store = paused
 
 	deleteDone := make(chan error, 1)
 	go func() { deleteDone <- r.B.DeleteAccount(ctx, accountID, "owner") }()
-	waitForLockWaiters(t, r.A.Store, 1)
+	<-paused.snapshot
 
 	createDone := make(chan error, 1)
 	go func() {
 		_, err := r.A.SCIMCreateLocalUser(ctx, accountID, "owner", localInput("ana@example.com"), goodPassword)
 		createDone <- err
 	}()
-	// Room for an unserialized create to run to completion; correctness is
-	// asserted on the outcome below, not on this timing.
-	time.Sleep(300 * time.Millisecond)
+	// Wait until the create either finished (no serialization) or is
+	// waiting on the account lifecycle lock the paused delete holds.
+	lifecycleKey := accountLifecycleLockPrefix + accountID
+	deadline := time.After(barrierTimeout)
+	for waiting := false; !waiting; {
+		select {
+		case err := <-createDone:
+			createDone <- err
+			waiting = true
+		case <-deadline:
+			t.Fatal("the create neither finished nor waited on the account lifecycle lock")
+		case <-time.After(10 * time.Millisecond):
+			waiting = coord.waiters(lifecycleKey) > 0
+		}
+	}
 
-	close(releaseC)
-	require.NoError(t, <-holderC)
+	close(paused.proceed)
 	deleteErr := <-deleteDone
 	createErr := <-createDone
 
