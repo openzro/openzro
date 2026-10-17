@@ -978,6 +978,17 @@ func (am *DefaultAccountManager) DeleteAccount(ctx context.Context, accountID, u
 		return status.Errorf(status.PermissionDenied, "user is not allowed to delete account. Only account owner can delete account")
 	}
 
+	// Refuse before deleting anything: the users below are removed one by
+	// one, so reaching the store's local-user check at the end would leave
+	// the account half deleted (ADR-0024, #205). The store check still
+	// closes the race with a reservation made after this read.
+	for _, u := range account.Users {
+		if u.LocalCredentialState != types.LocalCredentialNone {
+			return status.Errorf(status.PreconditionFailed,
+				"account %s has SCIM local users: delete them through SCIM first", accountID)
+		}
+	}
+
 	userInfosMap, err := am.BuildUserInfosForAccount(ctx, accountID, userID, maps.Values(account.Users))
 	if err != nil {
 		return status.Errorf(status.Internal, "failed to build user infos for account %s: %v", accountID, err)

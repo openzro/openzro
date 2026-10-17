@@ -75,3 +75,20 @@ func TestSCIMHidesPendingLocalUsers(t *testing.T) {
 	require.Empty(t, filtered)
 	require.Equal(t, len(users), total)
 }
+
+// #216 review: DeleteAccount removed users one by one and only met the
+// store's local-user refusal at the end, leaving the account half deleted.
+// It must refuse before deleting anything.
+func TestDeleteAccount_RefusesBeforeDeletingAnyUser(t *testing.T) {
+	m, accountID, _ := setupLocalUsers(t)
+	ctx := context.Background()
+	_, err := m.SCIMCreateLocalUser(ctx, accountID, userID, localInput("ana@example.com"), goodPassword)
+	require.NoError(t, err)
+	regular, err := m.SCIMCreateUser(ctx, accountID, userID, account.SCIMUserInput{UserName: "bea@example.com", Active: true})
+	require.NoError(t, err)
+
+	requireStatusType(t, m.DeleteAccount(ctx, accountID, userID), status.PreconditionFailed)
+
+	_, err = m.Store.GetUserByUserID(ctx, store.LockingStrengthShare, regular.Id)
+	require.NoError(t, err, "no user may be deleted before the refusal")
+}

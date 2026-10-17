@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/openzro/openzro/management/server/auth/jwt"
 	"github.com/openzro/openzro/management/server/status"
 	"github.com/openzro/openzro/management/server/store"
 	"github.com/openzro/openzro/management/server/types"
@@ -270,4 +271,80 @@ func TestLocalUser_SaveAccountCannotRevertConcurrentTermination(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, types.LocalCredentialDeactivated, u.LocalCredentialState)
 	require.True(t, u.Blocked)
+}
+
+// #216 review: DeleteAccount counted local users without the account mutex,
+// so a reservation could commit between that count and the account-wide
+// deletes; the delete then removed the new user while its Dex credential
+// stayed behind. A third transaction holding a policy row lock pauses the
+// delete right after its count, while the other replica runs the full SCIM
+// create. Invariant: no Dex credential may outlive its user record.
+func TestLocalUser_DeleteAccountRaceLeavesNoOrphanCredential(t *testing.T) {
+	r := newTwoReplicas(t)
+	ctx := context.Background()
+	accountID, err := r.A.GetAccountIDByUserID(ctx, "owner", "")
+	require.NoError(t, err)
+	policies, err := r.A.Store.GetAccountPolicies(ctx, store.LockingStrengthShare, accountID)
+	require.NoError(t, err)
+	require.NotEmpty(t, policies, "the default policy anchors the pause")
+	snapshot, err := r.B.Store.GetAccount(ctx, accountID)
+	require.NoError(t, err)
+
+	// C holds a policy row: DeleteAccount's first delete waits on it.
+	started, releaseC, holderC := holdInTx(t, r.A.Store, func(tx store.Store) error {
+		_, err := tx.GetPolicyByID(ctx, store.LockingStrengthUpdate, accountID, policies[0].ID)
+		return err
+	})
+	<-started
+
+	deleteDone := make(chan error, 1)
+	go func() { deleteDone <- r.B.Store.DeleteAccount(ctx, snapshot) }()
+	waitForLockWaiters(t, r.A.Store, 1)
+
+	creds := newFakeLocalCredentials()
+	r.A.EnableLocalUsers(creds)
+	createDone := make(chan error, 1)
+	go func() {
+		_, err := r.A.SCIMCreateLocalUser(ctx, accountID, "owner", localInput("ana@example.com"), goodPassword)
+		createDone <- err
+	}()
+	// Either the create waits for the delete's account mutex (a second lock
+	// waiter) or, without the mutex, it runs to completion first.
+	var createFinished bool
+	deadline := time.After(barrierTimeout)
+	for !createFinished && lockWaiters(t, r.A.Store) < 2 {
+		select {
+		case err := <-createDone:
+			createFinished = true
+			createDone <- err
+		case <-deadline:
+			t.Fatal("the create neither finished nor waited on a lock")
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+
+	close(releaseC)
+	require.NoError(t, <-holderC)
+	require.NoError(t, <-deleteDone)
+	<-createDone
+
+	for email, entry := range creds.entries {
+		sub := jwt.EncodeDexSubject(entry.userID, dexLocalConnector)
+		_, err := r.A.Store.GetUserByUserID(ctx, store.LockingStrengthShare, sub)
+		require.NoError(t, err, "Dex credential for %s outlived its openZro user record", email)
+	}
+}
+
+// waitForLockWaiters blocks until the database reports at least n
+// transactions waiting on a lock.
+func waitForLockWaiters(t *testing.T, probe store.Store, n int64) {
+	t.Helper()
+	deadline := time.After(barrierTimeout)
+	for lockWaiters(t, probe) < n {
+		select {
+		case <-deadline:
+			t.Fatalf("the database never reported %d lock waiter(s)", n)
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
 }

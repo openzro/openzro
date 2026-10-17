@@ -318,10 +318,17 @@ func refuseLocalUserDelete(tx *gorm.DB, accountID, userID string) error {
 }
 
 // refuseAccountDeleteWithLocalUsers refuses to delete an account that still
-// has local users, for the same reason (ADR-0024, #205). A reservation
-// racing the delete cannot leave an orphan: it either committed before this
-// check (refused here) or fails on the missing account afterwards.
+// has local users, for the same reason (ADR-0024, #205). It takes the
+// account mutex first and the caller keeps it until the delete commits:
+// CreatePendingLocalUser takes the same mutex, so a reservation either
+// committed before this count (refused here) or waits and then fails on the
+// missing account. Without the mutex a reservation could commit between the
+// count and the account-wide deletes, which would remove the new user and
+// orphan its Dex credential.
 func refuseAccountDeleteWithLocalUsers(tx *gorm.DB, accountID string) error {
+	if err := lockAccount(tx, accountID); err != nil {
+		return err
+	}
 	var n int64
 	result := tx.Model(&types.User{}).
 		Where("account_id = ? AND "+colLocalUserState+" <> ?", accountID, types.LocalCredentialNone).
