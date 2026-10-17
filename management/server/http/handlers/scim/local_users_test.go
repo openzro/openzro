@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -56,36 +55,67 @@ func TestCreateUser_PasswordRoutesToLocalCreate(t *testing.T) {
 	assert.Equal(t, 1, plainCalls)
 }
 
-// Password changes are a separate, isolated operation that is not wired
-// yet. A password in PUT or PATCH must be refused, never silently dropped.
-func TestUpdateUser_PasswordIsRefused(t *testing.T) {
-	called := false
+// ADR-0024 D6: a password reset is an isolated operation. PATCH qualifies
+// only when its single operation replaces the password; PUT carries the
+// rest of the representation, which the manager checks is unchanged.
+func TestUpdateUser_PasswordReset(t *testing.T) {
+	var resets []string
+	var replaceInputs []*account.SCIMUserInput
+	updateCalled := false
 	am := &mock_server.MockAccountManager{
+		SCIMResetLocalPasswordFunc: func(_ context.Context, _, _, userID, password string, replace *account.SCIMUserInput) (*types.User, error) {
+			resets = append(resets, password)
+			replaceInputs = append(replaceInputs, replace)
+			return &types.User{Id: userID}, nil
+		},
 		SCIMReplaceUserFunc: func(_ context.Context, _, _, _ string, _ account.SCIMUserInput) (*types.User, error) {
-			called = true
+			updateCalled = true
 			return &types.User{Id: "u"}, nil
 		},
 		SCIMPatchUserFunc: func(_ context.Context, _, _, _ string, _ account.SCIMUserPatch) (*types.User, error) {
-			called = true
+			updateCalled = true
 			return &types.User{Id: "u"}, nil
 		},
 	}
 	srv := newTestServer(am, "acct", "caller")
 	secret := "correct-horse-battery"
 
-	cases := map[string]*httptest.ResponseRecorder{
-		"PUT": doSCIM(t, srv, http.MethodPut, "/scim/v2/Users/u",
-			map[string]any{"userName": "ana@example.com", "password": secret}),
+	ok := map[string]*httptest.ResponseRecorder{
 		"PATCH path": doSCIM(t, srv, http.MethodPatch, "/scim/v2/Users/u", map[string]any{
 			"Operations": []map[string]any{{"op": "replace", "path": "password", "value": secret}}}),
 		"PATCH bag": doSCIM(t, srv, http.MethodPatch, "/scim/v2/Users/u", map[string]any{
 			"Operations": []map[string]any{{"op": "replace", "value": map[string]any{"password": secret}}}}),
+		"PUT": doSCIM(t, srv, http.MethodPut, "/scim/v2/Users/u",
+			map[string]any{"userName": "ana@example.com", "displayName": "Ana", "password": secret}),
 	}
-	for name, rec := range cases {
+	for name, rec := range ok {
+		assert.Equal(t, http.StatusOK, rec.Code, name)
+		assert.NotContains(t, rec.Body.String(), secret, "%s echoed the password", name)
+	}
+	require.Equal(t, []string{secret, secret, secret}, resets)
+	assert.Nil(t, replaceInputs[0], "PATCH carries no representation to compare")
+	require.NotNil(t, replaceInputs[2], "PUT passes its representation for the unchanged check")
+	assert.Equal(t, "Ana", replaceInputs[2].DisplayName)
+
+	refused := map[string]*httptest.ResponseRecorder{
+		"PATCH password + other op": doSCIM(t, srv, http.MethodPatch, "/scim/v2/Users/u", map[string]any{
+			"Operations": []map[string]any{
+				{"op": "replace", "path": "password", "value": secret},
+				{"op": "replace", "path": "displayName", "value": "Other"},
+			}}),
+		"PATCH bag password + other": doSCIM(t, srv, http.MethodPatch, "/scim/v2/Users/u", map[string]any{
+			"Operations": []map[string]any{{"op": "replace", "value": map[string]any{"password": secret, "active": false}}}}),
+		"PATCH add password": doSCIM(t, srv, http.MethodPatch, "/scim/v2/Users/u", map[string]any{
+			"Operations": []map[string]any{{"op": "add", "path": "password", "value": secret}}}),
+		"PATCH non-string": doSCIM(t, srv, http.MethodPatch, "/scim/v2/Users/u", map[string]any{
+			"Operations": []map[string]any{{"op": "replace", "path": "password", "value": 123}}}),
+	}
+	for name, rec := range refused {
 		assert.Equal(t, http.StatusBadRequest, rec.Code, name)
-		assert.False(t, strings.Contains(rec.Body.String(), secret), "%s echoed the password", name)
+		assert.NotContains(t, rec.Body.String(), secret, "%s echoed the password", name)
 	}
-	assert.False(t, called, "a request carrying a password must not reach the update")
+	assert.Len(t, resets, 3, "a refused request must not reset the password")
+	assert.False(t, updateCalled, "no request carrying a password may reach the generic update")
 }
 
 // #216 review: a request that mentions the credential but cannot be

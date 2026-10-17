@@ -186,7 +186,21 @@ func (h *Handler) handleReplaceUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.hasPassword() {
-		writeError(w, http.StatusBadRequest, errPasswordChangeUnsupported)
+		// A PUT that carries a password is a password reset; the rest of the
+		// body must match the current representation (checked by the manager).
+		password, ok := body.passwordString()
+		if !ok {
+			writeError(w, http.StatusBadRequest, "password must be a string")
+			return
+		}
+		input := body.toInput()
+		updated, err := h.accountManager.SCIMResetLocalPassword(r.Context(), userAuth.AccountId, userAuth.UserId,
+			id, password, &input)
+		if err != nil {
+			writeError(w, mapErrorStatus(err), err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, fromUser(updated))
 		return
 	}
 	updated, err := h.accountManager.SCIMReplaceUser(r.Context(), userAuth.AccountId, userAuth.UserId, id, body.toInput())
@@ -227,18 +241,26 @@ func (h *Handler) handlePatchUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if password, handled, errMsg := passwordResetFromPatch(body.Operations); handled {
+		if errMsg != "" {
+			writeError(w, http.StatusBadRequest, errMsg)
+			return
+		}
+		updated, err := h.accountManager.SCIMResetLocalPassword(r.Context(), userAuth.AccountId, userAuth.UserId,
+			id, password, nil)
+		if err != nil {
+			writeError(w, mapErrorStatus(err), err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, fromUser(updated))
+		return
+	}
+
 	patch := account.SCIMUserPatch{}
 	for _, op := range body.Operations {
 		// SCIM is case-insensitive on op and path per RFC.
 		opName := strings.ToLower(op.Op)
 		path := strings.ToLower(strings.TrimSpace(op.Path))
-
-		// Checked before the op filter: "remove" on the password must be
-		// refused too, not skipped as an unsupported op.
-		if path == "password" {
-			writeError(w, http.StatusBadRequest, errPasswordChangeUnsupported)
-			return
-		}
 
 		// Most IdPs send `op=replace, path=active, value=true`.
 		// Some send a single op without path and a value object.
@@ -250,10 +272,6 @@ func (h *Handler) handlePatchUser(w http.ResponseWriter, r *http.Request) {
 			var bag map[string]json.RawMessage
 			if err := json.Unmarshal(op.Value, &bag); err != nil {
 				continue
-			}
-			if bagHasPassword(bag) {
-				writeError(w, http.StatusBadRequest, errPasswordChangeUnsupported)
-				return
 			}
 			applyPatchBag(&patch, bag)
 			continue
@@ -305,12 +323,58 @@ func (b userBody) passwordString() (string, bool) {
 	return v, true
 }
 
-// errPasswordChangeUnsupported is returned for a password in PUT or PATCH:
-// a password change is a separate operation not wired yet (ADR-0024 D6),
-// and it must be refused rather than silently dropped.
-const errPasswordChangeUnsupported = "changing a password is not supported yet"
+// errPasswordNotIsolated is returned when a PATCH mentions the password
+// alongside anything else, or with an op other than replace: a password
+// reset must be an isolated operation (ADR-0024 D6), and a mentioned
+// password is never silently dropped.
+const errPasswordNotIsolated = "a password can only be set by a PATCH whose single operation replaces it"
 
-func bagHasPassword(bag map[string]json.RawMessage) bool {
+// passwordResetFromPatch inspects PATCH operations for the password. handled
+// is false when no operation mentions it. Otherwise either errMsg explains
+// why the request is refused, or password is the value to set: the only
+// accepted shape is a single replace, by path or by an attribute bag that
+// holds nothing but the password.
+func passwordResetFromPatch(ops []patchOp) (password string, handled bool, errMsg string) {
+	mentions := false
+	for _, op := range ops {
+		if strings.EqualFold(strings.TrimSpace(op.Path), "password") || opBagHasPassword(op) {
+			mentions = true
+			break
+		}
+	}
+	if !mentions {
+		return "", false, ""
+	}
+	if len(ops) != 1 || !strings.EqualFold(ops[0].Op, "replace") {
+		return "", true, errPasswordNotIsolated
+	}
+	raw := ops[0].Value
+	if strings.TrimSpace(ops[0].Path) == "" {
+		var bag map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &bag); err != nil || len(bag) != 1 {
+			return "", true, errPasswordNotIsolated
+		}
+		for _, v := range bag {
+			raw = v
+		}
+	}
+	if string(raw) == "null" {
+		return "", true, "password must be a string"
+	}
+	if err := json.Unmarshal(raw, &password); err != nil {
+		return "", true, "password must be a string"
+	}
+	return password, true, ""
+}
+
+func opBagHasPassword(op patchOp) bool {
+	if strings.TrimSpace(op.Path) != "" {
+		return false
+	}
+	var bag map[string]json.RawMessage
+	if err := json.Unmarshal(op.Value, &bag); err != nil {
+		return false
+	}
 	for k := range bag {
 		if strings.EqualFold(k, "password") {
 			return true
