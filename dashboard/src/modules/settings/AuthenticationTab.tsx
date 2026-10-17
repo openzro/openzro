@@ -21,6 +21,7 @@ import {
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { useHasChanges } from "@/hooks/useHasChanges";
 import { Account } from "@/interfaces/Account";
+import AllowedEmailDomainsCard from "@/modules/settings/AllowedEmailDomainsCard";
 import OzSettingsCard from "@/modules/settings/v2/OzSettingsCard";
 import OzSettingsField from "@/modules/settings/v2/OzSettingsField";
 import OzSettingsToggle from "@/modules/settings/v2/OzSettingsToggle";
@@ -62,6 +63,10 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
     () => account?.settings?.mfa_enforce_federated ?? false,
   );
 
+  const [allowedDomains, setAllowedDomains] = useState<string[]>(
+    () => account?.settings?.allowed_email_domains ?? [],
+  );
+
   const [
     loginExpiration,
     setLoginExpiration,
@@ -99,6 +104,7 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
     peerInactivityExpireInterval,
     mfaEnforceLocal,
     mfaEnforceFederated,
+    allowedDomains,
   ]);
 
   const saveChanges = async () => {
@@ -120,6 +126,7 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
             peer_inactivity_expiration: 600,
             mfa_enforce_local: mfaEnforceLocal,
             mfa_enforce_federated: mfaEnforceFederated,
+            allowed_email_domains: allowedDomains,
             extra: {
               ...account.settings?.extra,
               peer_approval_enabled: peerApproval,
@@ -138,6 +145,7 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
             peerInactivityExpireInterval,
             mfaEnforceLocal,
             mfaEnforceFederated,
+            allowedDomains,
           ]);
         }),
       loadingMessage: "Saving the authentication settings...",
@@ -315,6 +323,12 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
           }
         />
       </OzSettingsCard>
+
+      <AllowedEmailDomainsCard
+        domains={allowedDomains}
+        onChange={setAllowedDomains}
+        disabled={editDisabled}
+      />
     </Tabs.Content>
   );
 }
