@@ -314,6 +314,11 @@ func (am *DefaultAccountManager) usersInGroup(ctx context.Context, accountID, gr
 	}
 	out := []string{}
 	for _, u := range users {
+		// A pending or tombstoned local user is not a SCIM resource, so it
+		// is not listed as a member either (its /Users/{id} is a 404).
+		if isHiddenFromSCIM(u) {
+			continue
+		}
 		for _, g := range u.AutoGroups {
 			if g == groupID {
 				out = append(out, u.Id)
@@ -408,7 +413,7 @@ func (am *DefaultAccountManager) applyUserAutoGroupInTx(
 	if err != nil {
 		return err
 	}
-	if user.AccountID != accountID {
+	if user.AccountID != accountID || (add && isHiddenFromSCIM(user)) {
 		return status.NewUserNotFoundError(userID)
 	}
 

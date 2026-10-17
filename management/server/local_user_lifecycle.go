@@ -148,7 +148,9 @@ func (am *DefaultAccountManager) terminateLocalUser(ctx context.Context, account
 }
 
 // cleanupTerminatedLocalUser runs the revocation steps of a terminal
-// transition and records their convergence. Each step is idempotent.
+// transition and records their convergence: peers, PATs, refresh tokens,
+// the Dex credential and, for a tombstone, group memberships. Each step is
+// idempotent.
 func (am *DefaultAccountManager) cleanupTerminatedLocalUser(ctx context.Context, accountID string, user *types.User) error {
 	if err := am.expireBlockedUserPeers(ctx, accountID, user); err != nil {
 		return status.Errorf(status.Internal, "expire peers: %v", err)
@@ -176,6 +178,14 @@ func (am *DefaultAccountManager) cleanupTerminatedLocalUser(ctx context.Context,
 	if entry != nil {
 		if err := am.localCreds.DeletePassword(ctx, user.SCIMUserName); err != nil && !errors.Is(err, dex_proxy.ErrNotFound) {
 			return status.Errorf(status.Internal, "delete Dex password: %v", err)
+		}
+	}
+	// A tombstone is not a SCIM resource, so it must not stay a group
+	// member (GET /Groups would reference a /Users/{id} that is a 404).
+	if user.LocalCredentialState == types.LocalCredentialTombstoned && len(user.AutoGroups) > 0 {
+		user.AutoGroups = []string{}
+		if err := am.Store.SaveUser(ctx, store.LockingStrengthUpdate, user); err != nil {
+			return status.Errorf(status.Internal, "remove group memberships: %v", err)
 		}
 	}
 	if err := am.Store.ClearLocalUserCleanup(ctx, accountID, user.Id, user.LocalCredentialState); err != nil {
