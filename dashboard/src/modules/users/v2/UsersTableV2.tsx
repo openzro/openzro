@@ -29,6 +29,7 @@ import {
   MailPlus,
   ShieldCheck,
   UserCheck,
+  UserPlus,
   Users as UsersIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -50,6 +51,8 @@ import { User } from "@/interfaces/User";
 import { useV2TopbarRight } from "@/layouts/V2DashboardLayout";
 import LastTimeRow from "@/modules/common-table-rows/LastTimeRow";
 import TeamTabs from "@/modules/team/v2/TeamTabs";
+import { LocalUserCreateModalContent } from "@/modules/users/local/LocalUserCreateModal";
+import useLocalUserConfig from "@/modules/users/local/useLocalUserConfig";
 import UserBlockCell from "@/modules/users/table-cells/UserBlockCell";
 import UserGroupCell from "@/modules/users/table-cells/UserGroupCell";
 import { UserInviteModalContent } from "@/modules/users/UserInviteModal";
@@ -93,17 +96,40 @@ export default function UsersTableV2({ users, isLoading }: Props) {
   const inviteAvailable = isLocalDev() || isOpenzroHosted();
   const [inviteOpen, setInviteOpen] = useState(false);
 
+  // Local users (ADR-0026): offered only when the server allows
+  // creating them, which needs Dex and the operator's opt-in.
+  const { creationEnabled: localCreateAvailable } = useLocalUserConfig(
+    permission.users.create,
+  );
+  const [localCreateOpen, setLocalCreateOpen] = useState(false);
+
   useV2TopbarRight(
-    inviteAvailable ? (
-      <OzButton
-        variant="primary"
-        type="button"
-        onClick={() => setInviteOpen(true)}
-        disabled={!permission.users.create}
-      >
-        <MailPlus size={14} />
-        Invite User
-      </OzButton>
+    inviteAvailable || localCreateAvailable ? (
+      <div className="flex items-center gap-2">
+        {localCreateAvailable && (
+          <OzButton
+            variant={inviteAvailable ? "default" : "primary"}
+            type="button"
+            data-cy="create-local-user"
+            onClick={() => setLocalCreateOpen(true)}
+            disabled={!permission.users.create}
+          >
+            <UserPlus size={14} />
+            Create local user
+          </OzButton>
+        )}
+        {inviteAvailable && (
+          <OzButton
+            variant="primary"
+            type="button"
+            onClick={() => setInviteOpen(true)}
+            disabled={!permission.users.create}
+          >
+            <MailPlus size={14} />
+            Invite User
+          </OzButton>
+        )}
+      </div>
     ) : null,
   );
 
@@ -303,6 +329,20 @@ export default function UsersTableV2({ users, isLoading }: Props) {
             {inviteOpen && (
               <UserInviteModalContent
                 onSuccess={() => setInviteOpen(false)}
+              />
+            )}
+          </Modal>
+        )}
+
+        {localCreateAvailable && (
+          <Modal
+            open={localCreateOpen}
+            onOpenChange={setLocalCreateOpen}
+            key={localCreateOpen ? "local-open" : "local-closed"}
+          >
+            {localCreateOpen && (
+              <LocalUserCreateModalContent
+                onSuccess={() => setLocalCreateOpen(false)}
               />
             )}
           </Modal>

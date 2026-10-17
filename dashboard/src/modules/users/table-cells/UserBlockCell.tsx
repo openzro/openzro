@@ -6,6 +6,7 @@ import { useSWRConfig } from "swr";
 import { useDialog } from "@/contexts/DialogProvider";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { User } from "@/interfaces/User";
+import { isLocalUser } from "@/modules/users/local/LocalUserBadge";
 
 type Props = {
   user: User;
@@ -21,7 +22,10 @@ export default function UserBlockCell({ user, isUserPage = false }: Props) {
     return user.is_blocked;
   }, [user]);
 
-  const disabled = user.is_current || user.role === "owner";
+  // Local users are not blocked: the store refuses the toggle and
+  // deactivation is their terminal path (ADR-0026 D3).
+  const disabled =
+    user.is_current || user.role === "owner" || isLocalUser(user);
 
   const update = async (blocked: boolean) => {
     const name = user.name || "User";

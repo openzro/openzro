@@ -16,7 +16,12 @@ export interface User {
   // means an external IdP pushed the user via SCIM — manual edits will
   // be overwritten on the next sync, so the UI shows a SCIM badge.
   issued?: UserIssued;
+  // local_credential_state is set only for local users, whose email and
+  // password live in openZro's embedded Dex (ADR-0024, ADR-0026).
+  local_credential_state?: LocalCredentialState;
 }
+
+export type LocalCredentialState = "active" | "deactivated";
 
 export enum UserIssued {
   API = "api",
