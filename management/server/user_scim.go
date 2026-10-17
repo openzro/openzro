@@ -91,8 +91,11 @@ func (am *DefaultAccountManager) SCIMReplaceUser(ctx context.Context, accountID,
 	if err != nil {
 		return nil, err
 	}
-	if user.AccountID != accountID {
+	if user.AccountID != accountID || isHiddenFromSCIM(user) {
 		return nil, status.NewUserNotFoundError(userID)
+	}
+	if err := gateLocalUserUpdate(user, &input.Active, &input.UserName); err != nil {
+		return nil, err
 	}
 	// SCIM userName has caseExact=false. A case-only re-send is the same
 	// identifier and must retain the legacy-user compatibility exception.
@@ -136,8 +139,11 @@ func (am *DefaultAccountManager) SCIMPatchUser(ctx context.Context, accountID, c
 	if err != nil {
 		return nil, err
 	}
-	if user.AccountID != accountID {
+	if user.AccountID != accountID || isHiddenFromSCIM(user) {
 		return nil, status.NewUserNotFoundError(userID)
+	}
+	if err := gateLocalUserUpdate(user, patch.Active, patch.UserName); err != nil {
+		return nil, err
 	}
 
 	wasBlocked := user.Blocked
@@ -202,8 +208,11 @@ func (am *DefaultAccountManager) SCIMDeactivateUser(ctx context.Context, account
 	if err != nil {
 		return err
 	}
-	if user.AccountID != accountID {
+	if user.AccountID != accountID || isHiddenFromSCIM(user) {
 		return status.NewUserNotFoundError(userID)
+	}
+	if user.LocalCredentialState != types.LocalCredentialNone {
+		return errLocalUserDeactivationUnsupported()
 	}
 
 	if !user.Blocked {
@@ -236,7 +245,7 @@ func (am *DefaultAccountManager) SCIMListUsers(ctx context.Context, accountID, c
 
 	filtered := make([]*types.User, 0, len(users))
 	for _, u := range users {
-		if u.NonDeletable || u.IsServiceUser {
+		if u.NonDeletable || u.IsServiceUser || isHiddenFromSCIM(u) {
 			continue
 		}
 		if userNameFilter != "" && !strings.EqualFold(u.SCIMUserName, userNameFilter) {
@@ -273,7 +282,7 @@ func (am *DefaultAccountManager) SCIMGetUser(ctx context.Context, accountID, cal
 	if err != nil {
 		return nil, ErrSCIMUserNotFound
 	}
-	if user.AccountID != accountID {
+	if user.AccountID != accountID || isHiddenFromSCIM(user) {
 		return nil, ErrSCIMUserNotFound
 	}
 	return user, nil
@@ -356,4 +365,32 @@ func (am *DefaultAccountManager) expireBlockedUserPeers(ctx context.Context, acc
 		return fmt.Errorf("disconnect expired peers of blocked user %s: %w", user.Id, err)
 	}
 	return nil
+}
+
+// isHiddenFromSCIM reports local users that are not SCIM resources: a
+// pending reservation and a tombstone (ADR-0024 D3).
+func isHiddenFromSCIM(u *types.User) bool {
+	return u.LocalCredentialState == types.LocalCredentialPending ||
+		u.LocalCredentialState == types.LocalCredentialTombstoned
+}
+
+// gateLocalUserUpdate refuses, for local users, the SCIM updates that need
+// machinery not built yet: deactivation (the cleanup saga) and renaming (Dex
+// cannot re-key a credential). active and userName are nil when the request
+// does not touch them. Other users pass through unchanged.
+func gateLocalUserUpdate(user *types.User, active *bool, userName *string) error {
+	if user.LocalCredentialState == types.LocalCredentialNone {
+		return nil
+	}
+	if active != nil && !*active {
+		return errLocalUserDeactivationUnsupported()
+	}
+	if userName != nil && !strings.EqualFold(*userName, user.SCIMUserName) {
+		return status.Errorf(status.BadRequest, "the userName of a local user cannot be changed")
+	}
+	return nil
+}
+
+func errLocalUserDeactivationUnsupported() error {
+	return status.Errorf(status.BadRequest, "deactivating or deleting SCIM local users is not supported yet")
 }
