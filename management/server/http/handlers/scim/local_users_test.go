@@ -235,3 +235,59 @@ func TestPatchGroup_MemberErrorsArePropagated(t *testing.T) {
 	rec = patch(map[string]any{"op": "remove", "path": `members[value eq "gone"]`})
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
+
+// #217 review: encoding/json decodes null into the zero value without an
+// error, so "active": null became a deactivation and a null bag or member
+// value became a silent no-op. null (or a missing value) for a recognized
+// attribute is malformed.
+func TestPatch_NullValuesAreRejected(t *testing.T) {
+	userCalls, memberCalls := 0, 0
+	am := &mock_server.MockAccountManager{
+		SCIMPatchUserFunc: func(_ context.Context, _, _, _ string, _ account.SCIMUserPatch) (*types.User, error) {
+			userCalls++
+			return &types.User{Id: "u"}, nil
+		},
+		SCIMAddGroupMemberFunc:    func(_ context.Context, _, _, _, _ string) error { memberCalls++; return nil },
+		SCIMRemoveGroupMemberFunc: func(_ context.Context, _, _, _, _ string) error { memberCalls++; return nil },
+		SCIMRenameGroupFunc: func(_ context.Context, _, _, groupID, _ string) (*types.Group, error) {
+			memberCalls++
+			return &types.Group{ID: groupID}, nil
+		},
+		SCIMGetGroupFunc: func(_ context.Context, _, _, groupID string) (*types.Group, []string, error) {
+			return &types.Group{ID: groupID, Name: "g"}, nil, nil
+		},
+	}
+	srv := newTestServer(am, "acct", "caller")
+	ops := func(o ...map[string]any) map[string]any { return map[string]any{"Operations": o} }
+
+	userCases := map[string]map[string]any{
+		"active null":          ops(map[string]any{"op": "replace", "path": "active", "value": nil}),
+		"active missing value": ops(map[string]any{"op": "replace", "path": "active"}),
+		"userName null":        ops(map[string]any{"op": "replace", "path": "userName", "value": nil}),
+		"bag null + active": ops(
+			map[string]any{"op": "replace", "path": "active", "value": false},
+			map[string]any{"op": "replace", "value": nil}),
+		"bag not an object + active": ops(
+			map[string]any{"op": "replace", "path": "active", "value": false},
+			map[string]any{"op": "replace", "value": "oops"}),
+		"bag active null": ops(map[string]any{"op": "replace", "value": map[string]any{"active": nil}}),
+	}
+	for name, body := range userCases {
+		rec := doSCIM(t, srv, http.MethodPatch, "/scim/v2/Users/u", body)
+		assert.Equal(t, http.StatusBadRequest, rec.Code, name)
+	}
+	assert.Zero(t, userCalls, "a PATCH with a null recognized value must not reach the manager")
+
+	groupCases := map[string]map[string]any{
+		"members null":        ops(map[string]any{"op": "add", "path": "members", "value": nil}),
+		"member value null":   ops(map[string]any{"op": "add", "path": "members", "value": []map[string]any{{"value": nil}}}),
+		"member value absent": ops(map[string]any{"op": "add", "path": "members", "value": []map[string]any{{}}}),
+		"member value empty":  ops(map[string]any{"op": "remove", "path": "members", "value": []map[string]any{{"value": ""}}}),
+		"displayName null":    ops(map[string]any{"op": "replace", "path": "displayName", "value": nil}),
+	}
+	for name, body := range groupCases {
+		rec := doSCIM(t, srv, http.MethodPatch, "/scim/v2/Groups/g", body)
+		assert.Equal(t, http.StatusBadRequest, rec.Code, name)
+	}
+	assert.Zero(t, memberCalls, "a malformed group PATCH must not reach the manager")
+}

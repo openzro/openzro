@@ -192,7 +192,7 @@ func (h *Handler) handlePatchGroup(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case opName == "replace" && path == "displayname":
 			var v string
-			if err := json.Unmarshal(op.Value, &v); err != nil {
+			if jsonNullOrMissing(op.Value) || json.Unmarshal(op.Value, &v) != nil {
 				writeError(w, http.StatusBadRequest, "displayName must be a string")
 				return
 			}
@@ -202,9 +202,9 @@ func (h *Handler) handlePatchGroup(w http.ResponseWriter, r *http.Request) {
 			}
 
 		case opName == "add" && path == "members":
-			var members []memberPatchValue
-			if err := json.Unmarshal(op.Value, &members); err != nil {
-				writeError(w, http.StatusBadRequest, "members must be a list of {value: id}")
+			members, ok := parseMemberValues(op.Value)
+			if !ok {
+				writeError(w, http.StatusBadRequest, errMalformedMembers)
 				return
 			}
 			for _, m := range members {
@@ -224,9 +224,9 @@ func (h *Handler) handlePatchGroup(w http.ResponseWriter, r *http.Request) {
 			if uid := extractRemoveUserID(path); uid != "" {
 				uids = []string{uid}
 			} else {
-				var members []memberPatchValue
-				if err := json.Unmarshal(op.Value, &members); err != nil {
-					writeError(w, http.StatusBadRequest, "members must be a list of {value: id}")
+				members, ok := parseMemberValues(op.Value)
+				if !ok {
+					writeError(w, http.StatusBadRequest, errMalformedMembers)
 					return
 				}
 				for _, m := range members {
@@ -304,4 +304,26 @@ func extractRemoveUserID(path string) string {
 		return ""
 	}
 	return strings.Trim(strings.Join(parts[2:], " "), "\"'")
+}
+
+const errMalformedMembers = "members must be a list of {value: id} with non-empty ids"
+
+// parseMemberValues decodes a members list and requires every entry to
+// carry a non-empty id. null, a missing list and null/absent/empty values
+// all decode without an error, and would otherwise turn into a no-op 200
+// (or, on remove, pass through the idempotent not-found exception).
+func parseMemberValues(raw json.RawMessage) ([]memberPatchValue, bool) {
+	if jsonNullOrMissing(raw) {
+		return nil, false
+	}
+	var members []memberPatchValue
+	if err := json.Unmarshal(raw, &members); err != nil {
+		return nil, false
+	}
+	for _, m := range members {
+		if strings.TrimSpace(m.Value) == "" {
+			return nil, false
+		}
+	}
+	return members, true
 }

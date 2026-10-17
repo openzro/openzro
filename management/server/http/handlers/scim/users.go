@@ -269,10 +269,12 @@ func (h *Handler) handlePatchUser(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if path == "" {
-			// Whole-resource value: parse as an attribute bag.
+			// Whole-resource value: an attribute bag. It must be a JSON
+			// object; null or another type is malformed, not a no-op.
 			var bag map[string]json.RawMessage
-			if err := json.Unmarshal(op.Value, &bag); err != nil {
-				continue
+			if jsonNullOrMissing(op.Value) || json.Unmarshal(op.Value, &bag) != nil {
+				writeError(w, http.StatusBadRequest, "a PATCH operation without a path must carry an attribute object")
+				return
 			}
 			if err := applyPatchBag(&patch, bag); err != nil {
 				writeError(w, http.StatusBadRequest, err.Error())
@@ -393,6 +395,14 @@ func applyPatchBag(out *account.SCIMUserPatch, bag map[string]json.RawMessage) e
 // are ignored so unknown extensions don't 400.
 func applyPatchAttribute(out *account.SCIMUserPatch, path string, raw json.RawMessage) error {
 	switch path {
+	case "active", "username", "displayname", "name.formatted":
+		// encoding/json decodes null into the zero value without an error,
+		// which would turn "active": null into a deactivation.
+		if jsonNullOrMissing(raw) {
+			return fmt.Errorf("%s must not be null", path)
+		}
+	}
+	switch path {
 	case "active":
 		v, err := parseSCIMBool(raw)
 		if err != nil {
@@ -413,6 +423,14 @@ func applyPatchAttribute(out *account.SCIMUserPatch, path string, raw json.RawMe
 		out.DisplayName = &v
 	}
 	return nil
+}
+
+// jsonNullOrMissing reports a value that is absent or JSON null. Both decode
+// to the zero value without an error, so recognized attributes check it
+// explicitly.
+func jsonNullOrMissing(raw json.RawMessage) bool {
+	t := strings.TrimSpace(string(raw))
+	return t == "" || t == "null"
 }
 
 // parseSCIMBool accepts a JSON boolean or the strings "true"/"false" in any
