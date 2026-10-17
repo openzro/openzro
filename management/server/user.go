@@ -962,6 +962,8 @@ func (am *DefaultAccountManager) BuildUserInfosForAccount(ctx context.Context, a
 				Status:        string(types.UserStatusActive),
 				IsServiceUser: localUser.IsServiceUser,
 				NonDeletable:  localUser.NonDeletable,
+
+				LocalCredentialState: string(localUser.LocalCredentialState),
 			}
 		}
 		userInfosMap[info.ID] = info

@@ -65,6 +65,9 @@ type UserInfo struct {
 	LastLogin            time.Time                                  `json:"last_login"`
 	Issued               string                                     `json:"issued"`
 	IntegrationReference integration_reference.IntegrationReference `json:"-"`
+	// LocalCredentialState mirrors User.LocalCredentialState for local users
+	// (ADR-0024); empty for every other user.
+	LocalCredentialState string `json:"local_credential_state,omitempty"`
 }
 
 // User represents a user of the system
@@ -237,6 +240,8 @@ func (u *User) ToUserInfo(userData *idp.UserData) (*UserInfo, error) {
 			IsBlocked:     u.Blocked,
 			LastLogin:     u.GetLastLogin(),
 			Issued:        u.Issued,
+
+			LocalCredentialState: string(u.LocalCredentialState),
 		}, nil
 	}
 	if userData.ID != u.Id {
@@ -274,6 +279,8 @@ func (u *User) ToUserInfo(userData *idp.UserData) (*UserInfo, error) {
 		IsBlocked:     u.Blocked,
 		LastLogin:     u.GetLastLogin(),
 		Issued:        u.Issued,
+
+		LocalCredentialState: string(u.LocalCredentialState),
 	}, nil
 }
 

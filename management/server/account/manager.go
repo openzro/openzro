@@ -92,6 +92,10 @@ type Manager interface {
 	// SCIMResetLocalPassword replaces a local user's password (ADR-0024 D6).
 	// replace is the rest of a PUT representation, nil for PATCH.
 	SCIMResetLocalPassword(ctx context.Context, accountID, callerID, userID, password string, replace *SCIMUserInput) (*types.User, error)
+	// DeactivateLocalUser permanently deactivates a local user (ADR-0026).
+	DeactivateLocalUser(ctx context.Context, accountID, callerID, userID string) (*types.User, error)
+	// LocalUserCreationEnabled reports whether local users can be created.
+	LocalUserCreationEnabled() bool
 	SCIMReplaceUser(ctx context.Context, accountID, callerID, userID string, input SCIMUserInput) (*types.User, error)
 	SCIMPatchUser(ctx context.Context, accountID, callerID, userID string, patch SCIMUserPatch) (*types.User, error)
 	SCIMDeactivateUser(ctx context.Context, accountID, callerID, userID string) error

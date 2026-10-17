@@ -283,3 +283,29 @@ func (am *DefaultAccountManager) deleteLocalUserViaREST(ctx context.Context, acc
 	}
 	return am.terminateLocalUser(ctx, accountID, initiatorUserID, targetUserID, types.LocalCredentialTombstoned)
 }
+
+// DeactivateLocalUser permanently deactivates a local user from the console
+// (ADR-0026): the same terminal saga as SCIM active=false. It is called
+// without the account write lock, per the lock discipline above.
+func (am *DefaultAccountManager) DeactivateLocalUser(ctx context.Context, accountID, callerID, userID string) (*types.User, error) {
+	if err := am.requireSCIMPermission(ctx, accountID, callerID, operations.Update); err != nil {
+		return nil, err
+	}
+	user, err := am.getSCIMVisibleUser(ctx, accountID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user.LocalCredentialState == types.LocalCredentialNone {
+		return nil, status.Errorf(status.BadRequest, "only local users can be deactivated this way")
+	}
+	if err := am.terminateLocalUser(ctx, accountID, callerID, userID, types.LocalCredentialDeactivated); err != nil {
+		return nil, err
+	}
+	return am.Store.GetUserByUserID(ctx, store.LockingStrengthShare, userID)
+}
+
+// LocalUserCreationEnabled reports whether this deployment can create local
+// users: Dex is wired and the operator opted in (ADR-0024 D10).
+func (am *DefaultAccountManager) LocalUserCreationEnabled() bool {
+	return am.localCreds != nil && am.localUserCreationEnabled
+}
