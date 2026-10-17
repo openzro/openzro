@@ -72,7 +72,7 @@ export default function UserActionCellV2({
     const choice = await confirm({
       title: `Delete '${name}'?`,
       description: local
-        ? "Deleting this local user removes their password, devices and dashboard access. The email can't be used for a new local user. This action cannot be undone."
+        ? "Deleting this local user removes their password and dashboard access, and disconnects their devices, which stay listed with their access expired. The email can't be used for a new local user. This action cannot be undone."
         : "Deleting this user will remove their devices and remove dashboard access. This action cannot be undone.",
       confirmText: "Delete",
       cancelText: "Cancel",
@@ -87,7 +87,7 @@ export default function UserActionCellV2({
     const choice = await confirm({
       title: `Deactivate '${name}'?`,
       description:
-        "Deactivation is permanent: the password is removed, sessions are revoked and peers are disconnected. The account can't be reactivated and the email can't be used for a new local user.",
+        "Deactivation is permanent: the password is removed, the user is blocked and their devices are disconnected with access expired. The account can't be reactivated and the email can't be used for a new local user.",
       confirmText: "Deactivate",
       cancelText: "Cancel",
       type: "danger",
