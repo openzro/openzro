@@ -11,7 +11,7 @@ describe("Local users", () => {
     cy.login();
   });
 
-  it("creates, resets and deactivates a local user", () => {
+  it("creates, resets, deactivates and deletes a local user", () => {
     const email = `cy-${Date.now()}@example.com`;
     cy.intercept("POST", "/api/users/local").as("create");
     cy.intercept("POST", "/api/users/*/password").as("reset");
@@ -56,6 +56,13 @@ describe("Local users", () => {
     row().find("[aria-label='Row actions']").click();
     cy.get("[data-cy=reset-local-password]").should("not.exist");
     cy.get("[data-cy=deactivate-local-user]").should("not.exist");
+
+    // A console admin deletes it; the tombstone leaves the list.
+    cy.intercept("DELETE", "/api/users/*").as("delete");
+    cy.get("[data-cy=delete-user]").click();
+    cy.contains("button", "Delete").click();
+    cy.wait("@delete").its("response.statusCode").should("eq", 200);
+    cy.contains("tr", email).should("not.exist");
   });
 
   it("re-enables the form when saving a new group fails", () => {
