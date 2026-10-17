@@ -171,6 +171,48 @@ func (c *ClaimsExtractor) ToUserAuth(token *jwt.Token) (nbcontext.UserAuth, erro
 	return userAuth, nil
 }
 
+// EncodeDexSubject builds the `sub` Dex issues for a user of connector
+// connID: base64url (no padding) of a protobuf with field 1 = userID and
+// field 2 = connID. Management uses it to precompute the openZro user ID of
+// a local password user before its first login (ADR-0024 D2).
+func EncodeDexSubject(userID, connID string) string {
+	var buf []byte
+	buf = protowire.AppendTag(buf, 1, protowire.BytesType)
+	buf = protowire.AppendString(buf, userID)
+	buf = protowire.AppendTag(buf, 2, protowire.BytesType)
+	buf = protowire.AppendString(buf, connID)
+	return base64.RawURLEncoding.EncodeToString(buf)
+}
+
+// DecodeDexSubject is the inverse of EncodeDexSubject. ok is false when sub
+// is not a Dex internal-id protobuf with both fields.
+func DecodeDexSubject(sub string) (userID, connID string, ok bool) {
+	raw, err := base64.RawURLEncoding.DecodeString(sub)
+	if err != nil || len(raw) == 0 {
+		return "", "", false
+	}
+	var gotUser, gotConn bool
+	for len(raw) > 0 {
+		num, typ, n := protowire.ConsumeTag(raw)
+		if n < 0 || typ != protowire.BytesType {
+			return "", "", false
+		}
+		raw = raw[n:]
+		val, n := protowire.ConsumeBytes(raw)
+		if n < 0 {
+			return "", "", false
+		}
+		raw = raw[n:]
+		switch num {
+		case 1:
+			userID, gotUser = string(val), true
+		case 2:
+			connID, gotConn = string(val), true
+		}
+	}
+	return userID, connID, gotUser && gotConn
+}
+
 // parseDexSubConnector decodes Dex's internal-id protobuf out of the
 // JWT `sub` claim and returns the embedded connector id, or empty
 // string if `sub` is not in that shape.

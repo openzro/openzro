@@ -150,3 +150,23 @@ func TestClaimsExtractor_EmailVerified(t *testing.T) {
 		})
 	}
 }
+
+// ADR-0024 D2: management precomputes the sub Dex will issue for a local
+// password user, so the encoding must match Dex byte for byte (same as the
+// dexSub fixture, which mirrors Dex's formatSubject) and round-trip.
+func TestEncodeDecodeDexSubject(t *testing.T) {
+	sub := EncodeDexSubject("3f0c1d2e-uid", "local")
+	if sub != dexSub(t, "3f0c1d2e-uid", "local") {
+		t.Fatalf("EncodeDexSubject does not match Dex's encoding")
+	}
+	if got := parseDexSubConnector(sub); got != "local" {
+		t.Fatalf("connector: got %q", got)
+	}
+	userID, connID, ok := DecodeDexSubject(sub)
+	if !ok || userID != "3f0c1d2e-uid" || connID != "local" {
+		t.Fatalf("DecodeDexSubject = %q, %q, %v", userID, connID, ok)
+	}
+	if _, _, ok := DecodeDexSubject("5f6c1c0a-3d4e-4d5b-9c8a-2f1a3b4c5d6e"); ok {
+		t.Fatalf("a non-Dex sub must not decode")
+	}
+}
