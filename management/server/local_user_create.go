@@ -109,6 +109,14 @@ func (am *DefaultAccountManager) SCIMCreateLocalUser(ctx context.Context, accoun
 		return nil, status.Errorf(status.Internal, "%v", err)
 	}
 	defer unlock()
+	// Held from the reservation to the finalize, after the identity lock:
+	// a concurrent account delete either sees this user in its preflight or
+	// runs to completion first (see lockAccountLifecycle).
+	unlockLifecycle, err := am.lockAccountLifecycle(ctx, accountID)
+	if err != nil {
+		return nil, status.Errorf(status.Internal, "%v", err)
+	}
+	defer unlockLifecycle()
 
 	user, dexUserID, reservedNow, err := am.reserveLocalUser(ctx, accountID, input)
 	if err != nil {

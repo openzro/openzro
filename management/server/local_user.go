@@ -42,3 +42,27 @@ func (am *DefaultAccountManager) lockLocalIdentity(ctx context.Context, email st
 	}
 	return unlock, nil
 }
+
+// accountLifecycleLockPrefix namespaces the lock that serializes deleting
+// an account with creating local users in it.
+const accountLifecycleLockPrefix = "account-lifecycle:"
+
+// lockAccountLifecycle takes the deployment-wide lock that makes account
+// deletion and local-user creation linearizable (ADR-0024, #205).
+// DeleteAccount holds it from before reading its snapshot until it is done,
+// and SCIMCreateLocalUser from its reservation until it finalizes, so either
+// the create is visible to the delete's preflight (refused before removing
+// anyone) or the create waits and then fails on the deleted account.
+// Lock order: a caller holding a local identity lock may take this one,
+// never the reverse.
+func (am *DefaultAccountManager) lockAccountLifecycle(ctx context.Context, accountID string) (func(), error) {
+	key := accountLifecycleLockPrefix + accountID
+	if am.coordinator == nil {
+		return am.Store.AcquireWriteLockByUID(ctx, key), nil
+	}
+	unlock, err := am.coordinator.Lock(ctx, key)
+	if err != nil {
+		return nil, fmt.Errorf("lock account lifecycle: %w", err)
+	}
+	return unlock, nil
+}

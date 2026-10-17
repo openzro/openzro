@@ -962,6 +962,15 @@ func (am *DefaultAccountManager) isCacheCold(ctx context.Context, store cacheSto
 
 // DeleteAccount deletes an account and all its users from local store and from the remote IDP if the requester is an admin and account owner
 func (am *DefaultAccountManager) DeleteAccount(ctx context.Context, accountID, userID string) error {
+	// Before the snapshot and held to the end: serializes with local-user
+	// creation so a user created concurrently cannot slip past the
+	// local-user preflight below (see lockAccountLifecycle).
+	unlockLifecycle, err := am.lockAccountLifecycle(ctx, accountID)
+	if err != nil {
+		return status.Errorf(status.Internal, "%v", err)
+	}
+	defer unlockLifecycle()
+
 	unlock := am.Store.AcquireWriteLockByUID(ctx, accountID)
 	defer unlock()
 	account, err := am.Store.GetAccount(ctx, accountID)
