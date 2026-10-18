@@ -255,6 +255,9 @@ func (s *SqlStore) SaveAccount(ctx context.Context, account *types.Account) erro
 		if err := guardAccountSnapshot(tx, account); err != nil {
 			return err
 		}
+		if err := keepCredentialsCutoffs(tx, account); err != nil {
+			return err
+		}
 
 		result := tx.Select(clause.Associations).Delete(account.Policies, "account_id = ?", account.Id)
 		if result.Error != nil {
@@ -542,7 +545,10 @@ func (s *SqlStore) SaveUsers(ctx context.Context, lockStrength LockingStrength, 
 		if err := guardLocalUserWrites(tx, users, true); err != nil {
 			return err
 		}
-		result := tx.Clauses(clause.Locking{Strength: string(lockStrength)}, clause.OnConflict{UpdateAll: true}).Create(&users)
+		// The credentials cutoff is written only by its targeted operation
+		// (ADR-0027 D2); a batch built from stale reads must not clobber it.
+		result := tx.Clauses(clause.Locking{Strength: string(lockStrength)}, clause.OnConflict{UpdateAll: true}).
+			Omit(colCredentialsValidAfter).Create(&users)
 		if result.Error != nil {
 			log.WithContext(ctx).Errorf("failed to save users to store: %s", result.Error)
 			return status.Errorf(status.Internal, "failed to save users to store")
@@ -557,7 +563,8 @@ func (s *SqlStore) SaveUser(ctx context.Context, lockStrength LockingStrength, u
 		if err := guardLocalUserWrites(tx, []*types.User{user}, true); err != nil {
 			return err
 		}
-		result := tx.Clauses(clause.Locking{Strength: string(lockStrength)}).Save(user)
+		// See SaveUsers: the credentials cutoff is never part of a full-row save.
+		result := tx.Clauses(clause.Locking{Strength: string(lockStrength)}).Omit(colCredentialsValidAfter).Save(user)
 		if result.Error != nil {
 			log.WithContext(ctx).Errorf("failed to save user to store: %s", result.Error)
 			return status.Errorf(status.Internal, "failed to save user to store")
@@ -1313,7 +1320,8 @@ func (s *SqlStore) SaveUserLastLogin(ctx context.Context, accountID, userID stri
 
 	if !lastLogin.IsZero() {
 		user.LastLogin = &lastLogin
-		return s.db.Save(&user).Error
+		// The row was read without a lock; never write the cutoff back from it.
+		return s.db.Omit(colCredentialsValidAfter).Save(&user).Error
 	}
 
 	return nil

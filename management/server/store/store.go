@@ -177,6 +177,9 @@ type Store interface {
 	FinalizeLocalUser(ctx context.Context, accountID, userID string) error
 	MarkLocalUserTerminal(ctx context.Context, accountID, userID string, to types.LocalCredentialState) error
 	ClearLocalUserCleanup(ctx context.Context, accountID, userID string, state types.LocalCredentialState) error
+	// SetUserCredentialsValidAfter moves the user's JWT cutoff forward
+	// (ADR-0027). The only write of User.CredentialsValidAfter.
+	SetUserCredentialsValidAfter(ctx context.Context, accountID, userID string, t time.Time) error
 	GetAccountPeersWithExpiration(ctx context.Context, lockStrength LockingStrength, accountID string) ([]*nbpeer.Peer, error)
 	GetAccountPeersWithInactivity(ctx context.Context, lockStrength LockingStrength, accountID string) ([]*nbpeer.Peer, error)
 	GetAllEphemeralPeers(ctx context.Context, lockStrength LockingStrength) ([]*nbpeer.Peer, error)

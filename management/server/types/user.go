@@ -131,6 +131,29 @@ type User struct {
 	// LocalCleanupPending marks a terminal transition (deactivation or
 	// delete) whose revocation steps have not converged yet (ADR-0024 D7).
 	LocalCleanupPending bool `gorm:"default:false"`
+
+	// CredentialsValidAfter is the credentials cutoff set by a local
+	// password reset (ADR-0027): a JWT issued at or before it is rejected
+	// on the HTTP API and on peer login. Nil means no cutoff. It is never
+	// exposed through the API and only changes through the store's
+	// targeted SetUserCredentialsValidAfter; generic user saves leave the
+	// column untouched.
+	CredentialsValidAfter *time.Time `gorm:"column:credentials_valid_after"`
+}
+
+// JWTRevoked reports whether a JWT issued at iat predates the user's
+// credentials cutoff (ADR-0027 D3). JWT iat has whole-second precision and
+// the cutoff is stored truncated to the second, so a token issued in the
+// cutoff's own second is rejected too. A token without iat (zero time) is
+// rejected only when a cutoff is set. Users without a cutoff are unaffected.
+func (u *User) JWTRevoked(iat time.Time) bool {
+	if u.CredentialsValidAfter == nil {
+		return false
+	}
+	if iat.IsZero() {
+		return true
+	}
+	return !iat.Truncate(time.Second).After(u.CredentialsValidAfter.Truncate(time.Second))
 }
 
 // LocalCredentialState is the lifecycle state of a password-backed local
@@ -293,27 +316,36 @@ func (u *User) Copy() *User {
 		pats[k] = v.Copy()
 	}
 	return &User{
-		Id:                   u.Id,
-		AccountID:            u.AccountID,
-		Role:                 u.Role,
-		AutoGroups:           autoGroups,
-		IsServiceUser:        u.IsServiceUser,
-		NonDeletable:         u.NonDeletable,
-		ServiceUserName:      u.ServiceUserName,
-		Email:                u.Email,
-		Name:                 u.Name,
-		PATs:                 pats,
-		Blocked:              u.Blocked,
-		LastLogin:            u.LastLogin,
-		CreatedAt:            u.CreatedAt,
-		Issued:               u.Issued,
-		IntegrationReference: u.IntegrationReference,
-		SCIMUserName:         u.SCIMUserName,
-		SCIMDisplayName:      u.SCIMDisplayName,
-		SCIMExternalID:       u.SCIMExternalID,
-		LocalCredentialState: u.LocalCredentialState,
-		LocalCleanupPending:  u.LocalCleanupPending,
+		Id:                    u.Id,
+		AccountID:             u.AccountID,
+		Role:                  u.Role,
+		AutoGroups:            autoGroups,
+		IsServiceUser:         u.IsServiceUser,
+		NonDeletable:          u.NonDeletable,
+		ServiceUserName:       u.ServiceUserName,
+		Email:                 u.Email,
+		Name:                  u.Name,
+		PATs:                  pats,
+		Blocked:               u.Blocked,
+		LastLogin:             u.LastLogin,
+		CreatedAt:             u.CreatedAt,
+		Issued:                u.Issued,
+		IntegrationReference:  u.IntegrationReference,
+		SCIMUserName:          u.SCIMUserName,
+		SCIMDisplayName:       u.SCIMDisplayName,
+		SCIMExternalID:        u.SCIMExternalID,
+		LocalCredentialState:  u.LocalCredentialState,
+		LocalCleanupPending:   u.LocalCleanupPending,
+		CredentialsValidAfter: copyTimePtr(u.CredentialsValidAfter),
 	}
+}
+
+func copyTimePtr(t *time.Time) *time.Time {
+	if t == nil {
+		return nil
+	}
+	c := *t
+	return &c
 }
 
 // NewUser creates a new user
