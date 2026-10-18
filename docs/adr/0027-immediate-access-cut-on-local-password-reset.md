@@ -214,10 +214,22 @@ table, one row per pass, so overlapping resets keep every deadline:
   expires the user's peers.
 - **Fence**, one minute after the sweep. The sweep has the same race as the
   reset: Dex may be signing a token, at that moment, for a request that
-  passed its checks before the revocation. Such a request finishes within
-  the minute, and none authenticated with the old password can start any
-  more, since every old code has expired. The fence cuts access once more
-  and enqueues nothing, which closes the window.
+  passed its checks before the revocation. The fence cuts access once more
+  and enqueues nothing. Completing a sweep and enqueuing its fence is one
+  transaction, so a crash in between reruns the sweep without a second
+  fence.
+
+**The fence is a mitigation, not a hard bound.** In Dex v2.45 `/token`
+reads the whole request body (`ParseForm`) before it checks the code's
+expiry, and nothing after the check waits on the client: the code exchange
+calls no connector, and `iat` is fixed when the token is signed, before the
+response is written. A slow or stalled client therefore cannot push a token
+signed for an old code past the fence. Dex's HTTP server has no read or
+write timeout, though, so a stall inside Dex itself (storage latency, load)
+longer than a minute between the check and the signature would still mint
+a token the fence does not see. openZro cannot bound Dex's internal
+processing time; only comparing `auth_time` can (see Later). Adding more
+fixed-delay passes would only move the same race.
 
 A loop on every replica (`OPENZRO_RESET_RECHECK_INTERVAL_SECONDS`, default
 60 s) loads due passes in pages of 50, oldest first, until none is left. A
@@ -227,8 +239,11 @@ however many replicas loaded it. A user deactivated or deleted in the
 meantime was already cut by that transition; its passes are discarded.
 
 - **Guarantee.** Every session that existed when the reset returned is cut
-  at once. A session minted from a login already in flight is cut within
-  about 32 minutes plus one loop interval.
+  at once. A session minted from a login already in flight is cut by the
+  sweep, about 31 minutes plus one loop interval later. A token Dex was
+  signing while the sweep ran is cut by the fence a minute later, unless
+  Dex itself took longer than that between checking the code and signing,
+  which the client cannot cause.
 - **Cost.** Anyone who signs in during those 32 minutes, including the user
   with the new password, is signed out once more by the sweep, and again
   if they sign in during the fence's minute; devices re-authenticate.
@@ -236,8 +251,10 @@ meantime was already cut by that transition; its passes are discarded.
 - **Deactivation** remains the operation that cuts every path at once,
   including logins in flight: it blocks the user, which every request and
   peer login checks.
-- **Later.** Comparing Dex's `auth_time` (v2.46+) instead of `iat` would
-  close the window without extra passes, once refresh-minted tokens carry it.
+- **Later.** Comparing Dex's `auth_time` (v2.46+), the moment the password
+  was checked, instead of `iat` is the definitive fix and would make the
+  passes unnecessary. It needs refresh-minted tokens to carry `auth_time`,
+  which Dex v2.46 does only with its experimental sessions feature.
 
 ### D7 — License posture
 
@@ -275,6 +292,8 @@ consulted.
 - Concurrency (Postgres, MySQL): an expired peer's re-login paused while it
   holds the user row, a reset that cannot finish meanwhile, then both
   converge and the peer ends expired.
+- Queue: finishing a sweep twice enqueues one fence; finishing a fence
+  enqueues nothing (SQLite, Postgres, MySQL).
 - Passes: a reset enqueues its sweep; the sweep cuts a token minted by a
   login in flight during the reset, revokes refresh tokens again, expires
   the peers, keeps the user active and enqueues one fence; the fence cuts a
