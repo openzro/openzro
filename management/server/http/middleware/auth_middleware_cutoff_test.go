@@ -52,7 +52,8 @@ func TestAuthMiddleware_CredentialsCutoff(t *testing.T) {
 				},
 				EnsureUserAccessByJWTGroupsFunc: mockEnsureUserAccessByJWTGroups,
 				MarkPATUsedFunc:                 mockMarkPATUsed,
-				GetPATInfoFunc: func(ctx context.Context, token string) (*types.User, *types.PersonalAccessToken, string, string, error) {
+				GetPATInfoFunc: func(ctx context.Context,
+					token string) (*types.User, *types.PersonalAccessToken, string, string, error) {
 					user, pat, d, c, err := mockGetAccountInfoFromPAT(ctx, token)
 					if user != nil {
 						user = user.Copy()

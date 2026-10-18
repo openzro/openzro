@@ -30,13 +30,15 @@ func TestProcessJWTToken_ReturnsIssuedAt(t *testing.T) {
 			ValidateAndParseTokenFunc: func(context.Context, string) (nbcontext.UserAuth, *jwt.Token, error) {
 				return nbcontext.UserAuth{UserId: "u", IssuedAt: iat}, &jwt.Token{}, nil
 			},
-			EnsureUserAccessByJWTGroupsFunc: func(_ context.Context, ua nbcontext.UserAuth, _ *jwt.Token) (nbcontext.UserAuth, error) {
+			EnsureUserAccessByJWTGroupsFunc: func(_ context.Context, ua nbcontext.UserAuth,
+				_ *jwt.Token) (nbcontext.UserAuth, error) {
 				return ua, nil
 			},
 		},
 	}
 
-	userID, issuedAt, err := server.processJwtToken(context.Background(), &proto.LoginRequest{JwtToken: "token"}, wgtypes.Key{})
+	userID, issuedAt, err := server.processJwtToken(context.Background(),
+		&proto.LoginRequest{JwtToken: "token"}, wgtypes.Key{})
 	require.NoError(t, err)
 	require.Equal(t, "u", userID)
 	require.True(t, iat.Equal(issuedAt), "iat: want %s, got %s", iat, issuedAt)

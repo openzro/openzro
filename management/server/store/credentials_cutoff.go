@@ -70,7 +70,8 @@ func keepCredentialsCutoffs(tx *gorm.DB, account *types.Account) error {
 		Where("account_id = ? AND "+colCredentialsValidAfter+" IS NOT NULL", account.Id).
 		Find(&rows)
 	if result.Error != nil {
-		return status.Errorf(status.Internal, "failed to read credentials cutoffs of account %s: %v", account.Id, result.Error)
+		return status.Errorf(status.Internal, "failed to read credentials cutoffs of account %s: %v",
+			account.Id, result.Error)
 	}
 	persisted := make(map[string]*time.Time, len(rows))
 	for _, r := range rows {
