@@ -408,3 +408,56 @@ func TestAuthManager_ValidateAndParseToken(t *testing.T) {
 	}
 
 }
+
+// ADR-0027: a JWT issued at or before the user's credentials cutoff fails
+// validation itself, so no caller (HTTP middleware, gRPC login) acts on it
+// before rejecting it: no account bootstrap, no JWT group sync.
+func TestAuthManager_ValidateAndParseToken_CredentialsCutoff(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "test_data/jwks.json")
+	}))
+	defer server.Close()
+
+	s, cleanup, err := store.NewTestStoreFromSQL(context.Background(), "", t.TempDir())
+	require.NoError(t, err)
+	t.Cleanup(cleanup)
+	ctx := context.Background()
+	require.NoError(t, s.SaveAccount(ctx, &types.Account{
+		Id:       "account_id",
+		Users:    map[string]*types.User{"reset-user": {Id: "reset-user", AccountID: "account_id"}},
+		Settings: &types.Settings{},
+	}))
+
+	issuer, audience := "http://issuer.local", "http://audience.local"
+	keyData, err := os.ReadFile("test_data/sample_key")
+	require.NoError(t, err)
+	key, err := jwt.ParseRSAPrivateKeyFromPEM(keyData)
+	require.NoError(t, err)
+	sign := func(sub string, iat time.Time) string {
+		token := jwt.New(jwt.SigningMethodRS256)
+		token.Header["kid"] = "test-key"
+		token.Claims = jwt.MapClaims{
+			"iss": issuer, "aud": []string{audience}, "sub": sub,
+			"iat": iat.Unix(), "exp": time.Now().Add(time.Hour).Unix(),
+		}
+		signed, err := token.SignedString(key)
+		require.NoError(t, err)
+		return signed
+	}
+	manager := auth.NewManager(s, issuer, audience, server.URL, "", []string{audience}, false)
+
+	cutoff := time.Now().Add(-time.Minute).Truncate(time.Second)
+	require.NoError(t, s.SetUserCredentialsValidAfter(ctx, "account_id", "reset-user", cutoff))
+
+	_, _, err = manager.ValidateAndParseToken(ctx, sign("reset-user", cutoff.Add(-time.Minute)))
+	require.Error(t, err, "a JWT issued before the reset is revoked")
+	_, _, err = manager.ValidateAndParseToken(ctx, sign("reset-user", cutoff))
+	require.Error(t, err, "a JWT issued in the reset's second is revoked too")
+
+	got, _, err := manager.ValidateAndParseToken(ctx, sign("reset-user", cutoff.Add(30*time.Second)))
+	require.NoError(t, err, "a JWT issued after the reset is valid")
+	assert.Equal(t, "reset-user", got.UserId)
+
+	_, _, err = manager.ValidateAndParseToken(ctx, sign("not-yet-a-user", cutoff.Add(-time.Minute)))
+	require.NoError(t, err, "a user that does not exist yet has no cutoff (JIT)")
+}

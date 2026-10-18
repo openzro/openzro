@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"hash/crc32"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/openzro/openzro/base62"
 	nbjwt "github.com/openzro/openzro/management/server/auth/jwt"
 	nbcontext "github.com/openzro/openzro/management/server/context"
+	"github.com/openzro/openzro/management/server/status"
 	"github.com/openzro/openzro/management/server/store"
 	"github.com/openzro/openzro/management/server/types"
 )
@@ -65,7 +67,35 @@ func (m *manager) ValidateAndParseToken(ctx context.Context, value string) (nbco
 	if err != nil {
 		return nbcontext.UserAuth{}, nil, err
 	}
-	return userAuth, token, err
+	if err := m.checkCredentialsCutoff(ctx, userAuth); err != nil {
+		return nbcontext.UserAuth{}, nil, err
+	}
+	return userAuth, token, nil
+}
+
+// ErrJWTRevoked rejects a JWT issued at or before its user's credentials
+// cutoff, set by a local password reset (ADR-0027).
+var ErrJWTRevoked = errors.New("token issued before the user's credentials cutoff")
+
+// checkCredentialsCutoff makes a JWT revoked by a password reset invalid
+// here, so every caller rejects it before acting on it: the HTTP middleware
+// before bootstrapping the account or syncing JWT groups, the gRPC server
+// before a peer login. A user that does not exist yet has no cutoff.
+func (m *manager) checkCredentialsCutoff(ctx context.Context, userAuth nbcontext.UserAuth) error {
+	if m.store == nil {
+		return nil
+	}
+	user, err := m.store.GetUserByUserID(ctx, store.LockingStrengthNone, userAuth.UserId)
+	if err != nil {
+		if sErr, ok := status.FromError(err); ok && sErr.Type() == status.NotFound {
+			return nil
+		}
+		return fmt.Errorf("read user for the credentials cutoff: %w", err)
+	}
+	if user.JWTRevoked(userAuth.IssuedAt) {
+		return fmt.Errorf("user %s: %w", userAuth.UserId, ErrJWTRevoked)
+	}
+	return nil
 }
 
 func (m *manager) EnsureUserAccessByJWTGroups(ctx context.Context, userAuth nbcontext.UserAuth, token *jwt.Token) (nbcontext.UserAuth, error) {

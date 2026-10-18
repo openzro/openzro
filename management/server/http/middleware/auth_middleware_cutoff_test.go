@@ -17,8 +17,10 @@ import (
 
 // ADR-0027 D3: after a local password reset, a JWT issued at or before the
 // user's credentials cutoff is refused with 401 so the dashboard's OIDC
-// client ends the session. Tokens issued later, users without a cutoff and
-// PATs are unaffected.
+// client ends the session. Token validation itself rejects it (the mock
+// below stands in for auth.Manager's check), so the middleware acts on
+// nothing first: no account bootstrap, no JWT group sync. Tokens issued
+// later, users without a cutoff and PATs are unaffected.
 func TestAuthMiddleware_CredentialsCutoff(t *testing.T) {
 	cutoff := time.Date(2026, 10, 18, 12, 0, 5, 0, time.UTC)
 	tests := []struct {
@@ -48,6 +50,9 @@ func TestAuthMiddleware_CredentialsCutoff(t *testing.T) {
 				ValidateAndParseTokenFunc: func(ctx context.Context, token string) (nbcontext.UserAuth, *jwt.Token, error) {
 					userAuth, parsed, err := mockValidateAndParseToken(ctx, token)
 					userAuth.IssuedAt = tc.iat
+					if (&types.User{CredentialsValidAfter: tc.cutoff}).JWTRevoked(tc.iat) {
+						return nbcontext.UserAuth{}, nil, auth.ErrJWTRevoked
+					}
 					return userAuth, parsed, err
 				},
 				EnsureUserAccessByJWTGroupsFunc: mockEnsureUserAccessByJWTGroups,
@@ -62,13 +67,14 @@ func TestAuthMiddleware_CredentialsCutoff(t *testing.T) {
 					return user, pat, d, c, err
 				},
 			}
-			reached := false
+			reached, bootstrapped, synced := false, false, false
 			handler := NewAuthMiddleware(
 				mockAuth,
 				func(_ context.Context, userAuth nbcontext.UserAuth) (string, string, error) {
+					bootstrapped = true
 					return userAuth.AccountId, userAuth.UserId, nil
 				},
-				func(context.Context, nbcontext.UserAuth) error { return nil },
+				func(context.Context, nbcontext.UserAuth) error { synced = true; return nil },
 				func(context.Context, nbcontext.UserAuth) (*types.User, error) {
 					return &types.User{Id: userID, AccountID: accountID, CredentialsValidAfter: tc.cutoff}, nil
 				},
@@ -82,6 +88,10 @@ func TestAuthMiddleware_CredentialsCutoff(t *testing.T) {
 
 			assert.Equal(t, tc.want, rec.Code)
 			assert.Equal(t, tc.want == http.StatusOK, reached, "the handler runs only for an accepted token")
+			if tc.want == http.StatusUnauthorized {
+				assert.False(t, bootstrapped, "a revoked JWT never bootstraps an account")
+				assert.False(t, synced, "a revoked JWT never syncs JWT groups")
+			}
 			assert.NotContains(t, rec.Body.String(), JWT, "the token is never echoed back")
 		})
 	}
