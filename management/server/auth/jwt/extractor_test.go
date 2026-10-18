@@ -2,7 +2,9 @@ package jwt
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"google.golang.org/protobuf/encoding/protowire"
@@ -146,6 +148,37 @@ func TestClaimsExtractor_EmailVerified(t *testing.T) {
 			}
 			if userAuth.EmailVerified != tc.want {
 				t.Fatalf("EmailVerified: got %v want %v", userAuth.EmailVerified, tc.want)
+			}
+		})
+	}
+}
+
+// ADR-0027 D3: the auth paths compare a JWT's iat with the user's
+// credentials cutoff, so the extractor must surface it. Absent or malformed
+// iat leaves the zero time, which the cutoff check treats as "no iat".
+func TestClaimsExtractor_IssuedAt(t *testing.T) {
+	iat := time.Date(2026, 10, 18, 12, 0, 5, 0, time.UTC)
+	tests := []struct {
+		name   string
+		claims jwt.MapClaims
+		want   time.Time
+	}{
+		{name: "numeric", claims: jwt.MapClaims{"sub": "u", "iat": float64(iat.Unix())}, want: iat},
+		{name: "json number", claims: jwt.MapClaims{"sub": "u", "iat": json.Number("1792324805")},
+			want: time.Unix(1792324805, 0)},
+		{name: "absent", claims: jwt.MapClaims{"sub": "u"}},
+		{name: "malformed", claims: jwt.MapClaims{"sub": "u", "iat": "yesterday"}},
+	}
+
+	extractor := NewClaimsExtractor()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			userAuth, err := extractor.ToUserAuth(&jwt.Token{Claims: tc.claims})
+			if err != nil {
+				t.Fatalf("ToUserAuth: %v", err)
+			}
+			if !userAuth.IssuedAt.Equal(tc.want) {
+				t.Fatalf("IssuedAt: got %s want %s", userAuth.IssuedAt, tc.want)
 			}
 		})
 	}

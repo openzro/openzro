@@ -43,6 +43,9 @@ type UserAuth struct {
 	Name string
 	// Last login time for this user
 	LastLogin time.Time
+	// IssuedAt is the JWT `iat` claim; zero when the token has none, and
+	// for PATs. Compared with the user's credentials cutoff (ADR-0027).
+	IssuedAt time.Time
 	// The Groups the user belongs to on this account
 	Groups []string
 

@@ -232,6 +232,7 @@ func TestAuthManager_ValidateAndParseToken(t *testing.T) {
 	}
 
 	lastLogin := time.Date(2025, 2, 12, 14, 25, 26, 0, time.UTC) //"2025-02-12T14:25:26.186Z"
+	issuedAt := time.Unix(time.Now().Unix(), 0)
 
 	tests := []struct {
 		name      string
@@ -246,7 +247,7 @@ func TestAuthManager_ValidateAndParseToken(t *testing.T) {
 				token.Claims = jwt.MapClaims{
 					"iss":                                   issuer,
 					"aud":                                   []string{audience},
-					"iat":                                   time.Now().Unix(),
+					"iat":                                   issuedAt.Unix(),
 					"exp":                                   time.Now().Add(time.Hour * 1).Unix(),
 					"sub":                                   "user-id|123",
 					customClaim(nbjwt.AccountIDSuffix):      "account-id|567",
@@ -265,6 +266,7 @@ func TestAuthManager_ValidateAndParseToken(t *testing.T) {
 				DomainCategory: "private",
 				LastLogin:      lastLogin,
 				Invited:        false,
+				IssuedAt:       issuedAt,
 			},
 		},
 		{
@@ -275,7 +277,7 @@ func TestAuthManager_ValidateAndParseToken(t *testing.T) {
 				token.Claims = jwt.MapClaims{
 					"iss": issuer,
 					"aud": []string{audience},
-					"iat": time.Now().Unix(),
+					"iat": issuedAt.Unix(),
 					"exp": time.Now().Add(time.Hour).Unix(),
 					"sub": "user-id|123",
 				}
@@ -283,7 +285,8 @@ func TestAuthManager_ValidateAndParseToken(t *testing.T) {
 				return tokenString
 			},
 			expected: &nbcontext.UserAuth{
-				UserId: "user-id|123",
+				UserId:   "user-id|123",
+				IssuedAt: issuedAt,
 			},
 		},
 		{

@@ -28,6 +28,10 @@ import (
 // passes it to the MFA gate.
 const mfaSessionHeader = "X-MFA-Token"
 
+// errJWTRevoked rejects a JWT issued at or before the user's credentials
+// cutoff. The Handler maps it, like any JWT failure, to a generic 401.
+var errJWTRevoked = errors.New("token issued before the user's credentials cutoff")
+
 type EnsureAccountFunc func(ctx context.Context, userAuth nbcontext.UserAuth) (string, string, error)
 type SyncUserJWTGroupsFunc func(ctx context.Context, userAuth nbcontext.UserAuth) error
 
@@ -198,6 +202,13 @@ func (m *AuthMiddleware) checkJWTFromRequest(r *http.Request, auth []string) (*h
 	if err != nil {
 		log.WithContext(ctx).Errorf("HTTP server failed to update user from user auth: %s", err)
 		return r, err
+	}
+
+	// A local password reset revokes every JWT issued up to it (ADR-0027).
+	// The user row was just read fresh, so a reset is seen on the very next
+	// request. PATs never reach this path: they are not password-derived.
+	if user.JWTRevoked(userAuth.IssuedAt) {
+		return r, fmt.Errorf("user %s: %w", userAuth.UserId, errJWTRevoked)
 	}
 
 	// MFA gate (issue #31). Skipped when the wiring is incomplete
