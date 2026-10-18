@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/openzro/openzro/management/server/account"
+	"github.com/openzro/openzro/management/server/auth"
 	nbcontext "github.com/openzro/openzro/management/server/context"
 	"github.com/openzro/openzro/management/server/dex_proxy"
 	"github.com/openzro/openzro/management/server/store"
@@ -205,6 +206,29 @@ func loginWithRefresh(t *testing.T, baseURL, email, password string) (string, in
 	return refresh, code
 }
 
+// Issuer and client of dexTestConfig.
+const (
+	dexTestIssuer   = "http://127.0.0.1:5556/dex"
+	dexTestClientID = "openzro-test"
+)
+
+// accessTokenAuth logs in with the password grant and validates the
+// returned access token with openZro's JWT validator and claims extractor,
+// as the HTTP API and peer login do.
+func accessTokenAuth(t *testing.T, validator auth.Manager, baseURL, email, password string) nbcontext.UserAuth {
+	t.Helper()
+	body, code := tokenGrant(t, baseURL, url.Values{
+		"grant_type": {"password"}, "username": {email}, "password": {password},
+		"scope": {"openid email"},
+	})
+	require.Equal(t, http.StatusOK, code)
+	accessToken, _ := body["access_token"].(string)
+	require.NotEmpty(t, accessToken)
+	userAuth, _, err := validator.ValidateAndParseToken(context.Background(), accessToken)
+	require.NoError(t, err)
+	return userAuth
+}
+
 func refreshTokenCount(t *testing.T, api apiv2.DexClient, sub string) int {
 	t.Helper()
 	resp, err := api.ListRefresh(context.Background(), &apiv2.ListRefreshReq{UserId: sub})
@@ -242,11 +266,24 @@ func TestLocalUserLifecycle_RealDex(t *testing.T) {
 	_, code := loginWithRefresh(t, baseURL, "ana@example.com", goodPassword)
 	require.Equal(t, http.StatusOK, code)
 	require.Positive(t, refreshTokenCount(t, api, user.Id), "offline_access must create a refresh token")
+	validator := auth.NewManager(manager.Store, dexTestIssuer, dexTestClientID, baseURL+"/keys", "sub",
+		[]string{dexTestClientID}, false)
+	oldAuth := accessTokenAuth(t, validator, baseURL, "ana@example.com", goodPassword)
+	require.False(t, oldAuth.IssuedAt.IsZero(), "Dex access tokens carry iat")
 
 	// Reset.
 	_, err = manager.SCIMResetLocalPassword(ctx, accountID, userID, user.Id, newPassword, nil)
 	require.NoError(t, err)
 	require.Zero(t, refreshTokenCount(t, api, user.Id), "a reset revokes existing refresh tokens")
+	// ADR-0027: the access token minted before the reset is revoked by the
+	// cutoff, and one minted with the new password after it is accepted.
+	stored, err := manager.Store.GetUserByUserID(ctx, store.LockingStrengthShare, user.Id)
+	require.NoError(t, err)
+	require.NotNil(t, stored.CredentialsValidAfter)
+	require.True(t, stored.JWTRevoked(oldAuth.IssuedAt), "a Dex access token issued before the reset is revoked")
+	time.Sleep(time.Until(stored.CredentialsValidAfter.Add(time.Second + 100*time.Millisecond)))
+	newAuth := accessTokenAuth(t, validator, baseURL, "ana@example.com", newPassword)
+	require.False(t, stored.JWTRevoked(newAuth.IssuedAt), "a Dex access token issued after the reset is accepted")
 	_, code = passwordGrant(t, baseURL, "ana@example.com", goodPassword)
 	require.NotEqual(t, http.StatusOK, code, "the old password must stop working")
 	_, code = loginWithRefresh(t, baseURL, "ana@example.com", newPassword)
