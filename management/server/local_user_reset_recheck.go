@@ -24,10 +24,11 @@ const (
 
 	// credentialsFenceDelay is how long after a sweep its fence runs. A
 	// sweep, like the reset, can race a token Dex is signing at that moment
-	// for a request that passed its checks before the revocation. Such a
-	// request completes within this bound, and no request authenticated with
-	// the old password can start any more (every old code has expired), so
-	// the fence closes the window for good.
+	// for a request that passed its checks before the revocation. No request
+	// authenticated with the old password can start any more (every old code
+	// has expired), and a client cannot delay Dex past its checks, but
+	// Dex's own processing is not bounded: the fence is a best-effort
+	// mitigation, not a guarantee (ADR-0027 D6). auth_time closes it (#221).
 	credentialsFenceDelay = time.Minute
 
 	// credentialsRecheckPage bounds how many due passes one query loads.
