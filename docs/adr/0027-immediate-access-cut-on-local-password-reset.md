@@ -204,28 +204,40 @@ right field to compare, but tokens minted by a refresh carry it only with
 Dex's experimental sessions feature, so it does not close the refresh path
 on its own.
 
-The reset therefore schedules a **second pass** at reset time + 31 minutes
-(the code lifetime plus a minute of margin), in a `users` column written
-only by targeted store operations, as the cutoff is. A loop on every
-replica (`OPENZRO_CREDENTIALS_RECHECK_INTERVAL_SECONDS`, default 60 s)
-runs due passes. A pass takes the local identity lock and, if the user is
-still active, cuts access exactly as the reset did: it revokes refresh
-tokens, moves the cutoff to the moment it runs (after the revocation, so a
-refresh in between cannot survive), and expires the user's peers. It then
-clears the schedule, only if no newer reset moved it. A user deactivated or
-deleted in the meantime was already cut by that transition; its schedule is
-only cleared.
+Each reset therefore enqueues its own passes in a `local_credential_rechecks`
+table, one row per pass, so overlapping resets keep every deadline:
+
+- **Sweep**, at reset time + 31 minutes (the code lifetime plus a minute of
+  margin). If the user is still active, it cuts access exactly as the reset
+  did: it revokes refresh tokens, moves the cutoff to the moment it runs
+  (after the revocation, so a refresh in between cannot survive), and
+  expires the user's peers.
+- **Fence**, one minute after the sweep. The sweep has the same race as the
+  reset: Dex may be signing a token, at that moment, for a request that
+  passed its checks before the revocation. Such a request finishes within
+  the minute, and none authenticated with the old password can start any
+  more, since every old code has expired. The fence cuts access once more
+  and enqueues nothing, which closes the window.
+
+A loop on every replica (`OPENZRO_RESET_RECHECK_INTERVAL_SECONDS`, default
+60 s) loads due passes in pages of 50, oldest first, until none is left. A
+pass takes the user's local identity lock and re-reads its own row: one
+another replica already ran is gone and does nothing, so a pass runs once
+however many replicas loaded it. A user deactivated or deleted in the
+meantime was already cut by that transition; its passes are discarded.
 
 - **Guarantee.** Every session that existed when the reset returned is cut
   at once. A session minted from a login already in flight is cut within
-  31 minutes plus one loop interval.
-- **Cost.** Anyone who signs in during those 31 minutes, including the user
-  with the new password, is signed out once more by the pass and devices
-  re-authenticate. Resets are rare, so a second sign-in is acceptable
-  against an unbounded window.
+  about 32 minutes plus one loop interval.
+- **Cost.** Anyone who signs in during those 32 minutes, including the user
+  with the new password, is signed out once more by the sweep, and again
+  if they sign in during the fence's minute; devices re-authenticate.
+  Resets are rare, so this is acceptable against an unbounded window.
 - **Deactivation** remains the operation that cuts every path at once,
   including logins in flight: it blocks the user, which every request and
   peer login checks.
+- **Later.** Comparing Dex's `auth_time` (v2.46+) instead of `iat` would
+  close the window without extra passes, once refresh-minted tokens carry it.
 
 ### D7 — License posture
 
@@ -263,12 +275,18 @@ consulted.
 - Concurrency (Postgres, MySQL): an expired peer's re-login paused while it
   holds the user row, a reset that cannot finish meanwhile, then both
   converge and the peer ends expired.
-- Second pass: a reset schedules it; before it is due nothing happens; when
-  due it revokes a token newer than the first cutoff and everything up to
-  the pass, revokes refresh tokens again, expires the peers, keeps the user
-  active and clears the schedule; for a deactivated user it only clears.
-  Store operations (schedule monotonic, due list, conditional clear,
-  generic saves keep it) on SQLite, Postgres and MySQL.
+- Passes: a reset enqueues its sweep; the sweep cuts a token minted by a
+  login in flight during the reset, revokes refresh tokens again, expires
+  the peers, keeps the user active and enqueues one fence; the fence cuts a
+  token minted while the sweep ran. Overlapping resets keep both deadlines.
+  Three workers running the same pass revoke once and enqueue one fence.
+  A deactivated user's passes are only discarded. A backlog is worked
+  through in bounded pages. Queue store operations run on SQLite, Postgres
+  and MySQL.
+- Real Dex, in-flight login: the authorization-code login reaches the code
+  with the old password, the password is reset, the code is redeemed
+  afterwards; that token passes the reset's cutoff and the sweep cuts it
+  and its refresh token.
 - `SaveUserLastLogin` writes `last_login` only: a block committed right
   before its statement survives it.
 - Real Dex (`TestLocalUserLifecycle_RealDex`): an access token minted by Dex
