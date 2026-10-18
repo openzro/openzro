@@ -53,6 +53,10 @@ The user is **not** blocked and its local credential state does not change.
 It signs in again with the new password and its devices reconnect after the
 SSO flow. Peers added with a setup key carry no user and are not touched.
 
+One exception is bounded rather than immediate: a login that passed the old
+password just before the reset and finishes after it. D6 cuts it within
+about half an hour.
+
 ### D2 — A per-user credentials cutoff with a single writer
 
 `users.credentials_valid_after` (`types.User.CredentialsValidAfter`, a
@@ -160,10 +164,12 @@ terminal cleanup already runs there.
 `validateToken` returns the token's `iat` with the user ID, and
 `types.PeerLogin.JWTIssuedAt` carries it to `LoginPeer`:
 
-- **Existing peer.** `handleUserPeer` already reads the user with a share
-  lock inside the login transaction, after locking the peer row. It now
-  rejects a revoked token there, before `handleExpiredPeer` can clear the
-  expiry.
+- **Existing peer.** `handleUserPeer` reads the user `FOR UPDATE` inside
+  the login transaction, after locking the peer row, and rejects a revoked
+  token there, before `handleExpiredPeer` can clear the expiry. It is an
+  update lock, not a share lock, because re-logging an expired peer writes
+  the user's last login to the same row: upgrading a share lock while a
+  reset queues for the row is the classic upgrade deadlock.
 - **New peer.** The registration transaction reads the user `FOR UPDATE`
   (the same transaction later writes the user's last login, so a share lock
   would invite an upgrade deadlock) and rejects a revoked token before
@@ -176,11 +182,52 @@ cutoff, then sees that login's result and expires it again. A login that
 reads the user after the cutoff committed is rejected. On SQLite the store
 runs on a single connection, which serializes the two.
 
-A rejected login is `status.Unauthorized`, which the gRPC layer maps to
-`PermissionDenied`; the client already treats that as "login needed" and
-starts a new SSO flow, which yields a token newer than the cutoff.
+A revoked token normally fails earlier, in token validation (D3), which the
+gRPC layer maps to `PermissionDenied`; so does the in-transaction check. The
+client's reconnect loop treats `PermissionDenied` as "login needed" and
+starts a new SSO flow, which yields a token newer than the cutoff. A store
+failure while reading the cutoff is `Internal` (HTTP 500), which the peer
+login retries, never a bad-token answer.
 
-### D6 — License posture
+### D6 — Logins in flight: a bounded second pass
+
+The cutoff compares a token's `iat`, the moment Dex **issues** it, not the
+moment it **checked the password**. In the authorization-code flow, which
+both the dashboard and the client use, those are minutes apart: Dex
+(v2.45-v2.46) issues the code right after the password check, keeps it valid
+for 30 minutes (hard-coded), and stamps the tokens with the time the code is
+redeemed. A login that passed the old password just before a reset can
+therefore redeem its code after the reset and get an access token newer than
+the cutoff, and a refresh token the reset's revocation never saw. Dex has no
+API to revoke pending codes. Dex v2.46 emits `auth_time`, which would be the
+right field to compare, but tokens minted by a refresh carry it only with
+Dex's experimental sessions feature, so it does not close the refresh path
+on its own.
+
+The reset therefore schedules a **second pass** at reset time + 31 minutes
+(the code lifetime plus a minute of margin), in a `users` column written
+only by targeted store operations, as the cutoff is. A loop on every
+replica (`OPENZRO_CREDENTIALS_RECHECK_INTERVAL_SECONDS`, default 60 s)
+runs due passes. A pass takes the local identity lock and, if the user is
+still active, cuts access exactly as the reset did: it revokes refresh
+tokens, moves the cutoff to the moment it runs (after the revocation, so a
+refresh in between cannot survive), and expires the user's peers. It then
+clears the schedule, only if no newer reset moved it. A user deactivated or
+deleted in the meantime was already cut by that transition; its schedule is
+only cleared.
+
+- **Guarantee.** Every session that existed when the reset returned is cut
+  at once. A session minted from a login already in flight is cut within
+  31 minutes plus one loop interval.
+- **Cost.** Anyone who signs in during those 31 minutes, including the user
+  with the new password, is signed out once more by the pass and devices
+  re-authenticate. Resets are rare, so a second sign-in is acceptable
+  against an unbounded window.
+- **Deactivation** remains the operation that cuts every path at once,
+  including logins in flight: it blocks the user, which every request and
+  peer login checks.
+
+### D7 — License posture
 
 openZro-original. No upstream code from the AGPL-licensed directories was
 consulted.
@@ -210,6 +257,20 @@ consulted.
   one; a JWT without `iat` fails for a user with a cutoff; a JWT issued after
   the reset succeeds; users without a cutoff are unaffected. The gRPC token
   path returns the `iat`.
+- Classification: a revoked JWT is gRPC `PermissionDenied` (one attempt), a
+  store failure is `Internal` (retried) and HTTP 500, a bad signature stays
+  `InvalidArgument` / 401.
+- Concurrency (Postgres, MySQL): an expired peer's re-login paused while it
+  holds the user row, a reset that cannot finish meanwhile, then both
+  converge and the peer ends expired.
+- Second pass: a reset schedules it; before it is due nothing happens; when
+  due it revokes a token newer than the first cutoff and everything up to
+  the pass, revokes refresh tokens again, expires the peers, keeps the user
+  active and clears the schedule; for a deactivated user it only clears.
+  Store operations (schedule monotonic, due list, conditional clear,
+  generic saves keep it) on SQLite, Postgres and MySQL.
+- `SaveUserLastLogin` writes `last_login` only: a block committed right
+  before its statement survives it.
 - Real Dex (`TestLocalUserLifecycle_RealDex`): an access token minted by Dex
   before the reset, validated by openZro's validator and extractor, is
   revoked by the cutoff; one minted with the new password afterwards is not.
