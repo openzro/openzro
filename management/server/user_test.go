@@ -366,8 +366,9 @@ func TestUser_Copy(t *testing.T) {
 		SCIMDisplayName: "SCIM User",
 		SCIMExternalID:  "external-id",
 
-		LocalCredentialState: types.LocalCredentialActive,
-		LocalCleanupPending:  true,
+		LocalCredentialState:  types.LocalCredentialActive,
+		LocalCleanupPending:   true,
+		CredentialsValidAfter: util.ToPtr(time.Now().UTC()),
 	}
 
 	err := validateStruct(user)
