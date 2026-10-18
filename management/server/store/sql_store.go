@@ -1309,21 +1309,33 @@ func (s *SqlStore) GetAccountCreatedBy(ctx context.Context, lockStrength Locking
 
 // SaveUserLastLogin stores the last login time for a user in DB.
 func (s *SqlStore) SaveUserLastLogin(ctx context.Context, accountID, userID string, lastLogin time.Time) error {
-	var user types.User
-	result := s.db.First(&user, accountAndIDQueryCondition, accountID, userID)
+	if lastLogin.IsZero() {
+		return nil
+	}
+	// A targeted UPDATE of last_login alone. Reading the user and saving the
+	// whole row back would undo any write that committed in between, such
+	// as a local-user deactivation (Blocked, LocalCredentialState) or a
+	// credentials cutoff, and on a re-login it would upgrade a share lock.
+	result := s.db.Model(&types.User{}).
+		Where(accountAndIDQueryCondition, accountID, userID).
+		Update("last_login", lastLogin)
 	if result.Error != nil {
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return status.NewUserNotFoundError(userID)
-		}
+		log.WithContext(ctx).Errorf("failed to save last login of user %s: %s", userID, result.Error)
+		return status.Errorf(status.Internal, "failed to save user last login")
+	}
+	if result.RowsAffected > 0 {
+		return nil
+	}
+	// MySQL reports zero affected rows when the value did not change, so
+	// zero is only "not found" if the user does not exist.
+	var count int64
+	if err := s.db.Model(&types.User{}).Where(accountAndIDQueryCondition, accountID, userID).
+		Count(&count).Error; err != nil {
 		return status.NewGetUserFromStoreError()
 	}
-
-	if !lastLogin.IsZero() {
-		user.LastLogin = &lastLogin
-		// The row was read without a lock; never write the cutoff back from it.
-		return s.db.Omit(colCredentialsValidAfter).Save(&user).Error
+	if count == 0 {
+		return status.NewUserNotFoundError(userID)
 	}
-
 	return nil
 }
 

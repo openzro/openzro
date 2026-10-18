@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 
 	"github.com/openzro/openzro/management/server/status"
 	"github.com/openzro/openzro/management/server/types"
@@ -91,5 +92,49 @@ func TestSqlStore_GenericSavesKeepCredentialsCutoff(t *testing.T) {
 		fresh.CredentialsValidAfter = &cutoff
 		require.NoError(t, s.SaveUser(ctx, LockingStrengthUpdate, fresh))
 		require.Nil(t, getUser(t, s, "fresh").CredentialsValidAfter)
+	})
+}
+
+// SaveUserLastLogin must write last_login only. It used to read the whole
+// user and save the whole row back, so a deactivation committing between
+// the read and the save was undone: Blocked and the local state went back
+// to what the stale read held. The hook commits such a write right before
+// the last-login statement runs.
+func TestSqlStore_SaveUserLastLoginWritesOnlyLastLogin(t *testing.T) {
+	runTestForAllEngines(t, "../testdata/store.sql", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		sql, ok := s.(*SqlStore)
+		require.True(t, ok)
+
+		interleaved := false
+		hook := func(tx *gorm.DB) {
+			if interleaved || tx.Statement.Table != "users" {
+				return
+			}
+			interleaved = true
+			// Runs on the connection of the statement about to execute, so it
+			// works on single-connection SQLite; for the row this is the same
+			// as a concurrent block that committed first.
+			inner := tx.Session(&gorm.Session{NewDB: true})
+			inner.Statement.ConnPool = tx.Statement.ConnPool
+			require.NoError(t, inner.Model(&types.User{}).
+				Where("id = ?", cutoffTestUserID).Update("blocked", true).Error)
+		}
+		require.NoError(t, sql.db.Callback().Update().Before("gorm:update").Register("test:interleave", hook))
+		t.Cleanup(func() { _ = sql.db.Callback().Update().Remove("test:interleave") })
+
+		login := time.Date(2026, 10, 18, 12, 0, 5, 0, time.UTC)
+		require.NoError(t, s.SaveUserLastLogin(ctx, localTestAccountID, cutoffTestUserID, login))
+		require.True(t, interleaved, "the hook must have run")
+
+		u := getUser(t, s, cutoffTestUserID)
+		require.True(t, u.Blocked, "a concurrent block must survive the last-login write")
+		require.NotNil(t, u.LastLogin)
+		require.True(t, login.Equal(u.LastLogin.UTC()), "last_login: want %s, got %s", login, u.LastLogin)
+
+		requireStatus(t, s.SaveUserLastLogin(ctx, localTestAccountID, "no-such-user", login), status.NotFound)
+		// Writing the same value again is not "not found" (MySQL reports zero
+		// affected rows for an unchanged row).
+		require.NoError(t, s.SaveUserLastLogin(ctx, localTestAccountID, cutoffTestUserID, login))
 	})
 }
