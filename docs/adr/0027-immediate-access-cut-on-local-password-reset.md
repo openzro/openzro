@@ -108,9 +108,12 @@ whole-second precision (`types.User.JWTRevoked`).
   gRPC server before resolving a peer login. A reset takes effect on the
   very next request, on every replica. A user that does not exist yet has
   no cutoff, so just-in-time provisioning is unchanged.
-- **HTTP API.** A revoked token gets the same generic `401 token invalid`
-  as any other invalid JWT, which makes the dashboard's OIDC client end the
-  session. The token is never logged.
+- **HTTP API.** A revoked token gets `401 token expired`, not the generic
+  `401 token invalid` of a malformed or forged JWT. The dashboard signs the
+  user in again on `token expired`, while on `token invalid` it only shows
+  an error and leaves the page on a spinner; a manual run found exactly
+  that before this choice. For the user, a reset ends the session the same
+  way an expiry does. The token is never logged.
 - **Personal access tokens are out of scope.** They take a separate
   middleware path and are not derived from the password, and service
   integrations rely on them surviving routine credential rotation. After a

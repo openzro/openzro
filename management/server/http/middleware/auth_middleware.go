@@ -28,6 +28,10 @@ import (
 // passes it to the MFA gate.
 const mfaSessionHeader = "X-MFA-Token"
 
+// errJWTRevoked aliases auth.ErrJWTRevoked where the handler's local auth
+// header slice shadows the package name.
+var errJWTRevoked = auth.ErrJWTRevoked
+
 type EnsureAccountFunc func(ctx context.Context, userAuth nbcontext.UserAuth) (string, string, error)
 type SyncUserJWTGroupsFunc func(ctx context.Context, userAuth nbcontext.UserAuth) error
 
@@ -125,6 +129,15 @@ func (m *AuthMiddleware) Handler(h http.Handler) http.Handler {
 				var mfaErr *MFAGateRequired
 				if errors.As(err, &mfaErr) {
 					writeMFAGateResponse(r.Context(), w, mfaErr.Decision)
+					return
+				}
+				// A JWT revoked by a local password reset (ADR-0027) reads
+				// as an ended session: the dashboard signs the user in
+				// again on "token expired", while "token invalid" only
+				// shows an error and leaves the page stuck.
+				if errors.Is(err, errJWTRevoked) {
+					log.WithContext(r.Context()).Infof("Rejected JWT: %s", err.Error())
+					util.WriteError(r.Context(), status.Errorf(status.Unauthorized, "token expired"), w)
 					return
 				}
 				log.WithContext(r.Context()).Errorf("Error when validating JWT: %s", err.Error())

@@ -89,6 +89,10 @@ func TestAuthMiddleware_CredentialsCutoff(t *testing.T) {
 			assert.Equal(t, tc.want, rec.Code)
 			assert.Equal(t, tc.want == http.StatusOK, reached, "the handler runs only for an accepted token")
 			if tc.want == http.StatusUnauthorized {
+				// The dashboard signs the user in again on "token expired"
+				// and only shows an error on "token invalid".
+				assert.Contains(t, rec.Body.String(), `"token expired"`,
+					"a revoked JWT reads as an ended session, so the dashboard re-authenticates")
 				assert.False(t, bootstrapped, "a revoked JWT never bootstraps an account")
 				assert.False(t, synced, "a revoked JWT never syncs JWT groups")
 			}
