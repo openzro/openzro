@@ -2155,9 +2155,12 @@ func (am *DefaultAccountManager) GetAccountIDForPeerKey(ctx context.Context, pee
 
 func (am *DefaultAccountManager) handleUserPeer(ctx context.Context, transaction store.Store, peer *nbpeer.Peer,
 	settings *types.Settings, jwtIssuedAt time.Time) (bool, error) {
-	// The share lock is held until the login commits, which orders this
-	// check against a concurrent password reset (see cutLocalUserAccess).
-	user, err := transaction.GetUserByUserID(ctx, store.LockingStrengthShare, peer.UserID)
+	// The lock is held until the login commits, which orders this check
+	// against a concurrent password reset (see cutLocalUserAccess). It is an
+	// update lock because re-logging an expired peer writes last_login to
+	// this row: upgrading a share lock while a reset queues for the row can
+	// deadlock on Postgres and MySQL. The new-peer path locks it the same way.
+	user, err := transaction.GetUserByUserID(ctx, store.LockingStrengthUpdate, peer.UserID)
 	if err != nil {
 		return false, err
 	}
