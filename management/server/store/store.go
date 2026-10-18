@@ -180,6 +180,9 @@ type Store interface {
 	// SetUserCredentialsValidAfter moves the user's JWT cutoff forward
 	// (ADR-0027). The only write of User.CredentialsValidAfter.
 	SetUserCredentialsValidAfter(ctx context.Context, accountID, userID string, t time.Time) error
+	// GetUserCredentialsValidAfter reads only the user's credentials cutoff
+	// (nil when unset); NotFound when there is no such user.
+	GetUserCredentialsValidAfter(ctx context.Context, userID string) (*time.Time, error)
 	GetAccountPeersWithExpiration(ctx context.Context, lockStrength LockingStrength, accountID string) ([]*nbpeer.Peer, error)
 	GetAccountPeersWithInactivity(ctx context.Context, lockStrength LockingStrength, accountID string) ([]*nbpeer.Peer, error)
 	GetAllEphemeralPeers(ctx context.Context, lockStrength LockingStrength) ([]*nbpeer.Peer, error)

@@ -52,6 +52,24 @@ func (s *SqlStore) SetUserCredentialsValidAfter(ctx context.Context, accountID, 
 	})
 }
 
+// GetUserCredentialsValidAfter returns the user's credentials cutoff, or nil
+// when it has none. It reads that one column only: token validation calls it
+// on every JWT request (ADR-0027). It returns NotFound when there is no such
+// user.
+func (s *SqlStore) GetUserCredentialsValidAfter(ctx context.Context, userID string) (*time.Time, error) {
+	var rows []struct{ CredentialsValidAfter *time.Time }
+	result := s.db.Model(&types.User{}).Select(colCredentialsValidAfter).
+		Where(idQueryCondition, userID).Limit(1).Find(&rows)
+	if result.Error != nil {
+		log.WithContext(ctx).Errorf("failed to read the credentials cutoff of user %s: %s", userID, result.Error)
+		return nil, status.Errorf(status.Internal, "failed to read the credentials cutoff")
+	}
+	if len(rows) == 0 {
+		return nil, status.NewUserNotFoundError(userID)
+	}
+	return rows[0].CredentialsValidAfter, nil
+}
+
 // keepCredentialsCutoffs overwrites the cutoff of every user in a
 // SaveAccount snapshot with the persisted one, so that re-inserting the
 // account's users from a snapshot read before a password reset cannot erase

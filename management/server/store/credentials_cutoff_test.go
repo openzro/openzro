@@ -138,3 +138,23 @@ func TestSqlStore_SaveUserLastLoginWritesOnlyLastLogin(t *testing.T) {
 		require.NoError(t, s.SaveUserLastLogin(ctx, localTestAccountID, cutoffTestUserID, login))
 	})
 }
+
+// ADR-0027: token validation reads the cutoff through a one-column query.
+func TestSqlStore_GetUserCredentialsValidAfter(t *testing.T) {
+	runTestForAllEngines(t, "../testdata/store.sql", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		got, err := s.GetUserCredentialsValidAfter(ctx, cutoffTestUserID)
+		require.NoError(t, err)
+		require.Nil(t, got, "no cutoff by default")
+
+		cutoff := time.Date(2026, 10, 18, 12, 0, 5, 0, time.UTC)
+		require.NoError(t, s.SetUserCredentialsValidAfter(ctx, localTestAccountID, cutoffTestUserID, cutoff))
+		got, err = s.GetUserCredentialsValidAfter(ctx, cutoffTestUserID)
+		require.NoError(t, err)
+		require.NotNil(t, got)
+		require.True(t, cutoff.Equal(*got), "cutoff: want %s, got %s", cutoff, *got)
+
+		_, err = s.GetUserCredentialsValidAfter(ctx, "no-such-user")
+		requireStatus(t, err, status.NotFound)
+	})
+}

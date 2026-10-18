@@ -85,14 +85,15 @@ func (m *manager) checkCredentialsCutoff(ctx context.Context, userAuth nbcontext
 	if m.store == nil {
 		return nil
 	}
-	user, err := m.store.GetUserByUserID(ctx, store.LockingStrengthNone, userAuth.UserId)
+	// A one-column read: this runs on every JWT request.
+	cutoff, err := m.store.GetUserCredentialsValidAfter(ctx, userAuth.UserId)
 	if err != nil {
 		if sErr, ok := status.FromError(err); ok && sErr.Type() == status.NotFound {
 			return nil
 		}
-		return fmt.Errorf("read user for the credentials cutoff: %w", err)
+		return fmt.Errorf("read the credentials cutoff: %w", err)
 	}
-	if user.JWTRevoked(userAuth.IssuedAt) {
+	if (&types.User{CredentialsValidAfter: cutoff}).JWTRevoked(userAuth.IssuedAt) {
 		return fmt.Errorf("user %s: %w", userAuth.UserId, ErrJWTRevoked)
 	}
 	return nil
