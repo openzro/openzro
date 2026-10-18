@@ -101,14 +101,16 @@ whole-second precision (`types.User.JWTRevoked`).
   time-based check on tokens. If the IdP lags, the user's first sign-ins
   after the reset fail until its clock passes the cutoff (fail closed). If
   it leads, tokens minted up to the skew before the reset survive.
-- **HTTP API.** The auth middleware checks the cutoff on the user row it
-  already reads fresh on every request (`GetUserFromUserAuth`; there is no
-  auth cache), so a reset takes effect on the very next request, on every
-  replica. A revoked token gets the same generic `401 token invalid` as any
-  other invalid JWT, which makes the dashboard's OIDC client end the session.
-  The token is never logged. The check runs after the account and JWT-group
-  steps that precede the user read; those only re-apply what the token
-  already proved at issuance.
+- **Token validation.** `auth.Manager.ValidateAndParseToken` reads the
+  user row (there is no auth cache) and fails for a JWT revoked by the
+  cutoff. Every caller therefore rejects it before acting on it: the HTTP
+  middleware before bootstrapping the account or syncing JWT groups, and the
+  gRPC server before resolving a peer login. A reset takes effect on the
+  very next request, on every replica. A user that does not exist yet has
+  no cutoff, so just-in-time provisioning is unchanged.
+- **HTTP API.** A revoked token gets the same generic `401 token invalid`
+  as any other invalid JWT, which makes the dashboard's OIDC client end the
+  session. The token is never logged.
 - **Personal access tokens are out of scope.** They take a separate
   middleware path and are not derived from the password, and service
   integrations rely on them surviving routine credential rotation. After a
@@ -191,8 +193,11 @@ consulted.
   `iat`, no cutoff. `Copy` keeps the cutoff without aliasing it.
 - Claims extractor: `iat` surfaced from numeric and `json.Number` claims;
   absent or malformed leaves it zero.
-- Auth middleware: a JWT issued before or in the cutoff second, or without
-  `iat`, gets 401 and never reaches the handler; a later JWT, a user without
+- Token validation against a real store: a JWT issued before or in the
+  cutoff second fails; a later one passes; a user that does not exist yet
+  passes.
+- Auth middleware: a revoked JWT gets 401 and never reaches the handler,
+  the account bootstrap or the JWT-group sync; a later JWT, a user without
   a cutoff, and a PAT of a user with a cutoff pass.
 - Manager: a reset sets the cutoff, login-expires and disconnects the user's
   peers, and leaves the user active and unblocked; a failed refresh-token
