@@ -48,3 +48,33 @@ func TestSqlStore_CredentialsRecheckQueue(t *testing.T) {
 		require.Len(t, due, 2, "the other reset's pass and the fence remain")
 	})
 }
+
+// Finishing a sweep and enqueuing its fence is one transaction, owned by
+// whoever deletes the sweep row: finishing it again (a retry after a crash
+// or another replica) enqueues no second fence, and finishing a fence
+// enqueues nothing.
+func TestSqlStore_FinishCredentialsRecheck(t *testing.T) {
+	runTestForAllEngines(t, "../testdata/store.sql", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		t0 := time.Date(2026, 10, 18, 12, 0, 0, 0, time.UTC)
+		require.NoError(t, s.EnqueueCredentialsRecheck(ctx, localTestAccountID, cutoffTestUserID, t0, false))
+		due, err := s.ListDueCredentialsRechecks(ctx, t0, 10)
+		require.NoError(t, err)
+		require.Len(t, due, 1)
+		sweep := due[0]
+
+		fenceAt := t0.Add(time.Minute)
+		require.NoError(t, s.FinishCredentialsRecheck(ctx, sweep, fenceAt))
+		require.NoError(t, s.FinishCredentialsRecheck(ctx, sweep, fenceAt.Add(time.Minute)))
+		due, err = s.ListDueCredentialsRechecks(ctx, t0.Add(time.Hour), 10)
+		require.NoError(t, err)
+		require.Len(t, due, 1, "exactly one fence")
+		require.True(t, due[0].Fence)
+		require.True(t, fenceAt.Equal(due[0].DueAt.UTC()))
+
+		require.NoError(t, s.FinishCredentialsRecheck(ctx, due[0], fenceAt.Add(time.Hour)))
+		due, err = s.ListDueCredentialsRechecks(ctx, t0.Add(2*time.Hour), 10)
+		require.NoError(t, err)
+		require.Empty(t, due, "a fence enqueues nothing")
+	})
+}

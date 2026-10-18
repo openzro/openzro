@@ -137,21 +137,21 @@ func (am *DefaultAccountManager) runCredentialsRecheck(ctx context.Context, rech
 	if err != nil {
 		return err
 	}
-	if user.LocalCredentialState == types.LocalCredentialActive {
-		if err := am.cutLocalUserAccess(ctx, recheck.AccountID, user.Id, now); err != nil {
-			return err
-		}
-		if !recheck.Fence {
-			fenceAt := time.Now()
-			if now.After(fenceAt) {
-				fenceAt = now
-			}
-			if err := am.Store.EnqueueCredentialsRecheck(ctx, recheck.AccountID, user.Id,
-				fenceAt.Add(credentialsFenceDelay), true); err != nil {
-				return err
-			}
-		}
-		log.WithContext(ctx).Infof("credentials recheck %s cut the sessions of local user %s", recheck.ID, user.Id)
+	if user.LocalCredentialState != types.LocalCredentialActive {
+		return am.Store.DeleteCredentialsRecheck(ctx, recheck.ID)
 	}
-	return am.Store.DeleteCredentialsRecheck(ctx, recheck.ID)
+	if err := am.cutLocalUserAccess(ctx, recheck.AccountID, user.Id, now); err != nil {
+		return err
+	}
+	fenceAt := time.Now()
+	if now.After(fenceAt) {
+		fenceAt = now
+	}
+	// Completing a sweep and enqueuing its fence is one transaction: a crash
+	// in between leaves the sweep pending, and its rerun enqueues the fence.
+	if err := am.Store.FinishCredentialsRecheck(ctx, recheck, fenceAt.Add(credentialsFenceDelay)); err != nil {
+		return err
+	}
+	log.WithContext(ctx).Infof("credentials recheck %s cut the sessions of local user %s", recheck.ID, user.Id)
+	return nil
 }

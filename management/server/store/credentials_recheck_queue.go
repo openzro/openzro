@@ -6,6 +6,7 @@ import (
 
 	"github.com/rs/xid"
 	log "github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 
 	"github.com/openzro/openzro/management/server/status"
 )
@@ -86,4 +87,30 @@ func (s *SqlStore) DeleteCredentialsRecheck(ctx context.Context, id string) erro
 		return status.Errorf(status.Internal, "failed to delete a credentials recheck")
 	}
 	return nil
+}
+
+// FinishCredentialsRecheck marks a pass as done and, for a sweep, enqueues
+// its fence due at fenceAt, in one transaction. Only the caller that deletes
+// the row enqueues the fence, so finishing the same sweep again (a retry
+// after a crash, or another replica) adds no second fence.
+func (s *SqlStore) FinishCredentialsRecheck(ctx context.Context, recheck CredentialsRecheck, fenceAt time.Time) error {
+	return s.transaction(ctx, s.db, func(tx *gorm.DB) error {
+		result := tx.Where(idQueryCondition, recheck.ID).Delete(&credentialsRecheck{})
+		if result.Error != nil {
+			log.WithContext(ctx).Errorf("failed to finish credentials recheck %s: %s", recheck.ID, result.Error)
+			return status.Errorf(status.Internal, "failed to finish a credentials recheck")
+		}
+		if result.RowsAffected == 0 || recheck.Fence {
+			return nil
+		}
+		fence := credentialsRecheck{
+			ID: xid.New().String(), AccountID: recheck.AccountID, UserID: recheck.UserID,
+			DueAt: fenceAt.UTC().Truncate(time.Second), Fence: true,
+		}
+		if err := tx.Create(&fence).Error; err != nil {
+			log.WithContext(ctx).Errorf("failed to enqueue the fence of credentials recheck %s: %s", recheck.ID, err)
+			return status.Errorf(status.Internal, "failed to enqueue a credentials fence")
+		}
+		return nil
+	})
 }

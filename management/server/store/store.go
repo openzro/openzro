@@ -190,6 +190,7 @@ type Store interface {
 	ListDueCredentialsRechecks(ctx context.Context, now time.Time, limit int) ([]CredentialsRecheck, error)
 	CredentialsRecheckExists(ctx context.Context, id string) (bool, error)
 	DeleteCredentialsRecheck(ctx context.Context, id string) error
+	FinishCredentialsRecheck(ctx context.Context, recheck CredentialsRecheck, fenceAt time.Time) error
 	GetAccountPeersWithExpiration(ctx context.Context, lockStrength LockingStrength, accountID string) ([]*nbpeer.Peer, error)
 	GetAccountPeersWithInactivity(ctx context.Context, lockStrength LockingStrength, accountID string) ([]*nbpeer.Peer, error)
 	GetAllEphemeralPeers(ctx context.Context, lockStrength LockingStrength) ([]*nbpeer.Peer, error)
