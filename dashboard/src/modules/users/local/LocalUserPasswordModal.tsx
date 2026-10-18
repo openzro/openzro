@@ -16,10 +16,12 @@ type Props = {
 };
 
 // LocalUserPasswordModalContent replaces a local user's password through
-// POST /api/users/{id}/password (ADR-0026 D1). The server also revokes
-// the user's refresh tokens, but access tokens already issued stay valid
-// until they expire and connected peers stay up (ADR-0024 D6); the copy
-// says so and points to Deactivate for cutting access now.
+// POST /api/users/{id}/password (ADR-0026 D1). The server also cuts the
+// user's existing access (ADR-0027): every token issued before the reset
+// is rejected, so current sessions end, and connected devices are
+// disconnected until they sign in again with the new password. A login
+// already in progress with the old password is cut by a later pass, so the
+// copy speaks of existing sessions only. The user is not deactivated.
 export function LocalUserPasswordModalContent({
   user,
   onSuccess,
@@ -35,7 +37,7 @@ export function LocalUserPasswordModalContent({
       title: "Password reset",
       description: `${
         user.email || user.name
-      } must use the new password for future sign-ins.`,
+      }'s current sessions were signed out; they must sign in with the new password.`,
       promise: request
         .post({ password }, `/${user.id}/password`)
         .then(() => onSuccess())
@@ -49,9 +51,9 @@ export function LocalUserPasswordModalContent({
       <div className="mt-2 flex flex-col items-center text-center">
         <h2 className="my-0 text-lg">Reset password</h2>
         <p className="max-w-xs text-sm text-oz2-text-muted">
-          Set a new password for {user.email || user.name}. Future sign-ins need
-          it, but access tokens already issued stay valid until they expire, and
-          connected devices stay connected. Deactivate the user to cut both now.
+          Set a new password for {user.email || user.name}. This signs out their
+          current sessions and disconnects their connected devices until they
+          sign in again with the new password.
         </p>
       </div>
 

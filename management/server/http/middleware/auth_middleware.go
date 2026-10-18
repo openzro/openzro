@@ -28,6 +28,10 @@ import (
 // passes it to the MFA gate.
 const mfaSessionHeader = "X-MFA-Token"
 
+// errJWTRevoked aliases auth.ErrJWTRevoked where the handler's local auth
+// header slice shadows the package name.
+var errJWTRevoked = auth.ErrJWTRevoked
+
 type EnsureAccountFunc func(ctx context.Context, userAuth nbcontext.UserAuth) (string, string, error)
 type SyncUserJWTGroupsFunc func(ctx context.Context, userAuth nbcontext.UserAuth) error
 
@@ -127,6 +131,22 @@ func (m *AuthMiddleware) Handler(h http.Handler) http.Handler {
 					writeMFAGateResponse(r.Context(), w, mfaErr.Decision)
 					return
 				}
+				// A JWT revoked by a local password reset (ADR-0027) reads
+				// as an ended session: the dashboard signs the user in
+				// again on "token expired", while "token invalid" only
+				// shows an error and leaves the page stuck.
+				if errors.Is(err, errJWTRevoked) {
+					log.WithContext(r.Context()).Infof("Rejected JWT: %s", err.Error())
+					util.WriteError(r.Context(), status.Errorf(status.Unauthorized, "token expired"), w)
+					return
+				}
+				// A store failure while checking the cutoff is an outage,
+				// not a bad credential: 500, so clients don't re-authenticate.
+				if sErr, ok := status.FromError(err); ok && sErr.Type() == status.Internal {
+					log.WithContext(r.Context()).Errorf("Error when validating JWT: %s", err.Error())
+					util.WriteError(r.Context(), status.Errorf(status.Internal, "internal server error"), w)
+					return
+				}
 				log.WithContext(r.Context()).Errorf("Error when validating JWT: %s", err.Error())
 				util.WriteError(r.Context(), status.Errorf(status.Unauthorized, "token invalid"), w)
 				return
@@ -159,6 +179,9 @@ func (m *AuthMiddleware) checkJWTFromRequest(r *http.Request, auth []string) (*h
 
 	ctx := r.Context()
 
+	// Validation also rejects a JWT revoked by a local password reset
+	// (ADR-0027), before anything below acts on it. PATs never reach this
+	// path: they are not password-derived.
 	userAuth, validatedToken, err := m.authManager.ValidateAndParseToken(ctx, token)
 	if err != nil {
 		return r, err

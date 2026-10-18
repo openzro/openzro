@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -27,9 +28,11 @@ import (
 // SCIMResetLocalPassword replaces a local user's password (ADR-0024 D6). It
 // is an isolated operation: when it comes from a SCIM PUT, replace carries
 // the rest of the representation, which must equal the current one. The
-// Dex credential is written only after an ownership check, and the user's
-// refresh tokens are revoked. It does not cut access tokens already issued
-// or connected peers; deactivation does.
+// Dex credential is written only after an ownership check. The reset then
+// cuts existing access (ADR-0027): it revokes the user's refresh tokens,
+// sets the credentials cutoff that rejects every JWT issued up to now, and
+// login-expires and disconnects the user's SSO peers. The user is not
+// blocked; it signs in again with the new password.
 func (am *DefaultAccountManager) SCIMResetLocalPassword(ctx context.Context, accountID, callerID, userID, password string,
 	replace *account.SCIMUserInput) (*types.User, error) {
 	if am.localCreds == nil {
@@ -81,15 +84,56 @@ func (am *DefaultAccountManager) SCIMResetLocalPassword(ctx context.Context, acc
 	if entry == nil {
 		return nil, status.Errorf(status.Internal, "local user %s has no Dex credential", user.Id)
 	}
+	// The password changes before existing access is cut, so no session
+	// started after the cutoff can come from the old password (ADR-0027 D4).
 	if err := am.localCreds.UpdatePassword(ctx, user.SCIMUserName, hash); err != nil {
 		return nil, status.Errorf(status.Internal, "update Dex password: %v", err)
 	}
-	if err := am.localCreds.RevokeAllRefreshTokens(ctx, user.Id); err != nil {
-		return nil, status.Errorf(status.Internal, "revoke refresh tokens: %v", err)
+	if err := am.cutLocalUserAccess(ctx, accountID, user.Id, time.Time{}); err != nil {
+		return nil, err
+	}
+	// A login that passed the old password before the reset can still turn
+	// its authorization code into tokens newer than the cutoff; this reset's
+	// own sweep cuts those (ADR-0027 D6).
+	if err := am.Store.EnqueueCredentialsRecheck(ctx, accountID, user.Id,
+		time.Now().Add(credentialsRecheckDelay), false); err != nil {
+		return nil, status.Errorf(status.Internal, "enqueue credentials recheck: %v", err)
 	}
 
 	am.StoreEvent(ctx, callerID, user.Id, accountID, activity.UserLocalPasswordReset, map[string]any{"scim": true})
 	return user, nil
+}
+
+// cutLocalUserAccess ends every session a local user holds after its
+// password changed, without blocking it (ADR-0027 D4). The order matters:
+// refresh tokens are revoked first, so nothing can mint a JWT after the
+// cutoff without the new password; then the cutoff revokes every JWT issued
+// so far; then the user's SSO peers are expired, and need a JWT issued after
+// the cutoff to log in again. A peer login that read the user before the
+// cutoff holds that row locked until it commits, so the cutoff write waits
+// for it and the expiry runs after it. Every step is idempotent; a failure
+// returns an error and a retried reset converges. It needs no account write
+// lock and runs under the local identity lock.
+//
+// The cutoff is the time after the revocation, never earlier than
+// notBefore (zero for none), which lets tests run the pass at a simulated
+// time.
+func (am *DefaultAccountManager) cutLocalUserAccess(ctx context.Context, accountID, userID string,
+	notBefore time.Time) error {
+	if err := am.localCreds.RevokeAllRefreshTokens(ctx, userID); err != nil {
+		return status.Errorf(status.Internal, "revoke refresh tokens: %v", err)
+	}
+	cutoff := time.Now()
+	if notBefore.After(cutoff) {
+		cutoff = notBefore
+	}
+	if err := am.Store.SetUserCredentialsValidAfter(ctx, accountID, userID, cutoff); err != nil {
+		return status.Errorf(status.Internal, "set credentials cutoff: %v", err)
+	}
+	if err := am.expireUserPeers(ctx, accountID, userID); err != nil {
+		return status.Errorf(status.Internal, "expire peers: %v", err)
+	}
+	return nil
 }
 
 // terminateLocalUser runs the terminal transition of a local user (ADR-0024

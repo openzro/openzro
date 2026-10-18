@@ -430,6 +430,10 @@ func BuildManager(
 	// broadcast was lost (at-most-once pub/sub).
 	go am.runPeerStreamReconciler(ctx)
 
+	// Runs the second pass of local password resets, which cuts sessions
+	// minted from logins already in flight during a reset (ADR-0027 D6).
+	go am.runCredentialsRechecker(ctx)
+
 	return am, nil
 }
 
@@ -2153,10 +2157,20 @@ func (am *DefaultAccountManager) GetAccountIDForPeerKey(ctx context.Context, pee
 	return am.Store.GetAccountIDByPeerPubKey(ctx, peerKey)
 }
 
-func (am *DefaultAccountManager) handleUserPeer(ctx context.Context, transaction store.Store, peer *nbpeer.Peer, settings *types.Settings) (bool, error) {
-	user, err := transaction.GetUserByUserID(ctx, store.LockingStrengthShare, peer.UserID)
+func (am *DefaultAccountManager) handleUserPeer(ctx context.Context, transaction store.Store, peer *nbpeer.Peer,
+	settings *types.Settings, jwtIssuedAt time.Time) (bool, error) {
+	// The lock is held until the login commits, which orders this check
+	// against a concurrent password reset (see cutLocalUserAccess). It is an
+	// update lock because re-logging an expired peer writes last_login to
+	// this row: upgrading a share lock while a reset queues for the row can
+	// deadlock on Postgres and MySQL. The new-peer path locks it the same way.
+	user, err := transaction.GetUserByUserID(ctx, store.LockingStrengthUpdate, peer.UserID)
 	if err != nil {
 		return false, err
+	}
+
+	if user.JWTRevoked(jwtIssuedAt) {
+		return false, errJWTRevokedForPeerLogin()
 	}
 
 	err = checkIfPeerOwnerIsBlocked(peer, user)

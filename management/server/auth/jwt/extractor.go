@@ -128,6 +128,12 @@ func (c *ClaimsExtractor) ToUserAuth(token *jwt.Token) (nbcontext.UserAuth, erro
 		userAuth.LastLogin = parseTime(lastLoginClaimString.(string))
 	}
 
+	// A malformed iat is left zero: the cutoff check treats that as "no
+	// iat", which fails closed for users with a cutoff (ADR-0027 D3).
+	if iat, err := claims.GetIssuedAt(); err == nil && iat != nil {
+		userAuth.IssuedAt = iat.Time
+	}
+
 	if invitedBool, ok := claims[c.audienceClaim(Invited)]; ok {
 		if value, ok := invitedBool.(bool); ok {
 			userAuth.Invited = value

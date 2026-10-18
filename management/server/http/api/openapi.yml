@@ -2971,7 +2971,7 @@ paths:
   /api/users/{userId}/password:
     post:
       summary: Reset a local user's password
-      description: Replace a local user's password and revoke its refresh tokens. Already issued access tokens and connected peers are not cut off; deactivate the user for that.
+      description: Replace a local user's password and cut its existing access without deactivating it. Refresh tokens are revoked, every JWT issued before the reset is rejected from then on, and the user's SSO-added peers are login-expired and disconnected until they sign in again with the new password. A login that already passed the old password when the reset ran is cut by a second pass about 31 minutes later, which also signs out anyone who signed in meanwhile. Personal access tokens are not affected.
       tags: [ Users ]
       security:
         - BearerAuth: [ ]

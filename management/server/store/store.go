@@ -177,6 +177,21 @@ type Store interface {
 	FinalizeLocalUser(ctx context.Context, accountID, userID string) error
 	MarkLocalUserTerminal(ctx context.Context, accountID, userID string, to types.LocalCredentialState) error
 	ClearLocalUserCleanup(ctx context.Context, accountID, userID string, state types.LocalCredentialState) error
+	// SetUserCredentialsValidAfter moves the user's JWT cutoff forward
+	// (ADR-0027). The only write of User.CredentialsValidAfter.
+	SetUserCredentialsValidAfter(ctx context.Context, accountID, userID string, t time.Time) error
+	// GetUserCredentialsValidAfter reads only the user's credentials cutoff
+	// (nil when unset); NotFound when there is no such user.
+	GetUserCredentialsValidAfter(ctx context.Context, userID string) (*time.Time, error)
+	// EnqueueCredentialsRecheck, ListDueCredentialsRechecks,
+	// CredentialsRecheckExists and DeleteCredentialsRecheck keep the queue of
+	// pending passes of local password resets (ADR-0027 D6).
+	EnqueueCredentialsRecheck(ctx context.Context, accountID, userID string, dueAt time.Time, fence bool) error
+	ListDueCredentialsRechecks(ctx context.Context, now time.Time, after *CredentialsRecheck,
+		limit int) ([]CredentialsRecheck, error)
+	CredentialsRecheckExists(ctx context.Context, id string) (bool, error)
+	DeleteCredentialsRecheck(ctx context.Context, id string) error
+	FinishCredentialsRecheck(ctx context.Context, recheck CredentialsRecheck, fenceAt time.Time) error
 	GetAccountPeersWithExpiration(ctx context.Context, lockStrength LockingStrength, accountID string) ([]*nbpeer.Peer, error)
 	GetAccountPeersWithInactivity(ctx context.Context, lockStrength LockingStrength, accountID string) ([]*nbpeer.Peer, error)
 	GetAllEphemeralPeers(ctx context.Context, lockStrength LockingStrength) ([]*nbpeer.Peer, error)

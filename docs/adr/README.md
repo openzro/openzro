@@ -39,6 +39,7 @@ to understand *what* was decided and *why* without opening the issue.
 | [0021](./0021-policy-propagation-consistency-model.md) | Policy-change peer propagation: consistency model | Proposed |
 | [0022](./0022-custom-dns-zones.md) | Custom DNS Zones: private authoritative zones with group-based distribution | Proposed |
 | [0023](./0023-policy-based-multi-resolver-dns.md) | Policy-based DNS response selection for multi-resolver zones | Proposed |
-| [0024](./0024-scim-provisioned-local-users.md) | SCIM-provisioned local users (password credentials in embedded Dex) | Accepted |
+| [0024](./0024-scim-provisioned-local-users.md) | SCIM-provisioned local users (password credentials in embedded Dex) | Accepted (D6 "What a reset does not do" superseded by 0027) |
 | [0025](./0025-allowed-email-domains.md) | Account-level allowlist of email domains for new users | Accepted |
 | [0026](./0026-console-local-users-and-email-domains.md) | Console management of local users and the email-domain allowlist | Proposed |
+| [0027](./0027-immediate-access-cut-on-local-password-reset.md) | Immediate access cut on a local password reset | Proposed (supersedes 0024 D6 "What a reset does not do") |

@@ -371,13 +371,25 @@ func (am *DefaultAccountManager) expireBlockedUserPeers(ctx context.Context, acc
 	if !user.Blocked {
 		return nil
 	}
-	peers, err := am.Store.GetUserPeers(ctx, store.LockingStrengthShare, accountID, user.Id)
+	if err := am.expireUserPeers(ctx, accountID, user.Id); err != nil {
+		return fmt.Errorf("blocked user: %w", err)
+	}
+	return nil
+}
+
+// expireUserPeers login-expires and disconnects every peer the user added
+// through SSO, whether or not the user is blocked; a local password reset
+// uses it to force re-authentication (ADR-0027). Peers added with a setup
+// key carry no user and are not touched. It is idempotent, and needs no
+// account write lock, so local-user sagas may call it.
+func (am *DefaultAccountManager) expireUserPeers(ctx context.Context, accountID, userID string) error {
+	peers, err := am.Store.GetUserPeers(ctx, store.LockingStrengthShare, accountID, userID)
 	if err != nil {
-		return fmt.Errorf("get peers of blocked user %s: %w", user.Id, err)
+		return fmt.Errorf("get peers of user %s: %w", userID, err)
 	}
 
 	// expireAndUpdatePeers only disconnects peers it newly expires. A
-	// repeated SCIM block is an explicit retry, so also re-send the fast-path
+	// repeated call is an explicit retry, so also re-send the fast-path
 	// disconnect for this user's already-expired peers: the set is bounded
 	// by one user's devices, and the reconciler remains the guarantee.
 	var alreadyExpired []string
@@ -387,10 +399,10 @@ func (am *DefaultAccountManager) expireBlockedUserPeers(ctx context.Context, acc
 		}
 	}
 	if err := am.expireAndUpdatePeers(ctx, accountID, peers); err != nil {
-		return fmt.Errorf("expire peers of blocked user %s: %w", user.Id, err)
+		return fmt.Errorf("expire peers of user %s: %w", userID, err)
 	}
 	if err := am.peersUpdateManager.DisconnectPeers(ctx, alreadyExpired); err != nil {
-		return fmt.Errorf("disconnect expired peers of blocked user %s: %w", user.Id, err)
+		return fmt.Errorf("disconnect expired peers of user %s: %w", userID, err)
 	}
 	return nil
 }
