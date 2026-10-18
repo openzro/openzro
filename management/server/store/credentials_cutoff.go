@@ -70,8 +70,8 @@ func (s *SqlStore) GetUserCredentialsValidAfter(ctx context.Context, userID stri
 	return rows[0].CredentialsValidAfter, nil
 }
 
-// keepCredentialsCutoffs overwrites the cutoff of every user in a
-// SaveAccount snapshot with the persisted one, so that re-inserting the
+// keepCredentialsCutoffs overwrites the cutoff and the recheck schedule of
+// every user in a SaveAccount snapshot with the persisted ones, so that re-inserting the
 // account's users from a snapshot read before a password reset cannot erase
 // or roll back the reset's cutoff (ADR-0027 D2). It must run inside
 // SaveAccount's transaction after the account mutex is taken, which
@@ -81,22 +81,26 @@ func keepCredentialsCutoffs(tx *gorm.DB, account *types.Account) error {
 	type row struct {
 		ID                    string
 		CredentialsValidAfter *time.Time
+		CredentialsRecheckAt  *time.Time
 	}
 	var rows []row
 	result := tx.Model(&types.User{}).
-		Select("id", colCredentialsValidAfter).
-		Where("account_id = ? AND "+colCredentialsValidAfter+" IS NOT NULL", account.Id).
+		Select("id", colCredentialsValidAfter, colCredentialsRecheckAt).
+		Where("account_id = ? AND ("+colCredentialsValidAfter+" IS NOT NULL OR "+
+			colCredentialsRecheckAt+" IS NOT NULL)", account.Id).
 		Find(&rows)
 	if result.Error != nil {
 		return status.Errorf(status.Internal, "failed to read credentials cutoffs of account %s: %v",
 			account.Id, result.Error)
 	}
-	persisted := make(map[string]*time.Time, len(rows))
+	persisted := make(map[string]row, len(rows))
 	for _, r := range rows {
-		persisted[r.ID] = r.CredentialsValidAfter
+		persisted[r.ID] = r
 	}
 	for i := range account.UsersG {
-		account.UsersG[i].CredentialsValidAfter = persisted[account.UsersG[i].Id]
+		r := persisted[account.UsersG[i].Id]
+		account.UsersG[i].CredentialsValidAfter = r.CredentialsValidAfter
+		account.UsersG[i].CredentialsRecheckAt = r.CredentialsRecheckAt
 	}
 	return nil
 }

@@ -183,6 +183,12 @@ type Store interface {
 	// GetUserCredentialsValidAfter reads only the user's credentials cutoff
 	// (nil when unset); NotFound when there is no such user.
 	GetUserCredentialsValidAfter(ctx context.Context, userID string) (*time.Time, error)
+	// ScheduleUserCredentialsRecheck, ListUserCredentialsRechecksDue and
+	// ClearUserCredentialsRecheck drive the second pass of a local password
+	// reset (ADR-0027 D6).
+	ScheduleUserCredentialsRecheck(ctx context.Context, accountID, userID string, at time.Time) error
+	ListUserCredentialsRechecksDue(ctx context.Context, now time.Time) ([]CredentialsRecheck, error)
+	ClearUserCredentialsRecheck(ctx context.Context, accountID, userID string, at time.Time) error
 	GetAccountPeersWithExpiration(ctx context.Context, lockStrength LockingStrength, accountID string) ([]*nbpeer.Peer, error)
 	GetAccountPeersWithInactivity(ctx context.Context, lockStrength LockingStrength, accountID string) ([]*nbpeer.Peer, error)
 	GetAllEphemeralPeers(ctx context.Context, lockStrength LockingStrength) ([]*nbpeer.Peer, error)
