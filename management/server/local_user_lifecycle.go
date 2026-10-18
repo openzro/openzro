@@ -93,11 +93,11 @@ func (am *DefaultAccountManager) SCIMResetLocalPassword(ctx context.Context, acc
 		return nil, err
 	}
 	// A login that passed the old password before the reset can still turn
-	// its authorization code into tokens newer than the cutoff; the second
-	// pass cuts those (ADR-0027 D6).
-	if err := am.Store.ScheduleUserCredentialsRecheck(ctx, accountID, user.Id,
-		time.Now().Add(credentialsRecheckDelay)); err != nil {
-		return nil, status.Errorf(status.Internal, "schedule credentials recheck: %v", err)
+	// its authorization code into tokens newer than the cutoff; this reset's
+	// own sweep cuts those (ADR-0027 D6).
+	if err := am.Store.EnqueueCredentialsRecheck(ctx, accountID, user.Id,
+		time.Now().Add(credentialsRecheckDelay), false); err != nil {
+		return nil, status.Errorf(status.Internal, "enqueue credentials recheck: %v", err)
 	}
 
 	am.StoreEvent(ctx, callerID, user.Id, accountID, activity.UserLocalPasswordReset, map[string]any{"scim": true})

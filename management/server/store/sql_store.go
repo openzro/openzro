@@ -111,6 +111,7 @@ func NewSqlStore(ctx context.Context, db *gorm.DB, storeEngine types.Engine, met
 		// Per-account mutex rows for SaveAccount vs local user
 		// reservations (ADR-0024); see accountLock.
 		&accountLock{},
+		&credentialsRecheck{},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("auto migratePreAuto: %w", err)
@@ -548,7 +549,7 @@ func (s *SqlStore) SaveUsers(ctx context.Context, lockStrength LockingStrength, 
 		// The credentials cutoff is written only by its targeted operation
 		// (ADR-0027 D2); a batch built from stale reads must not clobber it.
 		result := tx.Clauses(clause.Locking{Strength: string(lockStrength)}, clause.OnConflict{UpdateAll: true}).
-			Omit(colCredentialsValidAfter, colCredentialsRecheckAt).Create(&users)
+			Omit(colCredentialsValidAfter).Create(&users)
 		if result.Error != nil {
 			log.WithContext(ctx).Errorf("failed to save users to store: %s", result.Error)
 			return status.Errorf(status.Internal, "failed to save users to store")
@@ -564,8 +565,7 @@ func (s *SqlStore) SaveUser(ctx context.Context, lockStrength LockingStrength, u
 			return err
 		}
 		// See SaveUsers: the credentials cutoff is never part of a full-row save.
-		result := tx.Clauses(clause.Locking{Strength: string(lockStrength)}).
-			Omit(colCredentialsValidAfter, colCredentialsRecheckAt).Save(user)
+		result := tx.Clauses(clause.Locking{Strength: string(lockStrength)}).Omit(colCredentialsValidAfter).Save(user)
 		if result.Error != nil {
 			log.WithContext(ctx).Errorf("failed to save user to store: %s", result.Error)
 			return status.Errorf(status.Internal, "failed to save user to store")

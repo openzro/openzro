@@ -139,11 +139,6 @@ type User struct {
 	// targeted SetUserCredentialsValidAfter; generic user saves leave the
 	// column untouched.
 	CredentialsValidAfter *time.Time `gorm:"column:credentials_valid_after"`
-	// CredentialsRecheckAt schedules the second pass of a local password
-	// reset (ADR-0027 D6), which cuts sessions minted from logins that were
-	// already in flight when the reset ran. Nil means none is pending. Like
-	// the cutoff, only targeted store operations change it.
-	CredentialsRecheckAt *time.Time `gorm:"column:credentials_recheck_at;index"`
 }
 
 // JWTRevoked reports whether a JWT issued at iat predates the user's
@@ -342,7 +337,6 @@ func (u *User) Copy() *User {
 		LocalCredentialState:  u.LocalCredentialState,
 		LocalCleanupPending:   u.LocalCleanupPending,
 		CredentialsValidAfter: copyTimePtr(u.CredentialsValidAfter),
-		CredentialsRecheckAt:  copyTimePtr(u.CredentialsRecheckAt),
 	}
 }
 

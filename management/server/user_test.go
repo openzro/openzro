@@ -369,7 +369,6 @@ func TestUser_Copy(t *testing.T) {
 		LocalCredentialState:  types.LocalCredentialActive,
 		LocalCleanupPending:   true,
 		CredentialsValidAfter: util.ToPtr(time.Now().UTC()),
-		CredentialsRecheckAt:  util.ToPtr(time.Now().UTC()),
 	}
 
 	err := validateStruct(user)

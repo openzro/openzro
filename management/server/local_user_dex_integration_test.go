@@ -368,7 +368,8 @@ func TestLocalPasswordReset_InFlightLoginCutBySecondPass_RealDex(t *testing.T) {
 	require.NoError(t, err)
 	stored, err := manager.Store.GetUserByUserID(ctx, store.LockingStrengthShare, user.Id)
 	require.NoError(t, err)
-	require.NotNil(t, stored.CredentialsRecheckAt)
+	sweeps := dueRechecks(t, manager, time.Now().Add(credentialsRecheckDelay+time.Minute))
+	require.Len(t, sweeps, 1)
 	// Redeem in a later second than the cutoff, as a real client would.
 	time.Sleep(time.Until(stored.CredentialsValidAfter.Add(time.Second + 100*time.Millisecond)))
 
@@ -382,7 +383,7 @@ func TestLocalPasswordReset_InFlightLoginCutBySecondPass_RealDex(t *testing.T) {
 	require.NoError(t, err, "the first cutoff cannot tell this token from a new-password one")
 	require.Positive(t, refreshTokenCount(t, api, user.Id), "the redemption minted a refresh token")
 
-	manager.runDueCredentialsRechecks(ctx, *stored.CredentialsRecheckAt)
+	manager.runDueCredentialsRechecks(ctx, sweeps[0].DueAt)
 
 	_, _, err = validator.ValidateAndParseToken(ctx, accessToken)
 	require.ErrorIs(t, err, auth.ErrJWTRevoked, "the second pass cuts the in-flight login's token")

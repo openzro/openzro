@@ -14,40 +14,51 @@ import (
 )
 
 const (
-	// credentialsRecheckDelay is when the second pass of a local password
-	// reset runs (ADR-0027 D6). Dex v2.45-v2.46 keeps an authorization code
-	// valid for 30 minutes (hard-coded) and stamps its tokens with the time
-	// of redemption, so a login that passed the old password just before
-	// the reset can mint tokens newer than the first cutoff until then. One
-	// minute of margin covers clock skew and the redemption itself.
+	// credentialsRecheckDelay is when a reset's sweep runs (ADR-0027 D6).
+	// Dex v2.45-v2.46 keeps an authorization code valid for 30 minutes
+	// (hard-coded) and stamps its tokens with the time of redemption, so a
+	// login that passed the old password just before the reset can mint
+	// tokens newer than the reset's cutoff until then. One minute of margin
+	// covers clock skew and the redemption itself.
 	credentialsRecheckDelay = 31 * time.Minute
 
-	// credentialsRecheckIntervalEnv overrides how often each replica looks
-	// for due second passes.
-	credentialsRecheckIntervalEnv = "OPENZRO_CREDENTIALS_RECHECK_INTERVAL_SECONDS"
-	// defaultCredentialsRecheckInterval adds at most this much to the
-	// window a pre-reset login can hold a session. The cost per pass is one
-	// indexed query.
-	defaultCredentialsRecheckInterval = time.Minute
-	// minCredentialsRecheckInterval floors pathological values so a typo
-	// cannot turn the loop into a tight DB loop; 0 and negative values fall
-	// back to the default, since the pass bounds a security window.
-	minCredentialsRecheckInterval = 5 * time.Second
+	// credentialsFenceDelay is how long after a sweep its fence runs. A
+	// sweep, like the reset, can race a token Dex is signing at that moment
+	// for a request that passed its checks before the revocation. Such a
+	// request completes within this bound, and no request authenticated with
+	// the old password can start any more (every old code has expired), so
+	// the fence closes the window for good.
+	credentialsFenceDelay = time.Minute
+
+	// credentialsRecheckPage bounds how many due passes one query loads.
+	credentialsRecheckPage = 50
+
+	// resetRecheckIntervalEnv overrides how often each replica looks for
+	// due passes.
+	resetRecheckIntervalEnv = "OPENZRO_RESET_RECHECK_INTERVAL_SECONDS"
+	// defaultResetRecheckInterval adds at most this much to the window a
+	// pre-reset login can hold a session. An idle tick costs one indexed
+	// query.
+	defaultResetRecheckInterval = time.Minute
+	// minResetRecheckInterval floors pathological values so a typo cannot
+	// turn the loop into a tight DB loop; 0 and negative values fall back to
+	// the default, since the pass bounds a security window.
+	minResetRecheckInterval = 5 * time.Second
 )
 
-func credentialsRecheckInterval() time.Duration {
-	secs, err := strconv.Atoi(os.Getenv(credentialsRecheckIntervalEnv))
+func resetRecheckInterval() time.Duration {
+	secs, err := strconv.Atoi(os.Getenv(resetRecheckIntervalEnv))
 	if err != nil || secs <= 0 {
-		return defaultCredentialsRecheckInterval
+		return defaultResetRecheckInterval
 	}
-	return max(time.Duration(secs)*time.Second, minCredentialsRecheckInterval)
+	return max(time.Duration(secs)*time.Second, minResetRecheckInterval)
 }
 
-// runCredentialsRechecker runs the due second passes of local password
-// resets on every replica. Passes are idempotent and serialize on the local
-// identity lock, so replicas running the same one concurrently converge.
+// runCredentialsRechecker runs the due passes of local password resets on
+// every replica. A pass runs under the user's identity lock and only while
+// its row exists, so replicas that load the same pass run it once.
 func (am *DefaultAccountManager) runCredentialsRechecker(ctx context.Context) {
-	interval := credentialsRecheckInterval()
+	interval := resetRecheckInterval()
 	log.WithContext(ctx).Infof("credentials rechecker running every %s", interval)
 
 	ticker := time.NewTicker(interval)
@@ -62,37 +73,53 @@ func (am *DefaultAccountManager) runCredentialsRechecker(ctx context.Context) {
 	}
 }
 
-// runDueCredentialsRechecks runs every second pass due at now. A failed pass
-// keeps its schedule and is retried on the next tick.
+// runDueCredentialsRechecks runs every pass due at now.
 func (am *DefaultAccountManager) runDueCredentialsRechecks(ctx context.Context, now time.Time) {
+	am.runDueCredentialsRechecksInPages(ctx, now, credentialsRecheckPage)
+}
+
+// runDueCredentialsRechecksInPages works through the due passes in pages of
+// at most page rows until none is due, so a backlog does not wait for later
+// ticks and no query loads the whole table. A failed pass keeps its row and
+// is retried on the next tick; a page in which nothing completed ends this
+// tick rather than spin on the same failures.
+func (am *DefaultAccountManager) runDueCredentialsRechecksInPages(ctx context.Context, now time.Time, page int) {
 	if am.localCreds == nil {
 		return
 	}
-	due, err := am.Store.ListUserCredentialsRechecksDue(ctx, now)
-	if err != nil {
-		log.WithContext(ctx).Errorf("failed to list due credentials rechecks: %v", err)
-		return
-	}
-	for _, recheck := range due {
-		if err := am.recheckLocalUserCredentials(ctx, recheck, now); err != nil {
-			log.WithContext(ctx).Errorf("credentials recheck of user %s failed, retrying next tick: %v",
-				recheck.UserID, err)
+	for ctx.Err() == nil {
+		due, err := am.Store.ListDueCredentialsRechecks(ctx, now, page)
+		if err != nil {
+			log.WithContext(ctx).Errorf("failed to list due credentials rechecks: %v", err)
+			return
+		}
+		completed := 0
+		for _, recheck := range due {
+			if err := am.runCredentialsRecheck(ctx, recheck, now); err != nil {
+				log.WithContext(ctx).Errorf("credentials recheck %s of user %s failed, retrying next tick: %v",
+					recheck.ID, recheck.UserID, err)
+				continue
+			}
+			completed++
+		}
+		if len(due) < page || completed == 0 {
+			return
 		}
 	}
 }
 
-// recheckLocalUserCredentials is the second pass of a reset (ADR-0027 D6):
-// for a user still active, it cuts access again exactly like the reset did,
-// which revokes the refresh tokens and every JWT a login in flight during
-// the reset could have minted since, and expires the user's peers. A user
-// deactivated or deleted meanwhile was cut by that transition; its schedule
-// is only cleared.
-func (am *DefaultAccountManager) recheckLocalUserCredentials(ctx context.Context, recheck store.CredentialsRecheck,
+// runCredentialsRecheck runs one pass (ADR-0027 D6). For a user still
+// active it cuts access exactly as the reset did; a sweep then enqueues its
+// fence. A user deactivated or deleted meanwhile was cut by that
+// transition, so its pass is only discarded. The pass is re-read after the
+// identity lock: one that another replica already ran is gone, and running
+// it again would cut the sessions of the user's new sign-ins once more.
+func (am *DefaultAccountManager) runCredentialsRecheck(ctx context.Context, recheck store.CredentialsRecheck,
 	now time.Time) error {
 	user, err := am.Store.GetUserByUserID(ctx, store.LockingStrengthNone, recheck.UserID)
 	if err != nil {
 		if sErr, ok := status.FromError(err); ok && sErr.Type() == status.NotFound {
-			return nil
+			return am.Store.DeleteCredentialsRecheck(ctx, recheck.ID)
 		}
 		return err
 	}
@@ -102,6 +129,10 @@ func (am *DefaultAccountManager) recheckLocalUserCredentials(ctx context.Context
 	}
 	defer unlock()
 
+	pending, err := am.Store.CredentialsRecheckExists(ctx, recheck.ID)
+	if err != nil || !pending {
+		return err
+	}
 	user, err = am.Store.GetUserByUserID(ctx, store.LockingStrengthShare, recheck.UserID)
 	if err != nil {
 		return err
@@ -110,7 +141,17 @@ func (am *DefaultAccountManager) recheckLocalUserCredentials(ctx context.Context
 		if err := am.cutLocalUserAccess(ctx, recheck.AccountID, user.Id, now); err != nil {
 			return err
 		}
-		log.WithContext(ctx).Infof("credentials recheck cut the sessions of local user %s", user.Id)
+		if !recheck.Fence {
+			fenceAt := time.Now()
+			if now.After(fenceAt) {
+				fenceAt = now
+			}
+			if err := am.Store.EnqueueCredentialsRecheck(ctx, recheck.AccountID, user.Id,
+				fenceAt.Add(credentialsFenceDelay), true); err != nil {
+				return err
+			}
+		}
+		log.WithContext(ctx).Infof("credentials recheck %s cut the sessions of local user %s", recheck.ID, user.Id)
 	}
-	return am.Store.ClearUserCredentialsRecheck(ctx, recheck.AccountID, user.Id, recheck.At)
+	return am.Store.DeleteCredentialsRecheck(ctx, recheck.ID)
 }
