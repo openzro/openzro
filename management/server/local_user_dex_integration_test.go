@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"os"
 	"runtime"
@@ -303,4 +304,87 @@ func TestLocalUserLifecycle_RealDex(t *testing.T) {
 	for _, e := range entries {
 		require.NotEqual(t, "ana@example.com", e.Email, "the Dex credential must be gone")
 	}
+}
+
+// authCodeAfterPassword runs Dex's authorization-code login up to the code:
+// it submits the password form and stops at the redirect to the client, so
+// the password has been checked but no token exists yet.
+func authCodeAfterPassword(t *testing.T, baseURL, email, password string) string {
+	t.Helper()
+	jar, err := cookiejar.New(nil)
+	require.NoError(t, err)
+	client := &http.Client{Jar: jar, CheckRedirect: func(req *http.Request, _ []*http.Request) error {
+		if strings.HasPrefix(req.URL.String(), "http://127.0.0.1/callback") {
+			return http.ErrUseLastResponse
+		}
+		return nil
+	}}
+	authURL := baseURL + "/auth?" + url.Values{
+		"client_id": {dexTestClientID}, "redirect_uri": {"http://127.0.0.1/callback"},
+		"response_type": {"code"}, "scope": {"openid email offline_access"}, "state": {"in-flight"},
+	}.Encode()
+	resp, err := client.Get(authURL)
+	require.NoError(t, err)
+	_ = resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode, "the password form")
+
+	resp, err = client.PostForm(resp.Request.URL.String(), url.Values{"login": {email}, "password": {password}})
+	require.NoError(t, err)
+	_ = resp.Body.Close()
+	require.Equal(t, http.StatusSeeOther, resp.StatusCode, "the password is accepted")
+	location, err := resp.Location()
+	require.NoError(t, err)
+	code := location.Query().Get("code")
+	require.NotEmpty(t, code)
+	return code
+}
+
+// ADR-0027 D6, #220 review, against real Dex: a login that passed the old
+// password before the reset redeems its authorization code after it. Its
+// access token is newer than the first cutoff and passes; it also gets a
+// refresh token. The second pass cuts both.
+func TestLocalPasswordReset_InFlightLoginCutBySecondPass_RealDex(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test; needs a container runtime")
+	}
+	if runtime.GOOS != "linux" && os.Getenv("CI") == "true" {
+		t.Skip("container tests run on Linux CI only")
+	}
+	dex, baseURL, api := startDexWithAPI(t)
+	manager, err := createManager(t)
+	require.NoError(t, err)
+	ctx := context.Background()
+	accountID, err := manager.GetAccountIDByUserID(ctx, userID, "")
+	require.NoError(t, err)
+	manager.EnableLocalUsers(dex)
+	user, err := manager.SCIMCreateLocalUser(ctx, accountID, userID, localInput("ana@example.com"), goodPassword)
+	require.NoError(t, err)
+	validator := auth.NewManager(manager.Store, dexTestIssuer, dexTestClientID, baseURL+"/keys", "sub",
+		[]string{dexTestClientID}, false)
+
+	code := authCodeAfterPassword(t, baseURL, "ana@example.com", goodPassword)
+
+	_, err = manager.SCIMResetLocalPassword(ctx, accountID, userID, user.Id, newPassword, nil)
+	require.NoError(t, err)
+	stored, err := manager.Store.GetUserByUserID(ctx, store.LockingStrengthShare, user.Id)
+	require.NoError(t, err)
+	require.NotNil(t, stored.CredentialsRecheckAt)
+	// Redeem in a later second than the cutoff, as a real client would.
+	time.Sleep(time.Until(stored.CredentialsValidAfter.Add(time.Second + 100*time.Millisecond)))
+
+	body, status := tokenGrant(t, baseURL, url.Values{
+		"grant_type": {"authorization_code"}, "code": {code}, "redirect_uri": {"http://127.0.0.1/callback"},
+	})
+	require.Equal(t, http.StatusOK, status, "Dex redeems a code issued before the reset")
+	accessToken, _ := body["access_token"].(string)
+	require.NotEmpty(t, accessToken)
+	_, _, err = validator.ValidateAndParseToken(ctx, accessToken)
+	require.NoError(t, err, "the first cutoff cannot tell this token from a new-password one")
+	require.Positive(t, refreshTokenCount(t, api, user.Id), "the redemption minted a refresh token")
+
+	manager.runDueCredentialsRechecks(ctx, *stored.CredentialsRecheckAt)
+
+	_, _, err = validator.ValidateAndParseToken(ctx, accessToken)
+	require.ErrorIs(t, err, auth.ErrJWTRevoked, "the second pass cuts the in-flight login's token")
+	require.Zero(t, refreshTokenCount(t, api, user.Id), "and its refresh token")
 }
