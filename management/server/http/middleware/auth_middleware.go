@@ -140,6 +140,13 @@ func (m *AuthMiddleware) Handler(h http.Handler) http.Handler {
 					util.WriteError(r.Context(), status.Errorf(status.Unauthorized, "token expired"), w)
 					return
 				}
+				// A store failure while checking the cutoff is an outage,
+				// not a bad credential: 500, so clients don't re-authenticate.
+				if sErr, ok := status.FromError(err); ok && sErr.Type() == status.Internal {
+					log.WithContext(r.Context()).Errorf("Error when validating JWT: %s", err.Error())
+					util.WriteError(r.Context(), status.Errorf(status.Internal, "internal server error"), w)
+					return
+				}
 				log.WithContext(r.Context()).Errorf("Error when validating JWT: %s", err.Error())
 				util.WriteError(r.Context(), status.Errorf(status.Unauthorized, "token invalid"), w)
 				return

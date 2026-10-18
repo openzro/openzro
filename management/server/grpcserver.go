@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -336,6 +337,21 @@ func (s *GRPCServer) cancelPeerRoutines(ctx context.Context, accountID string, p
 	log.WithContext(ctx).Tracef("peer %s has been disconnected", peer.Key)
 }
 
+// tokenValidationError maps a JWT validation failure to its gRPC code. A
+// token revoked by a local password reset is PermissionDenied, the code on
+// which the client's reconnect loop asks for a new login (ADR-0027). A store
+// failure while checking the cutoff is Internal, which processJwtToken
+// retries, rather than a bad token. Everything else is InvalidArgument.
+func tokenValidationError(err error) error {
+	if errors.Is(err, auth.ErrJWTRevoked) {
+		return status.Error(codes.PermissionDenied, "token issued before the user's credentials were reset")
+	}
+	if sErr, ok := internalStatus.FromError(err); ok && sErr.Type() == internalStatus.Internal {
+		return status.Errorf(codes.Internal, "validate jwt token: %v", err)
+	}
+	return status.Errorf(codes.InvalidArgument, "invalid jwt token, err: %v", err)
+}
+
 // validateToken validates a peer's JWT and returns its user ID and its iat
 // (zero when absent). The iat travels to LoginPeer, which compares it with
 // the user's credentials cutoff inside the login transaction (ADR-0027 D5).
@@ -346,7 +362,7 @@ func (s *GRPCServer) validateToken(ctx context.Context, jwtToken string) (string
 
 	userAuth, token, err := s.authManager.ValidateAndParseToken(ctx, jwtToken)
 	if err != nil {
-		return "", time.Time{}, status.Errorf(codes.InvalidArgument, "invalid jwt token, err: %v", err)
+		return "", time.Time{}, tokenValidationError(err)
 	}
 
 	// we need to call this method because if user is new, we will automatically add it to existing or create a new account

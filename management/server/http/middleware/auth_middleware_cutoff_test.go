@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/openzro/openzro/management/server/auth"
 	nbcontext "github.com/openzro/openzro/management/server/context"
+	"github.com/openzro/openzro/management/server/status"
 	"github.com/openzro/openzro/management/server/types"
 )
 
@@ -28,6 +30,7 @@ func TestAuthMiddleware_CredentialsCutoff(t *testing.T) {
 		authHeader string
 		iat        time.Time
 		cutoff     *time.Time
+		storeDown  bool
 		want       int
 	}{
 		{name: "JWT issued before the cutoff", authHeader: "Bearer " + JWT, iat: cutoff.Add(-time.Minute),
@@ -42,6 +45,8 @@ func TestAuthMiddleware_CredentialsCutoff(t *testing.T) {
 			want: http.StatusOK},
 		{name: "user without a cutoff, JWT without iat", authHeader: "Bearer " + JWT, want: http.StatusOK},
 		{name: "PAT of a user with a cutoff", authHeader: "Token " + PAT, cutoff: &cutoff, want: http.StatusOK},
+		{name: "store failure while checking the cutoff", authHeader: "Bearer " + JWT, storeDown: true,
+			want: http.StatusInternalServerError},
 	}
 
 	for _, tc := range tests {
@@ -50,6 +55,10 @@ func TestAuthMiddleware_CredentialsCutoff(t *testing.T) {
 				ValidateAndParseTokenFunc: func(ctx context.Context, token string) (nbcontext.UserAuth, *jwt.Token, error) {
 					userAuth, parsed, err := mockValidateAndParseToken(ctx, token)
 					userAuth.IssuedAt = tc.iat
+					if tc.storeDown {
+						return nbcontext.UserAuth{}, nil, fmt.Errorf("read user: %w",
+							status.Errorf(status.Internal, "db down"))
+					}
 					if (&types.User{CredentialsValidAfter: tc.cutoff}).JWTRevoked(tc.iat) {
 						return nbcontext.UserAuth{}, nil, auth.ErrJWTRevoked
 					}
@@ -88,6 +97,10 @@ func TestAuthMiddleware_CredentialsCutoff(t *testing.T) {
 
 			assert.Equal(t, tc.want, rec.Code)
 			assert.Equal(t, tc.want == http.StatusOK, reached, "the handler runs only for an accepted token")
+			if tc.want != http.StatusOK {
+				assert.False(t, bootstrapped, "a rejected JWT never bootstraps an account")
+				assert.False(t, synced, "a rejected JWT never syncs JWT groups")
+			}
 			if tc.want == http.StatusUnauthorized {
 				// The dashboard signs the user in again on "token expired"
 				// and only shows an error on "token invalid".
