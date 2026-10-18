@@ -2153,10 +2153,17 @@ func (am *DefaultAccountManager) GetAccountIDForPeerKey(ctx context.Context, pee
 	return am.Store.GetAccountIDByPeerPubKey(ctx, peerKey)
 }
 
-func (am *DefaultAccountManager) handleUserPeer(ctx context.Context, transaction store.Store, peer *nbpeer.Peer, settings *types.Settings) (bool, error) {
+func (am *DefaultAccountManager) handleUserPeer(ctx context.Context, transaction store.Store, peer *nbpeer.Peer,
+	settings *types.Settings, jwtIssuedAt time.Time) (bool, error) {
+	// The share lock is held until the login commits, which orders this
+	// check against a concurrent password reset (see cutLocalUserAccess).
 	user, err := transaction.GetUserByUserID(ctx, store.LockingStrengthShare, peer.UserID)
 	if err != nil {
 		return false, err
+	}
+
+	if user.JWTRevoked(jwtIssuedAt) {
+		return false, errJWTRevokedForPeerLogin()
 	}
 
 	err = checkIfPeerOwnerIsBlocked(peer, user)

@@ -336,20 +336,23 @@ func (s *GRPCServer) cancelPeerRoutines(ctx context.Context, accountID string, p
 	log.WithContext(ctx).Tracef("peer %s has been disconnected", peer.Key)
 }
 
-func (s *GRPCServer) validateToken(ctx context.Context, jwtToken string) (string, error) {
+// validateToken validates a peer's JWT and returns its user ID and its iat
+// (zero when absent). The iat travels to LoginPeer, which compares it with
+// the user's credentials cutoff inside the login transaction (ADR-0027 D5).
+func (s *GRPCServer) validateToken(ctx context.Context, jwtToken string) (string, time.Time, error) {
 	if s.authManager == nil {
-		return "", status.Errorf(codes.Internal, "missing auth manager")
+		return "", time.Time{}, status.Errorf(codes.Internal, "missing auth manager")
 	}
 
 	userAuth, token, err := s.authManager.ValidateAndParseToken(ctx, jwtToken)
 	if err != nil {
-		return "", status.Errorf(codes.InvalidArgument, "invalid jwt token, err: %v", err)
+		return "", time.Time{}, status.Errorf(codes.InvalidArgument, "invalid jwt token, err: %v", err)
 	}
 
 	// we need to call this method because if user is new, we will automatically add it to existing or create a new account
 	accountId, _, err := s.accountManager.GetAccountIDFromUserAuth(ctx, userAuth)
 	if err != nil {
-		return "", mapError(ctx, err)
+		return "", time.Time{}, mapError(ctx, err)
 	}
 
 	if userAuth.AccountId != accountId {
@@ -359,7 +362,7 @@ func (s *GRPCServer) validateToken(ctx context.Context, jwtToken string) (string
 
 	userAuth, err = s.authManager.EnsureUserAccessByJWTGroups(ctx, userAuth, token)
 	if err != nil {
-		return "", status.Error(codes.PermissionDenied, err.Error())
+		return "", time.Time{}, status.Error(codes.PermissionDenied, err.Error())
 	}
 
 	err = s.accountManager.SyncUserJWTGroups(ctx, userAuth)
@@ -367,7 +370,7 @@ func (s *GRPCServer) validateToken(ctx context.Context, jwtToken string) (string
 		log.WithContext(ctx).Errorf("gRPC server failed to sync user JWT groups: %s", err)
 	}
 
-	return userAuth.UserId, nil
+	return userAuth.UserId, userAuth.IssuedAt, nil
 }
 
 func (s *GRPCServer) acquirePeerLockByUID(ctx context.Context, uniqueID string) (unlock func()) {
@@ -530,7 +533,7 @@ func (s *GRPCServer) Login(ctx context.Context, req *proto.EncryptedMessage) (*p
 		return nil, msg
 	}
 
-	userID, err := s.processJwtToken(ctx, loginReq, peerKey)
+	userID, jwtIssuedAt, err := s.processJwtToken(ctx, loginReq, peerKey)
 	if err != nil {
 		return nil, err
 	}
@@ -545,6 +548,7 @@ func (s *GRPCServer) Login(ctx context.Context, req *proto.EncryptedMessage) (*p
 		SSHKey:          string(sshKey),
 		Meta:            extractPeerMeta(ctx, loginReq.GetMeta()),
 		UserID:          userID,
+		JWTIssuedAt:     jwtIssuedAt,
 		SetupKey:        loginReq.GetSetupKey(),
 		ConnectionIP:    realIP,
 		ExtraDNSLabels:  loginReq.GetDnsLabels(),
@@ -625,18 +629,20 @@ func (s *GRPCServer) prepareLoginResponse(ctx context.Context, peer *nbpeer.Peer
 	return loginResp, nil
 }
 
-// processJwtToken validates the existence of a JWT token in the login request, and returns the corresponding user ID if
-// the token is valid.
+// processJwtToken validates the existence of a JWT token in the login request, and returns the corresponding user ID
+// and the token's iat if the token is valid.
 //
 // The user ID can be empty if the token is not provided, which is acceptable if the peer is already
 // registered or if it uses a setup key to register.
-func (s *GRPCServer) processJwtToken(ctx context.Context, loginReq *proto.LoginRequest, peerKey wgtypes.Key) (string, error) {
+func (s *GRPCServer) processJwtToken(ctx context.Context, loginReq *proto.LoginRequest,
+	peerKey wgtypes.Key) (string, time.Time, error) {
 	userID := ""
+	var issuedAt time.Time
 	if loginReq.GetJwtToken() != "" {
 		const maxAttempts = 3
 		var err error
 		for i := 0; i < maxAttempts; i++ {
-			userID, err = s.validateToken(ctx, loginReq.GetJwtToken())
+			userID, issuedAt, err = s.validateToken(ctx, loginReq.GetJwtToken())
 			if err == nil {
 				break
 			}
@@ -655,15 +661,15 @@ func (s *GRPCServer) processJwtToken(ctx context.Context, loginReq *proto.LoginR
 				"Trying again as it may be due to the IdP cache issue", peerKey.String(), err)
 			select {
 			case <-ctx.Done():
-				return "", status.FromContextError(ctx.Err()).Err()
+				return "", time.Time{}, status.FromContextError(ctx.Err()).Err()
 			case <-time.After(200 * time.Millisecond):
 			}
 		}
 		if err != nil {
-			return "", err
+			return "", time.Time{}, err
 		}
 	}
-	return userID, nil
+	return userID, issuedAt, nil
 }
 
 func ToResponseProto(configProto types.Protocol) proto.HostConfig_Protocol {

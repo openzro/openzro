@@ -563,6 +563,16 @@ func (am *DefaultAccountManager) GetPeerNetwork(ctx context.Context, peerID stri
 // Each new Peer will be assigned a new next net.IP from the Account.Network and Account.Network.LastIP will be updated (IP's are not reused).
 // The peer property is just a placeholder for the Peer properties to pass further
 func (am *DefaultAccountManager) AddPeer(ctx context.Context, setupKey, userID string, peer *nbpeer.Peer) (*nbpeer.Peer, *types.NetworkMap, []*posture.Checks, error) {
+	return am.addPeer(ctx, setupKey, userID, nil, peer)
+}
+
+// addPeer is AddPeer for a registration that may come from a peer login.
+// jwtIssuedAt is the iat of the JWT that authenticated userID, or nil when
+// the caller did not authenticate the user with a JWT; when set, the
+// registration is refused if the JWT predates the user's credentials cutoff
+// (ADR-0027 D5).
+func (am *DefaultAccountManager) addPeer(ctx context.Context, setupKey, userID string, jwtIssuedAt *time.Time,
+	peer *nbpeer.Peer) (*nbpeer.Peer, *types.NetworkMap, []*posture.Checks, error) {
 	if setupKey == "" && userID == "" {
 		// no auth method provided => reject access
 		return nil, nil, nil, status.Errorf(status.Unauthenticated, "no peer auth method provided, please use a setup key or interactive SSO login")
@@ -734,6 +744,11 @@ func (am *DefaultAccountManager) AddPeer(ctx context.Context, setupKey, userID s
 		}()
 
 		err = am.Store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
+			if jwtIssuedAt != nil {
+				if err := checkPeerRegistrationJWT(ctx, transaction, userID, *jwtIssuedAt); err != nil {
+					return err
+				}
+			}
 			err = transaction.AddPeerToAccount(ctx, store.LockingStrengthUpdate, newPeer)
 			if err != nil {
 				return err
@@ -940,7 +955,11 @@ func (am *DefaultAccountManager) handlePeerLoginNotFound(ctx context.Context, lo
 			ExtraDNSLabels: login.ExtraDNSLabels,
 		}
 
-		return am.AddPeer(ctx, login.SetupKey, login.UserID, newPeer)
+		var jwtIssuedAt *time.Time
+		if login.UserID != "" {
+			jwtIssuedAt = &login.JWTIssuedAt
+		}
+		return am.addPeer(ctx, login.SetupKey, login.UserID, jwtIssuedAt, newPeer)
 	}
 
 	log.WithContext(ctx).Errorf("failed while logging in peer %s: %v", login.WireGuardPubKey, err)
@@ -1001,7 +1020,7 @@ func (am *DefaultAccountManager) LoginPeer(ctx context.Context, login types.Peer
 				return status.NewPeerLoginMismatchError()
 			}
 
-			changed, err := am.handleUserPeer(ctx, transaction, peer, settings)
+			changed, err := am.handleUserPeer(ctx, transaction, peer, settings, login.JWTIssuedAt)
 			if err != nil {
 				return err
 			}
@@ -1242,6 +1261,30 @@ func (am *DefaultAccountManager) handleExpiredPeer(ctx context.Context, transact
 	}
 
 	am.StoreEvent(ctx, user.Id, peer.ID, user.AccountID, activity.UserLoggedInPeer, peer.EventMeta(am.GetDNSDomain(settings)))
+	return nil
+}
+
+// errJWTRevokedForPeerLogin is returned when a peer logs in or registers
+// with a JWT issued at or before the user's credentials cutoff (ADR-0027).
+// It reaches the client as PermissionDenied, which makes it run SSO again.
+func errJWTRevokedForPeerLogin() error {
+	return status.Errorf(status.Unauthorized, "token invalid: issued before the user's credentials were reset")
+}
+
+// checkPeerRegistrationJWT refuses a new peer registered with a JWT issued
+// before the user's credentials cutoff. It reads the user FOR UPDATE inside
+// the registration's transaction: a concurrent password reset's cutoff
+// write then waits for the registration to commit, and its peer expiry
+// sees the new peer (ADR-0027 D5). FOR UPDATE rather than FOR SHARE because
+// the same transaction later writes the user's last login.
+func checkPeerRegistrationJWT(ctx context.Context, transaction store.Store, userID string, iat time.Time) error {
+	user, err := transaction.GetUserByUserID(ctx, store.LockingStrengthUpdate, userID)
+	if err != nil {
+		return err
+	}
+	if user.JWTRevoked(iat) {
+		return errJWTRevokedForPeerLogin()
+	}
 	return nil
 }
 
