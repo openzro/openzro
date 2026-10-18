@@ -89,8 +89,15 @@ func (am *DefaultAccountManager) SCIMResetLocalPassword(ctx context.Context, acc
 	if err := am.localCreds.UpdatePassword(ctx, user.SCIMUserName, hash); err != nil {
 		return nil, status.Errorf(status.Internal, "update Dex password: %v", err)
 	}
-	if err := am.cutLocalUserAccess(ctx, accountID, user.Id); err != nil {
+	if err := am.cutLocalUserAccess(ctx, accountID, user.Id, time.Time{}); err != nil {
 		return nil, err
+	}
+	// A login that passed the old password before the reset can still turn
+	// its authorization code into tokens newer than the cutoff; the second
+	// pass cuts those (ADR-0027 D6).
+	if err := am.Store.ScheduleUserCredentialsRecheck(ctx, accountID, user.Id,
+		time.Now().Add(credentialsRecheckDelay)); err != nil {
+		return nil, status.Errorf(status.Internal, "schedule credentials recheck: %v", err)
 	}
 
 	am.StoreEvent(ctx, callerID, user.Id, accountID, activity.UserLocalPasswordReset, map[string]any{"scim": true})
@@ -107,11 +114,20 @@ func (am *DefaultAccountManager) SCIMResetLocalPassword(ctx context.Context, acc
 // for it and the expiry runs after it. Every step is idempotent; a failure
 // returns an error and a retried reset converges. It needs no account write
 // lock and runs under the local identity lock.
-func (am *DefaultAccountManager) cutLocalUserAccess(ctx context.Context, accountID, userID string) error {
+//
+// The cutoff is the time after the revocation, never earlier than
+// notBefore (zero for none), which lets tests run the pass at a simulated
+// time.
+func (am *DefaultAccountManager) cutLocalUserAccess(ctx context.Context, accountID, userID string,
+	notBefore time.Time) error {
 	if err := am.localCreds.RevokeAllRefreshTokens(ctx, userID); err != nil {
 		return status.Errorf(status.Internal, "revoke refresh tokens: %v", err)
 	}
-	if err := am.Store.SetUserCredentialsValidAfter(ctx, accountID, userID, time.Now()); err != nil {
+	cutoff := time.Now()
+	if notBefore.After(cutoff) {
+		cutoff = notBefore
+	}
+	if err := am.Store.SetUserCredentialsValidAfter(ctx, accountID, userID, cutoff); err != nil {
 		return status.Errorf(status.Internal, "set credentials cutoff: %v", err)
 	}
 	if err := am.expireUserPeers(ctx, accountID, userID); err != nil {

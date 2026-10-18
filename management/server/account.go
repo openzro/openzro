@@ -430,6 +430,10 @@ func BuildManager(
 	// broadcast was lost (at-most-once pub/sub).
 	go am.runPeerStreamReconciler(ctx)
 
+	// Runs the second pass of local password resets, which cuts sessions
+	// minted from logins already in flight during a reset (ADR-0027 D6).
+	go am.runCredentialsRechecker(ctx)
+
 	return am, nil
 }
 
