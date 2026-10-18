@@ -9,12 +9,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/openzro/openzro/management/server/status"
 	"github.com/openzro/openzro/management/server/store"
+	"github.com/openzro/openzro/management/server/types"
 )
 
 func dueRechecks(t *testing.T, m *DefaultAccountManager, now time.Time) []store.CredentialsRecheck {
 	t.Helper()
-	due, err := m.Store.ListDueCredentialsRechecks(context.Background(), now, 100)
+	due, err := m.Store.ListDueCredentialsRechecks(context.Background(), now, nil, 100)
 	require.NoError(t, err)
 	return due
 }
@@ -166,8 +168,8 @@ type listCountingStore struct {
 }
 
 func (s *listCountingStore) ListDueCredentialsRechecks(ctx context.Context, now time.Time,
-	limit int) ([]store.CredentialsRecheck, error) {
-	due, err := s.Store.ListDueCredentialsRechecks(ctx, now, limit)
+	after *store.CredentialsRecheck, limit int) ([]store.CredentialsRecheck, error) {
+	due, err := s.Store.ListDueCredentialsRechecks(ctx, now, after, limit)
 	s.mu.Lock()
 	s.pages = append(s.pages, len(due))
 	s.mu.Unlock()
@@ -194,4 +196,45 @@ func TestCredentialsRecheck_WorksThroughBacklogInPages(t *testing.T) {
 		assert.LessOrEqual(t, n, 2, "pages are bounded")
 	}
 	assert.GreaterOrEqual(t, len(counting.pages), 3)
+}
+
+// failingUserStore fails every user read for the given ids, as a persistent
+// inconsistency would.
+type failingUserStore struct {
+	store.Store
+	broken map[string]bool
+}
+
+func (s *failingUserStore) GetUserByUserID(ctx context.Context, lockStrength store.LockingStrength,
+	userID string) (*types.User, error) {
+	if s.broken[userID] {
+		return nil, status.Errorf(status.Internal, "persistent failure")
+	}
+	return s.Store.GetUserByUserID(ctx, lockStrength, userID)
+}
+
+// #220 review: a full page of passes that keep failing must not starve the
+// passes behind it. The round moves past them; they stay for the next tick.
+func TestCredentialsRecheck_FailingPageDoesNotBlockTheQueue(t *testing.T) {
+	m, accountID, _ := setupLocalUsers(t)
+	ctx := context.Background()
+	now := time.Now()
+	broken := map[string]bool{}
+	for i := range 3 {
+		id := "broken-" + string(rune('a'+i))
+		broken[id] = true
+		require.NoError(t, m.Store.EnqueueCredentialsRecheck(ctx, accountID, id, now.Add(-time.Hour), false))
+	}
+	// Due after the failing ones: a user that no longer exists, discarded.
+	require.NoError(t, m.Store.EnqueueCredentialsRecheck(ctx, accountID, "gone-z", now.Add(-time.Minute), false))
+	plain := m.Store
+	m.Store = &failingUserStore{Store: plain, broken: broken}
+
+	m.runDueCredentialsRechecksInPages(ctx, now, 2)
+	m.Store = plain
+	left := dueRechecks(t, m, now)
+	require.Len(t, left, 3, "the failing passes stay for the next tick")
+	for _, r := range left {
+		assert.True(t, broken[r.UserID], "the pass behind them ran in the same round")
+	}
 }

@@ -79,32 +79,32 @@ func (am *DefaultAccountManager) runDueCredentialsRechecks(ctx context.Context, 
 }
 
 // runDueCredentialsRechecksInPages works through the due passes in pages of
-// at most page rows until none is due, so a backlog does not wait for later
-// ticks and no query loads the whole table. A failed pass keeps its row and
-// is retried on the next tick; a page in which nothing completed ends this
-// tick rather than spin on the same failures.
+// at most page rows, by cursor, until none is due, so a backlog does not
+// wait for later ticks and no query loads the whole table. A failed pass
+// keeps its row and is retried on the next tick; the cursor moves past it,
+// so passes that keep failing never starve the ones behind them, and the
+// round always ends.
 func (am *DefaultAccountManager) runDueCredentialsRechecksInPages(ctx context.Context, now time.Time, page int) {
 	if am.localCreds == nil {
 		return
 	}
+	var cursor *store.CredentialsRecheck
 	for ctx.Err() == nil {
-		due, err := am.Store.ListDueCredentialsRechecks(ctx, now, page)
+		due, err := am.Store.ListDueCredentialsRechecks(ctx, now, cursor, page)
 		if err != nil {
 			log.WithContext(ctx).Errorf("failed to list due credentials rechecks: %v", err)
 			return
 		}
-		completed := 0
 		for _, recheck := range due {
 			if err := am.runCredentialsRecheck(ctx, recheck, now); err != nil {
 				log.WithContext(ctx).Errorf("credentials recheck %s of user %s failed, retrying next tick: %v",
 					recheck.ID, recheck.UserID, err)
-				continue
 			}
-			completed++
 		}
-		if len(due) < page || completed == 0 {
+		if len(due) < page {
 			return
 		}
+		cursor = &due[len(due)-1]
 	}
 }
 

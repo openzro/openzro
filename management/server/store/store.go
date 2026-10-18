@@ -187,7 +187,8 @@ type Store interface {
 	// CredentialsRecheckExists and DeleteCredentialsRecheck keep the queue of
 	// pending passes of local password resets (ADR-0027 D6).
 	EnqueueCredentialsRecheck(ctx context.Context, accountID, userID string, dueAt time.Time, fence bool) error
-	ListDueCredentialsRechecks(ctx context.Context, now time.Time, limit int) ([]CredentialsRecheck, error)
+	ListDueCredentialsRechecks(ctx context.Context, now time.Time, after *CredentialsRecheck,
+		limit int) ([]CredentialsRecheck, error)
 	CredentialsRecheckExists(ctx context.Context, id string) (bool, error)
 	DeleteCredentialsRecheck(ctx context.Context, id string) error
 	FinishCredentialsRecheck(ctx context.Context, recheck CredentialsRecheck, fenceAt time.Time) error

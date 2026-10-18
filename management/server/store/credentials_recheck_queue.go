@@ -51,10 +51,17 @@ func (s *SqlStore) EnqueueCredentialsRecheck(ctx context.Context, accountID, use
 }
 
 // ListDueCredentialsRechecks returns at most limit passes due at or before
-// now, oldest first, so a caller works through a backlog in bounded batches.
-func (s *SqlStore) ListDueCredentialsRechecks(ctx context.Context, now time.Time, limit int) ([]CredentialsRecheck, error) {
+// now, ordered by due time then id, starting after the pass after (nil for
+// the first page). Paging by cursor lets a caller move past passes that
+// keep failing instead of reading the same oldest page forever.
+func (s *SqlStore) ListDueCredentialsRechecks(ctx context.Context, now time.Time, after *CredentialsRecheck,
+	limit int) ([]CredentialsRecheck, error) {
+	query := s.db.Where("due_at <= ?", now.UTC())
+	if after != nil {
+		query = query.Where("(due_at > ? OR (due_at = ? AND id > ?))", after.DueAt, after.DueAt, after.ID)
+	}
 	var rows []credentialsRecheck
-	result := s.db.Where("due_at <= ?", now.UTC()).Order("due_at, id").Limit(limit).Find(&rows)
+	result := query.Order("due_at, id").Limit(limit).Find(&rows)
 	if result.Error != nil {
 		log.WithContext(ctx).Errorf("failed to list due credentials rechecks: %s", result.Error)
 		return nil, status.Errorf(status.Internal, "failed to list due credentials rechecks")
