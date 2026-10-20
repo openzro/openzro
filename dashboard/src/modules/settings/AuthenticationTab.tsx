@@ -2,12 +2,13 @@
 
 import InlineLink from "@components/InlineLink";
 import { notify } from "@components/Notification";
+import { PeerGroupSelector } from "@components/PeerGroupSelector";
 import { useExpirationState } from "@hooks/useExpirationState";
 import { convertToSeconds } from "@hooks/useTimeFormatter";
 import * as Tabs from "@radix-ui/react-tabs";
 import { useApiCall } from "@utils/api";
 import { CalendarClock, ExternalLinkIcon } from "lucide-react";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
 import OzButton from "@/components/v2/OzButton";
 import OzInput from "@/components/v2/OzInput";
@@ -21,6 +22,7 @@ import {
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { useHasChanges } from "@/hooks/useHasChanges";
 import { Account } from "@/interfaces/Account";
+import useGroupHelper from "@/modules/groups/useGroupHelper";
 import AllowedEmailDomainsCard from "@/modules/settings/AllowedEmailDomainsCard";
 import OzSettingsCard from "@/modules/settings/v2/OzSettingsCard";
 import OzSettingsField from "@/modules/settings/v2/OzSettingsField";
@@ -94,6 +96,30 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
 
   const saveRequest = useApiCall<Account>("/accounts/" + account.id);
 
+  // Groups whose peers skip approval, so approval can apply only to
+  // third parties. Saved through useGroupHelper like other group pickers.
+  const [exemptGroups, setExemptGroups, { save: saveExemptGroups }] =
+    useGroupHelper({
+      initial: account.settings.extra?.peer_approval_exempt_groups ?? [],
+    });
+  // The selected groups resolve asynchronously from /groups, so comparing
+  // them on load would mark the form dirty with no edit. Only a change the
+  // operator makes counts, compared with the stored list.
+  const [exemptTouched, setExemptTouched] = useState(false);
+  const initialExemptKey = useMemo(
+    () =>
+      [...(account.settings.extra?.peer_approval_exempt_groups ?? [])]
+        .sort()
+        .join(","),
+    [account.settings.extra?.peer_approval_exempt_groups],
+  );
+  const exemptDirty =
+    exemptTouched &&
+    exemptGroups
+      .map((g) => g.id ?? g.name)
+      .sort()
+      .join(",") !== initialExemptKey;
+
   const { hasChanges, updateRef } = useHasChanges([
     peerApproval,
     loginExpiration,
@@ -109,6 +135,10 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
 
   const saveChanges = async () => {
     const expiration = convertToSeconds(expiresIn, expireInterval);
+    const persistedExemptGroups = await saveExemptGroups();
+    const exemptGroupIDs = persistedExemptGroups
+      .map((g) => g.id)
+      .filter((id): id is string => Boolean(id));
 
     notify({
       title: "Save Authentication Settings",
@@ -130,11 +160,14 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
             extra: {
               ...account.settings?.extra,
               peer_approval_enabled: peerApproval,
+              peer_approval_exempt_groups: exemptGroupIDs,
             },
           },
         } as Account)
         .then(() => {
           mutate("/accounts");
+          setExemptGroups(persistedExemptGroups);
+          setExemptTouched(false);
           updateRef([
             peerApproval,
             loginExpiration,
@@ -175,7 +208,7 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
         <OzButton
           variant="primary"
           type="button"
-          disabled={!hasChanges || editDisabled}
+          disabled={!(hasChanges || exemptDirty) || editDisabled}
           onClick={saveChanges}
           data-cy="save-authentication-settings"
         >
@@ -205,6 +238,22 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
             </>
           }
         />
+        {peerApproval && (
+          <OzSettingsField
+            label="Groups that skip approval"
+            hint="Peers in these groups are approved automatically. Add your internal staff groups so approval applies only to everyone else, such as third parties. Removing a group sends back to pending only the peers it had released; peers approved at registration stay approved."
+          >
+            <PeerGroupSelector
+              values={exemptGroups}
+              onChange={(groups) => {
+                setExemptTouched(true);
+                setExemptGroups(groups);
+              }}
+              disabled={editDisabled}
+              hideAllGroup
+            />
+          </OzSettingsField>
+        )}
       </OzSettingsCard>
 
       <OzSettingsCard

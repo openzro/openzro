@@ -7,6 +7,9 @@ export interface Account {
   settings: {
     extra: {
       peer_approval_enabled: boolean;
+      // Group IDs whose peers skip peer approval (typically internal
+      // staff, so approval applies only to third parties).
+      peer_approval_exempt_groups?: string[];
       network_traffic_logs_enabled?: boolean;
       network_traffic_packet_counter_enabled?: boolean;
       // Optional list of group IDs that scope traffic event capture.
