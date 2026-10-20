@@ -508,12 +508,34 @@ func (am *DefaultAccountManager) UpdateAccountSettings(ctx context.Context, acco
 	var updateAccountPeers bool
 	var groupChangesAffectPeers bool
 
+	if newSettings.Extra != nil && newSettings.Extra.IntegratedValidatorGroups != nil {
+		newSettings.Extra.IntegratedValidatorGroups = normalizeGroupIDs(newSettings.Extra.IntegratedValidatorGroups)
+	}
+
 	err = am.Store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
 		var groupsUpdated bool
+
+		// Lock order: groups before the account row (which holds the
+		// settings), the same order group writers such as DeleteGroups take.
+		// Locking the settings first would deadlock against them across
+		// replicas.
+		if err = lockPeerApprovalExemptGroups(ctx, transaction, accountID, newSettings.Extra); err != nil {
+			return err
+		}
 
 		oldSettings, err = transaction.GetAccountSettings(ctx, store.LockingStrengthUpdate, accountID)
 		if err != nil {
 			return err
+		}
+
+		// A nil exempt list means the API client omitted the field. Merge it
+		// with the stored value while the settings row is locked, so a
+		// concurrent change on another replica is not overwritten. A non-nil
+		// empty list remains an explicit request to clear it. Stored groups
+		// need no validation: a group on the list cannot be deleted.
+		if newSettings.Extra != nil && newSettings.Extra.IntegratedValidatorGroups == nil &&
+			oldSettings.Extra != nil {
+			newSettings.Extra.IntegratedValidatorGroups = append([]string(nil), oldSettings.Extra.IntegratedValidatorGroups...)
 		}
 
 		if err = am.validateSettingsUpdate(ctx, transaction, newSettings, oldSettings, userID, accountID); err != nil {
@@ -632,18 +654,15 @@ func (am *DefaultAccountManager) validateSettingsUpdate(ctx context.Context, tra
 		peersMap[peer.ID] = peer
 	}
 
-	if err := validatePeerApprovalExemptGroups(ctx, transaction, accountID, newSettings.Extra); err != nil {
-		return err
-	}
-
 	return am.integratedPeerValidator.ValidateExtraSettings(ctx, newSettings.Extra, oldSettings.Extra, peersMap, userID, accountID)
 }
 
-// validatePeerApprovalExemptGroups requires every group whose peers skip
-// peer approval to exist in the account. It runs inside the settings
-// transaction; a group already on the list cannot be deleted later
-// (group.go refuses it with a GroupLinkError).
-func validatePeerApprovalExemptGroups(ctx context.Context, transaction store.Store, accountID string,
+// lockPeerApprovalExemptGroups share-locks every group in an explicitly sent
+// exempt list, in sorted order, and requires each to exist in the account. It
+// runs before the settings row is locked; see UpdateAccountSettings. Once the
+// list is saved, a group on it cannot be deleted (group.go refuses it with a
+// GroupLinkError).
+func lockPeerApprovalExemptGroups(ctx context.Context, transaction store.Store, accountID string,
 	extra *types.ExtraSettings) error {
 	if extra == nil {
 		return nil
@@ -659,6 +678,18 @@ func validatePeerApprovalExemptGroups(ctx context.Context, transaction store.Sto
 	return nil
 }
 
+// normalizeGroupIDs returns the IDs sorted and without duplicates. The exempt
+// list is a set: order carries no meaning, and the sorted order is also the
+// order its groups are locked in. The result is never nil.
+func normalizeGroupIDs(ids []string) []string {
+	out := slices.Clone(ids)
+	if out == nil {
+		out = []string{}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
 // peerApprovalSettingsChanged reports whether the approval toggle or the
 // exempt groups differ. Either changes which peers are validated, so
 // connected peers need new network maps.
@@ -670,8 +701,10 @@ func peerApprovalSettingsChanged(oldSettings, newSettings *types.Settings) (togg
 	if newSettings.Extra != nil {
 		newExtra = *newSettings.Extra
 	}
+	// Compared as sets: lists stored before normalization may be unsorted.
 	return oldExtra.PeerApprovalEnabled != newExtra.PeerApprovalEnabled,
-		!stringSlicesEqual(oldExtra.IntegratedValidatorGroups, newExtra.IntegratedValidatorGroups)
+		!slices.Equal(normalizeGroupIDs(oldExtra.IntegratedValidatorGroups),
+			normalizeGroupIDs(newExtra.IntegratedValidatorGroups))
 }
 
 // handlePeerApprovalSettings audits the approval toggle and the exempt

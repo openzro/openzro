@@ -646,10 +646,24 @@ func TestAccounts_PeerApprovalExemptGroups(t *testing.T) {
 	captured = nil
 	put(`{"settings":{"peer_login_expiration":3600,"peer_login_expiration_enabled":false,"extra":{"peer_approval_enabled":true,"network_traffic_logs_enabled":false,"network_traffic_packet_counter_enabled":false}}}`)
 	require.NotNil(t, captured)
-	assert.Equal(t, []string{"g-staff"}, captured.Extra.IntegratedValidatorGroups, "an omitted field keeps the stored list")
+	assert.Nil(t, captured.Extra.IntegratedValidatorGroups,
+		"an omitted field reaches the manager as nil, which keeps the stored list inside its transaction")
 
 	captured = nil
 	put(`{"settings":{"peer_login_expiration":3600,"peer_login_expiration_enabled":false,"extra":{"peer_approval_enabled":true,"peer_approval_exempt_groups":[],"network_traffic_logs_enabled":false,"network_traffic_packet_counter_enabled":false}}}`)
 	require.NotNil(t, captured)
+	require.NotNil(t, captured.Extra.IntegratedValidatorGroups, "an explicit empty list is not an omitted one")
 	assert.Empty(t, captured.Extra.IntegratedValidatorGroups, "an explicit empty list clears it")
+
+	// The handler's own settings read can fail. An omitted field must still
+	// reach the manager as nil, not as an empty list that clears the stored one.
+	ctrl := gomock.NewController(t)
+	failing := settings.NewMockManager(ctrl)
+	failing.EXPECT().GetSettings(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil, status.Errorf(status.Internal, "store unavailable")).AnyTimes()
+	handler.settingsManager = failing
+	captured = nil
+	put(`{"settings":{"peer_login_expiration":3600,"peer_login_expiration_enabled":false,"extra":{"peer_approval_enabled":true,"network_traffic_logs_enabled":false,"network_traffic_packet_counter_enabled":false}}}`)
+	require.NotNil(t, captured)
+	assert.Nil(t, captured.Extra.IntegratedValidatorGroups, "a failed read must not clear the stored list")
 }

@@ -108,3 +108,82 @@ func TestUpdateAccountSettings_PeerApprovalReachesConnectedPeers(t *testing.T) {
 	require.NoError(t, err)
 	expectUpdate("changing the exempt groups")
 }
+
+// A nil exempt list means the API client omitted the field: the stored list is
+// kept, merged inside the settings transaction. An empty list clears it.
+func TestUpdateAccountSettings_PeerApprovalExemptGroupsOmitted(t *testing.T) {
+	m, err := createManager(t)
+	require.NoError(t, err)
+	ctx := context.Background()
+	accountID, err := m.GetAccountIDByUserID(ctx, userID, "")
+	require.NoError(t, err)
+	require.NoError(t, m.SaveGroup(ctx, accountID, userID, &types.Group{ID: "g-staff", Name: "staff", Issued: types.GroupIssuedAPI}, true))
+
+	update := func(groups []string) []string {
+		t.Helper()
+		_, err := m.UpdateAccountSettings(ctx, accountID, userID, &types.Settings{
+			PeerLoginExpiration: time.Hour,
+			Extra:               &types.ExtraSettings{PeerApprovalEnabled: true, IntegratedValidatorGroups: groups},
+		})
+		require.NoError(t, err)
+		stored, err := m.Store.GetAccountSettings(ctx, store.LockingStrengthShare, accountID)
+		require.NoError(t, err)
+		return stored.Extra.IntegratedValidatorGroups
+	}
+
+	assert.Equal(t, []string{"g-staff"}, update([]string{"g-staff"}))
+	assert.Equal(t, []string{"g-staff"}, update(nil), "an omitted list keeps the stored one")
+	assert.Empty(t, update([]string{}), "an explicit empty list clears it")
+}
+
+// The exempt list is a set. Duplicates are dropped and the order is canonical,
+// so reordering it is not a change: no audit event and no network serial bump.
+func TestUpdateAccountSettings_PeerApprovalExemptGroupsAreASet(t *testing.T) {
+	m, err := createManager(t)
+	require.NoError(t, err)
+	ctx := context.Background()
+	accountID, err := m.GetAccountIDByUserID(ctx, userID, "")
+	require.NoError(t, err)
+	for _, id := range []string{"g-a", "g-b"} {
+		require.NoError(t, m.SaveGroup(ctx, accountID, userID, &types.Group{ID: id, Name: id, Issued: types.GroupIssuedAPI}, true))
+	}
+
+	update := func(groups ...string) {
+		t.Helper()
+		_, err := m.UpdateAccountSettings(ctx, accountID, userID, &types.Settings{
+			PeerLoginExpiration: time.Hour,
+			Extra:               &types.ExtraSettings{PeerApprovalEnabled: true, IntegratedValidatorGroups: groups},
+		})
+		require.NoError(t, err)
+	}
+	serial := func() uint64 {
+		t.Helper()
+		network, err := m.Store.GetAccountNetwork(ctx, store.LockingStrengthShare, accountID)
+		require.NoError(t, err)
+		return network.CurrentSerial()
+	}
+	exemptEvents := func() int {
+		t.Helper()
+		events, err := m.eventStore.Get(ctx, accountID, 0, 200, false)
+		require.NoError(t, err)
+		n := 0
+		for _, e := range events {
+			if e.Activity == activity.AccountPeerApprovalExemptGroupsUpdated {
+				n++
+			}
+		}
+		return n
+	}
+
+	update("g-b", "g-a", "g-a")
+	stored, err := m.Store.GetAccountSettings(ctx, store.LockingStrengthShare, accountID)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"g-a", "g-b"}, stored.Extra.IntegratedValidatorGroups)
+	requireEventually(t, m, accountID, activity.AccountPeerApprovalExemptGroupsUpdated)
+
+	events, before := exemptEvents(), serial()
+	update("g-b", "g-a")
+	assert.Equal(t, before, serial(), "reordering the set must not bump the network serial")
+	assert.Never(t, func() bool { return exemptEvents() != events }, 300*time.Millisecond, 20*time.Millisecond,
+		"reordering the set must not be audited")
+}
