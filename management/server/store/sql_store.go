@@ -2752,11 +2752,19 @@ func (s *SqlStore) SaveAccountSettings(ctx context.Context, lockStrength Locking
 		log.WithContext(ctx).Errorf("failed to save account settings to store: %v", result.Error)
 		return status.Errorf(status.Internal, "failed to save account settings to store")
 	}
-
-	if result.RowsAffected == 0 {
+	if result.RowsAffected > 0 {
+		return nil
+	}
+	// MySQL reports zero affected rows when nothing changed, so zero is only
+	// "not found" if the account does not exist.
+	var count int64
+	if err := s.db.Model(&types.Account{}).Where(idQueryCondition, accountID).Count(&count).Error; err != nil {
+		log.WithContext(ctx).Errorf("failed to check account existence: %v", err)
+		return status.Errorf(status.Internal, "failed to save account settings to store")
+	}
+	if count == 0 {
 		return status.NewAccountNotFoundError(accountID)
 	}
-
 	return nil
 }
 
