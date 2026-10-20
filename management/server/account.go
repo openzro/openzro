@@ -536,6 +536,12 @@ func (am *DefaultAccountManager) UpdateAccountSettings(ctx context.Context, acco
 			updateAccountPeers = true
 		}
 
+		// Which peers are validated depends on the approval toggle and the
+		// exempt groups, so a change must reach connected peers.
+		if toggled, groupsChanged := peerApprovalSettingsChanged(oldSettings, newSettings); toggled || groupsChanged {
+			updateAccountPeers = true
+		}
+
 		if oldSettings.GroupsPropagationEnabled != newSettings.GroupsPropagationEnabled && newSettings.GroupsPropagationEnabled {
 			groupsUpdated, groupChangesAffectPeers, err = propagateUserGroupMemberships(ctx, transaction, accountID)
 			if err != nil {
@@ -570,6 +576,7 @@ func (am *DefaultAccountManager) UpdateAccountSettings(ctx context.Context, acco
 	am.handleRoutingPeerDNSResolutionSettings(ctx, oldSettings, newSettings, userID, accountID)
 	am.handleLazyConnectionSettings(ctx, oldSettings, newSettings, userID, accountID)
 	am.handleAdmissionSettings(ctx, oldSettings, newSettings, userID, accountID)
+	am.handlePeerApprovalSettings(ctx, oldSettings, newSettings, userID, accountID)
 	am.handleClientUpdateSettings(ctx, oldSettings, newSettings, userID, accountID)
 	am.handlePeerLoginExpirationSettings(ctx, oldSettings, newSettings, userID, accountID)
 	am.handleGroupsPropagationSettings(ctx, oldSettings, newSettings, userID, accountID)
@@ -625,7 +632,69 @@ func (am *DefaultAccountManager) validateSettingsUpdate(ctx context.Context, tra
 		peersMap[peer.ID] = peer
 	}
 
+	if err := validatePeerApprovalExemptGroups(ctx, transaction, accountID, newSettings.Extra); err != nil {
+		return err
+	}
+
 	return am.integratedPeerValidator.ValidateExtraSettings(ctx, newSettings.Extra, oldSettings.Extra, peersMap, userID, accountID)
+}
+
+// validatePeerApprovalExemptGroups requires every group whose peers skip
+// peer approval to exist in the account. It runs inside the settings
+// transaction; a group already on the list cannot be deleted later
+// (group.go refuses it with a GroupLinkError).
+func validatePeerApprovalExemptGroups(ctx context.Context, transaction store.Store, accountID string,
+	extra *types.ExtraSettings) error {
+	if extra == nil {
+		return nil
+	}
+	for _, groupID := range extra.IntegratedValidatorGroups {
+		if _, err := transaction.GetGroupByID(ctx, store.LockingStrengthShare, accountID, groupID); err != nil {
+			if sErr, ok := status.FromError(err); ok && sErr.Type() == status.NotFound {
+				return status.Errorf(status.InvalidArgument, "peer approval exempt group %q does not exist", groupID)
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+// peerApprovalSettingsChanged reports whether the approval toggle or the
+// exempt groups differ. Either changes which peers are validated, so
+// connected peers need new network maps.
+func peerApprovalSettingsChanged(oldSettings, newSettings *types.Settings) (toggled, groupsChanged bool) {
+	var oldExtra, newExtra types.ExtraSettings
+	if oldSettings.Extra != nil {
+		oldExtra = *oldSettings.Extra
+	}
+	if newSettings.Extra != nil {
+		newExtra = *newSettings.Extra
+	}
+	return oldExtra.PeerApprovalEnabled != newExtra.PeerApprovalEnabled,
+		!stringSlicesEqual(oldExtra.IntegratedValidatorGroups, newExtra.IntegratedValidatorGroups)
+}
+
+// handlePeerApprovalSettings audits the approval toggle and the exempt
+// groups. The extra-settings backend does not report changes, so this
+// compares the snapshots itself.
+func (am *DefaultAccountManager) handlePeerApprovalSettings(ctx context.Context, oldSettings, newSettings *types.Settings,
+	userID, accountID string) {
+	toggled, groupsChanged := peerApprovalSettingsChanged(oldSettings, newSettings)
+	if toggled {
+		event := activity.AccountPeerApprovalEnabled
+		if newSettings.Extra == nil || !newSettings.Extra.PeerApprovalEnabled {
+			event = activity.AccountPeerApprovalDisabled
+		}
+		am.StoreEvent(ctx, userID, accountID, accountID, event, nil)
+	}
+	if groupsChanged {
+		var groups []string
+		if newSettings.Extra != nil {
+			groups = newSettings.Extra.IntegratedValidatorGroups
+		}
+		am.StoreEvent(ctx, userID, accountID, accountID, activity.AccountPeerApprovalExemptGroupsUpdated,
+			map[string]any{"exempt_group_ids": groups})
+	}
 }
 
 func (am *DefaultAccountManager) handleRoutingPeerDNSResolutionSettings(ctx context.Context, oldSettings, newSettings *types.Settings, userID, accountID string) {

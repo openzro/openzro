@@ -154,6 +154,12 @@ func (h *handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 		}
 		extra := seed
 		extra.PeerApprovalEnabled = req.Settings.Extra.PeerApprovalEnabled
+		// Public name of IntegratedValidatorGroups: peers in these groups skip
+		// approval. Nil keeps the stored list (seeded above); an empty list
+		// clears it. Existence is validated by UpdateAccountSettings.
+		if req.Settings.Extra.PeerApprovalExemptGroups != nil {
+			extra.IntegratedValidatorGroups = append([]string{}, *req.Settings.Extra.PeerApprovalExemptGroups...)
+		}
 		extra.FlowEnabled = req.Settings.Extra.NetworkTrafficLogsEnabled
 		extra.FlowPacketCounterEnabled = req.Settings.Extra.NetworkTrafficPacketCounterEnabled
 		extra.FlowEventsGroups = groups
@@ -381,8 +387,10 @@ func toAccountResponse(accountID string, settings *types.Settings, meta *types.A
 			gs := append([]string(nil), settings.Extra.FlowEventsGroups...)
 			groups = &gs
 		}
+		exemptGroups := append([]string{}, settings.Extra.IntegratedValidatorGroups...)
 		apiSettings.Extra = &api.AccountExtraSettings{
 			PeerApprovalEnabled:                settings.Extra.PeerApprovalEnabled,
+			PeerApprovalExemptGroups:           &exemptGroups,
 			NetworkTrafficLogsEnabled:          settings.Extra.FlowEnabled,
 			NetworkTrafficPacketCounterEnabled: settings.Extra.FlowPacketCounterEnabled,
 			NetworkTrafficLogsGroups:           groups,

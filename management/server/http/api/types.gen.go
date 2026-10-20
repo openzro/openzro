@@ -358,8 +358,17 @@ type AccountExtraSettings struct {
 	// NetworkTrafficPacketCounterEnabled Enables or disables network traffic packet counter. If enabled, network packets and their size will be counted and reported. (This can have an slight impact on performance)
 	NetworkTrafficPacketCounterEnabled bool `json:"network_traffic_packet_counter_enabled"`
 
-	// PeerApprovalEnabled (Cloud only) Enables or disables peer approval globally. If enabled, all peers added will be in pending state until approved by an admin.
+	// PeerApprovalEnabled Enables or disables peer approval. If enabled, new peers stay pending until an admin approves them, except peers in peer_approval_exempt_groups.
 	PeerApprovalEnabled bool `json:"peer_approval_enabled"`
+
+	// PeerApprovalExemptGroups Group IDs whose peers skip peer approval. Typically the internal
+	// staff groups, so approval applies only to everyone else (for
+	// example third parties). Evaluated live: adding a group releases its
+	// pending peers. Removing a group sends back to pending only the
+	// peers that were released by the exemption; peers approved at
+	// registration stay approved. Omit to keep the current list; send an
+	// empty list to clear it.
+	PeerApprovalExemptGroups *[]string `json:"peer_approval_exempt_groups,omitempty"`
 }
 
 // AccountExtraSettingsNetworkTrafficDefaultRange Pre-fills the date filter on the Flow Traffic dashboard page so

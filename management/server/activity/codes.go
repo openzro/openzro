@@ -241,6 +241,9 @@ const (
 	// UserLocalPasswordReset records a password reset of a SCIM local user
 	// (ADR-0024). It never carries the password.
 	UserLocalPasswordReset Activity = 109
+	// AccountPeerApprovalExemptGroupsUpdated records a change to the groups
+	// whose peers skip peer approval (ExtraSettings.IntegratedValidatorGroups).
+	AccountPeerApprovalExemptGroupsUpdated Activity = 110
 
 	AccountDeleted Activity = 99999
 )
@@ -364,9 +367,10 @@ var activityMap = map[Activity]Code{
 	DNSRecordUpdated: {"DNS record updated", "dns.record.update"},
 	DNSRecordDeleted: {"DNS record deleted", "dns.record.delete"},
 
-	UserJoinDeniedByDomain:            {"User join denied by email domain", "user.join.denied_domain"},
-	AccountAllowedEmailDomainsUpdated: {"Account allowed email domains updated", "account.setting.allowed_email_domains.update"},
-	UserLocalPasswordReset:            {"Local user password reset", "user.password.reset"},
+	UserJoinDeniedByDomain:                 {"User join denied by email domain", "user.join.denied_domain"},
+	AccountAllowedEmailDomainsUpdated:      {"Account allowed email domains updated", "account.setting.allowed_email_domains.update"},
+	UserLocalPasswordReset:                 {"Local user password reset", "user.password.reset"},
+	AccountPeerApprovalExemptGroupsUpdated: {"Account peer approval exempt groups updated", "account.setting.peer.approval.exempt_groups.update"},
 }
 
 // StringCode returns a string code of the activity
