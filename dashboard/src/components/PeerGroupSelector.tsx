@@ -83,6 +83,10 @@ interface MultiSelectProps {
   align?: "start" | "end";
   side?: "top" | "bottom";
   users?: User[];
+  // When false, only existing groups can be picked: typing a new name does
+  // not offer to create it. For fields saved in one request, where a group
+  // created first would be left behind if that request failed.
+  allowCreate?: boolean;
 }
 export function PeerGroupSelector({
   onChange,
@@ -107,6 +111,7 @@ export function PeerGroupSelector({
   align = "start",
   side = "bottom",
   users,
+  allowCreate = true,
 }: Readonly<MultiSelectProps>) {
   const { groups, dropdownOptions, setDropdownOptions, addDropdownOptions } =
     useGroups();
@@ -227,8 +232,8 @@ export function PeerGroupSelector({
     const groupDoesNotExist =
       dropdownOptions.filter((item) => item.name == trim(search)).length == 0;
     const isAllGroup = search.toLowerCase() == "all";
-    return isSearching && groupDoesNotExist && !isAllGroup;
-  }, [search, dropdownOptions]);
+    return allowCreate && isSearching && groupDoesNotExist && !isAllGroup;
+  }, [search, dropdownOptions, allowCreate]);
 
   const [open, setOpen] = useState(false);
 
@@ -277,9 +282,11 @@ export function PeerGroupSelector({
   }, [tab]);
 
   const searchPlaceholder =
-    tab === "groups"
+    tab !== "groups"
+      ? "Search resource..."
+      : allowCreate
       ? 'Search groups or add new group by pressing "Enter"...'
-      : "Search resource...";
+      : "Search groups...";
 
   const selectResource = (resource?: NetworkResource) => {
     onResourceChange?.(

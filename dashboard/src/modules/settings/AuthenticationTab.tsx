@@ -97,11 +97,11 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
   const saveRequest = useApiCall<Account>("/accounts/" + account.id);
 
   // Groups whose peers skip approval, so approval can apply only to
-  // third parties. Saved through useGroupHelper like other group pickers.
-  const [exemptGroups, setExemptGroups, { save: saveExemptGroups }] =
-    useGroupHelper({
-      initial: account.settings.extra?.peer_approval_exempt_groups ?? [],
-    });
+  // third parties. Only existing groups can be picked, and only their IDs
+  // are sent, so a failed save leaves nothing behind.
+  const [exemptGroups, setExemptGroups] = useGroupHelper({
+    initial: account.settings.extra?.peer_approval_exempt_groups ?? [],
+  });
   // The selected groups resolve asynchronously from /groups, so comparing
   // them on load would mark the form dirty with no edit. Only a change the
   // operator makes counts, compared with the stored list.
@@ -135,8 +135,7 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
 
   const saveChanges = async () => {
     const expiration = convertToSeconds(expiresIn, expireInterval);
-    const persistedExemptGroups = await saveExemptGroups();
-    const exemptGroupIDs = persistedExemptGroups
+    const exemptGroupIDs = exemptGroups
       .map((g) => g.id)
       .filter((id): id is string => Boolean(id));
 
@@ -166,7 +165,6 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
         } as Account)
         .then(() => {
           mutate("/accounts");
-          setExemptGroups(persistedExemptGroups);
           setExemptTouched(false);
           updateRef([
             peerApproval,
@@ -251,6 +249,8 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
               }}
               disabled={editDisabled}
               hideAllGroup
+              allowCreate={false}
+              placeholder="Select group(s)..."
             />
           </OzSettingsField>
         )}
@@ -346,11 +346,11 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
           label="Require 2FA for local accounts"
           desc={
             <>
-              Bundled Dex <code>staticPasswords</code> has no built-in
-              MFA — this is the <strong>primary</strong> second factor
-              for teams running openZro without an external IdP. When
-              on, local users without TOTP are forced into the
-              enrollment flow on their next session check.
+              Bundled Dex <code>staticPasswords</code> has no built-in MFA —
+              this is the <strong>primary</strong> second factor for teams
+              running openZro without an external IdP. When on, local users
+              without TOTP are forced into the enrollment flow on their next
+              session check.
             </>
           }
         />
@@ -362,12 +362,11 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
           label="Require 2FA for federated accounts (redundancy)"
           desc={
             <>
-              On top of your IdP&apos;s own MFA. Useful when the threat
-              model treats the IdP as a separate trust domain
-              (compromised IdP key, social engineering, IdP
-              misconfiguration). Users enter two codes per login — one
-              at the IdP, one at openZro. Leave off if you trust your
-              IdP&apos;s MFA fully.
+              On top of your IdP&apos;s own MFA. Useful when the threat model
+              treats the IdP as a separate trust domain (compromised IdP key,
+              social engineering, IdP misconfiguration). Users enter two codes
+              per login — one at the IdP, one at openZro. Leave off if you trust
+              your IdP&apos;s MFA fully.
             </>
           }
         />
