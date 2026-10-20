@@ -528,13 +528,18 @@ func (am *DefaultAccountManager) UpdateAccountSettings(ctx context.Context, acco
 			return err
 		}
 
-		// A nil exempt list means the API client omitted the field. Merge it
-		// with the stored value while the settings row is locked, so a
-		// concurrent change on another replica is not overwritten. A non-nil
-		// empty list remains an explicit request to clear it. Stored groups
-		// need no validation: a group on the list cannot be deleted.
-		if newSettings.Extra != nil && newSettings.Extra.IntegratedValidatorGroups == nil &&
-			oldSettings.Extra != nil {
+		// Omitted fields keep the stored value, merged while the settings row
+		// is locked so a concurrent change on another replica is not
+		// overwritten. A nil Extra means the API client omitted the whole
+		// object; a nil exempt list means it omitted just that field. A
+		// non-nil empty list remains an explicit request to clear it. Stored
+		// groups need no locking or validation: a group on the list cannot be
+		// deleted, and nothing here changes it.
+		switch {
+		case newSettings.Extra == nil && oldSettings.Extra != nil:
+			newSettings.Extra = oldSettings.Extra.Copy()
+		case newSettings.Extra != nil && newSettings.Extra.IntegratedValidatorGroups == nil &&
+			oldSettings.Extra != nil:
 			newSettings.Extra.IntegratedValidatorGroups = append([]string(nil), oldSettings.Extra.IntegratedValidatorGroups...)
 		}
 

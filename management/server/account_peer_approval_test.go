@@ -187,3 +187,68 @@ func TestUpdateAccountSettings_PeerApprovalExemptGroupsAreASet(t *testing.T) {
 	assert.Never(t, func() bool { return exemptEvents() != events }, 300*time.Millisecond, 20*time.Millisecond,
 		"reordering the set must not be audited")
 }
+
+// An API client that omits the whole extra object changes nothing in it:
+// the toggle and the exempt groups stay, with no audit event, no network
+// serial bump and no update to connected peers.
+func TestUpdateAccountSettings_OmittedExtraKeepsPeerApproval(t *testing.T) {
+	m, err := createManager(t)
+	require.NoError(t, err)
+	ctx := context.Background()
+	accountID, err := m.GetAccountIDByUserID(ctx, userID, "")
+	require.NoError(t, err)
+	require.NoError(t, m.SaveGroup(ctx, accountID, userID, &types.Group{ID: "g-staff", Name: "staff", Issued: types.GroupIssuedAPI}, true))
+
+	_, err = m.UpdateAccountSettings(ctx, accountID, userID, &types.Settings{
+		PeerLoginExpiration: time.Hour,
+		Extra:               &types.ExtraSettings{PeerApprovalEnabled: true, IntegratedValidatorGroups: []string{"g-staff"}},
+	})
+	require.NoError(t, err)
+	requireEventually(t, m, accountID, activity.AccountPeerApprovalExemptGroupsUpdated)
+
+	owner, err := m.Store.GetUserByUserID(ctx, store.LockingStrengthShare, userID)
+	require.NoError(t, err)
+	_, updates := connectPeer(t, m, owner)
+	// Let the connect-time updates settle before measuring.
+	time.Sleep(300 * time.Millisecond)
+	for len(updates) > 0 {
+		<-updates
+	}
+
+	approvalEvents := func() int {
+		t.Helper()
+		events, err := m.eventStore.Get(ctx, accountID, 0, 200, false)
+		require.NoError(t, err)
+		n := 0
+		for _, e := range events {
+			switch e.Activity {
+			case activity.AccountPeerApprovalEnabled, activity.AccountPeerApprovalDisabled,
+				activity.AccountPeerApprovalExemptGroupsUpdated:
+				n++
+			}
+		}
+		return n
+	}
+	network, err := m.Store.GetAccountNetwork(ctx, store.LockingStrengthShare, accountID)
+	require.NoError(t, err)
+	serialBefore, eventsBefore := network.CurrentSerial(), approvalEvents()
+
+	_, err = m.UpdateAccountSettings(ctx, accountID, userID, &types.Settings{PeerLoginExpiration: time.Hour})
+	require.NoError(t, err)
+
+	stored, err := m.Store.GetAccountSettings(ctx, store.LockingStrengthShare, accountID)
+	require.NoError(t, err)
+	require.NotNil(t, stored.Extra)
+	assert.True(t, stored.Extra.PeerApprovalEnabled, "an omitted extra keeps the toggle")
+	assert.Equal(t, []string{"g-staff"}, stored.Extra.IntegratedValidatorGroups, "an omitted extra keeps the groups")
+
+	network, err = m.Store.GetAccountNetwork(ctx, store.LockingStrengthShare, accountID)
+	require.NoError(t, err)
+	assert.Equal(t, serialBefore, network.CurrentSerial(), "an omitted extra must not bump the network serial")
+	select {
+	case <-updates:
+		t.Fatal("an omitted extra must not fan out to connected peers")
+	case <-time.After(500 * time.Millisecond):
+	}
+	assert.Equal(t, eventsBefore, approvalEvents(), "an omitted extra must not be audited")
+}

@@ -666,4 +666,11 @@ func TestAccounts_PeerApprovalExemptGroups(t *testing.T) {
 	put(`{"settings":{"peer_login_expiration":3600,"peer_login_expiration_enabled":false,"extra":{"peer_approval_enabled":true,"network_traffic_logs_enabled":false,"network_traffic_packet_counter_enabled":false}}}`)
 	require.NotNil(t, captured)
 	assert.Nil(t, captured.Extra.IntegratedValidatorGroups, "a failed read must not clear the stored list")
+
+	// Omitting the whole extra object reaches the manager as nil, which keeps
+	// every stored extra setting inside its transaction.
+	captured = nil
+	put(`{"settings":{"peer_login_expiration":3600,"peer_login_expiration_enabled":false}}`)
+	require.NotNil(t, captured)
+	assert.Nil(t, captured.Extra, "an omitted extra object reaches the manager as nil")
 }

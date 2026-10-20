@@ -55,6 +55,26 @@ func TestUpdateAccountSettings_OmittedExemptGroupsKeepOtherReplicasWrite(t *test
 	require.Equal(t, []string{exemptRaceGroup}, stored.Extra.IntegratedValidatorGroups)
 }
 
+// A client that omits the whole extra object keeps the latest stored peer
+// approval settings, including a change another replica just made.
+func TestUpdateAccountSettings_OmittedExtraKeepsOtherReplicasWrite(t *testing.T) {
+	r := newTwoReplicas(t)
+	ctx := context.Background()
+	seedExemptRaceAccount(t, r)
+
+	_, err := r.B.UpdateAccountSettings(ctx, exemptRaceAccount, exemptRaceUser, exemptSettings([]string{exemptRaceGroup}))
+	require.NoError(t, err)
+
+	_, err = r.A.UpdateAccountSettings(ctx, exemptRaceAccount, exemptRaceUser, &types.Settings{PeerLoginExpiration: time.Hour})
+	require.NoError(t, err)
+
+	stored, err := r.A.Store.GetAccountSettings(ctx, store.LockingStrengthShare, exemptRaceAccount)
+	require.NoError(t, err)
+	require.NotNil(t, stored.Extra)
+	require.True(t, stored.Extra.PeerApprovalEnabled)
+	require.Equal(t, []string{exemptRaceGroup}, stored.Extra.IntegratedValidatorGroups)
+}
+
 // pauseAfterFirstLock makes the replica's next locking read of the accounts or
 // groups table report itself and then wait for release. Tables are filtered
 // because permission checks lock the user row first, outside the transaction
