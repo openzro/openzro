@@ -332,3 +332,16 @@ func TestLoginPeer_MFAGate_NewPeerSeesGateEnabledMeanwhile(t *testing.T) {
 	assert.Nil(t, f.record(t, required.Challenge.ApprovalID).ApprovedAt)
 	assert.False(t, f.peerExists(t, wgKeyA), "the device registered without the approval")
 }
+
+// Re-activating an expired device also decides the gate inside its
+// transaction.
+func TestLoginPeer_MFAGate_ExpiredPeerSeesGateEnabledMeanwhile(t *testing.T) {
+	f := newPeerLoginFixture(t, "ana")
+	f.gateOn(t, func(s *types.Settings) { s.MFAEnforcePeerLogin = false })
+	require.NoError(t, f.login(wgKeyA, "local"))
+	f.expire(t, wgKeyA)
+	f.enableGateBeforeNextTx(t)
+
+	required := f.requireApproval(t, wgKeyA)
+	assert.False(t, f.record(t, required.Challenge.ApprovalID).NewPeer)
+}
