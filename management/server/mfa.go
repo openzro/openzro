@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/openzro/openzro/management/server/account"
+	"github.com/openzro/openzro/management/server/activity"
 	activityStore "github.com/openzro/openzro/management/server/activity/store"
 	"github.com/openzro/openzro/management/server/mfa"
 	"github.com/openzro/openzro/management/server/status"
@@ -326,9 +327,25 @@ func (am *DefaultAccountManager) MFASessionValid(userID, mfaSessionToken, jwtSes
 //     (the handler enforces an MFA-verified session before reaching
 //     here, so a stolen JWT alone can't strip the second factor)
 //
-// Idempotent: deleting a non-enrolled user is a no-op (no error).
-func (am *DefaultAccountManager) MFADisenroll(ctx context.Context, userID string) error {
-	return am.Store.DeleteUserMFA(ctx, store.LockingStrengthUpdate, userID)
+// Audited in the account: an admin clearing another user is a reset, a
+// user clearing themselves is a disable. Idempotent: a user without 2FA is
+// a no-op, with no error and no audit event.
+func (am *DefaultAccountManager) MFADisenroll(ctx context.Context, accountID, initiatorUserID, targetUserID string) error {
+	if _, err := am.Store.GetUserMFA(ctx, store.LockingStrengthNone, targetUserID); err != nil {
+		if errors.Is(err, store.ErrUserMFANotFound) {
+			return nil
+		}
+		return err
+	}
+	if err := am.Store.DeleteUserMFA(ctx, store.LockingStrengthUpdate, targetUserID); err != nil {
+		return err
+	}
+	event := activity.UserMFAReset
+	if initiatorUserID == targetUserID {
+		event = activity.UserMFADisabled
+	}
+	am.StoreEvent(ctx, initiatorUserID, targetUserID, accountID, event, nil)
+	return nil
 }
 
 // MFARegenerateBackupCodes mints a fresh batch (invalidates all

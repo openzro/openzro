@@ -264,7 +264,7 @@ func (h *handler) disenrollSelf(w http.ResponseWriter, r *http.Request) {
 	if !h.requireMFASession(w, r, userAuth.UserId) {
 		return
 	}
-	if err := h.am.MFADisenroll(r.Context(), userAuth.UserId); err != nil {
+	if err := h.am.MFADisenroll(r.Context(), userAuth.AccountId, userAuth.UserId, userAuth.UserId); err != nil {
 		util.WriteError(r.Context(), err, w)
 		return
 	}
@@ -318,7 +318,7 @@ func (h *handler) disenroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.am.MFADisenroll(r.Context(), targetUserID); err != nil {
+	if err := h.am.MFADisenroll(r.Context(), userAuth.AccountId, userAuth.UserId, targetUserID); err != nil {
 		util.WriteError(r.Context(), err, w)
 		return
 	}
