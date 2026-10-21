@@ -150,11 +150,56 @@ func TestWaitSSO_ClosingTheLinkWindowCancelsTheWait(t *testing.T) {
 		done <- err
 	}()
 	require.Eventually(t, func() bool { return s.approvalWindowOpen() }, 2*time.Second, 10*time.Millisecond)
-	s.closeApprovalWindow()
+	s.closeApprovalWindow(s.currentApprovalWindow())
 	select {
 	case err := <-done:
 		assert.Equal(t, codes.Canceled, status.Code(err))
 	case <-time.After(2 * time.Second):
 		t.Fatal("closing the window did not end the wait")
 	}
+}
+
+// A newer wait replaces an older one's window; the older wait ending late
+// must not close the newer window or cancel the newer wait.
+func TestWaitSSO_OlderWaitLeavesTheNewerWindowAlone(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	s := &serviceClient{app: app, ctx: context.Background()}
+	a := &fakeDaemon{release: make(chan struct{})}
+	b := &fakeDaemon{release: make(chan struct{})}
+
+	doneA, doneB := make(chan error, 1), make(chan error, 1)
+	go func() {
+		_, err := s.waitSSO(context.Background(), a, "code-a", noBrowser)
+		doneA <- err
+	}()
+	require.Eventually(t, s.approvalWindowOpen, 2*time.Second, 10*time.Millisecond)
+	windowA := s.currentApprovalWindow()
+
+	go func() {
+		_, err := s.waitSSO(context.Background(), b, "code-b", noBrowser)
+		doneB <- err
+	}()
+	require.Eventually(t, func() bool {
+		w := s.currentApprovalWindow()
+		return w != nil && w != windowA
+	}, 2*time.Second, 10*time.Millisecond)
+	windowB := s.currentApprovalWindow()
+
+	// B's window replaced A's, which ended A's wait; A now finishes.
+	select {
+	case <-doneA:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the replaced wait did not end")
+	}
+	assert.Equal(t, windowB, s.currentApprovalWindow(), "A's ending left B's window open")
+	select {
+	case err := <-doneB:
+		t.Fatalf("B ended when A finished: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(b.release)
+	require.NoError(t, <-doneB)
+	assert.False(t, s.approvalWindowOpen())
 }

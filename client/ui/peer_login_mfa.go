@@ -23,22 +23,26 @@ func (s *serviceClient) waitSSO(ctx context.Context, conn proto.DaemonServiceCli
 	open func(string) error) (string, error) {
 	waitCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	defer s.closeApprovalWindow()
+	// Each wait closes its own window only: a newer wait may have replaced
+	// it, and must keep its window and its wait.
+	var mine fyne.Window
+	defer func() { s.closeApprovalWindow(mine) }()
 	return peerloginmfa.WaitSSO(waitCtx, conn, userCode, "", open,
-		func(url string, _ time.Duration, opened bool) { s.showPeerLoginMFAApproval(url, opened, cancel) })
+		func(url string, _ time.Duration, opened bool) { mine = s.showPeerLoginMFAApproval(url, opened, cancel) })
 }
 
 // showPeerLoginMFAApproval tells the user that this device's sign-in waits
 // for their 2FA approval (ADR-0028). When the browser opened the page, a
 // notification says so; the link carries a secret, so it is neither logged
 // nor put in the notification. When the browser did not open, a window
-// gives the user the link, to copy or to try opening again; onClose runs
-// when that window closes.
-func (s *serviceClient) showPeerLoginMFAApproval(url string, opened bool, onClose func()) {
+// gives the user the link, to copy or to try opening again, and is
+// returned; onClose runs when it closes. A newer window replaces, and
+// closes, an older one.
+func (s *serviceClient) showPeerLoginMFAApproval(url string, opened bool, onClose func()) fyne.Window {
 	if opened {
 		s.app.SendNotification(fyne.NewNotification("Approve this sign-in",
 			"Enter your 2FA code on the page that opened in your browser. openZro connects once you approve."))
-		return
+		return nil
 	}
 	w := s.app.NewWindow("Approve this sign-in")
 	label := widget.NewLabel("Your browser did not open. Open this link in a browser and enter your 2FA code " +
@@ -71,15 +75,22 @@ func (s *serviceClient) showPeerLoginMFAApproval(url string, opened bool, onClos
 		previous.Close()
 	}
 	w.Show()
+	return w
 }
 
-// closeApprovalWindow closes the approval link window, if one is open.
-func (s *serviceClient) closeApprovalWindow() {
+// closeApprovalWindow closes w if it is still the open approval window. A
+// window a newer one replaced was closed then, and is left alone.
+func (s *serviceClient) closeApprovalWindow(w fyne.Window) {
+	if w == nil {
+		return
+	}
 	s.approvalMu.Lock()
-	w := s.approvalWin
-	s.approvalWin = nil
+	current := s.approvalWin == w
+	if current {
+		s.approvalWin = nil
+	}
 	s.approvalMu.Unlock()
-	if w != nil {
+	if current {
 		w.Close()
 	}
 }
@@ -113,4 +124,10 @@ func (s *serviceClient) showPeerLoginMFAError(err error) bool {
 	w.Resize(fyne.NewSize(420, 160))
 	w.Show()
 	return true
+}
+
+func (s *serviceClient) currentApprovalWindow() fyne.Window {
+	s.approvalMu.Lock()
+	defer s.approvalMu.Unlock()
+	return s.approvalWin
 }
