@@ -14,6 +14,7 @@ import (
 	"github.com/openzro/openzro/client/ssh"
 	"github.com/openzro/openzro/client/system"
 	mgm "github.com/openzro/openzro/management/client"
+	"github.com/openzro/openzro/management/client/peerloginmfa"
 	mgmProto "github.com/openzro/openzro/management/proto"
 )
 
@@ -149,7 +150,7 @@ func registerPeer(ctx context.Context, serverPublicKey wgtypes.Key, client *mgm.
 	)
 	loginResp, err := client.Register(serverPublicKey, validSetupKey.String(), jwtToken, info, pubSSHKey, config.DNSLabels)
 	if err != nil {
-		log.Errorf("failed registering peer %v", err)
+		logRegisterError(err)
 		return nil, err
 	}
 
@@ -184,4 +185,14 @@ func isRegistrationNeeded(err error) bool {
 		return true
 	}
 	return false
+}
+
+// logRegisterError logs a failed registration. One waiting for the user's
+// 2FA approval is part of a normal sign-in, not an error.
+func logRegisterError(err error) {
+	if peerloginmfa.Is(err) {
+		log.Info("peer registration is waiting for the user's 2FA")
+		return
+	}
+	log.Errorf("failed registering peer %v", err)
 }
