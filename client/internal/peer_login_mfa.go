@@ -46,6 +46,9 @@ func (p PeerLoginMFAPoll) jitter(d time.Duration) time.Duration {
 // ErrPeerLoginMFAExpired at deadline; and ctx's error when it ends.
 func WaitPeerLoginMFA(ctx context.Context, deadline time.Time, login func(context.Context) error,
 	managementURL string, poll PeerLoginMFAPoll) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if !time.Now().Before(deadline) {
 		return ErrPeerLoginMFAExpired
 	}

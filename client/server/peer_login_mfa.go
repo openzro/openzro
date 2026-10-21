@@ -90,12 +90,15 @@ func (s *Server) WaitMFAApproval(callerCtx context.Context, msg *proto.WaitMFAAp
 	if s.actCancel != nil {
 		s.actCancel()
 	}
-	ctx, cancel := context.WithCancel(s.rootCtx)
+	// The wait derives from the caller's context directly, so a caller that
+	// is gone is seen synchronously; the daemon's shutdown is the extra,
+	// asynchronous, cancellation.
+	ctx, cancel := context.WithCancel(callerCtx)
 	opGen := s.setActiveOpLocked(cancel)
 	s.mutex.Unlock()
 	defer cancel()
 	jwt, email, deadline, cfg := flow.jwt, flow.email, flow.expiresAt, flow.config
-	stop := context.AfterFunc(callerCtx, cancel)
+	stop := context.AfterFunc(s.rootCtx, cancel)
 	defer stop()
 	if flow.hostname != "" {
 		ctx = context.WithValue(ctx, system.DeviceNameCtxKey, flow.hostname) //nolint:staticcheck // existing key type

@@ -411,3 +411,25 @@ func TestPeerLoginMFA_StaleWaiterKeepsItsHandsOffTheState(t *testing.T) {
 	got, _ := state.Status()
 	assert.Equal(t, internal.StatusIdle, got, "the stale waiter left the newer state alone")
 }
+
+// A caller that already went away gets no login attempt: the wait's
+// context derives from the caller's directly, and is checked before the
+// first call.
+func TestPeerLoginMFA_CanceledCallerMakesNoAttempt(t *testing.T) {
+	for i := 0; i < 50; i++ {
+		calls := 0
+		s := newMFATestServer(t, func(context.Context, string) error {
+			calls++
+			return nil
+		})
+		resp, _, err := startFlow(s, &proto.WaitSSOLoginRequest{SupportsMfaApproval: true}, "sso-jwt", "", "", required())
+		require.NoError(t, err)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		_, err = s.WaitMFAApproval(ctx, &proto.WaitMFAApprovalRequest{FlowId: resp.MfaFlowId})
+		require.Equal(t, codes.Canceled, status.Code(err), "run %d", i)
+		require.Zero(t, calls, "run %d: a login ran for a caller that was gone", i)
+		require.Equal(t, 0, s.mfaFlows.len())
+	}
+}
