@@ -17,6 +17,23 @@ import (
 	contract "github.com/openzro/openzro/management/client/peerloginmfa"
 )
 
+func entryTexts(w fyne.Window) []string {
+	var out []string
+	var walk func(o fyne.CanvasObject)
+	walk = func(o fyne.CanvasObject) {
+		switch v := o.(type) {
+		case *widget.Entry:
+			out = append(out, v.Text)
+		case *fyne.Container:
+			for _, c := range v.Objects {
+				walk(c)
+			}
+		}
+	}
+	walk(w.Content())
+	return out
+}
+
 func windowTexts(w fyne.Window) (labels, buttons []string) {
 	var walk func(o fyne.CanvasObject)
 	walk = func(o fyne.CanvasObject) {
@@ -58,6 +75,16 @@ func TestShowPeerLoginMFAError(t *testing.T) {
 	labels, buttons = windowTexts(newest())
 	assert.Contains(t, labels[0], "two-factor")
 	assert.Equal(t, []string{"Open the openZro dashboard", "Close"}, buttons)
+
+	// A browser that did not open leaves the user the link, in a window.
+	count := len(app.Driver().AllWindows())
+	s.showPeerLoginMFAApproval("https://app.example.com/mfa/peer-login#t=tok", true)
+	assert.Len(t, app.Driver().AllWindows(), count, "no window when the browser opened")
+	s.showPeerLoginMFAApproval("https://app.example.com/mfa/peer-login#t=tok", false)
+	_, buttons = windowTexts(newest())
+	assert.Contains(t, buttons, "Copy link")
+	assert.Contains(t, buttons, "Open in browser")
+	assert.Contains(t, entryTexts(newest()), "https://app.example.com/mfa/peer-login#t=tok")
 
 	before := len(app.Driver().AllWindows())
 	assert.False(t, s.showPeerLoginMFAError(status.Error(codes.PermissionDenied, "blocked")))

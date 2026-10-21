@@ -19,13 +19,14 @@ import (
 
 // WaitSSO finishes the SSO login userCode started, declaring that the
 // caller can show the 2FA approval page. If the device login then waits for
-// the approval, it calls announce (when set) with the approval URL and how
-// long it stays open, opens the URL, and waits on the daemon until the
-// approval lands. A browser that fails to open does not stop the wait:
-// announce is where the caller shows the link. The URL carries a secret in
-// its fragment; callers must not log it. It returns the signed-in email.
+// the approval, it opens the URL, calls announce (when set) with the URL,
+// how long it stays open and whether the browser opened, and waits on the
+// daemon until the approval lands. A browser that fails to open does not
+// stop the wait: announce must then show the user the link. The URL
+// carries a secret in its fragment; callers must not log it. It returns
+// the signed-in email.
 func WaitSSO(ctx context.Context, daemon proto.DaemonServiceClient, userCode, hostname string,
-	open func(url string) error, announce func(url string, expiresIn time.Duration)) (string, error) {
+	open func(url string) error, announce func(url string, expiresIn time.Duration, opened bool)) (string, error) {
 	resp, err := daemon.WaitSSOLogin(ctx, &proto.WaitSSOLoginRequest{
 		UserCode: userCode, Hostname: hostname, SupportsMfaApproval: true,
 	})
@@ -36,10 +37,10 @@ func WaitSSO(ctx context.Context, daemon proto.DaemonServiceClient, userCode, ho
 		return resp.GetEmail(), nil
 	}
 
+	opened := open(resp.GetMfaApprovalURL()) == nil
 	if announce != nil {
-		announce(resp.GetMfaApprovalURL(), time.Duration(resp.GetMfaExpiresInSec())*time.Second)
+		announce(resp.GetMfaApprovalURL(), time.Duration(resp.GetMfaExpiresInSec())*time.Second, opened)
 	}
-	_ = open(resp.GetMfaApprovalURL())
 
 	waited, err := daemon.WaitMFAApproval(ctx, &proto.WaitMFAApprovalRequest{FlowId: resp.GetMfaFlowId()})
 	if err != nil {
@@ -72,6 +73,22 @@ func Describe(err error, managementURL string) (msg, link string, ok bool) {
 		return "The 2FA approval request expired before it was approved. Sign in again.", "", true
 	}
 	return "", "", false
+}
+
+// ExpiresIn says how long an approval request stays open, rounded so it is
+// never shown longer than it is: under a minute is "less than a minute".
+// Empty for an unknown lifetime.
+func ExpiresIn(d time.Duration) string {
+	switch {
+	case d <= 0:
+		return ""
+	case d < time.Minute:
+		return "less than a minute"
+	case d < 2*time.Minute:
+		return "about a minute"
+	default:
+		return fmt.Sprintf("%d minutes", int(d/time.Minute))
+	}
 }
 
 func humanize(d time.Duration) string {

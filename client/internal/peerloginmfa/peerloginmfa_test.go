@@ -60,26 +60,49 @@ func TestWaitSSO_ApprovalFlow(t *testing.T) {
 	}
 	var opened, announced string
 	var expires time.Duration
+	var browserOpened bool
 	email, err := WaitSSO(context.Background(), d, "code", "", func(u string) error { opened = u; return nil },
-		func(u string, in time.Duration) { announced, expires = u, in })
+		func(u string, in time.Duration, ok bool) { announced, expires, browserOpened = u, in, ok })
 	require.NoError(t, err)
 	assert.Equal(t, "ana@example.com", email)
 	assert.Equal(t, "https://app.example.com/mfa/peer-login#t=tok", opened)
 	assert.Equal(t, opened, announced)
 	assert.Equal(t, 5*time.Minute, expires)
+	assert.True(t, browserOpened)
 	assert.Equal(t, "flow-1", d.waitedOn)
 }
 
-// The browser failing to open does not stop the wait: the caller showed
-// the link.
+// The browser failing to open does not stop the wait, and the caller is
+// told, so it can show the link instead.
 func TestWaitSSO_BrowserFails(t *testing.T) {
 	d := &fakeDaemon{
 		ssoResp:  &proto.WaitSSOLoginResponse{MfaFlowId: "flow-1", MfaApprovalURL: "https://app.example.com/x#t=tok"},
 		waitResp: &proto.WaitMFAApprovalResponse{},
 	}
-	_, err := WaitSSO(context.Background(), d, "code", "", func(string) error { return assert.AnError }, nil)
+	browserOpened, shown := true, ""
+	_, err := WaitSSO(context.Background(), d, "code", "", func(string) error { return assert.AnError },
+		func(u string, _ time.Duration, ok bool) { shown, browserOpened = u, ok })
 	require.NoError(t, err)
+	assert.False(t, browserOpened)
+	assert.Equal(t, "https://app.example.com/x#t=tok", shown)
 	assert.Equal(t, "flow-1", d.waitedOn)
+}
+
+// How long a request stays open is never shown longer than it is, and
+// never as zero.
+func TestExpiresIn(t *testing.T) {
+	tests := map[time.Duration]string{
+		0:                              "",
+		10 * time.Second:               "less than a minute",
+		59 * time.Second:               "less than a minute",
+		60 * time.Second:               "about a minute",
+		89 * time.Second:               "about a minute",
+		4*time.Minute + 59*time.Second: "4 minutes",
+		5 * time.Minute:                "5 minutes",
+	}
+	for in, want := range tests {
+		assert.Equal(t, want, ExpiresIn(in), in.String())
+	}
 }
 
 func TestWaitSSO_Errors(t *testing.T) {

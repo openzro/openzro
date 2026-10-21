@@ -663,7 +663,7 @@ func (s *serviceClient) handleSSOLogin(loginResp *proto.LoginResponse, conn prot
 	// The device sign-in may then wait for the user's 2FA approval
 	// (ADR-0028): WaitSSO opens the approval page and waits for it.
 	email, err := peerloginmfa.WaitSSO(s.ctx, conn, loginResp.UserCode, "", openURL,
-		func(string, time.Duration) { s.announcePeerLoginMFA() })
+		func(url string, _ time.Duration, opened bool) { s.showPeerLoginMFAApproval(url, opened) })
 	if err != nil {
 		s.showPeerLoginMFAError(err)
 		log.Errorf("waiting sso login failed with: %v", err)
@@ -1637,8 +1637,9 @@ func (s *serviceClient) showLoginURL() {
 		}
 
 		_, err = peerloginmfa.WaitSSO(s.ctx, conn, resp.UserCode, "", openURL,
-			func(string, time.Duration) {
-				label.SetText("Approve the sign-in in your browser:\nenter your 2FA code on the page that opened.")
+			func(url string, _ time.Duration, opened bool) {
+				label.SetText("Approve the sign-in in your browser:\nenter your 2FA code on the approval page.")
+				s.showPeerLoginMFAApproval(url, opened)
 			})
 		if err != nil {
 			log.Errorf("Waiting sso login failed with: %v", err)
