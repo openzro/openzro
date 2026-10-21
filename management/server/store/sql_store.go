@@ -773,14 +773,16 @@ func (s *SqlStore) SaveUserMFA(ctx context.Context, lockStrength LockingStrength
 // disenrollment path (operator override OR user reset). A delete
 // for a user with no MFA enrolled is a no-op (no error) so the
 // idempotent caller doesn't have to GetUserMFA first.
-func (s *SqlStore) DeleteUserMFA(ctx context.Context, lockStrength LockingStrength, userID string) error {
+func (s *SqlStore) DeleteUserMFA(ctx context.Context, lockStrength LockingStrength, userID string) (bool, error) {
 	result := s.db.Clauses(clause.Locking{Strength: string(lockStrength)}).
 		Delete(&types.UserMFA{}, "user_id = ?", userID)
 	if result.Error != nil {
 		log.WithContext(ctx).Errorf("failed to delete user_mfa from store: %s", result.Error)
-		return status.Errorf(status.Internal, "failed to delete user_mfa from store")
+		return false, status.Errorf(status.Internal, "failed to delete user_mfa from store")
 	}
-	return nil
+	// The DELETE is the linearization point: of concurrent deletes of the
+	// same row, only one affects it.
+	return result.RowsAffected > 0, nil
 }
 
 func (s *SqlStore) DeleteUser(ctx context.Context, lockStrength LockingStrength, accountID, userID string) error {

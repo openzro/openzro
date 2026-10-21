@@ -328,17 +328,17 @@ func (am *DefaultAccountManager) MFASessionValid(userID, mfaSessionToken, jwtSes
 //     here, so a stolen JWT alone can't strip the second factor)
 //
 // Audited in the account: an admin clearing another user is a reset, a
-// user clearing themselves is a disable. Idempotent: a user without 2FA is
-// a no-op, with no error and no audit event.
+// user clearing themselves is a disable. Atomic and idempotent: the single
+// DELETE decides, so of concurrent calls (on any replica) only the one that
+// removed the row audits it, and a user without 2FA is a no-op with no
+// error and no audit event.
 func (am *DefaultAccountManager) MFADisenroll(ctx context.Context, accountID, initiatorUserID, targetUserID string) error {
-	if _, err := am.Store.GetUserMFA(ctx, store.LockingStrengthNone, targetUserID); err != nil {
-		if errors.Is(err, store.ErrUserMFANotFound) {
-			return nil
-		}
+	deleted, err := am.Store.DeleteUserMFA(ctx, store.LockingStrengthUpdate, targetUserID)
+	if err != nil {
 		return err
 	}
-	if err := am.Store.DeleteUserMFA(ctx, store.LockingStrengthUpdate, targetUserID); err != nil {
-		return err
+	if !deleted {
+		return nil
 	}
 	event := activity.UserMFAReset
 	if initiatorUserID == targetUserID {

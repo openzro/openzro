@@ -55,3 +55,24 @@ func TestSqlStore_GetAccountUserMFAs(t *testing.T) {
 		require.Empty(t, rows)
 	})
 }
+
+// DeleteUserMFA reports whether it removed a row, so the caller can audit
+// exactly the delete that happened: the second delete of a row reports
+// nothing removed.
+func TestSqlStore_DeleteUserMFAReportsRemoval(t *testing.T) {
+	runTestForAllEngines(t, "../testdata/store.sql", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		const userID = "a23efe53-63fb-11ec-90d6-0242ac120003"
+		require.NoError(t, s.SaveUserMFA(ctx, LockingStrengthUpdate, &types.UserMFA{
+			UserID: userID, Method: types.MFAMethodTOTP, TOTPSecretEnc: "secret", EnrolledAt: time.Now().UTC(),
+		}))
+
+		deleted, err := s.DeleteUserMFA(ctx, LockingStrengthUpdate, userID)
+		require.NoError(t, err)
+		require.True(t, deleted)
+
+		deleted, err = s.DeleteUserMFA(ctx, LockingStrengthUpdate, userID)
+		require.NoError(t, err)
+		require.False(t, deleted, "a missing row is not removed again")
+	})
+}
