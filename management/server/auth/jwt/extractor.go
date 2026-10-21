@@ -155,7 +155,7 @@ func (c *ClaimsExtractor) ToUserAuth(token *jwt.Token) (nbcontext.UserAuth, erro
 	//      sends access_token as Bearer, so this branch is effectively
 	//      unused in production.
 	//   2. The `sub` claim parsed as a Dex internal-id protobuf —
-	//      see parseDexSubConnector. Dex encodes the connector id
+	//      see ParseDexSubConnector. Dex encodes the connector id
 	//      directly inside `sub` on every token it issues, so this
 	//      catches both staticPasswords (conn_id="local") and any
 	//      federated connector (conn_id="google", "github", ...)
@@ -171,7 +171,7 @@ func (c *ClaimsExtractor) ToUserAuth(token *jwt.Token) (nbcontext.UserAuth, erro
 		}
 	}
 	if userAuth.ConnectorID == "" {
-		userAuth.ConnectorID = parseDexSubConnector(userID)
+		userAuth.ConnectorID = ParseDexSubConnector(userID)
 	}
 
 	return userAuth, nil
@@ -219,7 +219,7 @@ func DecodeDexSubject(sub string) (userID, connID string, ok bool) {
 	return userID, connID, gotUser && gotConn
 }
 
-// parseDexSubConnector decodes Dex's internal-id protobuf out of the
+// ParseDexSubConnector decodes Dex's internal-id protobuf out of the
 // JWT `sub` claim and returns the embedded connector id, or empty
 // string if `sub` is not in that shape.
 //
@@ -237,7 +237,7 @@ func DecodeDexSubject(sub string) (userID, connID string, ok bool) {
 // Non-Dex IdPs (Auth0, Keycloak, …) emit UUID-style subs that
 // won't parse as a protobuf with field 2 = string; the consumer
 // gets "" back and falls through to the legacy code path.
-func parseDexSubConnector(sub string) string {
+func ParseDexSubConnector(sub string) string {
 	if sub == "" {
 		return ""
 	}
