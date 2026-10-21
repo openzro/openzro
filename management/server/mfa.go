@@ -116,7 +116,7 @@ func (am *DefaultAccountManager) mfaNow() time.Time {
 // verifySecondFactorTx checks a TOTP or backup code for the user in tx,
 // which it locks the user_mfa row in. It is the one verifier behind the
 // dashboard challenge and the peer login approval page (ADR-0028 D4, D7):
-// a lockout is honoured and counted, a TOTP step is accepted once, and a
+// a lockout is honored and counted, a TOTP step is accepted once, and a
 // backup code is spent in the same transaction. The outcome carries no
 // session token; a wrong code's failed attempt is written, so the caller
 // commits on a nil error whatever the outcome.
