@@ -706,6 +706,9 @@ release:
       them on first run. Prefer the installer; if you need a raw binary,
       `xattr -d com.apple.quarantine <path-to-binary>` clears the flag.
 
+    [Code signing policy](https://github.com/openzro/openzro/blob/main/CODE_SIGNING_POLICY.md)
+    · [Privacy policy](https://github.com/openzro/openzro/blob/main/PRIVACY.md)
+
 snapshot:
   version_template: "{{ .Tag }}-snapshot-{{ .ShortCommit }}"
 
