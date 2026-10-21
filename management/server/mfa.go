@@ -88,76 +88,9 @@ func (am *DefaultAccountManager) MFAChallenge(ctx context.Context, userID, code,
 
 	var outcome *account.MFAChallengeOutcome
 	txErr := am.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
-		row, err := tx.GetUserMFA(ctx, store.LockingStrengthUpdate, userID)
-		if err != nil {
-			return err
-		}
-		now := am.mfaNow()
-		if row.LockedUntil != nil && row.LockedUntil.After(now) {
-			outcome = &account.MFAChallengeOutcome{Locked: true, LockedUntil: row.LockedUntil}
-			return nil
-		}
-
-		// Try TOTP first. A successful TOTP doesn't burn a backup code.
-		secret, err := am.mfaSecretCipher.Decrypt(row.TOTPSecretEnc)
-		if err != nil {
-			return fmt.Errorf("mfa: decrypt secret: %w", err)
-		}
-		// The row is locked for update, so reading LastUsedStep and writing
-		// the accepted step below cannot interleave with another challenge
-		// on any replica.
-		step, matched, err := mfa.MatchTOTPStep(code, secret, now)
-		if err != nil {
-			return fmt.Errorf("mfa: validate totp: %w", err)
-		}
-		totpOK := matched && step > row.LastUsedStep
-		if matched && !totpOK {
-			// Right code, already used: refused, but not a failed guess.
-			outcome = &account.MFAChallengeOutcome{CodeReused: true}
-			return nil
-		}
-
-		usedBackup := false
-		if !totpOK {
-			// Backup code is consumed in the same transaction as the
-			// SaveUserMFA below, so a replay of /challenge with the
-			// same backup code from another goroutine is rejected.
-			remaining, ok := mfa.ConsumeBackupCode(code, row.BackupCodesHash)
-			if ok {
-				row.BackupCodesHash = remaining
-				usedBackup = true
-			}
-		}
-
-		if !totpOK && !usedBackup {
-			row.FailedAttempts++
-			if row.FailedAttempts >= types.MFALockoutThreshold {
-				lock := now.Add(types.MFALockoutDuration)
-				row.LockedUntil = &lock
-			}
-			if err := tx.SaveUserMFA(ctx, store.LockingStrengthUpdate, row); err != nil {
-				return err
-			}
-			outcome = &account.MFAChallengeOutcome{OK: false}
-			if row.LockedUntil != nil && row.LockedUntil.After(now) {
-				outcome.Locked = true
-				outcome.LockedUntil = row.LockedUntil
-			}
-			return nil
-		}
-
-		// Success.
-		if totpOK {
-			row.LastUsedStep = step
-		}
-		row.FailedAttempts = 0
-		row.LockedUntil = nil
-		row.LastVerifiedAt = &now
-		if err := tx.SaveUserMFA(ctx, store.LockingStrengthUpdate, row); err != nil {
-			return err
-		}
-		outcome = &account.MFAChallengeOutcome{OK: true, UsedBackupCode: usedBackup}
-		return nil
+		var err error
+		outcome, err = am.verifySecondFactorTx(ctx, tx, userID, code, am.mfaNow())
+		return err
 	})
 	if txErr != nil {
 		return nil, txErr
@@ -178,6 +111,83 @@ func (am *DefaultAccountManager) mfaNow() time.Time {
 		return am.mfaClock().UTC()
 	}
 	return time.Now().UTC()
+}
+
+// verifySecondFactorTx checks a TOTP or backup code for the user in tx,
+// which it locks the user_mfa row in. It is the one verifier behind the
+// dashboard challenge and the peer login approval page (ADR-0028 D4, D7):
+// a lockout is honoured and counted, a TOTP step is accepted once, and a
+// backup code is spent in the same transaction. The outcome carries no
+// session token; a wrong code's failed attempt is written, so the caller
+// commits on a nil error whatever the outcome.
+func (am *DefaultAccountManager) verifySecondFactorTx(ctx context.Context, tx store.Store, userID, code string,
+	now time.Time) (*account.MFAChallengeOutcome, error) {
+	row, err := tx.GetUserMFA(ctx, store.LockingStrengthUpdate, userID)
+	if err != nil {
+		return nil, err
+	}
+	if row.LockedUntil != nil && row.LockedUntil.After(now) {
+		return &account.MFAChallengeOutcome{Locked: true, LockedUntil: row.LockedUntil}, nil
+	}
+
+	// Try TOTP first. A successful TOTP doesn't burn a backup code.
+	secret, err := am.mfaSecretCipher.Decrypt(row.TOTPSecretEnc)
+	if err != nil {
+		return nil, fmt.Errorf("mfa: decrypt secret: %w", err)
+	}
+	// The row is locked for update, so reading LastUsedStep and writing
+	// the accepted step below cannot interleave with another challenge
+	// on any replica.
+	step, matched, err := mfa.MatchTOTPStep(code, secret, now)
+	if err != nil {
+		return nil, fmt.Errorf("mfa: validate totp: %w", err)
+	}
+	totpOK := matched && step > row.LastUsedStep
+	if matched && !totpOK {
+		// Right code, already used: refused, but not a failed guess.
+		return &account.MFAChallengeOutcome{CodeReused: true}, nil
+	}
+
+	usedBackup := false
+	if !totpOK {
+		// Backup code is consumed in the same transaction as the
+		// SaveUserMFA below, so a replay of /challenge with the
+		// same backup code from another goroutine is rejected.
+		remaining, ok := mfa.ConsumeBackupCode(code, row.BackupCodesHash)
+		if ok {
+			row.BackupCodesHash = remaining
+			usedBackup = true
+		}
+	}
+
+	if !totpOK && !usedBackup {
+		row.FailedAttempts++
+		if row.FailedAttempts >= types.MFALockoutThreshold {
+			lock := now.Add(types.MFALockoutDuration)
+			row.LockedUntil = &lock
+		}
+		if err := tx.SaveUserMFA(ctx, store.LockingStrengthUpdate, row); err != nil {
+			return nil, err
+		}
+		outcome := &account.MFAChallengeOutcome{OK: false}
+		if row.LockedUntil != nil && row.LockedUntil.After(now) {
+			outcome.Locked = true
+			outcome.LockedUntil = row.LockedUntil
+		}
+		return outcome, nil
+	}
+
+	// Success.
+	if totpOK {
+		row.LastUsedStep = step
+	}
+	row.FailedAttempts = 0
+	row.LockedUntil = nil
+	row.LastVerifiedAt = &now
+	if err := tx.SaveUserMFA(ctx, store.LockingStrengthUpdate, row); err != nil {
+		return nil, err
+	}
+	return &account.MFAChallengeOutcome{OK: true, UsedBackupCode: usedBackup}, nil
 }
 
 // MFAVerifyToken validates a challenge_token / enrollment_token /
