@@ -148,8 +148,9 @@ export default function OIDCProvider({ children }: Props) {
   }, []);
 
   // We bypass authentication for pages that do not require auth.
-  // E.g., when we just want to show installation steps for public.
-  if (path === "/install") return children;
+  // E.g., when we just want to show installation steps for public, or the
+  // device-login approval page, whose link token is its credential.
+  if (path === "/install" || path === "/mfa/peer-login") return children;
 
   return mounted && providerConfig ? (
     <OidcProvider
