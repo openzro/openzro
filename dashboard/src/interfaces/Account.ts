@@ -82,6 +82,11 @@ export interface Account {
     //   the IdP's own MFA. Users enter two codes per login.
     mfa_enforce_local?: boolean;
     mfa_enforce_federated?: boolean;
+    // Ask the users the two rules above cover for their second factor
+    // when they register a device or re-activate an expired one
+    // (ADR-0028). Switching it on is refused (412) while one of them has
+    // no 2FA.
+    mfa_enforce_peer_login?: boolean;
     // Email domains allowed to join the account (ADR-0025). Empty
     // disables the check; the server normalizes and validates entries.
     allowed_email_domains?: string[];

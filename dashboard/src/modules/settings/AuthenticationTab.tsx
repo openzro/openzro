@@ -25,6 +25,7 @@ import { Account } from "@/interfaces/Account";
 import useGroupHelper from "@/modules/groups/useGroupHelper";
 import AllowedEmailDomainsCard from "@/modules/settings/AllowedEmailDomainsCard";
 import MFAUnenrolledHint from "@/modules/settings/MFAUnenrolledHint";
+import PeerLoginMFAHint from "@/modules/settings/PeerLoginMFAHint";
 import OzSettingsCard from "@/modules/settings/v2/OzSettingsCard";
 import OzSettingsField from "@/modules/settings/v2/OzSettingsField";
 import OzSettingsToggle from "@/modules/settings/v2/OzSettingsToggle";
@@ -64,6 +65,11 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
   );
   const [mfaEnforceFederated, setMfaEnforceFederated] = useState<boolean>(
     () => account?.settings?.mfa_enforce_federated ?? false,
+  );
+  // Device sign-in 2FA (ADR-0028): applies to the users the two rules
+  // above cover, when they register a device or re-activate one.
+  const [mfaEnforcePeerLogin, setMfaEnforcePeerLogin] = useState<boolean>(
+    () => account?.settings?.mfa_enforce_peer_login ?? false,
   );
 
   const [allowedDomains, setAllowedDomains] = useState<string[]>(
@@ -131,6 +137,7 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
     peerInactivityExpireInterval,
     mfaEnforceLocal,
     mfaEnforceFederated,
+    mfaEnforcePeerLogin,
     allowedDomains,
   ]);
 
@@ -156,6 +163,7 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
             peer_inactivity_expiration: 600,
             mfa_enforce_local: mfaEnforceLocal,
             mfa_enforce_federated: mfaEnforceFederated,
+            mfa_enforce_peer_login: mfaEnforcePeerLogin,
             allowed_email_domains: allowedDomains,
             extra: {
               ...account.settings?.extra,
@@ -177,6 +185,7 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
             peerInactivityExpireInterval,
             mfaEnforceLocal,
             mfaEnforceFederated,
+            mfaEnforcePeerLogin,
             allowedDomains,
           ]);
         }),
@@ -377,6 +386,29 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
                 count={account.mfa_unenrolled_users?.federated}
                 kind="federated"
                 dataCy="mfa-unenrolled-federated"
+              />
+            </>
+          }
+        />
+        <OzSettingsToggle
+          value={mfaEnforcePeerLogin}
+          onChange={setMfaEnforcePeerLogin}
+          disabled={editDisabled}
+          dataCy="mfa-enforce-peer-login"
+          label="Require 2FA to sign in devices"
+          desc={
+            <>
+              Users the rules above cover approve with their authenticator when
+              they add a device or sign one in again after its login expired.
+              Before switching on, keep peer approval on for third parties, and
+              upgrade every management server and the users&apos; desktop and
+              CLI apps: older apps and mobile cannot sign in devices while this
+              is on.
+              <PeerLoginMFAHint
+                enabled={mfaEnforcePeerLogin}
+                local={mfaEnforceLocal}
+                federated={mfaEnforceFederated}
+                unenrolled={account.mfa_unenrolled_users}
               />
             </>
           }
