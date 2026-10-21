@@ -240,6 +240,18 @@ type Manager interface {
 	// Authorization is the caller's job.
 	MFADisenroll(ctx context.Context, accountID, initiatorUserID, targetUserID string) error
 
+	// GetPeerLoginMFAApproval returns what the device-login approval page
+	// shows for the record the token names (ADR-0028 D4).
+	GetPeerLoginMFAApproval(ctx context.Context, token string) (*PeerLoginMFAView, error)
+
+	// ApprovePeerLoginMFA checks the user's code with the dashboard
+	// challenge's verifier and approves the pending device login. A retry
+	// of an approval that already happened succeeds without a code.
+	ApprovePeerLoginMFA(ctx context.Context, token, code string) (*PeerLoginMFAApproveOutcome, error)
+
+	// DenyPeerLoginMFA records "Not me" for the pending device login.
+	DenyPeerLoginMFA(ctx context.Context, token string) (*PeerLoginMFAView, error)
+
 	// GetAccountUsersMFAState returns the 2FA state of the account's users
 	// that have 2FA, keyed by user ID. Admin only.
 	GetAccountUsersMFAState(ctx context.Context, accountID, initiatorUserID string) (map[string]UserMFAState, error)
@@ -292,6 +304,46 @@ type UserMFAState struct {
 type MFAEnrollmentGaps struct {
 	Local     int
 	Federated int
+}
+
+// PeerLoginMFAState is the state of a device-login approval as the page
+// shows it. Expired is derived from the clock.
+type PeerLoginMFAState string
+
+// The states of a device-login approval.
+const (
+	PeerLoginMFAPending  PeerLoginMFAState = "pending"
+	PeerLoginMFAApproved PeerLoginMFAState = "approved"
+	PeerLoginMFADenied   PeerLoginMFAState = "denied"
+	PeerLoginMFAConsumed PeerLoginMFAState = "consumed"
+	PeerLoginMFAExpired  PeerLoginMFAState = "expired"
+)
+
+// PeerLoginMFAView is what the approval page shows. Hostname and OS are
+// what the device reported; IP and location are what the server observed.
+// The email is partly masked, since anyone holding the link can open it.
+type PeerLoginMFAView struct {
+	State          PeerLoginMFAState
+	Hostname       string
+	OS             string
+	IP             string
+	GeoCountry     string
+	GeoCity        string
+	NewPeer        bool
+	KeyFingerprint string
+	MaskedEmail    string
+	AccountDomain  string
+	CreatedAt      time.Time
+	ExpiresAt      time.Time
+}
+
+// PeerLoginMFAApproveOutcome is the result of a code on the approval page.
+// Approved false with no other flag is a wrong code.
+type PeerLoginMFAApproveOutcome struct {
+	Approved    bool
+	CodeReused  bool
+	Locked      bool
+	LockedUntil *time.Time
 }
 
 // MFATokenPurpose identifies what a short-lived MFA token can be

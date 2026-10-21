@@ -248,6 +248,20 @@ const (
 	UserMFAReset Activity = 111
 	// UserMFADisabled records a user turning off their own 2FA.
 	UserMFADisabled Activity = 112
+	// PeerLoginMFARequired records a device login waiting for the user's
+	// second factor (ADR-0028).
+	PeerLoginMFARequired Activity = 113
+	// PeerLoginMFAApproved records a device login approved through the
+	// approval link. The link proves the user's code, not their session,
+	// so the initiator is the system.
+	PeerLoginMFAApproved Activity = 114
+	// PeerLoginMFAFailed records a wrong or refused code on the approval
+	// link.
+	PeerLoginMFAFailed Activity = 115
+	// PeerLoginMFADenied records "Not me" on the approval link.
+	PeerLoginMFADenied Activity = 116
+	// PeerLoginMFAExpired records a device login that was never approved.
+	PeerLoginMFAExpired Activity = 117
 
 	AccountDeleted Activity = 99999
 )
@@ -377,6 +391,11 @@ var activityMap = map[Activity]Code{
 	AccountPeerApprovalExemptGroupsUpdated: {"Account peer approval exempt groups updated", "account.setting.peer.approval.exempt_groups.update"},
 	UserMFAReset:                           {"User 2FA reset", "user.mfa.reset"},
 	UserMFADisabled:                        {"User 2FA disabled", "user.mfa.disable"},
+	PeerLoginMFARequired:                   {"Device login waiting for 2FA approval", "peer.login.mfa.require"},
+	PeerLoginMFAApproved:                   {"Device login approved with 2FA", "peer.login.mfa.approve"},
+	PeerLoginMFAFailed:                     {"Device login 2FA approval failed", "peer.login.mfa.fail"},
+	PeerLoginMFADenied:                     {"Device login denied through the approval link", "peer.login.mfa.deny"},
+	PeerLoginMFAExpired:                    {"Device login 2FA approval expired", "peer.login.mfa.expire"},
 }
 
 // StringCode returns a string code of the activity

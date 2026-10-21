@@ -94,3 +94,30 @@ func TestPendingTokenCarriesEnrollmentMode(t *testing.T) {
 		assert.Equal(t, "JBSWY3DPEHPK3PXP", res.Secret)
 	}
 }
+
+// A peer login approval token names its record and expires at the
+// record's deadline; it is useless for any other purpose.
+func TestPeerLoginToken(t *testing.T) {
+	s, err := NewSigner(base64.StdEncoding.EncodeToString(make([]byte, 32)))
+	require.NoError(t, err)
+	deadline := time.Now().Add(7 * time.Minute).Truncate(time.Second)
+
+	raw, err := s.IssuePeerLogin("user-1", "approval-1", deadline)
+	require.NoError(t, err)
+	res, err := s.Verify(raw, PurposePeerLogin)
+	require.NoError(t, err)
+	assert.Equal(t, "user-1", res.UserID)
+	assert.Equal(t, "approval-1", res.ApprovalID)
+	assert.True(t, deadline.Equal(res.ExpiresAt), "expires at the record's deadline")
+
+	_, err = s.Verify(raw, PurposeSession)
+	require.Error(t, err, "not usable as another purpose")
+
+	expired, err := s.IssuePeerLogin("user-1", "approval-1", time.Now().Add(-time.Second))
+	require.NoError(t, err)
+	_, err = s.Verify(expired, PurposePeerLogin)
+	require.Error(t, err, "an expired token is refused")
+
+	_, err = s.IssuePeerLogin("user-1", "", deadline)
+	require.Error(t, err, "the record is required")
+}

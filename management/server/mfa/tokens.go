@@ -44,6 +44,11 @@ const (
 	// silently elevate device B that happens to be logged in as the
 	// same user.
 	PurposeSession TokenPurpose = "mfa_session"
+
+	// PurposePeerLogin: the bearer of the device-login approval page
+	// (ADR-0028 D4). Names one approval record and expires at that
+	// record's deadline, so it is valid for as long as the record can be.
+	PurposePeerLogin TokenPurpose = "mfa_peer_login"
 )
 
 // pendingTokenTTL bounds how long the user has to scan the QR and
@@ -82,6 +87,8 @@ const mfaTokenSigningKeyInfo = "openzro-mfa-token-v1"
 // — no per-request key derivation.
 type Signer struct {
 	key []byte
+	// now is the clock for issuing and checking expiry; nil means time.Now.
+	now func() time.Time
 }
 
 // NewSigner derives the HS256 signing key from the operator's
@@ -106,6 +113,16 @@ func NewSigner(dataStoreEncryptionKeyB64 string) (*Signer, error) {
 	return &Signer{key: h.Sum(nil)}, nil
 }
 
+// SetClock sets the signer's clock, for tests that step through time.
+func (s *Signer) SetClock(now func() time.Time) { s.now = now }
+
+func (s *Signer) clock() time.Time {
+	if s.now != nil {
+		return s.now().UTC()
+	}
+	return time.Now().UTC()
+}
+
 // tokenClaims is the wire shape. `Purpose` lives in a dedicated
 // claim so the verify path can refuse a wrong-purpose token before
 // reaching the endpoint's business logic. `JTIBinding` ties the
@@ -124,6 +141,8 @@ type tokenClaims struct {
 	// inferred from it. PurposePendingEnrollment only.
 	Enrollment     string `json:"enrollment,omitempty"`
 	ReplacesFactor string `json:"replaces_factor,omitempty"`
+	// ApprovalID is the peer login approval record. PurposePeerLogin only.
+	ApprovalID string `json:"approval_id,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -161,6 +180,25 @@ func (s *Signer) IssuePending(userID, secretBase32 string, reenroll bool, replac
 	return s.issueWith(claims, userID, pendingTokenTTL)
 }
 
+// IssuePeerLogin mints the approval page's token for one approval record.
+// It expires exactly at the record's deadline.
+func (s *Signer) IssuePeerLogin(userID, approvalID string, deadline time.Time) (string, error) {
+	if userID == "" || approvalID == "" {
+		return "", errors.New("mfa: IssuePeerLogin requires userID and approvalID")
+	}
+	now := s.clock()
+	claims := tokenClaims{
+		Purpose:    PurposePeerLogin,
+		ApprovalID: approvalID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   userID,
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(deadline),
+		},
+	}
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(s.key)
+}
+
 // enrollmentReEnroll is the Enrollment claim of a re-enrollment token.
 const enrollmentReEnroll = "reenroll"
 
@@ -182,7 +220,7 @@ func (s *Signer) issue(userID, jtiBinding, secret string, purpose TokenPurpose, 
 
 // issueWith signs claims for userID with the given lifetime.
 func (s *Signer) issueWith(claims tokenClaims, userID string, ttl time.Duration) (string, error) {
-	now := time.Now().UTC()
+	now := s.clock()
 	claims.RegisteredClaims = jwt.RegisteredClaims{
 		Subject:   userID,
 		IssuedAt:  jwt.NewNumericDate(now),
@@ -203,6 +241,8 @@ type VerifyResult struct {
 	Secret         string
 	ReEnrollment   bool
 	ReplacesFactor string
+	ApprovalID     string
+	ExpiresAt      time.Time
 }
 
 // Verify parses, validates signature + expiry, and asserts the
@@ -212,7 +252,7 @@ func (s *Signer) Verify(raw string, want TokenPurpose) (VerifyResult, error) {
 	if raw == "" {
 		return VerifyResult{}, errors.New("mfa: empty token")
 	}
-	parser := jwt.NewParser(jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
+	parser := jwt.NewParser(jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithTimeFunc(s.clock))
 	tok, err := parser.ParseWithClaims(raw, &tokenClaims{}, func(t *jwt.Token) (any, error) {
 		return s.key, nil
 	})
@@ -236,5 +276,14 @@ func (s *Signer) Verify(raw string, want TokenPurpose) (VerifyResult, error) {
 		Secret:         claims.Secret,
 		ReEnrollment:   claims.Enrollment == enrollmentReEnroll,
 		ReplacesFactor: claims.ReplacesFactor,
+		ApprovalID:     claims.ApprovalID,
+		ExpiresAt:      expiresAt(claims),
 	}, nil
+}
+
+func expiresAt(claims *tokenClaims) time.Time {
+	if claims.ExpiresAt == nil {
+		return time.Time{}
+	}
+	return claims.ExpiresAt.Time
 }
