@@ -38,6 +38,7 @@ import (
 
 	"github.com/openzro/openzro/client/iface"
 	"github.com/openzro/openzro/client/internal"
+	"github.com/openzro/openzro/client/internal/peerloginmfa"
 	"github.com/openzro/openzro/client/internal/profilemanager"
 	"github.com/openzro/openzro/client/proto"
 	"github.com/openzro/openzro/client/ui/desktop"
@@ -659,15 +660,19 @@ func (s *serviceClient) handleSSOLogin(loginResp *proto.LoginResponse, conn prot
 		return err
 	}
 
-	resp, err := conn.WaitSSOLogin(s.ctx, &proto.WaitSSOLoginRequest{UserCode: loginResp.UserCode})
+	// The device sign-in may then wait for the user's 2FA approval
+	// (ADR-0028): WaitSSO opens the approval page and waits for it.
+	email, err := peerloginmfa.WaitSSO(s.ctx, conn, loginResp.UserCode, "", openURL,
+		func(string, time.Duration) { s.announcePeerLoginMFA() })
 	if err != nil {
+		s.showPeerLoginMFAError(err)
 		log.Errorf("waiting sso login failed with: %v", err)
 		return err
 	}
 
-	if resp.Email != "" {
+	if email != "" {
 		err := s.profileManager.SetActiveProfileState(&profilemanager.ProfileState{
-			Email: resp.Email,
+			Email: email,
 		})
 		if err != nil {
 			log.Warnf("failed to set profile state: %v", err)
@@ -1631,9 +1636,17 @@ func (s *serviceClient) showLoginURL() {
 			return
 		}
 
-		_, err = conn.WaitSSOLogin(s.ctx, &proto.WaitSSOLoginRequest{UserCode: resp.UserCode})
+		_, err = peerloginmfa.WaitSSO(s.ctx, conn, resp.UserCode, "", openURL,
+			func(string, time.Duration) {
+				label.SetText("Approve the sign-in in your browser:\nenter your 2FA code on the page that opened.")
+			})
 		if err != nil {
 			log.Errorf("Waiting sso login failed with: %v", err)
+			if msg, _, ok := peerloginmfa.Describe(err, s.managementURL); ok {
+				label.SetText(msg)
+				s.showPeerLoginMFAError(err)
+				return
+			}
 			label.SetText("Waiting login failed, please create \na debug bundle in the settings and contact support.")
 			return
 		}
