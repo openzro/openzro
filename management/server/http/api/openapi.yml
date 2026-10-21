@@ -76,6 +76,71 @@ components:
         - created_at
         - created_by
         - onboarding
+    PeerLoginApproval:
+      description: A device login waiting for the user's second factor (ADR-0028), as the approval page shows it. Hostname and OS are what the device reported; IP and location are what the server observed. The email is partly masked, since anyone holding the link can open the page.
+      type: object
+      properties:
+        state:
+          description: Expired is derived from expires_at.
+          type: string
+          enum: [ "pending", "approved", "denied", "consumed", "expired" ]
+          example: pending
+        hostname:
+          type: string
+          example: ana-laptop
+        os:
+          type: string
+          example: linux
+        ip:
+          type: string
+          example: 203.0.113.7
+        geo_country:
+          type: string
+          example: BR
+        geo_city:
+          type: string
+          example: São Paulo
+        new_peer:
+          description: True when the login registers a new device, false when it re-activates a login-expired one
+          type: boolean
+        key_fingerprint:
+          description: The device's WireGuard key, shortened
+          type: string
+          example: Oxc1yl…CVQ=
+        masked_email:
+          type: string
+          example: a***@example.com
+        account_domain:
+          type: string
+          example: example.com
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+      required: [ state, hostname, os, ip, new_peer, key_fingerprint, masked_email, account_domain, created_at, expires_at ]
+    PeerLoginApproveRequest:
+      type: object
+      properties:
+        code:
+          description: A TOTP code or a backup code. Optional when repeating an approval that already happened.
+          type: string
+          example: "123456"
+    PeerLoginApproveResponse:
+      type: object
+      properties:
+        approved:
+          type: boolean
+        reason:
+          description: Why the code did not approve the login. Set only when approved is false.
+          type: string
+          enum: [ "wrong_code", "code_reused", "locked" ]
+        locked_until:
+          description: Set when the user is locked out after repeated wrong codes
+          type: string
+          format: date-time
+      required: [ approved ]
     MFAUnenrolledUsers:
       description: Active users without two-factor authentication, returned to admins only. Local users follow mfa_enforce_local, everyone else mfa_enforce_federated. Service users, blocked users and pending or deactivated local users are not counted.
       type: object
@@ -2577,6 +2642,13 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    ApprovalToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >-
+        The token from a device-login approval link (ADR-0028), not a dashboard
+        session. It names one approval and expires with it.
     TokenAuth:
       type: apiKey
       in: header
@@ -2587,6 +2659,82 @@ security:
   - BearerAuth: [ ]
   - TokenAuth: [ ]
 paths:
+  /api/mfa/peer-login:
+    get:
+      summary: Show a device login waiting for 2FA
+      description: Opened by the approval page. Authenticated by the page token from the approval link (Authorization Bearer), not a dashboard session. Responses are not cached and send no referrer.
+      tags: [ MFA ]
+      security:
+        - ApprovalToken: [ ]
+      responses:
+        '200':
+          description: The device login
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeerLoginApproval'
+        '401':
+          description: The link is invalid or past its deadline
+        '412':
+          description: The device login no longer exists
+  /api/mfa/peer-login/approve:
+    post:
+      summary: Approve a device login with a 2FA code
+      description: Checks the code with the same verifier and lockout as the dashboard 2FA challenge. Repeating an approval that already happened succeeds without a code, so the body and the code are optional; on a login not yet approved, a missing code is a wrong code. The body is at most 1 KiB.
+      tags: [ MFA ]
+      security:
+        - ApprovalToken: [ ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PeerLoginApproveRequest'
+      responses:
+        '200':
+          description: Approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeerLoginApproveResponse'
+        '400':
+          description: The body is not one JSON object
+        '401':
+          description: The link is invalid or past its deadline
+        '412':
+          description: The device login was consumed, denied or has expired, or the user has no 2FA
+        '413':
+          description: The body is larger than 1 KiB
+        '422':
+          description: Wrong or already used code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeerLoginApproveResponse'
+        '423':
+          description: Locked after repeated wrong codes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeerLoginApproveResponse'
+  /api/mfa/peer-login/deny:
+    post:
+      summary: Deny a device login ("Not me")
+      description: The device key stays denied until the attempt expires. Denying again is harmless; an approved login cannot be denied.
+      tags: [ MFA ]
+      security:
+        - ApprovalToken: [ ]
+      responses:
+        '200':
+          description: Denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeerLoginApproval'
+        '401':
+          description: The link is invalid or past its deadline
+        '412':
+          description: The device login can no longer be denied
   /api/accounts:
     get:
       summary: List all Accounts

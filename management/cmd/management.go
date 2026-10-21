@@ -899,6 +899,16 @@ func loadMgmtConfig(ctx context.Context, mgmtConfigPath string) (*types.Config, 
 	if mgmtLetsencryptDomain != "" {
 		loadedConfig.HttpConfig.LetsEncryptDomain = mgmtLetsencryptDomain
 	}
+	// The dashboard URL is where clients open the device-login approval
+	// page with a bearer token; refuse to start with one that is not safe.
+	if v, ok := os.LookupEnv(types.DashboardURLEnv); ok {
+		loadedConfig.HttpConfig.DashboardURL = v
+	}
+	dashboardURL, err := types.NormalizeDashboardURL(loadedConfig.HttpConfig.DashboardURL)
+	if err != nil {
+		return nil, fmt.Errorf("HttpConfig.DashboardURL: %w", err)
+	}
+	loadedConfig.HttpConfig.DashboardURL = dashboardURL
 	if mgmtDataDir != "" {
 		loadedConfig.Datadir = mgmtDataDir
 	}
