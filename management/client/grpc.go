@@ -559,11 +559,12 @@ func infoToMetaData(info *system.Info) *proto.PeerSystemMeta {
 }
 
 // logLoginError logs a failed login. A device-login 2FA refusal is part of
-// a normal sign-in that waits for the user, so it is not an error; its
-// message, meant for older clients, is not repeated.
+// a sign-in the caller handles and announces once, while it polls every few
+// seconds; it is logged at debug, without its message, which is meant for
+// older clients.
 func logLoginError(err error) {
 	if peerloginmfa.Is(err) {
-		log.Info("login to Management Service is waiting for the user's 2FA")
+		log.Debug("login to Management Service refused by the device-login 2FA gate")
 		return
 	}
 	log.Errorf("failed to login to Management Service: %v", err)

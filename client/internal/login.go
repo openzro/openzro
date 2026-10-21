@@ -187,11 +187,11 @@ func isRegistrationNeeded(err error) bool {
 	return false
 }
 
-// logRegisterError logs a failed registration. One waiting for the user's
-// 2FA approval is part of a normal sign-in, not an error.
+// logRegisterError logs a failed registration. A device-login 2FA refusal
+// is handled and announced once by the caller, so it is logged at debug.
 func logRegisterError(err error) {
 	if peerloginmfa.Is(err) {
-		log.Info("peer registration is waiting for the user's 2FA")
+		log.Debug("peer registration refused by the device-login 2FA gate")
 		return
 	}
 	log.Errorf("failed registering peer %v", err)
