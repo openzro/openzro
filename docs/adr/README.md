@@ -43,3 +43,4 @@ to understand *what* was decided and *why* without opening the issue.
 | [0025](./0025-allowed-email-domains.md) | Account-level allowlist of email domains for new users | Accepted |
 | [0026](./0026-console-local-users-and-email-domains.md) | Console management of local users and the email-domain allowlist | Proposed |
 | [0027](./0027-immediate-access-cut-on-local-password-reset.md) | Immediate access cut on a local password reset | Proposed (supersedes 0024 D6 "What a reset does not do") |
+| [0028](./0028-mfa-on-peer-login.md) | Second factor on peer login | Proposed |
