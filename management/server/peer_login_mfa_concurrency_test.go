@@ -270,9 +270,20 @@ func TestSweepPeerLoginMFAApprovals_RacesDeny(t *testing.T) {
 		r.B.sweepPeerLoginMFAApprovals(ctx, afterExpiry, 10)
 		close(swept)
 	}()
-	// Let the sweep read the record and block on its lock, then let the
-	// denial commit.
-	time.Sleep(time.Second)
+	// Wait until the database reports the sweep's DELETE blocked on the
+	// record lock the denial holds, then let the denial commit.
+	deadline := time.After(barrierTimeout)
+	for lockWaiters(t, r.B.Store) == 0 {
+		select {
+		case <-swept:
+			close(release)
+			t.Fatal("the sweep finished without waiting for the denial's lock")
+		case <-deadline:
+			close(release)
+			t.Fatal("the database never reported the sweep waiting on a lock")
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
 	close(release)
 	require.NoError(t, <-denyErr)
 	<-swept
