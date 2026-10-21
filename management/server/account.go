@@ -172,6 +172,10 @@ type DefaultAccountManager struct {
 	// mfaClock is the time source for TOTP checks and lockouts. Nil means
 	// time.Now; tests set it to step through TOTP windows.
 	mfaClock func() time.Time
+
+	// peerLoginMFAMetrics counts device logins the 2FA gate refuses and
+	// their approvals' outcomes; nil when metrics are off.
+	peerLoginMFAMetrics *telemetry.PeerLoginMFAMetrics
 }
 
 // FlowPolicyIndex is the narrow contract DefaultAccountManager uses
@@ -381,6 +385,10 @@ func BuildManager(
 		settingsManager:          settingsManager,
 		permissionsManager:       permissionsManager,
 		disableDefaultPolicy:     disableDefaultPolicy,
+	}
+
+	if metrics != nil {
+		am.peerLoginMFAMetrics = metrics.AccountManagerMetrics().PeerLoginMFA()
 	}
 
 	am.startWarmup(ctx)
@@ -2277,7 +2285,7 @@ func (am *DefaultAccountManager) GetAccountIDForPeerKey(ctx context.Context, pee
 }
 
 func (am *DefaultAccountManager) handleUserPeer(ctx context.Context, transaction store.Store, peer *nbpeer.Peer,
-	settings *types.Settings, jwtIssuedAt time.Time) (bool, error) {
+	settings *types.Settings, jwtIssuedAt time.Time, connectorID string) (bool, error) {
 	// The lock is held until the login commits, which orders this check
 	// against a concurrent password reset (see cutLocalUserAccess). It is an
 	// update lock because re-logging an expired peer writes last_login to
@@ -2298,6 +2306,13 @@ func (am *DefaultAccountManager) handleUserPeer(ctx context.Context, transaction
 	}
 
 	if peerLoginExpired(ctx, peer, settings) {
+		// Re-activating an expired login asks the second factor again
+		// (ADR-0028 D1); the user row locked above comes first.
+		if am.peerLoginMFARequired(settings, connectorID) {
+			if err = am.checkPeerLoginMFA(ctx, transaction, user, peer.Key, false); err != nil {
+				return false, err
+			}
+		}
 		err = am.handleExpiredPeer(ctx, transaction, user, peer)
 		if err != nil {
 			return false, err

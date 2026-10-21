@@ -32,6 +32,10 @@ type PeerLogin struct {
 	// token had none. Compared with the user's credentials cutoff so a JWT
 	// issued before a local password reset cannot log a peer in (ADR-0027).
 	JWTIssuedAt time.Time
+	// ConnectorID is the identity provider connector that issued the JWT
+	// ("local" for Dex local users); empty for other issuers. It decides
+	// whether the device-login 2FA gate applies (ADR-0028 D2).
+	ConnectorID string
 	// SetupKey references to a server.SetupKey to log in. Can be empty when UserID is used or auth is not required.
 	SetupKey string
 	// ConnectionIP is the real IP of the peer

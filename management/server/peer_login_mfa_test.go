@@ -302,6 +302,7 @@ func countEvents(t *testing.T, am *DefaultAccountManager, accountID string, code
 func TestSweepPeerLoginMFAApprovals(t *testing.T) {
 	f := newPeerLoginFixture(t, "ana")
 	ctx := context.Background()
+	read := f.peerLoginMFAMeter(t)
 	pending, err := f.request(t, "key-pending")
 	require.NoError(t, err)
 	approved, err := f.request(t, "key-approved")
@@ -332,6 +333,8 @@ func TestSweepPeerLoginMFAApprovals(t *testing.T) {
 	assert.Never(t, func() bool {
 		return countEvents(t, f.am, f.accountID, activity.PeerLoginMFAExpired) != 1
 	}, 300*time.Millisecond, 20*time.Millisecond, "only the attempt nobody acted on expired")
+	outcomes, _ := read("management.peer.login.mfa.outcome.counter")
+	assert.Equal(t, int64(1), outcomes["expired"], "the expiry is counted once, by the replica that swept it")
 }
 
 // A 2FA reset removes the user's approval records in the same transaction
