@@ -403,12 +403,25 @@ func requireUserAuth(w http.ResponseWriter, r *http.Request) (nbcontext.UserAuth
 // session so the dashboard's 403 interceptor can route the user to
 // /mfa/challenge — without that token the user gets stuck (review
 // round 2, finding #2: enforcement-OFF voluntary MFA users hit this
-// when sessionStorage is empty after a tab reset). Returns false
-// when refused.
+// when sessionStorage is empty after a tab reset). A caller with no
+// 2FA cannot pass a challenge, so they get a refusal that tells them
+// to set it up instead of a token. Returns false when refused.
 func (h *handler) requireMFASession(w http.ResponseWriter, r *http.Request, userID string) bool {
 	jwtSession := jwtSessionIDFromRequest(r)
 	mfaTok := r.Header.Get(mfaSessionHeader)
 	if jwtSession == "" || !h.am.MFASessionValid(userID, mfaTok, jwtSession) {
+		// A user without 2FA cannot pass a challenge: a challenge token
+		// would strand them on the challenge page. Say what to do instead.
+		st, err := h.am.MFAStatus(r.Context(), userID)
+		if err != nil {
+			util.WriteError(r.Context(), err, w)
+			return false
+		}
+		if !st.Enrolled {
+			util.WriteError(r.Context(), status.Errorf(status.PermissionDenied,
+				"set up two-factor authentication on your own account first"), w)
+			return false
+		}
 		token, err := h.am.MFAIssueChallengeToken(userID, jwtSession)
 		if err != nil {
 			log.WithContext(r.Context()).Errorf("issue challenge token on sensitive-op refusal: %v", err)
