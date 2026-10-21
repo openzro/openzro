@@ -3670,6 +3670,26 @@ func TestSqlStore_SaveAccountSettings_AllowedEmailDomains(t *testing.T) {
 	require.Equal(t, []string{"example.com", "eng.example.com"}, saved.AllowedEmailDomains)
 }
 
+// Saving settings that did not change is not "account not found". MySQL
+// reports zero affected rows for an unchanged row, which used to surface as
+// a 404 on an idempotent save.
+func TestSqlStore_SaveAccountSettings_Unchanged(t *testing.T) {
+	runTestForAllEngines(t, "../testdata/store.sql", func(t *testing.T, store Store) {
+		ctx := context.Background()
+		accountID := "bf1c8084-ba50-4ce7-9439-34653001fc3b"
+
+		settings, err := store.GetAccountSettings(ctx, LockingStrengthShare, accountID)
+		require.NoError(t, err)
+		require.NoError(t, store.SaveAccountSettings(ctx, LockingStrengthUpdate, accountID, settings))
+		require.NoError(t, store.SaveAccountSettings(ctx, LockingStrengthUpdate, accountID, settings))
+
+		err = store.SaveAccountSettings(ctx, LockingStrengthUpdate, "no-such-account", settings)
+		sErr, ok := status.FromError(err)
+		require.True(t, ok, "expected a status error, got %v", err)
+		require.Equal(t, status.NotFound, sErr.Type())
+	})
+}
+
 // GetSyncablePeerIDs backs the per-replica stream reconciler (#212): a
 // peer may hold a Sync stream only if it still exists and its login is not
 // expired.

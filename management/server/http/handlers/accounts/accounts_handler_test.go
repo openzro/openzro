@@ -593,3 +593,84 @@ func TestAccounts_PutStripsLeadingVOnClientUpdateTargetVersion(t *testing.T) {
 		})
 	}
 }
+
+// peer_approval_exempt_groups is the public name of
+// ExtraSettings.IntegratedValidatorGroups: peers in these groups skip peer
+// approval. Sending it sets the list; omitting it keeps the stored list;
+// the response reports it.
+func TestAccounts_PeerApprovalExemptGroups(t *testing.T) {
+	accountID := "test_account"
+	adminUser := types.NewAdminUser("test_user")
+	account := &types.Account{
+		Id:      accountID,
+		Domain:  "hotmail.com",
+		Network: types.NewNetwork(),
+		Users:   map[string]*types.User{adminUser.Id: adminUser},
+		Settings: &types.Settings{
+			PeerLoginExpiration: time.Hour,
+			Extra: &types.ExtraSettings{
+				PeerApprovalEnabled:       true,
+				IntegratedValidatorGroups: []string{"g-staff"},
+			},
+		},
+	}
+	handler := initAccountsTestData(t, account)
+	var captured *types.Settings
+	m, ok := handler.accountManager.(*mock_server.MockAccountManager)
+	require.True(t, ok)
+	m.UpdateAccountSettingsFunc = func(_ context.Context, _, _ string, newSettings *types.Settings) (*types.Settings, error) {
+		captured = newSettings
+		return newSettings, nil
+	}
+	put := func(body string) api.Account {
+		t.Helper()
+		recorder := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPut, "/api/accounts/"+accountID, bytes.NewBufferString(body))
+		req = nbcontext.SetUserAuthInRequest(req, nbcontext.UserAuth{UserId: adminUser.Id, AccountId: accountID, Domain: "hotmail.com"})
+		router := mux.NewRouter()
+		router.HandleFunc("/api/accounts/{accountId}", handler.updateAccount).Methods("PUT")
+		router.ServeHTTP(recorder, req)
+		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+		var got api.Account
+		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &got))
+		return got
+	}
+
+	got := put(`{"settings":{"peer_login_expiration":3600,"peer_login_expiration_enabled":false,"extra":{"peer_approval_enabled":true,"peer_approval_exempt_groups":["g-staff","g-ops"],"network_traffic_logs_enabled":false,"network_traffic_packet_counter_enabled":false}}}`)
+	require.NotNil(t, captured)
+	assert.Equal(t, []string{"g-staff", "g-ops"}, captured.Extra.IntegratedValidatorGroups)
+	require.NotNil(t, got.Settings.Extra)
+	require.NotNil(t, got.Settings.Extra.PeerApprovalExemptGroups)
+	assert.Equal(t, []string{"g-staff", "g-ops"}, *got.Settings.Extra.PeerApprovalExemptGroups)
+
+	captured = nil
+	put(`{"settings":{"peer_login_expiration":3600,"peer_login_expiration_enabled":false,"extra":{"peer_approval_enabled":true,"network_traffic_logs_enabled":false,"network_traffic_packet_counter_enabled":false}}}`)
+	require.NotNil(t, captured)
+	assert.Nil(t, captured.Extra.IntegratedValidatorGroups,
+		"an omitted field reaches the manager as nil, which keeps the stored list inside its transaction")
+
+	captured = nil
+	put(`{"settings":{"peer_login_expiration":3600,"peer_login_expiration_enabled":false,"extra":{"peer_approval_enabled":true,"peer_approval_exempt_groups":[],"network_traffic_logs_enabled":false,"network_traffic_packet_counter_enabled":false}}}`)
+	require.NotNil(t, captured)
+	require.NotNil(t, captured.Extra.IntegratedValidatorGroups, "an explicit empty list is not an omitted one")
+	assert.Empty(t, captured.Extra.IntegratedValidatorGroups, "an explicit empty list clears it")
+
+	// The handler's own settings read can fail. An omitted field must still
+	// reach the manager as nil, not as an empty list that clears the stored one.
+	ctrl := gomock.NewController(t)
+	failing := settings.NewMockManager(ctrl)
+	failing.EXPECT().GetSettings(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil, status.Errorf(status.Internal, "store unavailable")).AnyTimes()
+	handler.settingsManager = failing
+	captured = nil
+	put(`{"settings":{"peer_login_expiration":3600,"peer_login_expiration_enabled":false,"extra":{"peer_approval_enabled":true,"network_traffic_logs_enabled":false,"network_traffic_packet_counter_enabled":false}}}`)
+	require.NotNil(t, captured)
+	assert.Nil(t, captured.Extra.IntegratedValidatorGroups, "a failed read must not clear the stored list")
+
+	// Omitting the whole extra object reaches the manager as nil, which keeps
+	// every stored extra setting inside its transaction.
+	captured = nil
+	put(`{"settings":{"peer_login_expiration":3600,"peer_login_expiration_enabled":false}}`)
+	require.NotNil(t, captured)
+	assert.Nil(t, captured.Extra, "an omitted extra object reaches the manager as nil")
+}

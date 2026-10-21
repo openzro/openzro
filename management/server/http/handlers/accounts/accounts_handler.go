@@ -154,6 +154,16 @@ func (h *handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 		}
 		extra := seed
 		extra.PeerApprovalEnabled = req.Settings.Extra.PeerApprovalEnabled
+		// Public name of IntegratedValidatorGroups: peers in these groups skip
+		// approval. Left nil when omitted, not taken from the seed above, so
+		// the account manager keeps the stored list inside the transaction
+		// that locks the settings; the seed is read earlier and may be stale
+		// or missing. An empty list clears it. Existence is validated, and
+		// the list normalized, by UpdateAccountSettings.
+		extra.IntegratedValidatorGroups = nil
+		if req.Settings.Extra.PeerApprovalExemptGroups != nil {
+			extra.IntegratedValidatorGroups = append([]string{}, *req.Settings.Extra.PeerApprovalExemptGroups...)
+		}
 		extra.FlowEnabled = req.Settings.Extra.NetworkTrafficLogsEnabled
 		extra.FlowPacketCounterEnabled = req.Settings.Extra.NetworkTrafficPacketCounterEnabled
 		extra.FlowEventsGroups = groups
@@ -381,8 +391,10 @@ func toAccountResponse(accountID string, settings *types.Settings, meta *types.A
 			gs := append([]string(nil), settings.Extra.FlowEventsGroups...)
 			groups = &gs
 		}
+		exemptGroups := append([]string{}, settings.Extra.IntegratedValidatorGroups...)
 		apiSettings.Extra = &api.AccountExtraSettings{
 			PeerApprovalEnabled:                settings.Extra.PeerApprovalEnabled,
+			PeerApprovalExemptGroups:           &exemptGroups,
 			NetworkTrafficLogsEnabled:          settings.Extra.FlowEnabled,
 			NetworkTrafficPacketCounterEnabled: settings.Extra.FlowPacketCounterEnabled,
 			NetworkTrafficLogsGroups:           groups,

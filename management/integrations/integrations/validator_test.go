@@ -178,3 +178,30 @@ func TestIsNotValidPeer_PendingPeerReportedInvalid(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, invalid, "approved peer must be reported valid")
 }
+
+// The exempt list is evaluated live, so removing a group from it has two
+// different effects that operators must be able to predict:
+//   - a peer that registered while exempt was stored as approved
+//     (RequiresApproval=false) and stays approved;
+//   - a peer that registered pending and was only released by the
+//     exemption is still stored as pending, so it goes back to pending.
+func TestGetValidatedPeers_RemovingExemption(t *testing.T) {
+	v, err := NewIntegratedValidator(context.Background(), nil)
+	assert.NoError(t, err)
+
+	group := &types.Group{ID: "g-staff", Peers: []string{"approved-at-registration", "released-by-exemption"}}
+	approved := newPeer("approved-at-registration", false)
+	released := newPeer("released-by-exemption", true)
+	groups := []*types.Group{group}
+	peers := []*nbpeer.Peer{approved, released}
+
+	got, err := v.GetValidatedPeers(context.Background(), tAccount, groups, peers, newApprovalEnabledSettings("g-staff"))
+	assert.NoError(t, err)
+	assert.Contains(t, got, "approved-at-registration")
+	assert.Contains(t, got, "released-by-exemption", "adding the group to the exempt list releases its pending peers")
+
+	got, err = v.GetValidatedPeers(context.Background(), tAccount, groups, peers, newApprovalEnabledSettings())
+	assert.NoError(t, err)
+	assert.Contains(t, got, "approved-at-registration", "a peer approved at registration stays approved")
+	assert.NotContains(t, got, "released-by-exemption", "a peer only released by the exemption goes back to pending")
+}
