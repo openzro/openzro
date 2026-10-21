@@ -77,10 +77,13 @@ func (s *serviceClient) showPeerLoginMFAApproval(url string, opened bool, cancel
 	content := container.NewVBox(label, link,
 		widget.NewButton("Copy link", func() { w.Clipboard().SetContent(url) }),
 		widget.NewButton("Open in browser", func() { _ = openURL(url) }),
-		widget.NewButton("Cancel sign-in", w.Close),
+		widget.NewButton("Cancel sign-in", func() { s.closeApprovalWindowUI(aw) }),
 	)
 	w.SetContent(container.NewPadded(content))
 	w.Resize(fyne.NewSize(460, 240))
+	// The title bar's close comes through here too, so it is serialized
+	// with every other close of the window.
+	w.SetCloseIntercept(func() { s.closeApprovalWindowUI(aw) })
 	w.SetOnClosed(func() {
 		aw.closed.Store(true)
 		s.approvalMu.Lock()
@@ -114,7 +117,8 @@ const approvalRetryClose = 5 * time.Second
 // again until its close callback reports that a close took effect.
 func (s *serviceClient) retireApprovalWindowLocked(aw *approvalWindow) {
 	ended := widget.NewLabel("This sign-in request has ended.")
-	aw.w.SetContent(container.NewPadded(container.NewVBox(ended, widget.NewButton("Close", aw.w.Close))))
+	aw.w.SetContent(container.NewPadded(container.NewVBox(ended,
+		widget.NewButton("Close", func() { s.closeApprovalWindowUI(aw) }))))
 	aw.cancel()
 	aw.w.Close()
 	go func() {
@@ -124,16 +128,24 @@ func (s *serviceClient) retireApprovalWindowLocked(aw *approvalWindow) {
 		for !aw.closed.Load() {
 			select {
 			case <-ticker.C:
-				s.approvalUIMu.Lock()
-				if !aw.closed.Load() {
-					aw.w.Close()
-				}
-				s.approvalUIMu.Unlock()
+				s.closeApprovalWindowUI(aw)
 			case <-deadline:
 				return
 			}
 		}
 	}()
+}
+
+// closeApprovalWindowUI is the one way an approval window is closed outside
+// approvalUIMu: its buttons, the title bar and the retry all come here.
+// Fyne v2.5.3 does not make overlapping Close calls safe; they could both
+// get through and tear down the same window at once.
+func (s *serviceClient) closeApprovalWindowUI(aw *approvalWindow) {
+	s.approvalUIMu.Lock()
+	defer s.approvalUIMu.Unlock()
+	if !aw.closed.Load() {
+		aw.w.Close()
+	}
 }
 
 // closeApprovalWindow retires aw if it is still the open approval window.

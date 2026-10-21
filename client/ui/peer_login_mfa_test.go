@@ -287,3 +287,83 @@ func TestWaitSSO_ReplacedWindowBeforeItShows(t *testing.T) {
 	close(b.release)
 	require.NoError(t, <-doneB)
 }
+
+// slowCloseWindow measures how many Close calls run at once, and records
+// the close intercept, which the desktop driver calls for the title bar's
+// close button.
+type slowCloseWindow struct {
+	fyne.Window
+	inClose, maxInClose atomic.Int32
+	closeOnce           sync.Once
+	intercept           atomic.Value
+}
+
+func (w *slowCloseWindow) Close() {
+	n := w.inClose.Add(1)
+	for {
+		m := w.maxInClose.Load()
+		if n <= m || w.maxInClose.CompareAndSwap(m, n) {
+			break
+		}
+	}
+	time.Sleep(20 * time.Millisecond)
+	w.inClose.Add(-1)
+	w.closeOnce.Do(w.Window.Close)
+}
+
+func (w *slowCloseWindow) SetCloseIntercept(f func()) { w.intercept.Store(f) }
+
+func buttonNamed(t *testing.T, w fyne.Window, text string) *widget.Button {
+	t.Helper()
+	var found *widget.Button
+	var walk func(o fyne.CanvasObject)
+	walk = func(o fyne.CanvasObject) {
+		switch v := o.(type) {
+		case *widget.Button:
+			if v.Text == text {
+				found = v
+			}
+		case *fyne.Container:
+			for _, c := range v.Objects {
+				walk(c)
+			}
+		}
+	}
+	walk(w.Content())
+	require.NotNil(t, found, "button %q", text)
+	return found
+}
+
+// Every way of closing an approval window goes through one serialized
+// close: the Cancel button, the title bar (close intercept) and retiring
+// it never run Close at the same time.
+func TestApprovalWindow_ClosesAreSerialized(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	s := &serviceClient{app: app, ctx: context.Background()}
+	var fw *slowCloseWindow
+	s.newWindow = func(title string) fyne.Window {
+		fw = &slowCloseWindow{Window: app.NewWindow(title)}
+		return fw
+	}
+	aw := s.showPeerLoginMFAApproval("https://app.example.com/mfa/peer-login#t=tok", false, func() {})
+	require.NotNil(t, aw)
+	cancelButton := buttonNamed(t, fw.Window, "Cancel sign-in")
+	intercept, ok := fw.intercept.Load().(func())
+	require.True(t, ok, "the title bar's close is intercepted")
+
+	var wg sync.WaitGroup
+	for _, close := range []func(){
+		cancelButton.OnTapped,
+		intercept,
+		func() { s.closeApprovalWindow(aw) },
+	} {
+		wg.Add(1)
+		go func(f func()) {
+			defer wg.Done()
+			f()
+		}(close)
+	}
+	wg.Wait()
+	assert.Equal(t, int32(1), fw.maxInClose.Load(), "at most one Close at a time")
+}
