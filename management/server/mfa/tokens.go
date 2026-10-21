@@ -87,6 +87,8 @@ const mfaTokenSigningKeyInfo = "openzro-mfa-token-v1"
 // — no per-request key derivation.
 type Signer struct {
 	key []byte
+	// now is the clock for issuing and checking expiry; nil means time.Now.
+	now func() time.Time
 }
 
 // NewSigner derives the HS256 signing key from the operator's
@@ -109,6 +111,16 @@ func NewSigner(dataStoreEncryptionKeyB64 string) (*Signer, error) {
 	h.Write(raw)
 	h.Write([]byte(mfaTokenSigningKeyInfo))
 	return &Signer{key: h.Sum(nil)}, nil
+}
+
+// SetClock sets the signer's clock, for tests that step through time.
+func (s *Signer) SetClock(now func() time.Time) { s.now = now }
+
+func (s *Signer) clock() time.Time {
+	if s.now != nil {
+		return s.now().UTC()
+	}
+	return time.Now().UTC()
 }
 
 // tokenClaims is the wire shape. `Purpose` lives in a dedicated
@@ -174,7 +186,7 @@ func (s *Signer) IssuePeerLogin(userID, approvalID string, deadline time.Time) (
 	if userID == "" || approvalID == "" {
 		return "", errors.New("mfa: IssuePeerLogin requires userID and approvalID")
 	}
-	now := time.Now().UTC()
+	now := s.clock()
 	claims := tokenClaims{
 		Purpose:    PurposePeerLogin,
 		ApprovalID: approvalID,
@@ -208,7 +220,7 @@ func (s *Signer) issue(userID, jtiBinding, secret string, purpose TokenPurpose, 
 
 // issueWith signs claims for userID with the given lifetime.
 func (s *Signer) issueWith(claims tokenClaims, userID string, ttl time.Duration) (string, error) {
-	now := time.Now().UTC()
+	now := s.clock()
 	claims.RegisteredClaims = jwt.RegisteredClaims{
 		Subject:   userID,
 		IssuedAt:  jwt.NewNumericDate(now),
@@ -240,7 +252,7 @@ func (s *Signer) Verify(raw string, want TokenPurpose) (VerifyResult, error) {
 	if raw == "" {
 		return VerifyResult{}, errors.New("mfa: empty token")
 	}
-	parser := jwt.NewParser(jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
+	parser := jwt.NewParser(jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithTimeFunc(s.clock))
 	tok, err := parser.ParseWithClaims(raw, &tokenClaims{}, func(t *jwt.Token) (any, error) {
 		return s.key, nil
 	})

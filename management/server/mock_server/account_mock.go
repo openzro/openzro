@@ -164,9 +164,12 @@ type MockAccountManager struct {
 	MFAVerifyTokenFunc                    func(raw string, purpose account.MFATokenPurpose) (*account.MFATokenVerifyResult, error)
 	// MFAStartEnrollmentFunc and MFAFinishEnrollmentFunc serve both the
 	// initial and the re-enrollment methods; reenroll tells them apart.
-	MFAStartEnrollmentFunc  func(ctx context.Context, accountID, userID string, reenroll bool) (*account.MFAStartEnrollmentResult, error)
-	MFAFinishEnrollmentFunc func(ctx context.Context, accountID, userID string, reenroll bool) (*account.MFAFinishEnrollmentResult, error)
-	MFAEnabledFunc          func() bool
+	MFAStartEnrollmentFunc      func(ctx context.Context, accountID, userID string, reenroll bool) (*account.MFAStartEnrollmentResult, error)
+	MFAFinishEnrollmentFunc     func(ctx context.Context, accountID, userID string, reenroll bool) (*account.MFAFinishEnrollmentResult, error)
+	MFAEnabledFunc              func() bool
+	GetPeerLoginMFAApprovalFunc func(ctx context.Context, token string) (*account.PeerLoginMFAView, error)
+	ApprovePeerLoginMFAFunc     func(ctx context.Context, token, code string) (*account.PeerLoginMFAApproveOutcome, error)
+	DenyPeerLoginMFAFunc        func(ctx context.Context, token string) (*account.PeerLoginMFAView, error)
 }
 
 func (am *MockAccountManager) UpdateAccountPeers(ctx context.Context, accountID string) {
@@ -1275,4 +1278,28 @@ func (am *MockAccountManager) MFAIssueChallengeToken(userID, jwtSessionID string
 		return am.MFAIssueChallengeTokenFunc(userID, jwtSessionID)
 	}
 	return "", status.Errorf(codes.Unimplemented, "method MFAIssueChallengeToken is not implemented")
+}
+
+// GetPeerLoginMFAApproval mocks GetPeerLoginMFAApproval of the AccountManager interface
+func (am *MockAccountManager) GetPeerLoginMFAApproval(ctx context.Context, token string) (*account.PeerLoginMFAView, error) {
+	if am.GetPeerLoginMFAApprovalFunc != nil {
+		return am.GetPeerLoginMFAApprovalFunc(ctx, token)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method GetPeerLoginMFAApproval is not implemented")
+}
+
+// ApprovePeerLoginMFA mocks ApprovePeerLoginMFA of the AccountManager interface
+func (am *MockAccountManager) ApprovePeerLoginMFA(ctx context.Context, token, code string) (*account.PeerLoginMFAApproveOutcome, error) {
+	if am.ApprovePeerLoginMFAFunc != nil {
+		return am.ApprovePeerLoginMFAFunc(ctx, token, code)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method ApprovePeerLoginMFA is not implemented")
+}
+
+// DenyPeerLoginMFA mocks DenyPeerLoginMFA of the AccountManager interface
+func (am *MockAccountManager) DenyPeerLoginMFA(ctx context.Context, token string) (*account.PeerLoginMFAView, error) {
+	if am.DenyPeerLoginMFAFunc != nil {
+		return am.DenyPeerLoginMFAFunc(ctx, token)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method DenyPeerLoginMFA is not implemented")
 }
