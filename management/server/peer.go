@@ -682,8 +682,6 @@ func (am *DefaultAccountManager) addPeer(ctx context.Context, setupKey, userID, 
 		return nil, nil, nil, fmt.Errorf("failed to get account settings: %w", err)
 	}
 
-	mfaRequired := addedByUser && am.peerLoginMFARequired(settings, connectorID)
-
 	if am.geo != nil && newPeer.Location.ConnectionIP != nil {
 		location, err := am.geo.Lookup(newPeer.Location.ConnectionIP)
 		if err != nil {
@@ -747,15 +745,13 @@ func (am *DefaultAccountManager) addPeer(ctx context.Context, setupKey, userID, 
 		}()
 
 		err = am.Store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
-			if jwtIssuedAt != nil || mfaRequired {
+			if addedByUser {
 				user, err := lockRegisteringUser(ctx, transaction, userID, jwtIssuedAt)
 				if err != nil {
 					return err
 				}
-				if mfaRequired {
-					if err := am.checkPeerLoginMFA(ctx, transaction, user, newPeer.Key, true); err != nil {
-						return err
-					}
+				if err := am.gatePeerLoginMFA(ctx, transaction, user, connectorID, newPeer.Key, true); err != nil {
+					return err
 				}
 			}
 			err = transaction.AddPeerToAccount(ctx, store.LockingStrengthUpdate, newPeer)

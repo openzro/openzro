@@ -107,6 +107,23 @@ func (am *DefaultAccountManager) peerLoginMFARequired(settings *types.Settings, 
 	return settings != nil && settings.MFAEnforcePeerLogin && am.resolveMFAEnforcement(connectorID, settings)
 }
 
+// gatePeerLoginMFA applies the gate inside the login's transaction, after
+// the user row is locked. It reads the setting there rather than using one
+// read before the transaction: a gate switched on meanwhile, by this or
+// another replica, applies. The read is the transaction's first plain one,
+// so a MySQL REPEATABLE READ snapshot starts after the user lock.
+func (am *DefaultAccountManager) gatePeerLoginMFA(ctx context.Context, tx store.Store, user *types.User,
+	connectorID, wgPubKey string, newPeer bool) error {
+	settings, err := tx.GetAccountSettings(ctx, store.LockingStrengthNone, user.AccountID)
+	if err != nil {
+		return err
+	}
+	if !am.peerLoginMFARequired(settings, connectorID) {
+		return nil
+	}
+	return am.checkPeerLoginMFA(ctx, tx, user, wgPubKey, newPeer)
+}
+
 // checkPeerLoginMFA runs in the login's transaction, after the user row is
 // locked. It uses the key's approval if there is one; otherwise the login
 // rolls back with errPeerLoginMFA.

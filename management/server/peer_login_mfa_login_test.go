@@ -289,3 +289,46 @@ func TestLoginPeer_MFAGate_Metrics(t *testing.T) {
 	_, samples := read("management.peer.login.mfa.time.to.approval.ms")
 	assert.Equal(t, uint64(1), samples)
 }
+
+// beforeTxStore runs before once, just before the next transaction
+// starts: what another replica commits between a caller's earlier reads
+// and its transaction.
+type beforeTxStore struct {
+	store.Store
+	before func()
+}
+
+func (s *beforeTxStore) ExecuteInTransaction(ctx context.Context, operation func(store.Store) error) error {
+	if before := s.before; before != nil {
+		s.before = nil
+		before()
+	}
+	return s.Store.ExecuteInTransaction(ctx, operation)
+}
+
+// enableGateBeforeNextTx switches the gate on, as another replica would,
+// right before the login's transaction starts.
+func (f *peerLoginFixture) enableGateBeforeNextTx(t *testing.T) {
+	t.Helper()
+	inner := f.am.Store
+	f.am.Store = &beforeTxStore{Store: inner, before: func() {
+		settings, err := inner.GetAccountSettings(context.Background(), store.LockingStrengthNone, f.accountID)
+		require.NoError(t, err)
+		settings.MFAEnforcePeerLogin = true
+		require.NoError(t, inner.SaveAccountSettings(context.Background(), store.LockingStrengthUpdate, f.accountID, settings))
+	}}
+	t.Cleanup(func() { f.am.Store = inner })
+}
+
+// A registration decides the gate inside its transaction: a gate switched
+// on after the login read the settings, but before it registered the
+// device, still applies.
+func TestLoginPeer_MFAGate_NewPeerSeesGateEnabledMeanwhile(t *testing.T) {
+	f := newPeerLoginFixture(t, "ana")
+	f.gateOn(t, func(s *types.Settings) { s.MFAEnforcePeerLogin = false })
+	f.enableGateBeforeNextTx(t)
+
+	required := f.requireApproval(t, wgKeyA)
+	assert.Nil(t, f.record(t, required.Challenge.ApprovalID).ApprovedAt)
+	assert.False(t, f.peerExists(t, wgKeyA), "the device registered without the approval")
+}
