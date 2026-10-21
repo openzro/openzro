@@ -379,16 +379,23 @@ func (am *DefaultAccountManager) MFARegenerateBackupCodes(ctx context.Context, u
 	if !am.MFAEnabled() {
 		return nil, status.Errorf(status.Internal, "mfa: subsystem not initialized")
 	}
-	row, err := am.Store.GetUserMFA(ctx, store.LockingStrengthUpdate, userID)
-	if err != nil {
-		return nil, err
-	}
+	// Hashing is slow, so it happens before the row is locked.
 	plaintext, hashes, err := mfa.GenerateBackupCodes()
 	if err != nil {
 		return nil, fmt.Errorf("mfa: backup codes: %w", err)
 	}
-	row.BackupCodesHash = hashes
-	if err := am.Store.SaveUserMFA(ctx, store.LockingStrengthUpdate, row); err != nil {
+	// Re-read under the row lock and change only the backup codes, so the
+	// save cannot write back a stale LastUsedStep or lockout state from
+	// before a challenge that committed meanwhile.
+	err = am.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
+		row, err := tx.GetUserMFA(ctx, store.LockingStrengthUpdate, userID)
+		if err != nil {
+			return err
+		}
+		row.BackupCodesHash = hashes
+		return tx.SaveUserMFA(ctx, store.LockingStrengthUpdate, row)
+	})
+	if err != nil {
 		return nil, err
 	}
 	return plaintext, nil

@@ -10,6 +10,7 @@ import (
 	"github.com/pquerna/otp/totp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 
 	"github.com/openzro/openzro/management/server/store"
 )
@@ -186,4 +187,90 @@ func TestMFAChallenge_ConcurrentReuseAcrossReplicas(t *testing.T) {
 	row, err := r.A.Store.GetUserMFA(ctx, store.LockingStrengthNone, userID)
 	require.NoError(t, err)
 	assert.Equal(t, 0, row.FailedAttempts)
+}
+
+// pauseAfterMFARead holds the replica's next read of user_mfas until
+// release closes, or for at most two seconds when the read holds a lock
+// that the other side is waiting on.
+func pauseAfterMFARead(t *testing.T, s store.Store, read chan<- struct{}, release <-chan struct{}) {
+	t.Helper()
+	sqlStore, ok := s.(*store.SqlStore)
+	require.True(t, ok)
+	var once sync.Once
+	hook := func(tx *gorm.DB) {
+		if tx.Statement.Table != "user_mfas" {
+			return
+		}
+		once.Do(func() {
+			close(read)
+			select {
+			case <-release:
+			case <-time.After(2 * time.Second):
+			}
+		})
+	}
+	// Not removed on cleanup; see pauseAfterFirstLock.
+	require.NoError(t, sqlStore.GetDB().Callback().Query().After("gorm:query").Register("test:pause-mfa-read", hook))
+}
+
+// Regenerating backup codes must not write back a stale last_used_step. If
+// it saved the row it read before another replica accepted a code, that
+// code would be accepted again.
+func TestMFARegenerateBackupCodes_KeepsConcurrentlyUsedStep(t *testing.T) {
+	r := newTwoReplicas(t)
+	ctx := context.Background()
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i)
+	}
+	encKey := base64.StdEncoding.EncodeToString(key)
+	require.NoError(t, r.A.SetMFA(encKey))
+	require.NoError(t, r.B.SetMFA(encKey))
+
+	const accountID, userID = "mfa-regen-account", "mfa-regen-user"
+	acc := newAccountWithId(ctx, accountID, userID, "mfa-regen.example", false)
+	acc.Users[userID].Email = "regen@example.com"
+	require.NoError(t, r.A.Store.SaveAccount(ctx, acc))
+	start, err := r.A.MFAStartEnrollment(ctx, accountID, userID)
+	require.NoError(t, err)
+	_, err = r.A.MFAFinishEnrollment(ctx, accountID, userID, start.PendingToken,
+		totpCodeAt(t, start.Secret, time.Now()), "jti-enroll")
+	require.NoError(t, err)
+	code := totpCodeAt(t, start.Secret, time.Now().Add(30*time.Second))
+
+	aRead, releaseA := make(chan struct{}), make(chan struct{})
+	pauseAfterMFARead(t, r.A.Store, aRead, releaseA)
+
+	regenErr := make(chan error, 1)
+	go func() {
+		_, err := r.A.MFARegenerateBackupCodes(ctx, userID)
+		regenErr <- err
+	}()
+	select {
+	case <-aRead:
+	case <-time.After(10 * time.Second):
+		t.Fatal("regeneration never read the row")
+	}
+
+	// B accepts the code while A holds its read. If A's read locks the row,
+	// B waits for A instead, and A goes on after its timeout.
+	challenged := make(chan bool, 1)
+	go func() {
+		outcome, err := r.B.MFAChallenge(ctx, userID, code, "jti-b")
+		challenged <- err == nil && outcome.OK
+	}()
+	select {
+	case ok := <-challenged:
+		require.True(t, ok, "the first use of the code is accepted")
+		close(releaseA)
+	case <-time.After(3 * time.Second):
+		close(releaseA)
+		require.True(t, <-challenged, "the first use of the code is accepted")
+	}
+	require.NoError(t, <-regenErr)
+
+	outcome, err := r.B.MFAChallenge(ctx, userID, code, "jti-c")
+	require.NoError(t, err)
+	assert.False(t, outcome.OK, "the code was already used")
+	assert.True(t, outcome.CodeReused)
 }
