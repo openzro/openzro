@@ -57,6 +57,7 @@ import UserBlockCell from "@/modules/users/table-cells/UserBlockCell";
 import UserGroupCell from "@/modules/users/table-cells/UserGroupCell";
 import { UserInviteModalContent } from "@/modules/users/UserInviteModal";
 import UserActionCellV2 from "@/modules/users/v2/UserActionCellV2";
+import UserMFACellV2 from "@/modules/users/v2/UserMFACellV2";
 import UserNameCellV2 from "@/modules/users/v2/UserNameCellV2";
 import UserRoleCellV2 from "@/modules/users/v2/UserRoleCellV2";
 import UserStatusCellV2 from "@/modules/users/v2/UserStatusCellV2";
@@ -214,6 +215,13 @@ export default function UsersTableV2({ users, isLoading }: Props) {
         sortingFn: "basic",
         header: ({ column }) => <SortHeader column={column} label="Groups" />,
         cell: ({ row }) => <UserGroupCell user={row.original} />,
+      },
+      {
+        id: "mfa",
+        accessorFn: (u) => (u.mfa_locked_until ? 2 : u.mfa_enrolled ? 1 : 0),
+        sortingFn: "basic",
+        header: ({ column }) => <SortHeader column={column} label="2FA" />,
+        cell: ({ row }) => <UserMFACellV2 user={row.original} />,
       },
       {
         id: "is_blocked",

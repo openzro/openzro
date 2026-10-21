@@ -4,6 +4,12 @@ export interface Account {
   domain_category: string;
   created_at: string;
   created_by: string;
+  // Active users without 2FA, returned to admins only. Local users follow
+  // mfa_enforce_local, everyone else mfa_enforce_federated.
+  mfa_unenrolled_users?: {
+    local: number;
+    federated: number;
+  };
   settings: {
     extra: {
       peer_approval_enabled: boolean;

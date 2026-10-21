@@ -15,6 +15,7 @@ import {
   Loader2,
   MailIcon,
   MoreVertical,
+  ShieldOff,
   Trash2,
   UserX,
 } from "lucide-react";
@@ -26,6 +27,7 @@ import { usePermissions } from "@/contexts/PermissionsProvider";
 import { User } from "@/interfaces/User";
 import { isLocalUser } from "@/modules/users/local/LocalUserBadge";
 import { LocalUserPasswordModalContent } from "@/modules/users/local/LocalUserPasswordModal";
+import useResetUserMFA from "@/modules/users/v2/useResetUserMFA";
 
 // UserActionCellV2 — v2 row actions for /team/users. Matches the
 // canonical kebab pattern used by NameserverActionCellV2 /
@@ -52,6 +54,7 @@ export default function UserActionCellV2({
   const { mutate } = useSWRConfig();
   const [inviteLoading, setInviteLoading] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
+  const resetMFA = useResetUserMFA(user, serviceUser);
   const local = isLocalUser(user);
   const localActive = user.local_credential_state === "active";
 
@@ -211,6 +214,22 @@ export default function UserActionCellV2({
                 </div>
               </DropdownMenuItem>
             </>
+          )}
+          {user.mfa_enrolled && (
+            <DropdownMenuItem
+              // Users clear their own 2FA from Profile → Security.
+              disabled={!permission.users.update || Boolean(user.is_current)}
+              data-cy="reset-user-mfa"
+              onClick={(e) => {
+                e.stopPropagation();
+                resetMFA();
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <ShieldOff size={14} className="shrink-0" />
+                Reset 2FA
+              </div>
+            </DropdownMenuItem>
           )}
           <DropdownMenuItem
             disabled={deleteDisabled}

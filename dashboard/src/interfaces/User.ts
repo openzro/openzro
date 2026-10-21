@@ -19,6 +19,10 @@ export interface User {
   // local_credential_state is set only for local users, whose email and
   // password live in openZro's embedded Dex (ADR-0024, ADR-0026).
   local_credential_state?: LocalCredentialState;
+  // mfa_enrolled and mfa_locked_until are returned to admins only. A
+  // lockout follows repeated wrong 2FA codes and ends on its own.
+  mfa_enrolled?: boolean;
+  mfa_locked_until?: string;
 }
 
 export type LocalCredentialState = "active" | "deactivated";

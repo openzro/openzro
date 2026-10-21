@@ -24,6 +24,7 @@ import { useHasChanges } from "@/hooks/useHasChanges";
 import { Account } from "@/interfaces/Account";
 import useGroupHelper from "@/modules/groups/useGroupHelper";
 import AllowedEmailDomainsCard from "@/modules/settings/AllowedEmailDomainsCard";
+import MFAUnenrolledHint from "@/modules/settings/MFAUnenrolledHint";
 import OzSettingsCard from "@/modules/settings/v2/OzSettingsCard";
 import OzSettingsField from "@/modules/settings/v2/OzSettingsField";
 import OzSettingsToggle from "@/modules/settings/v2/OzSettingsToggle";
@@ -351,6 +352,11 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
               running openZro without an external IdP. When on, local users
               without TOTP are forced into the enrollment flow on their next
               session check.
+              <MFAUnenrolledHint
+                count={account.mfa_unenrolled_users?.local}
+                kind="local"
+                dataCy="mfa-unenrolled-local"
+              />
             </>
           }
         />
@@ -367,6 +373,11 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
               social engineering, IdP misconfiguration). Users enter two codes
               per login — one at the IdP, one at openZro. Leave off if you trust
               your IdP&apos;s MFA fully.
+              <MFAUnenrolledHint
+                count={account.mfa_unenrolled_users?.federated}
+                kind="federated"
+                dataCy="mfa-unenrolled-federated"
+              />
             </>
           }
         />
