@@ -2,7 +2,6 @@ package internal
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -46,8 +45,9 @@ func TestWaitPeerLoginMFA_TerminalRefusals(t *testing.T) {
 	} {
 		login, calls := scripted(refusal, nil)
 		err := WaitPeerLoginMFA(context.Background(), time.Now().Add(time.Minute), login, "", fastPoll)
-		var parsed *peerloginmfa.Error
-		require.True(t, errors.As(err, &parsed), "got %v", err)
+		assert.Equal(t, refusal, err, "the refusal is returned as the server sent it")
+		_, ok := peerloginmfa.Parse(err, "")
+		assert.True(t, ok)
 		assert.Equal(t, 1, *calls)
 	}
 }

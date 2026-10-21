@@ -38,9 +38,11 @@ func (p PeerLoginMFAPoll) jitter(d time.Duration) time.Duration {
 
 // WaitPeerLoginMFA retries login while the management server answers that
 // the device login waits for the user's 2FA approval (ADR-0028 D6). It
-// returns nil once a login succeeds; the *peerloginmfa.Error of a denial,
-// a rate limit or a missing enrollment, which end the wait; any other
-// login error as is, except brief unavailability, which is retried;
+// returns nil once a login succeeds; the login's own error for a denial, a
+// rate limit or a missing enrollment, which end the wait (callers read it
+// with peerloginmfa.Parse, and a daemon can pass the gRPC status on as
+// is); any other login error as is, except brief unavailability, which is
+// retried;
 // ErrPeerLoginMFAExpired at deadline; and ctx's error when it ends.
 func WaitPeerLoginMFA(ctx context.Context, deadline time.Time, login func(context.Context) error,
 	managementURL string, poll PeerLoginMFAPoll) error {
@@ -55,7 +57,7 @@ func WaitPeerLoginMFA(ctx context.Context, deadline time.Time, login func(contex
 		}
 		if refusal, ok := peerloginmfa.Parse(err, managementURL); ok {
 			if refusal.Reason != peerloginmfa.ReasonRequired {
-				return refusal
+				return err
 			}
 		} else if !transient(err) {
 			return err
