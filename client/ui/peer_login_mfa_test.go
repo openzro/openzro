@@ -4,6 +4,8 @@ package main
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -202,4 +204,76 @@ func TestWaitSSO_OlderWaitLeavesTheNewerWindowAlone(t *testing.T) {
 	close(b.release)
 	require.NoError(t, <-doneB)
 	assert.False(t, s.approvalWindowOpen())
+}
+
+// lateWindow behaves like the desktop driver: Show is asynchronous, and
+// Close does nothing until the native window exists.
+type lateWindow struct {
+	fyne.Window
+	shown  atomic.Bool
+	closed atomic.Bool
+}
+
+func (l *lateWindow) Show() {}
+
+func (l *lateWindow) Close() {
+	if l.shown.Load() {
+		l.closed.Store(true)
+		l.Window.Close()
+	}
+}
+
+// A window replaced before the driver showed it neither shows the old link
+// when it appears, nor stays open, and its wait ends without relying on
+// the close callback.
+func TestWaitSSO_ReplacedWindowBeforeItShows(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	s := &serviceClient{app: app, ctx: context.Background()}
+	var windows []*lateWindow
+	var mu sync.Mutex
+	s.newWindow = func(title string) fyne.Window {
+		w := &lateWindow{Window: app.NewWindow(title)}
+		mu.Lock()
+		windows = append(windows, w)
+		mu.Unlock()
+		return w
+	}
+	window := func(i int) *lateWindow {
+		mu.Lock()
+		defer mu.Unlock()
+		if i >= len(windows) {
+			return nil
+		}
+		return windows[i]
+	}
+	a := &fakeDaemon{release: make(chan struct{})}
+	b := &fakeDaemon{release: make(chan struct{})}
+
+	doneA := make(chan error, 1)
+	go func() {
+		_, err := s.waitSSO(context.Background(), a, "code-a", noBrowser)
+		doneA <- err
+	}()
+	// A's window is created and registered before B starts.
+	require.Eventually(t, func() bool {
+		w := window(0)
+		return w != nil && s.currentApprovalWindow() == fyne.Window(w)
+	}, 2*time.Second, 10*time.Millisecond)
+	go func() { _, _ = s.waitSSO(context.Background(), b, "code-b", noBrowser) }()
+	require.Eventually(t, func() bool { return window(1) != nil }, 2*time.Second, 10*time.Millisecond)
+
+	select {
+	case err := <-doneA:
+		assert.Equal(t, codes.Canceled, status.Code(err), "the replaced wait ended")
+	case <-time.After(2 * time.Second):
+		t.Fatal("the replaced wait did not end although its window never closed")
+	}
+	old := window(0)
+	assert.NotContains(t, entryTexts(old), "https://app.example.com/mfa/peer-login#t=tok", "the old link is gone")
+
+	// The driver finally shows the old window: it gets closed.
+	old.shown.Store(true)
+	require.Eventually(t, old.closed.Load, 3*time.Second, 20*time.Millisecond)
+	close(b.release)
 }

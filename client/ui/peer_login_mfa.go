@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -44,7 +45,11 @@ func (s *serviceClient) showPeerLoginMFAApproval(url string, opened bool, onClos
 			"Enter your 2FA code on the page that opened in your browser. openZro connects once you approve."))
 		return nil
 	}
-	w := s.app.NewWindow("Approve this sign-in")
+	newWindow := s.app.NewWindow
+	if s.newWindow != nil {
+		newWindow = s.newWindow
+	}
+	w := newWindow("Approve this sign-in")
 	label := widget.NewLabel("Your browser did not open. Open this link in a browser and enter your 2FA code " +
 		"to approve this sign-in. openZro connects once you approve. Closing this window cancels the sign-in.")
 	label.Wrapping = fyne.TextWrapWord
@@ -61,21 +66,57 @@ func (s *serviceClient) showPeerLoginMFAApproval(url string, opened bool, onClos
 	w.SetOnClosed(func() {
 		s.approvalMu.Lock()
 		if s.approvalWin == w {
-			s.approvalWin = nil
+			s.approvalWin, s.approvalCancel = nil, nil
 		}
 		s.approvalMu.Unlock()
 		onClose()
 	})
 
 	s.approvalMu.Lock()
-	previous := s.approvalWin
-	s.approvalWin = w
+	previous, previousCancel := s.approvalWin, s.approvalCancel
+	s.approvalWin, s.approvalCancel = w, onClose
 	s.approvalMu.Unlock()
 	if previous != nil {
-		previous.Close()
+		retireApprovalWindow(previous, previousCancel)
 	}
 	w.Show()
 	return w
+}
+
+// approvalRetryClose is how long a retired window is closed again: the
+// desktop driver shows windows asynchronously and ignores Close until the
+// native window exists.
+const approvalRetryClose = 5 * time.Second
+
+// retireApprovalWindow ends an approval window that may not have appeared
+// yet. Its link is replaced first, so a window the driver shows late never
+// shows it; its wait is canceled directly, since a close that the driver
+// ignored fires no callback; and it is closed again until it can be.
+func retireApprovalWindow(w fyne.Window, cancel func()) {
+	ended := widget.NewLabel("This sign-in request has ended.")
+	w.SetContent(container.NewPadded(container.NewVBox(ended, widget.NewButton("Close", w.Close))))
+	if cancel != nil {
+		cancel()
+	}
+	// onClosed fires only when a close took effect; until then, try again.
+	var closed atomic.Bool
+	w.SetOnClosed(func() { closed.Store(true) })
+	w.Close()
+	go func() {
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+		deadline := time.After(approvalRetryClose)
+		for !closed.Load() {
+			select {
+			case <-ticker.C:
+				if !closed.Load() {
+					w.Close()
+				}
+			case <-deadline:
+				return
+			}
+		}
+	}()
 }
 
 // closeApprovalWindow closes w if it is still the open approval window. A
@@ -86,12 +127,14 @@ func (s *serviceClient) closeApprovalWindow(w fyne.Window) {
 	}
 	s.approvalMu.Lock()
 	current := s.approvalWin == w
+	var cancel func()
 	if current {
-		s.approvalWin = nil
+		cancel = s.approvalCancel
+		s.approvalWin, s.approvalCancel = nil, nil
 	}
 	s.approvalMu.Unlock()
 	if current {
-		w.Close()
+		retireApprovalWindow(w, cancel)
 	}
 }
 

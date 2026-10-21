@@ -277,8 +277,11 @@ type serviceClient struct {
 
 	// approvalWin is the open window with a 2FA approval link, if any. It
 	// lives as long as the wait for that approval (ADR-0028).
-	approvalMu          sync.Mutex
-	approvalWin         fyne.Window
+	approvalMu     sync.Mutex
+	approvalWin    fyne.Window
+	approvalCancel func()
+	// newWindow creates windows; nil means s.app.NewWindow. A test seam.
+	newWindow           func(title string) fyne.Window
 	preSharedKey        string
 	RosenpassPermissive bool
 	interfaceName       string
