@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"net"
 	"testing"
@@ -344,4 +346,102 @@ func TestLoginPeer_MFAGate_ExpiredPeerSeesGateEnabledMeanwhile(t *testing.T) {
 
 	required := f.requireApproval(t, wgKeyA)
 	assert.False(t, f.record(t, required.Challenge.ApprovalID).NewPeer)
+}
+
+// settingsReadHookStore runs onRead once, right after the first read of
+// the account settings inside a transaction: the read the gate decides on,
+// whether or not it locks.
+type settingsReadHookStore struct {
+	store.Store
+	onRead func()
+}
+
+func (s *settingsReadHookStore) ExecuteInTransaction(ctx context.Context, operation func(store.Store) error) error {
+	return s.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
+		return operation(&settingsReadHookTx{Store: tx, parent: s})
+	})
+}
+
+type settingsReadHookTx struct {
+	store.Store
+	parent *settingsReadHookStore
+}
+
+func (tx *settingsReadHookTx) GetAccountSettings(ctx context.Context, lock store.LockingStrength,
+	accountID string) (*types.Settings, error) {
+	settings, err := tx.Store.GetAccountSettings(ctx, lock, accountID)
+	if onRead := tx.parent.onRead; err == nil && onRead != nil {
+		tx.parent.onRead = nil
+		onRead()
+	}
+	return settings, err
+}
+
+// An admin switching the gate on through replica B while replica A signs a
+// device in under the gate's old value: B's save returns only after A's
+// login commits, so once the activation returns no login decided under
+// the old value can still commit, and the next one is gated.
+func TestLoginPeer_MFAGate_ActivationWaitsForInflightLogin(t *testing.T) {
+	tests := []struct {
+		name  string
+		setup func(t *testing.T, f *peerLoginFixture)
+	}{
+		{"registration", func(*testing.T, *peerLoginFixture) {}},
+		{"expired peer", func(t *testing.T, f *peerLoginFixture) {
+			require.NoError(t, f.login(wgKeyA, "local"))
+			f.expire(t, wgKeyA)
+		}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			replicas := newTwoReplicas(t)
+			key := make([]byte, 32)
+			_, err := rand.Read(key)
+			require.NoError(t, err)
+			for _, am := range []*DefaultAccountManager{replicas.A, replicas.B} {
+				require.NoError(t, am.SetMFA(base64.StdEncoding.EncodeToString(key)))
+			}
+			f := newPeerLoginFixtureOn(t, replicas.A, "ana")
+			f.gateOn(t, func(s *types.Settings) { s.MFAEnforcePeerLogin = false })
+			tc.setup(t, f)
+
+			// A different admin saves, so B never waits on the row of the
+			// user A is signing in.
+			seedMFAUser(t, replicas.B, f.accountID, "admin", types.UserRoleAdmin)
+			enable, err := replicas.B.Store.GetAccountSettings(context.Background(), store.LockingStrengthNone, f.accountID)
+			require.NoError(t, err)
+			enable.MFAEnforcePeerLogin = true
+
+			inner := replicas.A.Store
+			saved := make(chan error, 1)
+			savedDuringLogin := false
+			replicas.A.Store = &settingsReadHookStore{Store: inner, onRead: func() {
+				go func() {
+					_, err := replicas.B.UpdateAccountSettings(context.Background(), f.accountID, "admin", enable)
+					saved <- err
+				}()
+				// Give B's save time to return if nothing holds it back,
+				// while A's login transaction is still open.
+				select {
+				case err := <-saved:
+					savedDuringLogin = true
+					saved <- err
+				case <-time.After(300 * time.Millisecond):
+				}
+			}}
+			t.Cleanup(func() { replicas.A.Store = inner })
+
+			require.NoError(t, f.login(wgKeyA, "local"), "A's login read the gate off")
+			assert.False(t, savedDuringLogin, "B's activation returned while A's login under the old value was open")
+			select {
+			case err := <-saved:
+				require.NoError(t, err)
+			case <-time.After(barrierTimeout):
+				t.Fatal("B's activation never returned")
+			}
+
+			const wgKeyB = "Pxc1ylvTfBm7y8MbEZvyMMYw5LwMqLbqvPxbTN0cCVQ="
+			f.requireApproval(t, wgKeyB)
+		})
+	}
 }

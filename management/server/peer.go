@@ -750,7 +750,7 @@ func (am *DefaultAccountManager) addPeer(ctx context.Context, setupKey, userID, 
 				if err != nil {
 					return err
 				}
-				if err := am.gatePeerLoginMFA(ctx, transaction, user, connectorID, newPeer.Key, true); err != nil {
+				if err := am.gatePeerLoginMFA(ctx, transaction, store.LockingStrengthUpdate, user, connectorID, newPeer.Key, true); err != nil {
 					return err
 				}
 			}
@@ -1030,6 +1030,13 @@ func (am *DefaultAccountManager) loginPeer(ctx context.Context, login types.Peer
 	}
 
 	err = am.Store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
+		if login.UserID != "" {
+			// The device-login gate share-locks the settings row; take it
+			// before the peer row, the order UpdateAccountSettings uses.
+			if _, err = transaction.GetAccountSettings(ctx, store.LockingStrengthShare, accountID); err != nil {
+				return err
+			}
+		}
 		peer, err = transaction.GetPeerByPeerPubKey(ctx, store.LockingStrengthUpdate, login.WireGuardPubKey)
 		if err != nil {
 			return err

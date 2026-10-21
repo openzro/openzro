@@ -2315,7 +2315,7 @@ func (am *DefaultAccountManager) handleUserPeer(ctx context.Context, transaction
 		// (ADR-0028 D1). The gate reads its setting after the user row
 		// lock above, not from settings, which was read before the
 		// transaction.
-		if err = am.gatePeerLoginMFA(ctx, transaction, user, connectorID, peer.Key, false); err != nil {
+		if err = am.gatePeerLoginMFA(ctx, transaction, store.LockingStrengthShare, user, connectorID, peer.Key, false); err != nil {
 			return false, err
 		}
 		err = am.handleExpiredPeer(ctx, transaction, user, peer)

@@ -29,7 +29,13 @@ type peerLoginFixture struct {
 
 func newPeerLoginFixture(t *testing.T, userID string) *peerLoginFixture {
 	t.Helper()
-	am := newMFATestManager(t)
+	return newPeerLoginFixtureOn(t, newMFATestManager(t), userID)
+}
+
+// newPeerLoginFixtureOn builds the fixture on am, whose MFA subsystem is
+// set up.
+func newPeerLoginFixtureOn(t *testing.T, am *DefaultAccountManager, userID string) *peerLoginFixture {
+	t.Helper()
 	clock := newMFATestClock()
 	am.mfaClock = clock.Now
 	am.mfaSigner.SetClock(clock.Now)
