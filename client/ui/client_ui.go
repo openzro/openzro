@@ -273,7 +273,12 @@ type serviceClient struct {
 	sBlockLANAccess      *widget.Check
 
 	// observable settings over corresponding iMngURL and iPreSharedKey values.
-	managementURL       string
+	managementURL string
+
+	// approvalWin is the open window with a 2FA approval link, if any. It
+	// lives as long as the wait for that approval (ADR-0028).
+	approvalMu          sync.Mutex
+	approvalWin         fyne.Window
 	preSharedKey        string
 	RosenpassPermissive bool
 	interfaceName       string
@@ -662,8 +667,7 @@ func (s *serviceClient) handleSSOLogin(loginResp *proto.LoginResponse, conn prot
 
 	// The device sign-in may then wait for the user's 2FA approval
 	// (ADR-0028): WaitSSO opens the approval page and waits for it.
-	email, err := peerloginmfa.WaitSSO(s.ctx, conn, loginResp.UserCode, "", openURL,
-		func(url string, _ time.Duration, opened bool) { s.showPeerLoginMFAApproval(url, opened) })
+	email, err := s.waitSSO(s.ctx, conn, loginResp.UserCode, openURL)
 	if err != nil {
 		s.showPeerLoginMFAError(err)
 		log.Errorf("waiting sso login failed with: %v", err)
@@ -1636,11 +1640,8 @@ func (s *serviceClient) showLoginURL() {
 			return
 		}
 
-		_, err = peerloginmfa.WaitSSO(s.ctx, conn, resp.UserCode, "", openURL,
-			func(url string, _ time.Duration, opened bool) {
-				label.SetText("Approve the sign-in in your browser:\nenter your 2FA code on the approval page.")
-				s.showPeerLoginMFAApproval(url, opened)
-			})
+		label.SetText("Complete the sign-in in your browser.\nIf asked, approve it with your 2FA code.")
+		_, err = s.waitSSO(s.ctx, conn, resp.UserCode, openURL)
 		if err != nil {
 			log.Errorf("Waiting sso login failed with: %v", err)
 			if msg, _, ok := peerloginmfa.Describe(err, s.managementURL); ok {
