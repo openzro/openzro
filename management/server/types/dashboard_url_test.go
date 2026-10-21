@@ -40,6 +40,7 @@ func TestNormalizeDashboardURL(t *testing.T) {
 		"https://:443",
 		"https://app.example.com:99999",
 		"https://app.example.com:0",
+		"https://app.example.com:",
 	}
 	for _, in := range bad {
 		_, err := NormalizeDashboardURL(in)

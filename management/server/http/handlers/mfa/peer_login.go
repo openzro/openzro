@@ -1,6 +1,7 @@
 package mfa
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -98,14 +99,23 @@ func (h *handler) peerLoginApprove(w http.ResponseWriter, r *http.Request) {
 // happened; the manager refuses it as a wrong code otherwise.
 func readApproveCode(w http.ResponseWriter, r *http.Request) (string, int, error) {
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxApproveBody))
-	var req api.PeerLoginApproveRequest
-	err := dec.Decode(&req)
+	// Decoded raw first: null, arrays and scalars would otherwise decode
+	// into an empty request and pass as a retry.
+	var raw json.RawMessage
+	err := dec.Decode(&raw)
 	if errors.Is(err, io.EOF) {
 		return "", http.StatusOK, nil
 	}
 	var tooLarge *http.MaxBytesError
 	if errors.As(err, &tooLarge) {
 		return "", http.StatusRequestEntityTooLarge, errors.New("request body too large")
+	}
+	var req api.PeerLoginApproveRequest
+	if trimmed := bytes.TrimSpace(raw); err == nil && (len(trimmed) == 0 || trimmed[0] != '{') {
+		err = errors.New("not an object")
+	}
+	if err == nil {
+		err = json.Unmarshal(raw, &req)
 	}
 	if err != nil {
 		return "", http.StatusBadRequest, errors.New("body must be a JSON object")
