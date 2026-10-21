@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/netip"
 	"testing"
+	"time"
 
 	"github.com/google/gopacket/layers"
 	"github.com/stretchr/testify/require"
@@ -71,6 +72,13 @@ func TestTCPTableCapEvictsLeastRecentlySeen(t *testing.T) {
 	for port := uint16(40001); port < 40004; port++ {
 		tracker.TrackOutbound(srcIP, dstIP, port, 443, TCPAck, 60)
 	}
+	// The touches above may land on the same clock reading as the creates:
+	// Windows' wall clock advances in coarse steps, and a tie leaves the
+	// choice to map order. Make 40000 the stalest explicitly.
+	tracker.mutex.Lock()
+	stalest := tracker.connections[ConnKey{SrcIP: srcIP, DstIP: dstIP, SrcPort: 40000, DstPort: 443}]
+	stalest.lastSeen.Store(stalest.lastSeen.Load() - int64(time.Minute))
+	tracker.mutex.Unlock()
 
 	tracker.TrackOutbound(srcIP, dstIP, 40004, 443, TCPSyn, 60)
 	require.Equal(t, 4, tableLen(tracker.connections, &tracker.mutex))
