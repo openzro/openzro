@@ -146,6 +146,11 @@ type HttpServerConfig struct {
 	IdpSignKeyRefreshEnabled bool
 	// Extra audience
 	ExtraAuthAudience string
+	// DashboardURL is the dashboard's public base URL, where clients open
+	// the device-login 2FA approval page (ADR-0028 D5). Optional; clients
+	// fall back to their management URL. Must be https:// (http:// only on
+	// loopback). Overridden by OPENZRO_DASHBOARD_URL.
+	DashboardURL string `json:",omitempty"`
 }
 
 // Host represents a Openzro host (e.g. STUN, TURN, Signal)
