@@ -74,17 +74,23 @@ func TestMatchTOTPStep(t *testing.T) {
 	})
 }
 
-// A pending-enrollment token carries the factor it replaces, empty for an
-// initial enrollment.
-func TestPendingTokenCarriesReplacedFactor(t *testing.T) {
+// A pending-enrollment token says whether it is a re-enrollment and which
+// factor it replaces. A re-enrollment of a factor without an ID is still a
+// re-enrollment.
+func TestPendingTokenCarriesEnrollmentMode(t *testing.T) {
 	s, err := NewSigner(base64.StdEncoding.EncodeToString(make([]byte, 32)))
 	require.NoError(t, err)
-	for _, factor := range []string{"", "factor-1"} {
-		raw, err := s.IssuePending("user-1", "JBSWY3DPEHPK3PXP", factor)
+	tests := []struct {
+		reenroll bool
+		factor   string
+	}{{false, ""}, {true, ""}, {true, "factor-1"}}
+	for _, tc := range tests {
+		raw, err := s.IssuePending("user-1", "JBSWY3DPEHPK3PXP", tc.reenroll, tc.factor)
 		require.NoError(t, err)
 		res, err := s.Verify(raw, PurposePendingEnrollment)
 		require.NoError(t, err)
-		assert.Equal(t, factor, res.ReplacesFactor)
+		assert.Equal(t, tc.reenroll, res.ReEnrollment)
+		assert.Equal(t, tc.factor, res.ReplacesFactor)
 		assert.Equal(t, "JBSWY3DPEHPK3PXP", res.Secret)
 	}
 }

@@ -183,11 +183,11 @@ func TestMFAEnrollment_ReEnrollmentTokenBoundToFactor(t *testing.T) {
 	// Two re-enrollments started from the same factor: only the first to
 	// finish wins.
 	clock.Advance(30 * time.Second)
-	startC, codeC := reenroll("c")
-	startD, codeD := reenroll("d")
-	_, err = am.MFAFinishReEnrollment(ctx, acc.Id, "hal", startC.PendingToken, codeC, "jti-c")
+	pendingC, codeC := reenroll("c")
+	pendingD, codeD := reenroll("d")
+	_, err = am.MFAFinishReEnrollment(ctx, acc.Id, "hal", pendingC.PendingToken, codeC, "jti-c")
 	require.NoError(t, err)
-	_, err = am.MFAFinishReEnrollment(ctx, acc.Id, "hal", startD.PendingToken, codeD, "jti-d")
+	_, err = am.MFAFinishReEnrollment(ctx, acc.Id, "hal", pendingD.PendingToken, codeD, "jti-d")
 	requireStatus(t, err, status.PreconditionFailed)
 
 	// After a reset, a re-enrollment token from before it is refused, by
@@ -202,4 +202,64 @@ func TestMFAEnrollment_ReEnrollmentTokenBoundToFactor(t *testing.T) {
 	requireStatus(t, err, status.PreconditionFailed)
 	_, err = am.Store.GetUserMFA(ctx, store.LockingStrengthNone, "hal")
 	require.ErrorIs(t, err, store.ErrUserMFANotFound)
+}
+
+// A factor enrolled before factor_id existed has an empty one. A
+// re-enrollment token started from it must still not pass as an initial
+// token: after a reset, neither finish accepts it.
+func TestMFAEnrollment_LegacyFactorReEnrollmentAfterReset(t *testing.T) {
+	am := newMFATestManager(t)
+	clock := newMFATestClock()
+	am.mfaClock = clock.Now
+	ctx := context.Background()
+	acc, err := am.GetOrCreateAccountByUser(ctx, "ivy", "example.com")
+	require.NoError(t, err)
+	setUserEmail(t, am, "ivy", "ivy@example.com")
+	enrollAt(t, am, clock, acc.Id, "ivy")
+
+	// Make it a pre-migration row.
+	row, err := am.Store.GetUserMFA(ctx, store.LockingStrengthNone, "ivy")
+	require.NoError(t, err)
+	row.FactorID = ""
+	require.NoError(t, am.Store.SaveUserMFA(ctx, store.LockingStrengthUpdate, row))
+
+	pending, err := am.MFAStartReEnrollment(ctx, acc.Id, "ivy")
+	require.NoError(t, err)
+	code := totpCodeAt(t, pending.Secret, clock.Now())
+	require.NoError(t, am.MFADisenroll(ctx, acc.Id, "ivy", "ivy"))
+
+	_, err = am.MFAFinishEnrollment(ctx, acc.Id, "ivy", pending.PendingToken, code, "jti-1")
+	requireStatus(t, err, status.PreconditionFailed)
+	_, err = am.MFAFinishReEnrollment(ctx, acc.Id, "ivy", pending.PendingToken, code, "jti-2")
+	requireStatus(t, err, status.PreconditionFailed)
+	_, err = am.Store.GetUserMFA(ctx, store.LockingStrengthNone, "ivy")
+	require.ErrorIs(t, err, store.ErrUserMFANotFound)
+}
+
+// Re-enrolling a pre-migration factor works once and gives it an ID.
+func TestMFAEnrollment_LegacyFactorReEnrollsOnce(t *testing.T) {
+	am := newMFATestManager(t)
+	clock := newMFATestClock()
+	am.mfaClock = clock.Now
+	ctx := context.Background()
+	acc, err := am.GetOrCreateAccountByUser(ctx, "jo", "example.com")
+	require.NoError(t, err)
+	setUserEmail(t, am, "jo", "jo@example.com")
+	enrollAt(t, am, clock, acc.Id, "jo")
+	row, err := am.Store.GetUserMFA(ctx, store.LockingStrengthNone, "jo")
+	require.NoError(t, err)
+	row.FactorID = ""
+	require.NoError(t, am.Store.SaveUserMFA(ctx, store.LockingStrengthUpdate, row))
+
+	pending, err := am.MFAStartReEnrollment(ctx, acc.Id, "jo")
+	require.NoError(t, err)
+	code := totpCodeAt(t, pending.Secret, clock.Now())
+	_, err = am.MFAFinishReEnrollment(ctx, acc.Id, "jo", pending.PendingToken, code, "jti-1")
+	require.NoError(t, err)
+	row, err = am.Store.GetUserMFA(ctx, store.LockingStrengthNone, "jo")
+	require.NoError(t, err)
+	assert.NotEmpty(t, row.FactorID)
+
+	_, err = am.MFAFinishReEnrollment(ctx, acc.Id, "jo", pending.PendingToken, code, "jti-2")
+	requireStatus(t, err, status.PreconditionFailed)
 }

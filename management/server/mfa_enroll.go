@@ -41,7 +41,7 @@ func (am *DefaultAccountManager) MFAStartEnrollment(ctx context.Context, account
 	} else if !errors.Is(err, store.ErrUserMFANotFound) {
 		return nil, err
 	}
-	return am.startEnrollment(ctx, accountID, userID, "")
+	return am.startEnrollment(ctx, accountID, userID, false, "")
 }
 
 // MFAStartReEnrollment begins an enrollment that may replace the user's
@@ -58,10 +58,10 @@ func (am *DefaultAccountManager) MFAStartReEnrollment(ctx context.Context, accou
 	if err != nil {
 		return nil, err
 	}
-	return am.startEnrollment(ctx, accountID, userID, row.FactorID)
+	return am.startEnrollment(ctx, accountID, userID, true, row.FactorID)
 }
 
-func (am *DefaultAccountManager) startEnrollment(ctx context.Context, accountID, userID, replacesFactor string) (*account.MFAStartEnrollmentResult, error) {
+func (am *DefaultAccountManager) startEnrollment(ctx context.Context, accountID, userID string, reenroll bool, replacesFactor string) (*account.MFAStartEnrollmentResult, error) {
 	user, err := am.Store.GetUserByUserID(ctx, store.LockingStrengthShare, userID)
 	if err != nil {
 		return nil, err
@@ -77,7 +77,7 @@ func (am *DefaultAccountManager) startEnrollment(ctx context.Context, accountID,
 	if err != nil {
 		return nil, fmt.Errorf("mfa: generate key: %w", err)
 	}
-	pending, err := am.mfaSigner.IssuePending(userID, key.Secret(), replacesFactor)
+	pending, err := am.mfaSigner.IssuePending(userID, key.Secret(), reenroll, replacesFactor)
 	if err != nil {
 		return nil, fmt.Errorf("mfa: issue pending token: %w", err)
 	}
@@ -158,7 +158,7 @@ func (am *DefaultAccountManager) finishEnrollment(ctx context.Context, accountID
 		if err != nil && !errors.Is(err, store.ErrUserMFANotFound) {
 			return err
 		}
-		if err := checkEnrollmentBinding(existing, pending.ReplacesFactor, replace); err != nil {
+		if err := checkEnrollmentBinding(existing, pending, replace); err != nil {
 			return err
 		}
 		// The code that finished enrollment counts as used, so it cannot
@@ -189,20 +189,23 @@ func (am *DefaultAccountManager) finishEnrollment(ctx context.Context, accountID
 }
 
 // checkEnrollmentBinding decides whether a pending enrollment may write
-// over the user's current factor, existing (nil when there is none). An
-// initial enrollment needs no factor and an initial token. A re-enrollment
-// needs the very factor its token was started from.
-func checkEnrollmentBinding(existing *types.UserMFA, replacesFactor string, replace bool) error {
+// over the user's current factor, existing (nil when there is none). The
+// token's mode is explicit, so a re-enrollment token is never taken for an
+// initial one, even when its factor ID is empty (a factor enrolled before
+// IDs existed). An initial enrollment needs an initial token and no
+// factor. A re-enrollment needs a re-enrollment token and the very factor
+// it was started from.
+func checkEnrollmentBinding(existing *types.UserMFA, pending mfa.VerifyResult, replace bool) error {
+	if pending.ReEnrollment != replace {
+		return errMFAEnrollmentStale
+	}
 	if !replace {
 		if existing != nil {
 			return errMFAAlreadyEnrolled
 		}
-		if replacesFactor != "" {
-			return errMFAEnrollmentStale
-		}
 		return nil
 	}
-	if existing == nil || existing.FactorID != replacesFactor {
+	if existing == nil || existing.FactorID != pending.ReplacesFactor {
 		return errMFAEnrollmentStale
 	}
 	return nil
