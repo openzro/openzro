@@ -438,6 +438,9 @@ func BuildManager(
 	// minted from logins already in flight during a reset (ADR-0027 D6).
 	go am.runCredentialsRechecker(ctx)
 
+	// Deletes expired device-login approvals (ADR-0028 D3).
+	go am.runPeerLoginMFASweeper(ctx)
+
 	return am, nil
 }
 

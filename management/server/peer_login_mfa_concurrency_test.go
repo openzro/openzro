@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/openzro/openzro/management/server/activity"
 	"github.com/openzro/openzro/management/server/store"
 	"github.com/openzro/openzro/management/server/types"
 )
@@ -146,4 +147,31 @@ func TestApprovePeerLoginMFA_ConcurrentWrongCodes(t *testing.T) {
 	row, err := r.A.Store.GetUserMFA(ctx, store.LockingStrengthNone, userID)
 	require.NoError(t, err)
 	assert.Equal(t, types.MFALockoutThreshold, row.FailedAttempts)
+}
+
+// Both replicas sweeping the same expired records report each once.
+func TestSweepPeerLoginMFAApprovals_ConcurrentReplicas(t *testing.T) {
+	r, accountID, userID, _ := twoReplicaPeerLogin(t)
+	ctx := context.Background()
+	const n = types.PeerLoginMFAMaxPerUser
+	for i := 0; i < n; i++ {
+		_, err := r.A.RequestPeerLoginMFAApproval(ctx, PeerLoginMFARequest{
+			AccountID: accountID, UserID: userID, WGPubKey: fmt.Sprintf("key-%d", i)})
+		require.NoError(t, err)
+	}
+	later := time.Now().Add(types.PeerLoginMFADeadline)
+	runOnBoth(t, r, 2, func(am *DefaultAccountManager, _ int) struct{} {
+		am.sweepPeerLoginMFAApprovals(ctx, later, 2)
+		return struct{}{}
+	})
+
+	expired := func() int {
+		total := 0
+		for _, am := range []*DefaultAccountManager{r.A, r.B} {
+			total += countEvents(t, am, accountID, activity.PeerLoginMFAExpired)
+		}
+		return total
+	}
+	require.Eventually(t, func() bool { return expired() == n }, 3*time.Second, 20*time.Millisecond)
+	assert.Never(t, func() bool { return expired() != n }, 500*time.Millisecond, 20*time.Millisecond)
 }

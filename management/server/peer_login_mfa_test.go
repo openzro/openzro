@@ -281,3 +281,53 @@ func TestDenyPeerLoginMFA(t *testing.T) {
 	_, err = f.am.DenyPeerLoginMFA(ctx, other.Token)
 	requireStatus(t, err, status.PreconditionFailed)
 }
+
+func countEvents(t *testing.T, am *DefaultAccountManager, accountID string, code activity.Activity) int {
+	t.Helper()
+	events, err := am.eventStore.Get(context.Background(), accountID, 0, 500, false)
+	require.NoError(t, err)
+	n := 0
+	for _, e := range events {
+		if e.Activity == code {
+			n++
+		}
+	}
+	return n
+}
+
+// The sweep deletes expired records in batches and audits as expired only
+// the attempts nobody approved or denied.
+func TestSweepPeerLoginMFAApprovals(t *testing.T) {
+	f := newPeerLoginFixture(t, "ana")
+	ctx := context.Background()
+	pending, err := f.request(t, "key-pending")
+	require.NoError(t, err)
+	approved, err := f.request(t, "key-approved")
+	require.NoError(t, err)
+	out, err := f.am.ApprovePeerLoginMFA(ctx, approved.Token, f.code(t))
+	require.NoError(t, err)
+	require.True(t, out.Approved)
+	denied, err := f.request(t, "key-denied")
+	require.NoError(t, err)
+	_, err = f.am.DenyPeerLoginMFA(ctx, denied.Token)
+	require.NoError(t, err)
+
+	f.clock.Advance(types.PeerLoginMFADeadline)
+	fresh, err := f.request(t, "key-fresh")
+	require.NoError(t, err)
+
+	// A batch of one still works through the backlog.
+	f.am.sweepPeerLoginMFAApprovals(ctx, f.clock.Now(), 1)
+
+	for _, id := range []string{pending.ApprovalID, approved.ApprovalID, denied.ApprovalID} {
+		_, err := f.am.Store.GetPeerLoginMFAApprovalByID(ctx, store.LockingStrengthNone, id)
+		require.ErrorIs(t, err, store.ErrPeerLoginMFAApprovalNotFound)
+	}
+	f.record(t, fresh.ApprovalID)
+	assert.Eventually(t, func() bool {
+		return countEvents(t, f.am, f.accountID, activity.PeerLoginMFAExpired) == 1
+	}, 2*time.Second, 20*time.Millisecond)
+	assert.Never(t, func() bool {
+		return countEvents(t, f.am, f.accountID, activity.PeerLoginMFAExpired) != 1
+	}, 300*time.Millisecond, 20*time.Millisecond, "only the attempt nobody acted on expired")
+}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/openzro/openzro/management/server/account"
 	"github.com/openzro/openzro/management/server/activity"
@@ -379,4 +380,62 @@ func maskEmail(email string) string {
 		return ""
 	}
 	return email[:1] + "***" + email[at:]
+}
+
+const (
+	// peerLoginMFASweepInterval is how often each replica sweeps expired
+	// approval records.
+	peerLoginMFASweepInterval = time.Minute
+	// peerLoginMFASweepBatch bounds each sweep query, so no transaction or
+	// query grows with the table.
+	peerLoginMFASweepBatch = 100
+	// peerLoginMFASweepMaxBatches bounds one tick; a larger backlog waits
+	// for the next.
+	peerLoginMFASweepMaxBatches = 100
+)
+
+// runPeerLoginMFASweeper deletes expired approval records on every replica
+// until ctx is done.
+func (am *DefaultAccountManager) runPeerLoginMFASweeper(ctx context.Context) {
+	ticker := time.NewTicker(peerLoginMFASweepInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			am.sweepPeerLoginMFAApprovals(ctx, time.Now().UTC(), peerLoginMFASweepBatch)
+		}
+	}
+}
+
+// sweepPeerLoginMFAApprovals deletes records expired at now, batch at a
+// time. Each record is deleted by its own conditional DELETE, so when
+// replicas sweep together exactly one deletes it, and only that one audits
+// it as expired, and only if nobody approved or denied it.
+func (am *DefaultAccountManager) sweepPeerLoginMFAApprovals(ctx context.Context, now time.Time, batch int) {
+	for range peerLoginMFASweepMaxBatches {
+		if ctx.Err() != nil {
+			return
+		}
+		expired, err := am.Store.GetExpiredPeerLoginMFAApprovals(ctx, now, batch)
+		if err != nil {
+			log.WithContext(ctx).Errorf("failed to list expired peer login approvals: %v", err)
+			return
+		}
+		for _, a := range expired {
+			deleted, err := am.Store.DeleteExpiredPeerLoginMFAApproval(ctx, a.ID, now)
+			if err != nil {
+				log.WithContext(ctx).Errorf("failed to sweep peer login approval %s: %v", a.ID, err)
+				return
+			}
+			if deleted && a.ApprovedAt == nil && a.DeniedAt == nil {
+				am.StoreEvent(ctx, activity.SystemInitiator, a.UserID, a.AccountID, activity.PeerLoginMFAExpired,
+					map[string]any{"approval_id": a.ID})
+			}
+		}
+		if len(expired) < batch {
+			return
+		}
+	}
 }
