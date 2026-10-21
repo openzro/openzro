@@ -46,14 +46,28 @@ func (p PeerLoginMFAPoll) jitter(d time.Duration) time.Duration {
 // ErrPeerLoginMFAExpired at deadline; and ctx's error when it ends.
 func WaitPeerLoginMFA(ctx context.Context, deadline time.Time, login func(context.Context) error,
 	managementURL string, poll PeerLoginMFAPoll) error {
+	if !time.Now().Before(deadline) {
+		return ErrPeerLoginMFAExpired
+	}
+	// The deadline bounds the login calls too, so a stalled call cannot
+	// keep the wait, and the token it holds, past the approval's life.
+	waitCtx, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+	ended := func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return ErrPeerLoginMFAExpired
+	}
+
 	wait := poll.Initial
 	for {
-		err := login(ctx)
+		err := login(waitCtx)
 		if err == nil {
 			return nil
 		}
-		if ctx.Err() != nil {
-			return ctx.Err()
+		if waitCtx.Err() != nil {
+			return ended()
 		}
 		if refusal, ok := peerloginmfa.Parse(err, managementURL); ok {
 			if refusal.Reason != peerloginmfa.ReasonRequired {
@@ -68,8 +82,8 @@ func WaitPeerLoginMFA(ctx context.Context, deadline time.Time, login func(contex
 			return ErrPeerLoginMFAExpired
 		}
 		select {
-		case <-ctx.Done():
-			return ctx.Err()
+		case <-waitCtx.Done():
+			return ended()
 		case <-time.After(sleep):
 		}
 		wait = poll.next(wait)

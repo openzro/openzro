@@ -87,3 +87,24 @@ func TestPeerLoginMFAPoll_Next(t *testing.T) {
 	}
 	assert.Equal(t, p.Max, d)
 }
+
+// The approval deadline also ends a login call in flight, and an expired
+// deadline ends the wait before any call.
+func TestWaitPeerLoginMFA_DeadlineCancelsInFlightLogin(t *testing.T) {
+	stalled := func(ctx context.Context) error {
+		<-ctx.Done()
+		return status.Error(codes.Canceled, "stalled call canceled")
+	}
+	start := time.Now()
+	err := WaitPeerLoginMFA(context.Background(), start.Add(50*time.Millisecond), stalled, "", fastPoll)
+	require.ErrorIs(t, err, ErrPeerLoginMFAExpired)
+	assert.Less(t, time.Since(start), 2*time.Second, "the stalled call ended at the deadline")
+
+	calls := 0
+	err = WaitPeerLoginMFA(context.Background(), time.Now().Add(-time.Second), func(context.Context) error {
+		calls++
+		return nil
+	}, "", fastPoll)
+	require.ErrorIs(t, err, ErrPeerLoginMFAExpired)
+	assert.Zero(t, calls)
+}
