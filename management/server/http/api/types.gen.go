@@ -148,6 +148,22 @@ const (
 	NetworkResourceTypeSubnet NetworkResourceType = "subnet"
 )
 
+// Defines values for PeerLoginApprovalState.
+const (
+	PeerLoginApprovalStateApproved PeerLoginApprovalState = "approved"
+	PeerLoginApprovalStateConsumed PeerLoginApprovalState = "consumed"
+	PeerLoginApprovalStateDenied   PeerLoginApprovalState = "denied"
+	PeerLoginApprovalStateExpired  PeerLoginApprovalState = "expired"
+	PeerLoginApprovalStatePending  PeerLoginApprovalState = "pending"
+)
+
+// Defines values for PeerLoginApproveResponseReason.
+const (
+	PeerLoginApproveResponseReasonCodeReused PeerLoginApproveResponseReason = "code_reused"
+	PeerLoginApproveResponseReasonLocked     PeerLoginApproveResponseReason = "locked"
+	PeerLoginApproveResponseReasonWrongCode  PeerLoginApproveResponseReason = "wrong_code"
+)
+
 // Defines values for PeerNetworkRangeCheckAction.
 const (
 	PeerNetworkRangeCheckActionAllow PeerNetworkRangeCheckAction = "allow"
@@ -1496,6 +1512,51 @@ type PeerBatch struct {
 	Version string `json:"version"`
 }
 
+// PeerLoginApproval A device login waiting for the user's second factor (ADR-0028), as the approval page shows it. Hostname and OS are what the device reported; IP and location are what the server observed. The email is partly masked, since anyone holding the link can open the page.
+type PeerLoginApproval struct {
+	AccountDomain string    `json:"account_domain"`
+	CreatedAt     time.Time `json:"created_at"`
+	ExpiresAt     time.Time `json:"expires_at"`
+	GeoCity       *string   `json:"geo_city,omitempty"`
+	GeoCountry    *string   `json:"geo_country,omitempty"`
+	Hostname      string    `json:"hostname"`
+	Ip            string    `json:"ip"`
+
+	// KeyFingerprint The device's WireGuard key, shortened
+	KeyFingerprint string `json:"key_fingerprint"`
+	MaskedEmail    string `json:"masked_email"`
+
+	// NewPeer True when the login registers a new device, false when it re-activates a login-expired one
+	NewPeer bool   `json:"new_peer"`
+	Os      string `json:"os"`
+
+	// State Expired is derived from expires_at.
+	State PeerLoginApprovalState `json:"state"`
+}
+
+// PeerLoginApprovalState Expired is derived from expires_at.
+type PeerLoginApprovalState string
+
+// PeerLoginApproveRequest defines model for PeerLoginApproveRequest.
+type PeerLoginApproveRequest struct {
+	// Code A TOTP code or a backup code
+	Code string `json:"code"`
+}
+
+// PeerLoginApproveResponse defines model for PeerLoginApproveResponse.
+type PeerLoginApproveResponse struct {
+	Approved bool `json:"approved"`
+
+	// LockedUntil Set when the user is locked out after repeated wrong codes
+	LockedUntil *time.Time `json:"locked_until,omitempty"`
+
+	// Reason Why the code did not approve the login. Set only when approved is false.
+	Reason *PeerLoginApproveResponseReason `json:"reason,omitempty"`
+}
+
+// PeerLoginApproveResponseReason Why the code did not approve the login. Set only when approved is false.
+type PeerLoginApproveResponseReason string
+
 // PeerMinimum defines model for PeerMinimum.
 type PeerMinimum struct {
 	// Id Peer ID
@@ -2294,6 +2355,9 @@ type PostApiIngressPeersJSONRequestBody = IngressPeerCreateRequest
 
 // PutApiIngressPeersIngressPeerIdJSONRequestBody defines body for PutApiIngressPeersIngressPeerId for application/json ContentType.
 type PutApiIngressPeersIngressPeerIdJSONRequestBody = IngressPeerUpdateRequest
+
+// PostApiMfaPeerLoginApproveJSONRequestBody defines body for PostApiMfaPeerLoginApprove for application/json ContentType.
+type PostApiMfaPeerLoginApproveJSONRequestBody = PeerLoginApproveRequest
 
 // PostApiNetworksJSONRequestBody defines body for PostApiNetworks for application/json ContentType.
 type PostApiNetworksJSONRequestBody = NetworkRequest

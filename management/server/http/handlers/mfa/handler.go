@@ -48,6 +48,11 @@ var mfaBypassRoutes = []string{
 	"/api/mfa/challenge",
 	"/api/mfa/enroll/start",
 	"/api/mfa/enroll/finish",
+	// Device-login approval page (ADR-0028 D4): the approval link's token
+	// is the credential.
+	"/api/mfa/peer-login",
+	"/api/mfa/peer-login/approve",
+	"/api/mfa/peer-login/deny",
 }
 
 // jwtSessionIDFromRequest re-derives the JWT session id from the
@@ -90,6 +95,9 @@ func AddEndpoints(accountManager account.Manager, router *mux.Router) {
 	router.HandleFunc("/mfa/enroll/start", h.enrollStartTokenAuth).Methods("POST", "OPTIONS")
 	router.HandleFunc("/mfa/enroll/finish", h.enrollFinishTokenAuth).Methods("POST", "OPTIONS")
 	router.HandleFunc("/mfa/challenge", h.challenge).Methods("POST", "OPTIONS")
+	router.HandleFunc("/mfa/peer-login", h.peerLoginGet).Methods("GET", "OPTIONS")
+	router.HandleFunc("/mfa/peer-login/approve", h.peerLoginApprove).Methods("POST", "OPTIONS")
+	router.HandleFunc("/mfa/peer-login/deny", h.peerLoginDeny).Methods("POST", "OPTIONS")
 
 	// Full-session paths.
 	router.HandleFunc("/users/me/mfa", h.status).Methods("GET", "OPTIONS")
