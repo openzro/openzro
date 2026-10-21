@@ -353,7 +353,10 @@ type MFAChallengeOutcome struct {
 	Locked         bool
 	LockedUntil    *time.Time
 	UsedBackupCode bool
-	SessionToken   string
+	// CodeReused is set when the code is right but its time step was
+	// already used (RFC 6238 §5.2): the user should wait for the next code.
+	CodeReused   bool
+	SessionToken string
 }
 
 // MFAStatus is the response of GET /api/users/me/mfa for the

@@ -151,6 +151,9 @@ func TestMFAGateForRequest_FailsClosedWithoutSubsystem(t *testing.T) {
 // last_verified_at silently elevating a separate stolen session).
 func TestMFAGateForRequest_RequiresSessionTokenForEnrolled(t *testing.T) {
 	am := newMFATestManager(t)
+	// A TOTP code works once, so each use below moves to a later step.
+	clock := newMFATestClock()
+	am.mfaClock = clock.Now
 	ctx := context.Background()
 
 	// Set up an enrolled user.
@@ -160,7 +163,7 @@ func TestMFAGateForRequest_RequiresSessionTokenForEnrolled(t *testing.T) {
 	setUserEmail(t, am, userID, "carol@example.com")
 	start, err := am.MFAStartEnrollment(ctx, acc.Id, userID)
 	require.NoError(t, err)
-	_, err = am.MFAFinishEnrollment(ctx, acc.Id, userID, start.PendingToken, mustTOTPCode(t, start.Secret), "jti-enroll")
+	_, err = am.MFAFinishEnrollment(ctx, acc.Id, userID, start.PendingToken, totpCodeAt(t, start.Secret, clock.Now()), "jti-enroll")
 	require.NoError(t, err)
 
 	user, err := am.GetUserByID(ctx, userID)
@@ -175,7 +178,8 @@ func TestMFAGateForRequest_RequiresSessionTokenForEnrolled(t *testing.T) {
 	})
 
 	t.Run("valid session token bound to same jti -> Pass", func(t *testing.T) {
-		outcome, err := am.MFAChallenge(ctx, userID, mustTOTPCode(t, start.Secret), "jti-B")
+		clock.Advance(30 * time.Second)
+		outcome, err := am.MFAChallenge(ctx, userID, totpCodeAt(t, start.Secret, clock.Now()), "jti-B")
 		require.NoError(t, err)
 		require.True(t, outcome.OK)
 		require.NotEmpty(t, outcome.SessionToken)
@@ -185,7 +189,8 @@ func TestMFAGateForRequest_RequiresSessionTokenForEnrolled(t *testing.T) {
 	})
 
 	t.Run("session token bound to different jti -> Challenge", func(t *testing.T) {
-		outcome, err := am.MFAChallenge(ctx, userID, mustTOTPCode(t, start.Secret), "jti-X")
+		clock.Advance(30 * time.Second)
+		outcome, err := am.MFAChallenge(ctx, userID, totpCodeAt(t, start.Secret, clock.Now()), "jti-X")
 		require.NoError(t, err)
 		require.True(t, outcome.OK)
 		require.NotEmpty(t, outcome.SessionToken)
@@ -216,6 +221,9 @@ func newMFATestManager(t *testing.T) *DefaultAccountManager {
 // code fails on the second use.
 func TestMFAEnrollmentFlow(t *testing.T) {
 	am := newMFATestManager(t)
+	// A TOTP code works once, so each use below moves to a later step.
+	clock := newMFATestClock()
+	am.mfaClock = clock.Now
 	ctx := context.Background()
 
 	// Use createAccount helper to get a real user with an email.
@@ -233,7 +241,7 @@ func TestMFAEnrollmentFlow(t *testing.T) {
 	require.NotEmpty(t, start.PendingToken)
 
 	// Compute the current TOTP code from the secret.
-	code := mustTOTPCode(t, start.Secret)
+	code := totpCodeAt(t, start.Secret, clock.Now())
 
 	// Finish enrollment with the code + pending token.
 	finish, err := am.MFAFinishEnrollment(ctx, acc.Id, userID, start.PendingToken, code, "jti-enroll")
@@ -248,8 +256,9 @@ func TestMFAEnrollmentFlow(t *testing.T) {
 	require.True(t, st.Enrolled)
 	require.Equal(t, 10, st.BackupCodesRemaining)
 
-	// Challenge with a fresh TOTP succeeds.
-	code = mustTOTPCode(t, start.Secret)
+	// Challenge with the next TOTP succeeds.
+	clock.Advance(30 * time.Second)
+	code = totpCodeAt(t, start.Secret, clock.Now())
 	outcome, err := am.MFAChallenge(ctx, userID, code, "jti-1")
 	require.NoError(t, err)
 	require.True(t, outcome.OK)

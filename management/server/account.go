@@ -168,6 +168,10 @@ type DefaultAccountManager struct {
 	// AES-256-GCM via the existing FieldEncrypt helper. Key is
 	// Config.DataStoreEncryptionKey.
 	mfaSecretCipher *activityStore.FieldEncrypt
+
+	// mfaClock is the time source for TOTP checks and lockouts. Nil means
+	// time.Now; tests set it to step through TOTP windows.
+	mfaClock func() time.Time
 }
 
 // FlowPolicyIndex is the narrow contract DefaultAccountManager uses

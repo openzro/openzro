@@ -65,7 +65,7 @@ func (am *DefaultAccountManager) MFAStatus(ctx context.Context, userID string) (
 		LastVerifiedAt:       row.LastVerifiedAt,
 		BackupCodesRemaining: len(row.BackupCodesHash),
 	}
-	if row.LockedUntil != nil && row.LockedUntil.After(time.Now().UTC()) {
+	if row.LockedUntil != nil && row.LockedUntil.After(am.mfaNow()) {
 		st.Locked = true
 		st.LockedUntil = row.LockedUntil
 	}
@@ -137,7 +137,8 @@ func (am *DefaultAccountManager) MFAFinishEnrollment(ctx context.Context, accoun
 	if pending.Secret == "" {
 		return nil, status.Errorf(status.InvalidArgument, "mfa: pending token missing secret")
 	}
-	valid, err := mfa.ValidateTOTP(code, pending.Secret)
+	now := am.mfaNow()
+	step, valid, err := mfa.MatchTOTPStep(code, pending.Secret, now)
 	if err != nil {
 		return nil, fmt.Errorf("mfa: validate: %w", err)
 	}
@@ -152,7 +153,8 @@ func (am *DefaultAccountManager) MFAFinishEnrollment(ctx context.Context, accoun
 	if err != nil {
 		return nil, fmt.Errorf("mfa: encrypt secret: %w", err)
 	}
-	now := time.Now().UTC()
+	// The code that finished enrollment counts as used, so it cannot also
+	// pass a challenge within its 30-second window.
 	row := &types.UserMFA{
 		UserID:          userID,
 		Method:          types.MFAMethodTOTP,
@@ -160,6 +162,7 @@ func (am *DefaultAccountManager) MFAFinishEnrollment(ctx context.Context, accoun
 		BackupCodesHash: hashes,
 		EnrolledAt:      now,
 		LastVerifiedAt:  &now,
+		LastUsedStep:    step,
 	}
 	if err := am.Store.SaveUserMFA(ctx, store.LockingStrengthUpdate, row); err != nil {
 		return nil, err
@@ -194,7 +197,7 @@ func (am *DefaultAccountManager) MFAChallenge(ctx context.Context, userID, code,
 		if err != nil {
 			return err
 		}
-		now := time.Now().UTC()
+		now := am.mfaNow()
 		if row.LockedUntil != nil && row.LockedUntil.After(now) {
 			outcome = &account.MFAChallengeOutcome{Locked: true, LockedUntil: row.LockedUntil}
 			return nil
@@ -205,9 +208,18 @@ func (am *DefaultAccountManager) MFAChallenge(ctx context.Context, userID, code,
 		if err != nil {
 			return fmt.Errorf("mfa: decrypt secret: %w", err)
 		}
-		totpOK, err := mfa.ValidateTOTP(code, secret)
+		// The row is locked for update, so reading LastUsedStep and writing
+		// the accepted step below cannot interleave with another challenge
+		// on any replica.
+		step, matched, err := mfa.MatchTOTPStep(code, secret, now)
 		if err != nil {
 			return fmt.Errorf("mfa: validate totp: %w", err)
+		}
+		totpOK := matched && step > row.LastUsedStep
+		if matched && !totpOK {
+			// Right code, already used: refused, but not a failed guess.
+			outcome = &account.MFAChallengeOutcome{CodeReused: true}
+			return nil
 		}
 
 		usedBackup := false
@@ -240,6 +252,9 @@ func (am *DefaultAccountManager) MFAChallenge(ctx context.Context, userID, code,
 		}
 
 		// Success.
+		if totpOK {
+			row.LastUsedStep = step
+		}
 		row.FailedAttempts = 0
 		row.LockedUntil = nil
 		row.LastVerifiedAt = &now
@@ -260,6 +275,14 @@ func (am *DefaultAccountManager) MFAChallenge(ctx context.Context, userID, code,
 		outcome.SessionToken = tok
 	}
 	return outcome, nil
+}
+
+// mfaNow is the clock for TOTP checks and lockouts.
+func (am *DefaultAccountManager) mfaNow() time.Time {
+	if am.mfaClock != nil {
+		return am.mfaClock().UTC()
+	}
+	return time.Now().UTC()
 }
 
 // MFAVerifyToken validates a challenge_token / enrollment_token /
