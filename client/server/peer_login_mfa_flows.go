@@ -9,6 +9,8 @@ import (
 
 	"google.golang.org/grpc/codes"
 	gstatus "google.golang.org/grpc/status"
+
+	"github.com/openzro/openzro/client/internal/profilemanager"
 )
 
 const (
@@ -27,10 +29,13 @@ type mfaFlowBinding struct {
 }
 
 // mfaFlow is a device login that waits for the user's 2FA approval. It
-// holds the SSO token the login needs, in memory only, until the flow ends.
+// holds the SSO token the login needs, in memory only, until the flow ends,
+// and its own copy of the configuration the login was made with, so the
+// token only ever goes to that management server.
 type mfaFlow struct {
 	id        string
 	binding   mfaFlowBinding
+	config    *profilemanager.Config
 	jwt       string
 	email     string
 	hostname  string
@@ -51,9 +56,9 @@ func newMFAFlows() *mfaFlows {
 	return &mfaFlows{flows: make(map[string]*mfaFlow)}
 }
 
-// add stores a flow and returns its id, dropping the oldest flow that is
-// not being waited on when the set is full.
-func (f *mfaFlows) add(binding mfaFlowBinding, jwt, email, hostname string, expiresAt, now time.Time) (string, error) {
+// add stores flow under a new id, which it returns, dropping the oldest flow
+// that is not being waited on when the set is full.
+func (f *mfaFlows) add(flow *mfaFlow, now time.Time) (string, error) {
 	raw := make([]byte, 16)
 	if _, err := rand.Read(raw); err != nil {
 		return "", fmt.Errorf("generate flow id: %w", err)
@@ -74,9 +79,8 @@ func (f *mfaFlows) add(binding mfaFlowBinding, jwt, email, hostname string, expi
 		}
 		f.dropLocked(oldest.id)
 	}
-	f.flows[id] = &mfaFlow{
-		id: id, binding: binding, jwt: jwt, email: email, hostname: hostname, expiresAt: expiresAt, createdAt: now,
-	}
+	flow.id, flow.createdAt, flow.waiting = id, now, false
+	f.flows[id] = flow
 	return id, nil
 }
 
@@ -116,6 +120,19 @@ func (f *mfaFlows) reap(now time.Time) {
 		if !flow.waiting && !now.Before(flow.expiresAt) {
 			f.dropLocked(id)
 		}
+	}
+}
+
+// clear drops every flow and its token: the daemon stopped. Waiters end
+// through their canceled operation.
+func (f *mfaFlows) clear() {
+	if f == nil {
+		return
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for id := range f.flows {
+		f.dropLocked(id)
 	}
 }
 

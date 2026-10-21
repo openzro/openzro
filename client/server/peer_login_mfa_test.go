@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"net/url"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,8 +20,8 @@ import (
 
 func newTestFlow(t *testing.T, flows *mfaFlows, now time.Time) string {
 	t.Helper()
-	id, err := flows.add(mfaFlowBinding{profile: "default", managementURL: "https://mgmt.example.com:443"},
-		"jwt", "ana@example.com", "ana-laptop", now.Add(5*time.Minute), now)
+	id, err := flows.add(&mfaFlow{binding: testBinding, jwt: "jwt", email: "ana@example.com",
+		hostname: "ana-laptop", expiresAt: now.Add(5 * time.Minute)}, now)
 	require.NoError(t, err)
 	return id
 }
@@ -103,6 +104,13 @@ func TestMFAFlows_Cap(t *testing.T) {
 // newMFATestServer is a daemon whose management logins answer from login.
 func newMFATestServer(t *testing.T, login func(ctx context.Context, jwt string) error) *Server {
 	t.Helper()
+	return newMFATestServerWithConfig(t, func(ctx context.Context, _ *profilemanager.Config, jwt string) error {
+		return login(ctx, jwt)
+	})
+}
+
+func newMFATestServerWithConfig(t *testing.T, login func(ctx context.Context, cfg *profilemanager.Config, jwt string) error) *Server {
+	t.Helper()
 	ctx, cancel := context.WithCancel(internal.CtxInitState(context.Background()))
 	t.Cleanup(cancel)
 	s := New(ctx, "console", false)
@@ -133,7 +141,7 @@ func TestPeerLoginMFA_ApprovalCompletesTheLogin(t *testing.T) {
 		return nil
 	})
 
-	resp, handled, err := s.startPeerLoginMFA(context.Background(), &proto.WaitSSOLoginRequest{SupportsMfaApproval: true},
+	resp, handled, err := startFlow(s, &proto.WaitSSOLoginRequest{SupportsMfaApproval: true},
 		"sso-jwt", "ana@example.com", "ana-laptop", required())
 	require.True(t, handled)
 	require.NoError(t, err)
@@ -155,7 +163,7 @@ func TestPeerLoginMFA_ApprovalCompletesTheLogin(t *testing.T) {
 // no flow keeps the token.
 func TestPeerLoginMFA_OldCallers(t *testing.T) {
 	s := newMFATestServer(t, func(context.Context, string) error { return nil })
-	resp, handled, err := s.startPeerLoginMFA(context.Background(), &proto.WaitSSOLoginRequest{},
+	resp, handled, err := startFlow(s, &proto.WaitSSOLoginRequest{},
 		"sso-jwt", "ana@example.com", "", required())
 	require.True(t, handled)
 	assert.Nil(t, resp)
@@ -164,7 +172,7 @@ func TestPeerLoginMFA_OldCallers(t *testing.T) {
 	assert.Equal(t, 0, s.mfaFlows.len())
 
 	// Errors that are not a 2FA wait are left to the caller.
-	_, handled, _ = s.startPeerLoginMFA(context.Background(), &proto.WaitSSOLoginRequest{SupportsMfaApproval: true},
+	_, handled, _ = startFlow(s, &proto.WaitSSOLoginRequest{SupportsMfaApproval: true},
 		"sso-jwt", "", "", status.Error(codes.PermissionDenied, "blocked"))
 	assert.False(t, handled)
 }
@@ -181,7 +189,7 @@ func TestPeerLoginMFA_RefusalEndsTheWait(t *testing.T) {
 		}
 		return denied
 	})
-	resp, _, err := s.startPeerLoginMFA(context.Background(), &proto.WaitSSOLoginRequest{SupportsMfaApproval: true},
+	resp, _, err := startFlow(s, &proto.WaitSSOLoginRequest{SupportsMfaApproval: true},
 		"sso-jwt", "", "", required())
 	require.NoError(t, err)
 
@@ -193,10 +201,10 @@ func TestPeerLoginMFA_RefusalEndsTheWait(t *testing.T) {
 	assert.Equal(t, 0, s.mfaFlows.len())
 }
 
-// Cancelling the wait ends the flow too.
+// Canceling the wait ends the flow too.
 func TestPeerLoginMFA_CancelledWait(t *testing.T) {
 	s := newMFATestServer(t, func(context.Context, string) error { return required() })
-	resp, _, err := s.startPeerLoginMFA(context.Background(), &proto.WaitSSOLoginRequest{SupportsMfaApproval: true},
+	resp, _, err := startFlow(s, &proto.WaitSSOLoginRequest{SupportsMfaApproval: true},
 		"sso-jwt", "", "", required())
 	require.NoError(t, err)
 
@@ -204,5 +212,110 @@ func TestPeerLoginMFA_CancelledWait(t *testing.T) {
 	defer cancel()
 	_, err = s.WaitMFAApproval(ctx, &proto.WaitMFAApprovalRequest{FlowId: resp.MfaFlowId})
 	assert.Equal(t, codes.Canceled, status.Code(err))
+	assert.Equal(t, 0, s.mfaFlows.len())
+}
+
+// startFlow starts a flow the way WaitSSOLogin does, from the login target
+// it would have used.
+func startFlow(s *Server, msg *proto.WaitSSOLoginRequest, jwt, email, hostname string,
+	loginErr error) (*proto.WaitSSOLoginResponse, bool, error) {
+	binding, cfg := s.loginTarget()
+	return s.startPeerLoginMFA(msg, binding, cfg, jwt, email, hostname, loginErr)
+}
+
+// The token goes only to the management server it was minted for: retries
+// use the configuration captured with the flow, and a profile switch during
+// the wait ends it before the next retry.
+func TestPeerLoginMFA_ProfileSwitchStopsTheWait(t *testing.T) {
+	var hosts []string
+	switched := make(chan struct{})
+	var s *Server
+	s = newMFATestServerWithConfig(t, func(_ context.Context, cfg *profilemanager.Config, _ string) error {
+		hosts = append(hosts, cfg.ManagementURL.Host)
+		if len(hosts) == 1 {
+			// Switch to another server while the wait sleeps.
+			other, _ := url.Parse("https://other.example.com:443")
+			s.mutex.Lock()
+			s.config = &profilemanager.Config{ManagementURL: other}
+			s.mutex.Unlock()
+			close(switched)
+		}
+		return required()
+	})
+	resp, _, err := startFlow(s, &proto.WaitSSOLoginRequest{SupportsMfaApproval: true}, "sso-jwt", "", "", required())
+	require.NoError(t, err)
+
+	_, err = s.WaitMFAApproval(context.Background(), &proto.WaitMFAApprovalRequest{FlowId: resp.MfaFlowId})
+	<-switched
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+	assert.Equal(t, []string{"mgmt.example.com:443"}, hosts, "no retry after the switch, and none to the new server")
+	assert.Equal(t, 0, s.mfaFlows.len())
+}
+
+// The flow keeps its own copy of the configuration: changing the daemon's
+// in place does not redirect the token.
+func TestPeerLoginMFA_FlowConfigIsACopy(t *testing.T) {
+	var hosts []string
+	pending := 1
+	s := newMFATestServerWithConfig(t, func(_ context.Context, cfg *profilemanager.Config, _ string) error {
+		hosts = append(hosts, cfg.ManagementURL.Host)
+		if pending > 0 {
+			pending--
+			return required()
+		}
+		return nil
+	})
+	resp, _, err := startFlow(s, &proto.WaitSSOLoginRequest{SupportsMfaApproval: true}, "sso-jwt", "", "", required())
+	require.NoError(t, err)
+	s.mutex.Lock()
+	s.config.ManagementURL.Host = "tampered.example.com"
+	s.mutex.Unlock()
+
+	_, err = s.WaitMFAApproval(context.Background(), &proto.WaitMFAApprovalRequest{FlowId: resp.MfaFlowId})
+	// The in-place change alters the binding, so the wait stops; either
+	// way the token never reached the tampered host.
+	assert.NotContains(t, hosts, "tampered.example.com")
+	_ = err
+}
+
+// The wait is the daemon's active operation: Down, a new login or any
+// other action that cancels it ends the wait and drops the flow.
+func TestPeerLoginMFA_DaemonCancellationEndsTheWait(t *testing.T) {
+	entered := make(chan struct{})
+	var once sync.Once
+	s := newMFATestServer(t, func(ctx context.Context, _ string) error {
+		once.Do(func() { close(entered) })
+		<-ctx.Done()
+		return status.Error(codes.Canceled, "canceled")
+	})
+	resp, _, err := startFlow(s, &proto.WaitSSOLoginRequest{SupportsMfaApproval: true}, "sso-jwt", "", "", required())
+	require.NoError(t, err)
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := s.WaitMFAApproval(context.Background(), &proto.WaitMFAApprovalRequest{FlowId: resp.MfaFlowId})
+		done <- err
+	}()
+	<-entered
+	// What Down and every new action do with the active operation.
+	s.mutex.Lock()
+	s.actCancel()
+	s.mutex.Unlock()
+	select {
+	case err := <-done:
+		assert.Equal(t, codes.Canceled, status.Code(err))
+	case <-time.After(5 * time.Second):
+		t.Fatal("the wait did not end when the daemon canceled it")
+	}
+	assert.Equal(t, 0, s.mfaFlows.len())
+}
+
+// Stopping the daemon also drops flows nobody is waiting on yet.
+func TestPeerLoginMFA_StopDropsPendingFlows(t *testing.T) {
+	s := newMFATestServer(t, func(context.Context, string) error { return required() })
+	_, _, err := startFlow(s, &proto.WaitSSOLoginRequest{SupportsMfaApproval: true}, "sso-jwt", "", "", required())
+	require.NoError(t, err)
+	require.Equal(t, 1, s.mfaFlows.len())
+	s.mfaFlows.clear()
 	assert.Equal(t, 0, s.mfaFlows.len())
 }

@@ -141,7 +141,7 @@ type Server struct {
 	// production leaves peerLogin and mfaProfile nil.
 	mfaFlows   *mfaFlows
 	mfaPoll    internal.PeerLoginMFAPoll
-	peerLogin  func(ctx context.Context, jwt string) error
+	peerLogin  func(ctx context.Context, cfg *profilemanager.Config, jwt string) error
 	mfaProfile func() string
 }
 
@@ -398,8 +398,14 @@ func parseEnvDuration(envVar string, defaultDuration time.Duration) time.Duratio
 
 // loginAttempt attempts to login using the provided information. it returns a status in case something fails
 func (s *Server) loginAttempt(ctx context.Context, setupKey, jwtToken string) (internal.StatusType, error) {
+	return s.loginAttemptWith(ctx, s.config, setupKey, jwtToken)
+}
+
+// loginAttemptWith logs in with the given configuration.
+func (s *Server) loginAttemptWith(ctx context.Context, cfg *profilemanager.Config, setupKey,
+	jwtToken string) (internal.StatusType, error) {
 	var status internal.StatusType
-	err := internal.Login(ctx, s.config, setupKey, jwtToken)
+	err := internal.Login(ctx, cfg, setupKey, jwtToken)
 	if err != nil {
 		if s, ok := gstatus.FromError(err); ok && (s.Code() == codes.InvalidArgument || s.Code() == codes.PermissionDenied) {
 			log.Warnf("failed login: %v", err)
@@ -726,10 +732,13 @@ func (s *Server) WaitSSOLogin(callerCtx context.Context, msg *proto.WaitSSOLogin
 	s.oauthAuthFlow.expiresAt = time.Now()
 	s.mutex.Unlock()
 
-	if loginStatus, err := s.loginAttempt(ctx, "", tokenInfo.GetTokenToUse()); err != nil {
+	// The login and a 2FA flow it may turn into share one target, so the
+	// token cannot reach a server the login did not use.
+	binding, target := s.loginTarget()
+	if loginStatus, err := s.loginAttemptWith(ctx, target, "", tokenInfo.GetTokenToUse()); err != nil {
 		// The login may be waiting for the user's 2FA approval (ADR-0028);
 		// the caller then waits on it with WaitMFAApproval.
-		resp, handled, mfaErr := s.startPeerLoginMFA(ctx, msg, tokenInfo.GetTokenToUse(), tokenInfo.Email,
+		resp, handled, mfaErr := s.startPeerLoginMFA(msg, binding, target, tokenInfo.GetTokenToUse(), tokenInfo.Email,
 			msg.Hostname, err)
 		if handled {
 			state.Set(internal.StatusNeedsLogin)
@@ -915,6 +924,9 @@ func (s *Server) Down(ctx context.Context, _ *proto.DownRequest) (*proto.DownRes
 	defer s.mutex.Unlock()
 
 	s.oauthAuthFlow = oauthAuthFlow{}
+	// Logins waiting for a 2FA approval end with the stop; a waiter ends
+	// through its canceled operation below.
+	s.mfaFlows.clear()
 
 	if s.actCancel == nil {
 		return nil, fmt.Errorf("service is not up")
