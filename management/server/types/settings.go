@@ -147,6 +147,12 @@ type Settings struct {
 	// the threat model treats the IdP as a separate trust domain.
 	MFAEnforceFederated bool `gorm:"default:false"`
 
+	// MFAEnforcePeerLogin, when true, asks users the 2FA rule above
+	// applies to for their second factor when they register a device or
+	// re-activate a login-expired one (ADR-0028). Switching it on needs
+	// every such user enrolled (D10).
+	MFAEnforcePeerLogin bool `gorm:"default:false"`
+
 	// AllowedEmailDomains, when non-empty, restricts which users may join
 	// the account on first login (and via SCIM / invite) to those whose
 	// verified email domain is listed exactly. Empty disables the check.
@@ -176,6 +182,7 @@ func (s *Settings) Copy() *Settings {
 		AdmissionExemptGroups:           append([]string(nil), s.AdmissionExemptGroups...),
 		MFAEnforceLocal:                 s.MFAEnforceLocal,
 		MFAEnforceFederated:             s.MFAEnforceFederated,
+		MFAEnforcePeerLogin:             s.MFAEnforcePeerLogin,
 		AllowedEmailDomains:             append([]string(nil), s.AllowedEmailDomains...),
 
 		ClientUpdateTargetVersion: s.ClientUpdateTargetVersion,

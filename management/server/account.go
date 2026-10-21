@@ -609,6 +609,7 @@ func (am *DefaultAccountManager) UpdateAccountSettings(ctx context.Context, acco
 
 	am.handleRoutingPeerDNSResolutionSettings(ctx, oldSettings, newSettings, userID, accountID)
 	am.handleLazyConnectionSettings(ctx, oldSettings, newSettings, userID, accountID)
+	am.handlePeerLoginMFASettings(ctx, oldSettings, newSettings, userID, accountID)
 	am.handleAdmissionSettings(ctx, oldSettings, newSettings, userID, accountID)
 	am.handlePeerApprovalSettings(ctx, oldSettings, newSettings, userID, accountID)
 	am.handleClientUpdateSettings(ctx, oldSettings, newSettings, userID, accountID)
@@ -655,6 +656,10 @@ func (am *DefaultAccountManager) validateSettingsUpdate(ctx context.Context, tra
 		return err
 	}
 	newSettings.AllowedEmailDomains = allowedEmailDomains
+
+	if err = checkPeerLoginMFAActivation(ctx, transaction, accountID, oldSettings, newSettings); err != nil {
+		return err
+	}
 
 	peers, err := transaction.GetAccountPeers(ctx, store.LockingStrengthShare, accountID, "", "")
 	if err != nil {

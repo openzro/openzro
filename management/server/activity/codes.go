@@ -262,6 +262,11 @@ const (
 	PeerLoginMFADenied Activity = 116
 	// PeerLoginMFAExpired records a device login that was never approved.
 	PeerLoginMFAExpired Activity = 117
+	// AccountMFAPeerLoginEnabled records an admin switching on the
+	// second factor on device login (ADR-0028).
+	AccountMFAPeerLoginEnabled Activity = 118
+	// AccountMFAPeerLoginDisabled records an admin switching it off.
+	AccountMFAPeerLoginDisabled Activity = 119
 
 	AccountDeleted Activity = 99999
 )
@@ -396,6 +401,8 @@ var activityMap = map[Activity]Code{
 	PeerLoginMFAFailed:                     {"Device login 2FA approval failed", "peer.login.mfa.fail"},
 	PeerLoginMFADenied:                     {"Device login denied through the approval link", "peer.login.mfa.deny"},
 	PeerLoginMFAExpired:                    {"Device login 2FA approval expired", "peer.login.mfa.expire"},
+	AccountMFAPeerLoginEnabled:             {"Account device login 2FA enabled", "account.setting.mfa.peer_login.enable"},
+	AccountMFAPeerLoginDisabled:            {"Account device login 2FA disabled", "account.setting.mfa.peer_login.disable"},
 }
 
 // StringCode returns a string code of the activity

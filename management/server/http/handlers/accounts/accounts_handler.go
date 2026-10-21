@@ -146,6 +146,18 @@ func (h *handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 	} else if existing, err := h.settingsManager.GetSettings(r.Context(), accountID, userID); err == nil && existing != nil {
 		settings.MFAEnforceFederated = existing.MFAEnforceFederated
 	}
+	// The device-login gate (ADR-0028). Unlike the toggles above, a failed
+	// read fails the request: defaulting to false would switch the gate off.
+	if req.Settings.MfaEnforcePeerLogin != nil {
+		settings.MFAEnforcePeerLogin = *req.Settings.MfaEnforcePeerLogin
+	} else {
+		existing, err := h.settingsManager.GetSettings(r.Context(), accountID, userID)
+		if err != nil {
+			util.WriteError(r.Context(), err, w)
+			return
+		}
+		settings.MFAEnforcePeerLogin = existing.MFAEnforcePeerLogin
+	}
 
 	// Email-domain allowlist (ADR-0025). Leave nil when omitted so the
 	// account manager can preserve the current value inside the same
@@ -394,6 +406,7 @@ func toAccountResponse(accountID string, settings *types.Settings, meta *types.A
 		ClientUpdateRolloutPercent:      settings.ClientUpdateRolloutPercent,
 		MfaEnforceLocal:                 &settings.MFAEnforceLocal,
 		MfaEnforceFederated:             &settings.MFAEnforceFederated,
+		MfaEnforcePeerLogin:             &settings.MFAEnforcePeerLogin,
 		AllowedEmailDomains:             &allowedEmailDomains,
 	}
 
