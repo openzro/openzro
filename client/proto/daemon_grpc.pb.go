@@ -23,6 +23,10 @@ type DaemonServiceClient interface {
 	// WaitSSOLogin uses the userCode to validate the TokenInfo and
 	// waits for the user to continue with the login on a browser
 	WaitSSOLogin(ctx context.Context, in *WaitSSOLoginRequest, opts ...grpc.CallOption) (*WaitSSOLoginResponse, error)
+	// WaitMFAApproval waits until the user approves, on the page at
+	// WaitSSOLoginResponse.mfaApprovalURL, the device login that
+	// WaitSSOLogin left waiting for their second factor (ADR-0028).
+	WaitMFAApproval(ctx context.Context, in *WaitMFAApprovalRequest, opts ...grpc.CallOption) (*WaitMFAApprovalResponse, error)
 	// Up starts engine work in the daemon.
 	Up(ctx context.Context, in *UpRequest, opts ...grpc.CallOption) (*UpResponse, error)
 	// Status of the service.
@@ -90,6 +94,15 @@ func (c *daemonServiceClient) Login(ctx context.Context, in *LoginRequest, opts 
 func (c *daemonServiceClient) WaitSSOLogin(ctx context.Context, in *WaitSSOLoginRequest, opts ...grpc.CallOption) (*WaitSSOLoginResponse, error) {
 	out := new(WaitSSOLoginResponse)
 	err := c.cc.Invoke(ctx, "/daemon.DaemonService/WaitSSOLogin", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) WaitMFAApproval(ctx context.Context, in *WaitMFAApprovalRequest, opts ...grpc.CallOption) (*WaitMFAApprovalResponse, error) {
+	out := new(WaitMFAApprovalResponse)
+	err := c.cc.Invoke(ctx, "/daemon.DaemonService/WaitMFAApproval", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -353,6 +366,10 @@ type DaemonServiceServer interface {
 	// WaitSSOLogin uses the userCode to validate the TokenInfo and
 	// waits for the user to continue with the login on a browser
 	WaitSSOLogin(context.Context, *WaitSSOLoginRequest) (*WaitSSOLoginResponse, error)
+	// WaitMFAApproval waits until the user approves, on the page at
+	// WaitSSOLoginResponse.mfaApprovalURL, the device login that
+	// WaitSSOLogin left waiting for their second factor (ADR-0028).
+	WaitMFAApproval(context.Context, *WaitMFAApprovalRequest) (*WaitMFAApprovalResponse, error)
 	// Up starts engine work in the daemon.
 	Up(context.Context, *UpRequest) (*UpResponse, error)
 	// Status of the service.
@@ -410,6 +427,9 @@ func (UnimplementedDaemonServiceServer) Login(context.Context, *LoginRequest) (*
 }
 func (UnimplementedDaemonServiceServer) WaitSSOLogin(context.Context, *WaitSSOLoginRequest) (*WaitSSOLoginResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WaitSSOLogin not implemented")
+}
+func (UnimplementedDaemonServiceServer) WaitMFAApproval(context.Context, *WaitMFAApprovalRequest) (*WaitMFAApprovalResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WaitMFAApproval not implemented")
 }
 func (UnimplementedDaemonServiceServer) Up(context.Context, *UpRequest) (*UpResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Up not implemented")
@@ -531,6 +551,24 @@ func _DaemonService_WaitSSOLogin_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(DaemonServiceServer).WaitSSOLogin(ctx, req.(*WaitSSOLoginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_WaitMFAApproval_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WaitMFAApprovalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).WaitMFAApproval(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/daemon.DaemonService/WaitMFAApproval",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).WaitMFAApproval(ctx, req.(*WaitMFAApprovalRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1002,6 +1040,10 @@ var DaemonService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "WaitSSOLogin",
 			Handler:    _DaemonService_WaitSSOLogin_Handler,
+		},
+		{
+			MethodName: "WaitMFAApproval",
+			Handler:    _DaemonService_WaitMFAApproval_Handler,
 		},
 		{
 			MethodName: "Up",
