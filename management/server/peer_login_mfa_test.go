@@ -331,3 +331,53 @@ func TestSweepPeerLoginMFAApprovals(t *testing.T) {
 		return countEvents(t, f.am, f.accountID, activity.PeerLoginMFAExpired) != 1
 	}, 300*time.Millisecond, 20*time.Millisecond, "only the attempt nobody acted on expired")
 }
+
+// A 2FA reset removes the user's approval records in the same transaction
+// as the factor, so an approved login can no longer be consumed.
+func TestMFADisenroll_ClearsPeerLoginApprovals(t *testing.T) {
+	f := newPeerLoginFixture(t, "ana")
+	ctx := context.Background()
+	ch, err := f.request(t, wgKeyA)
+	require.NoError(t, err)
+	out, err := f.am.ApprovePeerLoginMFA(ctx, ch.Token, f.code(t))
+	require.NoError(t, err)
+	require.True(t, out.Approved)
+
+	require.NoError(t, f.am.MFADisenroll(ctx, f.accountID, f.userID, f.userID))
+
+	ok, err := f.am.Store.ConsumePeerLoginMFAApproval(ctx, f.accountID, f.userID, wgKeyA, f.clock.Now())
+	require.NoError(t, err)
+	assert.False(t, ok, "the approval did not survive the reset")
+	_, err = f.am.Store.GetPeerLoginMFAApprovalByID(ctx, store.LockingStrengthNone, ch.ApprovalID)
+	require.ErrorIs(t, err, store.ErrPeerLoginMFAApprovalNotFound)
+
+	// Clearing approvals of a user with no 2FA is still done, and still
+	// not audited as a reset.
+	_, err = f.request(t, "key-2")
+	require.NoError(t, err)
+	require.NoError(t, f.am.MFADisenroll(ctx, f.accountID, f.userID, f.userID))
+	live, err := f.am.Store.GetUserPeerLoginMFAApprovals(ctx, store.LockingStrengthNone, f.accountID, f.userID, f.clock.Now())
+	require.NoError(t, err)
+	assert.Empty(t, live)
+	assert.Equal(t, 1, countEvents(t, f.am, f.accountID, activity.UserMFADisabled))
+}
+
+// A password reset cuts the user's access, including logins waiting for or
+// holding a 2FA approval.
+func TestSCIMResetLocalPassword_ClearsPeerLoginApprovals(t *testing.T) {
+	m, accountID, _ := setupLocalUsers(t)
+	ctx := context.Background()
+	u := createLocal(t, m, accountID, "ana@example.com")
+	now := time.Now().UTC()
+	require.NoError(t, m.Store.CreatePeerLoginMFAApproval(ctx, &types.PeerLoginMFAApproval{
+		ID: "approval-1", AccountID: accountID, UserID: u.Id, WGPubKey: wgKeyA, CreatedAt: now,
+		ExpiresAt: now.Add(types.PeerLoginMFAWindow), Deadline: now.Add(types.PeerLoginMFADeadline),
+	}))
+
+	_, err := m.SCIMResetLocalPassword(ctx, accountID, userID, u.Id, newPassword, nil)
+	require.NoError(t, err)
+
+	live, err := m.Store.GetUserPeerLoginMFAApprovals(ctx, store.LockingStrengthNone, accountID, u.Id, now)
+	require.NoError(t, err)
+	assert.Empty(t, live)
+}

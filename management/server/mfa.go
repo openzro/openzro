@@ -260,8 +260,26 @@ func (am *DefaultAccountManager) MFASessionValid(userID, mfaSessionToken, jwtSes
 // DELETE decides, so of concurrent calls (on any replica) only the one that
 // removed the row audits it, and a user without 2FA is a no-op with no
 // error and no audit event.
+//
+// The user's device-login approvals go in the same transaction, in the
+// approval lock order (users, approvals, user_mfa), so an approved login
+// cannot outlive the factor that approved it, and a failure rolls both
+// back for the retry to redo (ADR-0028 D8). The audit follows the commit.
 func (am *DefaultAccountManager) MFADisenroll(ctx context.Context, accountID, initiatorUserID, targetUserID string) error {
-	deleted, err := am.Store.DeleteUserMFA(ctx, store.LockingStrengthUpdate, targetUserID)
+	var deleted bool
+	err := am.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
+		if _, err := tx.GetUserByUserID(ctx, store.LockingStrengthUpdate, targetUserID); err != nil {
+			if sErr, ok := status.FromError(err); !ok || sErr.Type() != status.NotFound {
+				return err
+			}
+		}
+		if _, err := tx.DeleteUserPeerLoginMFAApprovals(ctx, accountID, targetUserID); err != nil {
+			return err
+		}
+		var err error
+		deleted, err = tx.DeleteUserMFA(ctx, store.LockingStrengthUpdate, targetUserID)
+		return err
+	})
 	if err != nil {
 		return err
 	}

@@ -139,3 +139,27 @@ func TestSqlStore_PeerLoginMFAApprovalListingAndSweep(t *testing.T) {
 		assert.Empty(t, live)
 	})
 }
+
+// Deleting a user or an account deletes their approval records.
+func TestSqlStore_DeletionClearsPeerLoginMFAApprovals(t *testing.T) {
+	runTestForAllEngines(t, "../testdata/store.sql", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		t0 := time.Now().UTC()
+		require.NoError(t, s.CreatePeerLoginMFAApproval(ctx, newApproval("u1", "key-1", t0)))
+		other := newApproval("o1", "key-2", t0)
+		other.UserID = "f4f6d672-63fb-11ec-90d6-0242ac120003"
+		require.NoError(t, s.CreatePeerLoginMFAApproval(ctx, other))
+
+		require.NoError(t, s.DeleteUser(ctx, LockingStrengthUpdate, plmAccount, plmUser))
+		_, err := s.GetPeerLoginMFAApprovalByID(ctx, LockingStrengthNone, "u1")
+		require.ErrorIs(t, err, ErrPeerLoginMFAApprovalNotFound)
+		_, err = s.GetPeerLoginMFAApprovalByID(ctx, LockingStrengthNone, "o1")
+		require.NoError(t, err, "another user's record stays")
+
+		account, err := s.GetAccount(ctx, plmAccount)
+		require.NoError(t, err)
+		require.NoError(t, s.DeleteAccount(ctx, account))
+		_, err = s.GetPeerLoginMFAApprovalByID(ctx, LockingStrengthNone, "o1")
+		require.ErrorIs(t, err, ErrPeerLoginMFAApprovalNotFound)
+	})
+}

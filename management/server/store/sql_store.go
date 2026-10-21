@@ -390,6 +390,10 @@ func (s *SqlStore) DeleteAccount(ctx context.Context, account *types.Account) er
 			return err
 		}
 
+		if err := tx.Delete(&types.PeerLoginMFAApproval{}, accountIDCondition, account.Id).Error; err != nil {
+			return err
+		}
+
 		result := tx.Select(clause.Associations).Delete(account.Policies, "account_id = ?", account.Id)
 		if result.Error != nil {
 			return result.Error
@@ -796,6 +800,9 @@ func (s *SqlStore) DeleteUser(ctx context.Context, lockStrength LockingStrength,
 			Delete(&types.PersonalAccessToken{}, "user_id = ?", userID)
 		if result.Error != nil {
 			return result.Error
+		}
+		if err := tx.Delete(&types.PeerLoginMFAApproval{}, "account_id = ? AND user_id = ?", accountID, userID).Error; err != nil {
+			return err
 		}
 
 		return tx.Clauses(clause.Locking{Strength: string(lockStrength)}).

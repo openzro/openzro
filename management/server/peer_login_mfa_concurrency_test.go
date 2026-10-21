@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/openzro/openzro/management/server/activity"
+	"github.com/openzro/openzro/management/server/status"
 	"github.com/openzro/openzro/management/server/store"
 	"github.com/openzro/openzro/management/server/types"
 )
@@ -174,4 +175,35 @@ func TestSweepPeerLoginMFAApprovals_ConcurrentReplicas(t *testing.T) {
 	}
 	require.Eventually(t, func() bool { return expired() == n }, 3*time.Second, 20*time.Millisecond)
 	assert.Never(t, func() bool { return expired() != n }, 500*time.Millisecond, 20*time.Millisecond)
+}
+
+// An approval racing a 2FA reset on the other replica loses cleanly either
+// way: no approved login survives the reset.
+func TestApprovePeerLoginMFA_RacesReset(t *testing.T) {
+	for round := 0; round < 3; round++ {
+		r, accountID, userID, secret := twoReplicaPeerLogin(t)
+		ctx := context.Background()
+		ch, err := r.A.RequestPeerLoginMFAApproval(ctx, PeerLoginMFARequest{
+			AccountID: accountID, UserID: userID, WGPubKey: "key"})
+		require.NoError(t, err)
+		code := totpCodeAt(t, secret, time.Now().Add(30*time.Second))
+
+		errs := runOnBoth(t, r, 2, func(am *DefaultAccountManager, i int) error {
+			if i == 0 {
+				_, err := am.ApprovePeerLoginMFA(ctx, ch.Token, code)
+				return err
+			}
+			return am.MFADisenroll(ctx, accountID, userID, userID)
+		})
+		for _, err := range errs {
+			if err != nil {
+				requireStatus(t, err, status.PreconditionFailed)
+			}
+		}
+		ok, err := r.A.Store.ConsumePeerLoginMFAApproval(ctx, accountID, userID, "key", time.Now())
+		require.NoError(t, err)
+		assert.False(t, ok, "round %d: an approval survived the reset", round)
+		_, err = r.A.Store.GetUserMFA(ctx, store.LockingStrengthNone, userID)
+		require.ErrorIs(t, err, store.ErrUserMFANotFound)
+	}
 }

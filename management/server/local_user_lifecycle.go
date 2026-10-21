@@ -133,6 +133,11 @@ func (am *DefaultAccountManager) cutLocalUserAccess(ctx context.Context, account
 	if err := am.expireUserPeers(ctx, accountID, userID); err != nil {
 		return status.Errorf(status.Internal, "expire peers: %v", err)
 	}
+	// Device logins waiting for, or holding, a 2FA approval were started
+	// with the old password (ADR-0028).
+	if _, err := am.Store.DeleteUserPeerLoginMFAApprovals(ctx, accountID, userID); err != nil {
+		return status.Errorf(status.Internal, "clear device login approvals: %v", err)
+	}
 	return nil
 }
 
