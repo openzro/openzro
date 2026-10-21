@@ -139,3 +139,32 @@ func TestUpdateAccountSettings_PeerLoginMFAOmittedKeepsLockedValue(t *testing.T)
 		})
 	}
 }
+
+// Across replicas: A builds a save from settings it read with the gate on
+// and omits the gate; B switches the gate off; A's save keeps B's value.
+func TestUpdateAccountSettings_PeerLoginMFAOmittedTwoReplicas(t *testing.T) {
+	replicas := newTwoReplicas(t)
+	ctx := context.Background()
+	acc, err := replicas.A.GetOrCreateAccountByUser(ctx, "owner", "example.com")
+	require.NoError(t, err)
+	settings := acc.Settings.Copy()
+	if settings.Extra == nil {
+		settings.Extra = &types.ExtraSettings{}
+	}
+	settings.MFAEnforcePeerLogin = true
+	require.NoError(t, replicas.A.Store.SaveAccountSettings(ctx, store.LockingStrengthUpdate, acc.Id, settings))
+
+	staleOnA := settings.Copy()
+	staleOnA.KeepMFAEnforcePeerLogin = true
+
+	off := settings.Copy()
+	off.MFAEnforcePeerLogin = false
+	_, err = replicas.B.UpdateAccountSettings(ctx, acc.Id, "owner", off)
+	require.NoError(t, err)
+
+	_, err = replicas.A.UpdateAccountSettings(ctx, acc.Id, "owner", staleOnA)
+	require.NoError(t, err)
+	got, err := replicas.B.Store.GetAccountSettings(ctx, store.LockingStrengthNone, acc.Id)
+	require.NoError(t, err)
+	assert.False(t, got.MFAEnforcePeerLogin, "A's stale value switched the gate back on")
+}
