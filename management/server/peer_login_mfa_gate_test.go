@@ -2,14 +2,17 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/openzro/openzro/management/server/activity"
 	"github.com/openzro/openzro/management/server/auth/jwt"
+	"github.com/openzro/openzro/management/server/settings"
 	"github.com/openzro/openzro/management/server/status"
 	"github.com/openzro/openzro/management/server/store"
 	"github.com/openzro/openzro/management/server/types"
@@ -167,4 +170,30 @@ func TestUpdateAccountSettings_PeerLoginMFAOmittedTwoReplicas(t *testing.T) {
 	got, err := replicas.B.Store.GetAccountSettings(ctx, store.LockingStrengthNone, acc.Id)
 	require.NoError(t, err)
 	assert.False(t, got.MFAEnforcePeerLogin, "A's stale value switched the gate back on")
+}
+
+// The gate's switch is audited once its transaction commits, even when the
+// extra settings backend fails afterwards and the request reports an error.
+func TestUpdateAccountSettings_PeerLoginMFAAuditSurvivesExtraFailure(t *testing.T) {
+	am := newMFATestManager(t)
+	ctx := context.Background()
+	acc, err := am.GetOrCreateAccountByUser(ctx, "owner", "example.com")
+	require.NoError(t, err)
+
+	ctrl := gomock.NewController(t)
+	failing := settings.NewMockManager(ctrl)
+	failing.EXPECT().UpdateExtraSettings(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(false, errors.New("extra backend down")).AnyTimes()
+	failing.EXPECT().GetExtraSettings(gomock.Any(), gomock.Any()).Return(&types.ExtraSettings{}, nil).AnyTimes()
+	am.settingsManager = failing
+
+	update := acc.Settings.Copy()
+	update.MFAEnforcePeerLogin = true
+	_, err = am.UpdateAccountSettings(ctx, acc.Id, "owner", update)
+	require.Error(t, err)
+
+	stored, err := am.Store.GetAccountSettings(ctx, store.LockingStrengthNone, acc.Id)
+	require.NoError(t, err)
+	require.True(t, stored.MFAEnforcePeerLogin, "the switch committed")
+	requireEventually(t, am, acc.Id, activity.AccountMFAPeerLoginEnabled)
 }

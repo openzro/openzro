@@ -614,6 +614,9 @@ func (am *DefaultAccountManager) UpdateAccountSettings(ctx context.Context, acco
 		am.StoreEvent(ctx, userID, accountID, accountID, activity.AccountAllowedEmailDomainsUpdated,
 			map[string]any{"domains": newSettings.AllowedEmailDomains})
 	}
+	// Likewise the device-login gate: an enable or disable that committed is
+	// audited even if the extra settings update below fails.
+	am.handlePeerLoginMFASettings(ctx, oldSettings, newSettings, userID, accountID)
 
 	extraSettingsChanged, err := am.settingsManager.UpdateExtraSettings(ctx, accountID, userID, newSettings.Extra)
 	if err != nil {
@@ -622,7 +625,6 @@ func (am *DefaultAccountManager) UpdateAccountSettings(ctx context.Context, acco
 
 	am.handleRoutingPeerDNSResolutionSettings(ctx, oldSettings, newSettings, userID, accountID)
 	am.handleLazyConnectionSettings(ctx, oldSettings, newSettings, userID, accountID)
-	am.handlePeerLoginMFASettings(ctx, oldSettings, newSettings, userID, accountID)
 	am.handleAdmissionSettings(ctx, oldSettings, newSettings, userID, accountID)
 	am.handlePeerApprovalSettings(ctx, oldSettings, newSettings, userID, accountID)
 	am.handleClientUpdateSettings(ctx, oldSettings, newSettings, userID, accountID)
