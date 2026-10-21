@@ -83,11 +83,26 @@ The table is `peer_login_mfa_approvals`, in the main store.
 - ID, account, user, the peer's WireGuard key;
 - a display snapshot: hostname, OS, observed IP, geolocation, and whether the
   peer is new;
-- created, expires (5 minutes), approved, consumed and denied times.
+- created, expires, deadline, approved, consumed and denied times.
+
+**Lifetime.** A record has two times, both fixed at creation:
+
+- `expires_at`, initially creation + 5 minutes, which may move later;
+- `deadline`, creation + 7 minutes, which never moves.
+
+`expires_at` never passes `deadline`, and the approval token (D4) expires
+exactly at `deadline`. So the token is valid for as long as the record can
+be.
 
 **Key.** A record is keyed by (account, user, WireGuard key). This is sound
 because the `Login` body is encrypted to the peer's key: only the holder of
 that private key can present it.
+
+**Indexes:**
+- `(account_id, user_id, wg_pub_key, expires_at)` for the per-key lookup;
+- `(user_id, expires_at)` for the per-user cap and the earliest-expiry query
+  behind `retry_after`;
+- `(expires_at)` for the batched sweep, so no replica scans the whole table.
 
 **Creation** runs in its own transaction, after the login transaction has
 rolled back on `errPeerLoginMFAPending`. It locks the user row, then:
@@ -119,7 +134,13 @@ update:
 `expires_at <= now`, never written, and a sweep deletes old records in
 batches.
 
-- Approval extends the record's life to at least 2 more minutes.
+- Approval sets `expires_at = min(max(expires_at, now + 2 min), deadline)`.
+  Approval is accepted only while the record is unexpired, so before
+  creation + 5 minutes. The extension therefore always gets its 2 minutes,
+  and the cap is never cut short. Boundary tests:
+  - approval just before the initial expiry;
+  - a retry of that approval after its response was lost, near the end of
+    the extension.
 - Approving an approved, unconsumed, unexpired record again returns 200
   without a new code check, since the first response may have been lost.
 - Approving a consumed, denied or expired record returns 412.
@@ -133,7 +154,10 @@ or a deletion, one side loses cleanly.
 ### D4 — The approval token and the page
 
 The existing MFA token signer gains the purpose `mfa_peer_login`. The token is
-bound to the approval ID and the user, and expires with the record.
+bound to the approval ID and the user. It expires at the record's `deadline`
+(D3), never earlier. So the idempotent approval retry works for the whole time
+the record can be valid. When a login reuses a pending record, the client gets
+a new token with that record's `deadline`.
 
 The token travels only in the URL **fragment** (`#t=`), never in the query.
 No server, daemon or CLI log contains it, and neither does the typed error's
@@ -155,6 +179,29 @@ The page and its endpoints exist to approve or refuse one login:
     since anyone holding the link can open the page.
 - It takes a TOTP or a backup code, and has a **"Not me"** button that denies
   the attempt.
+
+**Guessing the code.** Someone with a stolen password can legitimately obtain
+an approval token. The page would then be an online oracle for a six-digit
+code, and the per-user record cap does not limit guesses against a single
+record. So `approve` checks the code exactly as the dashboard challenge does,
+with the same shared verifier:
+
+- **One transaction.** It runs with the `user_mfa` row locked (D7), so
+  concurrent attempts on any replica are serialized.
+- **The same lockout.** It uses the user's `failed_attempts` and
+  `locked_until`: 5 consecutive failures lock the user for 15 minutes, for
+  the dashboard challenge and the approval page alike.
+- **Single-use backup codes.** A matching backup code is removed in the same
+  transaction.
+- **When locked.** `approve` returns **423 Locked** with `locked_until`,
+  checks no code, and counts no attempt. The page says when to try again.
+
+The lockout can be triggered only by someone who already holds the user's
+password, which is the same exposure the dashboard challenge has today.
+
+A test runs concurrent wrong attempts across two replicas. The failures must
+be counted exactly, the lock must engage at the fifth, and no attempt may be
+verified while locked.
 
 ### D5 — Errors returned to the client
 
@@ -214,6 +261,23 @@ Codes at or below it are refused (RFC 6238 §5.2), including a future step that
 was accepted within the clock-skew window. This applies to the dashboard
 challenge and to the approval page.
 
+**The check is atomic.** Verification runs in a transaction that holds the
+`user_mfa` row lock (`FOR UPDATE`) from reading `last_used_step` to writing
+the accepted step. The same transaction resets `failed_attempts` and, for a
+backup code, removes it. That way two replicas, or two pages, cannot both
+accept the same code.
+
+**Enrollment counts as a use.** `MFAFinishEnrollment` stores the step of the
+code that completed enrollment as `last_used_step`. Otherwise that same code
+could pass the dashboard challenge, or approve a peer, within its 30-second
+window.
+
+Tests:
+- a previous, the same and a future step, at the 30-second boundary;
+- the same code submitted concurrently from two replicas, where exactly one
+  is accepted;
+- the enrollment code refused right after enrollment.
+
 ### D8 — Admin visibility and the 2FA reset
 
 - **Visibility.** Admins see each user's 2FA state and lockout in the users
@@ -222,12 +286,25 @@ challenge and to the approval page.
   service users, blocked users, and pending, deactivated or tombstoned local
   users.
 - **Reset.** An admin with a verified 2FA session can reset a user's 2FA.
-  The reset is **atomic and idempotent**: a single `DELETE` decides, so of
-  concurrent resets on any number of replicas exactly one removes the row.
-  That one emits **at most one audit event**: `user.mfa.reset` for an admin
-  resetting someone else, `user.mfa.disable` for users clearing their own.
-  Resetting a user without 2FA is a no-op and is not audited. The reset also
-  clears the user's approval records (D3).
+  The reset is **atomic and idempotent**, with **at most one audit event**:
+  `user.mfa.reset` for an admin resetting someone else, `user.mfa.disable`
+  for users clearing their own. It is one transaction, in D3's lock order:
+  1. lock the `users` row;
+  2. delete the user's approval records;
+  3. delete the `user_mfa` row; whether a row was affected decides the
+     audit;
+  4. commit, then audit, and only if step 3 removed a row.
+
+  The approval records are cleared whether or not a 2FA row existed. A
+  failure at any step rolls back both deletes, so a retry does the whole
+  reset again, and an approved record can never outlive the reset. Of
+  concurrent resets on any number of replicas, exactly one removes the row
+  and audits it. Resetting a user without 2FA changes no 2FA and is not
+  audited. Tests cover concurrent resets and a failure between the two
+  deletes followed by a retry.
+
+  Until the approval table exists, the reset is the single conditional
+  `DELETE` of step 3 (openzro#225).
 - **Audit on the approval page.** A denial through the link is recorded with
   the **system** initiator and a "denied through the approval link" note. It
   is not attributed to the user: holding the link proves the user's TOTP,
@@ -304,15 +381,28 @@ Through the existing OpenTelemetry metrics:
 - the count of polls;
 - the time to approval;
 - the count of expired and denied approvals;
-- errors, by account.
+- errors.
+
+Metric attributes stay bounded: outcome, reason, and endpoint. No account,
+user or peer identifiers go on metrics, since they would grow without bound
+as accounts accumulate. When the account matters, the audit events, logs
+and traces carry it.
 
 Only the replica whose sweep `DELETE` removed a record emits its expiry event
 and metric.
 
 ## Consequences
 
-- A leaked third-party password no longer brings up a tunnel by itself. It
-  takes the user's TOTP, or an admin's approval of the device.
+- A leaked third-party password no longer brings up a tunnel by itself. With
+  the gate on:
+  - a **new** third-party device needs **both** the user's TOTP (D2) **and**
+    an admin's peer approval (D9);
+  - **re-activating** a login-expired peer that was already approved needs
+    the user's TOTP.
+
+  That is why self-service enrollment after a reset is acceptable for third
+  parties. Someone holding only the password can enroll a TOTP, but the new
+  device still waits for an admin.
 - Device registration gains a browser step and up to a few seconds of
   polling.
 - Old clients and mobile cannot log in to accounts that switch the setting
