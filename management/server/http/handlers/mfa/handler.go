@@ -148,6 +148,7 @@ type challengeResponse struct {
 	UsedBackupCode  bool   `json:"used_backup_code,omitempty"`
 	Locked          bool   `json:"locked,omitempty"`
 	LockedUntil     string `json:"locked_until,omitempty"` // RFC3339
+	CodeReused      bool   `json:"code_reused,omitempty"`
 	MFASessionToken string `json:"mfa_session_token,omitempty"`
 }
 
@@ -175,6 +176,7 @@ func (h *handler) challenge(w http.ResponseWriter, r *http.Request) {
 		OK:              outcome.OK,
 		UsedBackupCode:  outcome.UsedBackupCode,
 		Locked:          outcome.Locked,
+		CodeReused:      outcome.CodeReused,
 		MFASessionToken: outcome.SessionToken,
 	}
 	if outcome.LockedUntil != nil {

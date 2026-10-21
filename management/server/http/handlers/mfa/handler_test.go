@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gorilla/mux"
@@ -98,4 +99,29 @@ func TestDisenroll_MemberCannotResetOthers(t *testing.T) {
 	code, _ := deleteMFA(t, newDisenrollTestManager(true, true, &calls), testMemberID, testAdminID)
 	require.Equal(t, http.StatusForbidden, code)
 	assert.Empty(t, calls)
+}
+
+// A right code whose step was already used is reported as such, so the
+// page can ask for the next code instead of saying it does not match.
+func TestChallenge_ReportsReusedCode(t *testing.T) {
+	am := &mock_server.MockAccountManager{
+		MFAVerifyTokenFunc: func(_ string, _ account.MFATokenPurpose) (*account.MFATokenVerifyResult, error) {
+			return &account.MFATokenVerifyResult{UserID: testMemberID, JTIBinding: "jti"}, nil
+		},
+		MFAChallengeFunc: func(_ context.Context, _, _, _ string) (*account.MFAChallengeOutcome, error) {
+			return &account.MFAChallengeOutcome{CodeReused: true}, nil
+		},
+	}
+	h := &handler{am: am}
+	req := httptest.NewRequest(http.MethodPost, "/mfa/challenge", strings.NewReader(`{"code":"123456"}`))
+	req.Header.Set("Authorization", "Bearer challenge-token")
+	rec := httptest.NewRecorder()
+	h.challenge(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, false, body["ok"])
+	assert.Equal(t, true, body["code_reused"])
+	assert.NotContains(t, body, "mfa_session_token")
 }

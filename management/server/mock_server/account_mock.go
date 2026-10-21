@@ -160,6 +160,8 @@ type MockAccountManager struct {
 	MFAStatusFunc                         func(ctx context.Context, userID string) (*account.MFAStatus, error)
 	MFASessionValidFunc                   func(userID, mfaSessionToken, jwtSessionID string) bool
 	MFAIssueChallengeTokenFunc            func(userID, jwtSessionID string) (string, error)
+	MFAChallengeFunc                      func(ctx context.Context, userID, code, jwtSessionID string) (*account.MFAChallengeOutcome, error)
+	MFAVerifyTokenFunc                    func(raw string, purpose account.MFATokenPurpose) (*account.MFATokenVerifyResult, error)
 }
 
 func (am *MockAccountManager) UpdateAccountPeers(ctx context.Context, accountID string) {
@@ -1182,6 +1184,9 @@ func (am *MockAccountManager) MFAFinishEnrollment(ctx context.Context, accountID
 }
 
 func (am *MockAccountManager) MFAChallenge(ctx context.Context, userID, code, jwtSessionID string) (*account.MFAChallengeOutcome, error) {
+	if am.MFAChallengeFunc != nil {
+		return am.MFAChallengeFunc(ctx, userID, code, jwtSessionID)
+	}
 	return nil, status.Errorf(codes.Unimplemented, "method MFAChallenge is not implemented")
 }
 
@@ -1220,6 +1225,9 @@ func (am *MockAccountManager) MFAStatus(ctx context.Context, userID string) (*ac
 }
 
 func (am *MockAccountManager) MFAVerifyToken(raw string, purpose account.MFATokenPurpose) (*account.MFATokenVerifyResult, error) {
+	if am.MFAVerifyTokenFunc != nil {
+		return am.MFAVerifyTokenFunc(raw, purpose)
+	}
 	return nil, status.Errorf(codes.Unimplemented, "method MFAVerifyToken is not implemented")
 }
 
