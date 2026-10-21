@@ -162,6 +162,11 @@ type MockAccountManager struct {
 	MFAIssueChallengeTokenFunc            func(userID, jwtSessionID string) (string, error)
 	MFAChallengeFunc                      func(ctx context.Context, userID, code, jwtSessionID string) (*account.MFAChallengeOutcome, error)
 	MFAVerifyTokenFunc                    func(raw string, purpose account.MFATokenPurpose) (*account.MFATokenVerifyResult, error)
+	// MFAStartEnrollmentFunc and MFAFinishEnrollmentFunc serve both the
+	// initial and the re-enrollment methods; reenroll tells them apart.
+	MFAStartEnrollmentFunc  func(ctx context.Context, accountID, userID string, reenroll bool) (*account.MFAStartEnrollmentResult, error)
+	MFAFinishEnrollmentFunc func(ctx context.Context, accountID, userID string, reenroll bool) (*account.MFAFinishEnrollmentResult, error)
+	MFAEnabledFunc          func() bool
 }
 
 func (am *MockAccountManager) UpdateAccountPeers(ctx context.Context, accountID string) {
@@ -1173,14 +1178,41 @@ func (am *MockAccountManager) MFAGateForRequest(ctx context.Context, connectorID
 	return &account.MFAGateDecision{Pass: true}, nil
 }
 
-func (am *MockAccountManager) MFAEnabled() bool { return false }
+func (am *MockAccountManager) MFAEnabled() bool {
+	if am.MFAEnabledFunc != nil {
+		return am.MFAEnabledFunc()
+	}
+	return false
+}
 
 func (am *MockAccountManager) MFAStartEnrollment(ctx context.Context, accountID, userID string) (*account.MFAStartEnrollmentResult, error) {
+	if am.MFAStartEnrollmentFunc != nil {
+		return am.MFAStartEnrollmentFunc(ctx, accountID, userID, false)
+	}
 	return nil, status.Errorf(codes.Unimplemented, "method MFAStartEnrollment is not implemented")
 }
 
+// MFAStartReEnrollment mocks MFAStartReEnrollment of the AccountManager interface
+func (am *MockAccountManager) MFAStartReEnrollment(ctx context.Context, accountID, userID string) (*account.MFAStartEnrollmentResult, error) {
+	if am.MFAStartEnrollmentFunc != nil {
+		return am.MFAStartEnrollmentFunc(ctx, accountID, userID, true)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method MFAStartReEnrollment is not implemented")
+}
+
 func (am *MockAccountManager) MFAFinishEnrollment(ctx context.Context, accountID, userID, pendingToken, code, jwtSessionID string) (*account.MFAFinishEnrollmentResult, error) {
+	if am.MFAFinishEnrollmentFunc != nil {
+		return am.MFAFinishEnrollmentFunc(ctx, accountID, userID, false)
+	}
 	return nil, status.Errorf(codes.Unimplemented, "method MFAFinishEnrollment is not implemented")
+}
+
+// MFAFinishReEnrollment mocks MFAFinishReEnrollment of the AccountManager interface
+func (am *MockAccountManager) MFAFinishReEnrollment(ctx context.Context, accountID, userID, pendingToken, code, jwtSessionID string) (*account.MFAFinishEnrollmentResult, error) {
+	if am.MFAFinishEnrollmentFunc != nil {
+		return am.MFAFinishEnrollmentFunc(ctx, accountID, userID, true)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method MFAFinishReEnrollment is not implemented")
 }
 
 func (am *MockAccountManager) MFAChallenge(ctx context.Context, userID, code, jwtSessionID string) (*account.MFAChallengeOutcome, error) {

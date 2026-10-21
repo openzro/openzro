@@ -127,7 +127,10 @@ func (h *handler) enrollStartTokenAuth(w http.ResponseWriter, r *http.Request) {
 		util.WriteError(r.Context(), status.Errorf(status.Unauthorized, "invalid enrollment token"), w)
 		return
 	}
-	h.doEnrollStart(w, r, "", res.UserID)
+	// The enrollment token comes from the gate for a user without 2FA. It
+	// only ever starts an initial enrollment, so a stale token cannot
+	// replace a factor set up since.
+	h.doEnrollStart(w, r, "", res.UserID, false)
 }
 
 func (h *handler) enrollFinishTokenAuth(w http.ResponseWriter, r *http.Request) {
@@ -136,7 +139,7 @@ func (h *handler) enrollFinishTokenAuth(w http.ResponseWriter, r *http.Request) 
 		util.WriteError(r.Context(), status.Errorf(status.Unauthorized, "invalid enrollment token"), w)
 		return
 	}
-	h.doEnrollFinish(w, r, "", res.UserID, res.JTIBinding)
+	h.doEnrollFinish(w, r, "", res.UserID, res.JTIBinding, false)
 }
 
 type challengeRequest struct {
@@ -210,10 +213,12 @@ func (h *handler) enrollStartFullSession(w http.ResponseWriter, r *http.Request)
 	// secret. Without this, a stolen JWT alone could replace the
 	// second factor. The gate-level enrollment-redirect path is
 	// covered separately by the token-bearer endpoint above.
-	if !h.requireSessionIfEnrolled(w, r, userAuth) {
+	enrolled, ok := h.requireSessionIfEnrolled(w, r, userAuth)
+	if !ok {
 		return
 	}
-	h.doEnrollStart(w, r, userAuth.AccountId, userAuth.UserId)
+	// Replacing the factor is allowed only after its session was verified.
+	h.doEnrollStart(w, r, userAuth.AccountId, userAuth.UserId, enrolled)
 }
 
 type fullSessionFinishRequest struct {
@@ -226,7 +231,8 @@ func (h *handler) enrollFinishFullSession(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	if !h.requireSessionIfEnrolled(w, r, userAuth) {
+	enrolled, ok := h.requireSessionIfEnrolled(w, r, userAuth)
+	if !ok {
 		return
 	}
 	jwtSessionID := jwtSessionIDFromRequest(r)
@@ -234,7 +240,7 @@ func (h *handler) enrollFinishFullSession(w http.ResponseWriter, r *http.Request
 		util.WriteError(r.Context(), status.Errorf(status.Unauthorized, "missing session binding"), w)
 		return
 	}
-	h.doEnrollFinish(w, r, userAuth.AccountId, userAuth.UserId, jwtSessionID)
+	h.doEnrollFinish(w, r, userAuth.AccountId, userAuth.UserId, jwtSessionID, enrolled)
 }
 
 func (h *handler) regenerateBackupCodes(w http.ResponseWriter, r *http.Request) {
@@ -329,7 +335,9 @@ func (h *handler) disenroll(w http.ResponseWriter, r *http.Request) {
 
 // -- shared helpers --
 
-func (h *handler) doEnrollStart(w http.ResponseWriter, r *http.Request, accountID, userID string) {
+// doEnrollStart starts an enrollment; reenroll may replace an existing
+// factor and is passed only after the user's 2FA session was verified.
+func (h *handler) doEnrollStart(w http.ResponseWriter, r *http.Request, accountID, userID string, reenroll bool) {
 	if !h.am.MFAEnabled() {
 		util.WriteError(r.Context(), status.Errorf(status.Internal, "mfa: subsystem not initialized"), w)
 		return
@@ -342,7 +350,11 @@ func (h *handler) doEnrollStart(w http.ResponseWriter, r *http.Request, accountI
 		}
 		accountID = acc
 	}
-	res, err := h.am.MFAStartEnrollment(r.Context(), accountID, userID)
+	start := h.am.MFAStartEnrollment
+	if reenroll {
+		start = h.am.MFAStartReEnrollment
+	}
+	res, err := start(r.Context(), accountID, userID)
 	if err != nil {
 		util.WriteError(r.Context(), err, w)
 		return
@@ -350,7 +362,8 @@ func (h *handler) doEnrollStart(w http.ResponseWriter, r *http.Request, accountI
 	util.WriteJSONObject(r.Context(), w, res)
 }
 
-func (h *handler) doEnrollFinish(w http.ResponseWriter, r *http.Request, accountID, userID, jwtSessionID string) {
+// doEnrollFinish finishes an enrollment; reenroll as in doEnrollStart.
+func (h *handler) doEnrollFinish(w http.ResponseWriter, r *http.Request, accountID, userID, jwtSessionID string, reenroll bool) {
 	if !h.am.MFAEnabled() {
 		util.WriteError(r.Context(), status.Errorf(status.Internal, "mfa: subsystem not initialized"), w)
 		return
@@ -372,7 +385,11 @@ func (h *handler) doEnrollFinish(w http.ResponseWriter, r *http.Request, account
 		util.WriteError(r.Context(), status.Errorf(status.InvalidArgument, "missing pending_token"), w)
 		return
 	}
-	out, err := h.am.MFAFinishEnrollment(r.Context(), accountID, userID, req.PendingToken, req.Code, jwtSessionID)
+	finish := h.am.MFAFinishEnrollment
+	if reenroll {
+		finish = h.am.MFAFinishReEnrollment
+	}
+	out, err := finish(r.Context(), accountID, userID, req.PendingToken, req.Code, jwtSessionID)
 	if err != nil {
 		util.WriteError(r.Context(), err, w)
 		return
@@ -437,17 +454,18 @@ func (h *handler) requireMFASession(w http.ResponseWriter, r *http.Request, user
 // requireSessionIfEnrolled is the variant for the voluntary enroll
 // endpoints: when the user has no MFA row yet, the request goes
 // through (no session to check); when they already have a row,
-// behaves like requireMFASession.
-func (h *handler) requireSessionIfEnrolled(w http.ResponseWriter, r *http.Request, userAuth nbcontext.UserAuth) bool {
+// behaves like requireMFASession. enrolled reports which case applied:
+// only an enrolled user with a verified session may replace the factor.
+func (h *handler) requireSessionIfEnrolled(w http.ResponseWriter, r *http.Request, userAuth nbcontext.UserAuth) (enrolled, ok bool) {
 	st, err := h.am.MFAStatus(r.Context(), userAuth.UserId)
 	if err != nil {
 		util.WriteError(r.Context(), err, w)
-		return false
+		return false, false
 	}
 	if !st.Enrolled {
-		return true
+		return false, true
 	}
-	return h.requireMFASession(w, r, userAuth.UserId)
+	return true, h.requireMFASession(w, r, userAuth.UserId)
 }
 
 // writeMFARequired emits a 403 with the same wire shape the auth
