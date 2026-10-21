@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -24,8 +25,13 @@ func NormalizeDashboardURL(raw string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("dashboard URL %q: %w", raw, err)
 	}
-	if u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" {
+	if u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" {
 		return "", fmt.Errorf("dashboard URL %q: want scheme://host[:port][/path] with no credentials, query or fragment", raw)
+	}
+	if p := u.Port(); p != "" {
+		if n, err := strconv.Atoi(p); err != nil || n < 1 || n > 65535 {
+			return "", fmt.Errorf("dashboard URL %q: port must be 1-65535", raw)
+		}
 	}
 	switch u.Scheme {
 	case "https":

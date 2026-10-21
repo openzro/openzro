@@ -37,6 +37,9 @@ func TestNormalizeDashboardURL(t *testing.T) {
 		"https://app.example.com?x=1",
 		"https://app.example.com#frag",
 		"https://user:pass@app.example.com",
+		"https://:443",
+		"https://app.example.com:99999",
+		"https://app.example.com:0",
 	}
 	for _, in := range bad {
 		_, err := NormalizeDashboardURL(in)
