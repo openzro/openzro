@@ -294,9 +294,12 @@ type Account struct {
 	DomainCategory string `json:"domain_category"`
 
 	// Id Account ID
-	Id         string            `json:"id"`
-	Onboarding AccountOnboarding `json:"onboarding"`
-	Settings   AccountSettings   `json:"settings"`
+	Id string `json:"id"`
+
+	// MfaUnenrolledUsers Active users without two-factor authentication, returned to admins only. Local users follow mfa_enforce_local, everyone else mfa_enforce_federated. Service users, blocked users and pending or deactivated local users are not counted.
+	MfaUnenrolledUsers *MFAUnenrolledUsers `json:"mfa_unenrolled_users,omitempty"`
+	Onboarding         AccountOnboarding   `json:"onboarding"`
+	Settings           AccountSettings     `json:"settings"`
 }
 
 // AccountExtraSettings defines model for AccountExtraSettings.
@@ -956,6 +959,15 @@ type Location struct {
 
 	// CountryCode 2-letter ISO 3166-1 alpha-2 code that represents the country
 	CountryCode CountryCode `json:"country_code"`
+}
+
+// MFAUnenrolledUsers Active users without two-factor authentication, returned to admins only. Local users follow mfa_enforce_local, everyone else mfa_enforce_federated. Service users, blocked users and pending or deactivated local users are not counted.
+type MFAUnenrolledUsers struct {
+	// Federated Users from any other identity provider without 2FA
+	Federated int `json:"federated"`
+
+	// Local Local users (email and password accounts in the embedded Dex) without 2FA
+	Local int `json:"local"`
 }
 
 // MinKernelVersionCheck Posture check with the kernel version
@@ -2120,6 +2132,12 @@ type User struct {
 
 	// LocalCredentialState Set for local users (email and password accounts in the embedded Dex, ADR-0024). Omitted for every other user.
 	LocalCredentialState *UserLocalCredentialState `json:"local_credential_state,omitempty"`
+
+	// MfaEnrolled Is true if the user has two-factor authentication (TOTP) set up. Returned to admins only; omitted otherwise.
+	MfaEnrolled *bool `json:"mfa_enrolled,omitempty"`
+
+	// MfaLockedUntil Set while the user is locked out of two-factor authentication after repeated wrong codes. Returned to admins only.
+	MfaLockedUntil *time.Time `json:"mfa_locked_until,omitempty"`
 
 	// Name User's name from idp provider
 	Name        string           `json:"name"`

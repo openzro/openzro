@@ -66,6 +66,8 @@ components:
           example: google-oauth2|277474792786460067937
         onboarding:
           $ref: '#/components/schemas/AccountOnboarding'
+        mfa_unenrolled_users:
+          $ref: '#/components/schemas/MFAUnenrolledUsers'
       required:
         - id
         - settings
@@ -74,6 +76,22 @@ components:
         - created_at
         - created_by
         - onboarding
+    MFAUnenrolledUsers:
+      description: Active users without two-factor authentication, returned to admins only. Local users follow mfa_enforce_local, everyone else mfa_enforce_federated. Service users, blocked users and pending or deactivated local users are not counted.
+      type: object
+      readOnly: true
+      properties:
+        local:
+          description: Local users (email and password accounts in the embedded Dex) without 2FA
+          type: integer
+          example: 3
+        federated:
+          description: Users from any other identity provider without 2FA
+          type: integer
+          example: 0
+      required:
+        - local
+        - federated
     AccountOnboarding:
       type: object
       properties:
@@ -408,6 +426,17 @@ components:
           type: string
           enum: [ "active", "deactivated" ]
           example: active
+        mfa_enrolled:
+          description: Is true if the user has two-factor authentication (TOTP) set up. Returned to admins only; omitted otherwise.
+          type: boolean
+          readOnly: true
+          example: true
+        mfa_locked_until:
+          description: Set while the user is locked out of two-factor authentication after repeated wrong codes. Returned to admins only.
+          type: string
+          format: date-time
+          readOnly: true
+          example: "2026-10-20T12:15:00Z"
         permissions:
           $ref: '#/components/schemas/UserPermissions'
       required:

@@ -1,6 +1,7 @@
 package accounts
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	flowfactory "github.com/openzro/openzro/flow/store/factory"
 
 	"github.com/gorilla/mux"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/openzro/openzro/management/server/account"
 	nbcontext "github.com/openzro/openzro/management/server/context"
@@ -79,7 +81,22 @@ func (h *handler) getAllAccounts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := toAccountResponse(accountID, settings, meta, onboarding, h.archiveReads)
+	resp.MfaUnenrolledUsers = h.mfaUnenrolledUsers(r.Context(), accountID, userID)
 	util.WriteJSONObject(r.Context(), w, []*api.Account{resp})
+}
+
+// mfaUnenrolledUsers counts the users without 2FA for an admin. It returns
+// nil for anyone else, and when the count fails, so the account is still
+// served, just without the count.
+func (h *handler) mfaUnenrolledUsers(ctx context.Context, accountID, userID string) *api.MFAUnenrolledUsers {
+	gaps, err := h.accountManager.GetMFAEnrollmentGaps(ctx, accountID, userID)
+	if err != nil {
+		if sErr, ok := status.FromError(err); !ok || sErr.Type() != status.PermissionDenied {
+			log.WithContext(ctx).Warnf("account served without the 2FA enrollment count: %v", err)
+		}
+		return nil
+	}
+	return &api.MFAUnenrolledUsers{Local: gaps.Local, Federated: gaps.Federated}
 }
 
 // updateAccount is HTTP PUT handler that updates the provided account. Updates only account settings (server.Settings)
