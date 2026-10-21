@@ -147,6 +147,12 @@ export default function UsersTableV2({ users, isLoading }: Props) {
   });
 
   const all = useMemo(() => users ?? [], [users]);
+  // The server sends the 2FA fields to admins only; without them the
+  // column would be a row of dashes, so it is hidden.
+  const showMFA = useMemo(
+    () => all.some((u) => u.mfa_enrolled !== undefined),
+    [all],
+  );
 
   const counts = useMemo(() => {
     let owner = 0;
@@ -263,7 +269,7 @@ export default function UsersTableV2({ users, isLoading }: Props) {
     state: {
       sorting,
       pagination,
-      columnVisibility: { is_current: false },
+      columnVisibility: { is_current: false, mfa: showMFA },
     },
     onSortingChange: setSorting,
     onPaginationChange: setPagination,
