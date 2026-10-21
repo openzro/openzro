@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	BearerAuthScopes = "BearerAuth.Scopes"
-	TokenAuthScopes  = "TokenAuth.Scopes"
+	ApprovalTokenScopes = "ApprovalToken.Scopes"
+	BearerAuthScopes    = "BearerAuth.Scopes"
+	TokenAuthScopes     = "TokenAuth.Scopes"
 )
 
 // Defines values for AccountExtraSettingsNetworkTrafficDefaultRange.
@@ -1539,8 +1540,8 @@ type PeerLoginApprovalState string
 
 // PeerLoginApproveRequest defines model for PeerLoginApproveRequest.
 type PeerLoginApproveRequest struct {
-	// Code A TOTP code or a backup code
-	Code string `json:"code"`
+	// Code A TOTP code or a backup code. Optional when repeating an approval that already happened.
+	Code *string `json:"code,omitempty"`
 }
 
 // PeerLoginApproveResponse defines model for PeerLoginApproveResponse.

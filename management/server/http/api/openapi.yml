@@ -124,10 +124,9 @@ components:
       type: object
       properties:
         code:
-          description: A TOTP code or a backup code
+          description: A TOTP code or a backup code. Optional when repeating an approval that already happened.
           type: string
           example: "123456"
-      required: [ code ]
     PeerLoginApproveResponse:
       type: object
       properties:
@@ -2643,6 +2642,13 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    ApprovalToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >-
+        The token from a device-login approval link (ADR-0028), not a dashboard
+        session. It names one approval and expires with it.
     TokenAuth:
       type: apiKey
       in: header
@@ -2658,7 +2664,8 @@ paths:
       summary: Show a device login waiting for 2FA
       description: Opened by the approval page. Authenticated by the page token from the approval link (Authorization Bearer), not a dashboard session. Responses are not cached and send no referrer.
       tags: [ MFA ]
-      security: [ ]
+      security:
+        - ApprovalToken: [ ]
       responses:
         '200':
           description: The device login
@@ -2673,11 +2680,12 @@ paths:
   /api/mfa/peer-login/approve:
     post:
       summary: Approve a device login with a 2FA code
-      description: Checks the code with the same verifier and lockout as the dashboard 2FA challenge. Repeating an approval that already happened succeeds without a code.
+      description: Checks the code with the same verifier and lockout as the dashboard 2FA challenge. Repeating an approval that already happened succeeds without a code, so the body and the code are optional; on a login not yet approved, a missing code is a wrong code. The body is at most 1 KiB.
       tags: [ MFA ]
-      security: [ ]
+      security:
+        - ApprovalToken: [ ]
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
@@ -2689,10 +2697,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PeerLoginApproveResponse'
+        '400':
+          description: The body is not one JSON object
         '401':
           description: The link is invalid or past its deadline
         '412':
           description: The device login was consumed, denied or has expired, or the user has no 2FA
+        '413':
+          description: The body is larger than 1 KiB
         '422':
           description: Wrong or already used code
           content:
@@ -2710,7 +2722,8 @@ paths:
       summary: Deny a device login ("Not me")
       description: The device key stays denied until the attempt expires. Denying again is harmless; an approved login cannot be denied.
       tags: [ MFA ]
-      security: [ ]
+      security:
+        - ApprovalToken: [ ]
       responses:
         '200':
           description: Denied

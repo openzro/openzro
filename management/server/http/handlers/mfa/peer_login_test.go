@@ -135,3 +135,44 @@ func TestPeerLogin_RoutesBypassJWT(t *testing.T) {
 		assert.Contains(t, mfaBypassRoutes, route)
 	}
 }
+
+// The approve body is one short code. Anything larger, or anything after
+// the JSON object, is refused before the manager is reached; an empty body
+// is the retry of an approval that already happened.
+func TestPeerLogin_ApproveBody(t *testing.T) {
+	tests := []struct {
+		name       string
+		body       string
+		wantStatus int
+		wantCalled bool
+		wantCode   string
+	}{
+		{"oversized", `{"code":"` + strings.Repeat("1", 64<<10) + `"}`, http.StatusRequestEntityTooLarge, false, ""},
+		{"trailing data", `{"code":"123456"}{"code":"654321"}`, http.StatusBadRequest, false, ""},
+		{"not JSON", `code=123456`, http.StatusBadRequest, false, ""},
+		{"empty body retries", ``, http.StatusOK, true, ""},
+		{"empty object retries", `{}`, http.StatusOK, true, ""},
+		{"code", `{"code":" 123456 "}`, http.StatusOK, true, "123456"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			called, gotCode := false, "unset"
+			h := &handler{am: &mock_server.MockAccountManager{
+				ApprovePeerLoginMFAFunc: func(_ context.Context, _, code string) (*account.PeerLoginMFAApproveOutcome, error) {
+					called, gotCode = true, code
+					return &account.PeerLoginMFAApproveOutcome{Approved: true}, nil
+				},
+			}}
+			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tc.body))
+			req.Header.Set("Authorization", "Bearer page-token")
+			rec := httptest.NewRecorder()
+			h.peerLoginApprove(rec, req)
+			require.Equal(t, tc.wantStatus, rec.Code, rec.Body.String())
+			assert.Equal(t, tc.wantCalled, called, "manager reached")
+			if tc.wantCalled {
+				assert.Equal(t, tc.wantCode, gotCode)
+			}
+			assert.Equal(t, "no-store", rec.Header().Get("Cache-Control"))
+		})
+	}
+}
