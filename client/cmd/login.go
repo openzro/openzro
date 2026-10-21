@@ -17,9 +17,11 @@ import (
 
 	"github.com/openzro/openzro/client/internal"
 	"github.com/openzro/openzro/client/internal/auth"
+	"github.com/openzro/openzro/client/internal/peerloginmfa"
 	"github.com/openzro/openzro/client/internal/profilemanager"
 	"github.com/openzro/openzro/client/proto"
 	"github.com/openzro/openzro/client/system"
+	mfacontract "github.com/openzro/openzro/management/client/peerloginmfa"
 	"github.com/openzro/openzro/util"
 )
 
@@ -250,14 +252,20 @@ func doForegroundLogin(ctx context.Context, cmd *cobra.Command, setupKey string,
 func handleSSOLogin(ctx context.Context, cmd *cobra.Command, loginResp *proto.LoginResponse, client proto.DaemonServiceClient, pm *profilemanager.ProfileManager) error {
 	openURL(cmd, loginResp.VerificationURIComplete, loginResp.UserCode, noBrowser)
 
-	resp, err := client.WaitSSOLogin(ctx, &proto.WaitSSOLoginRequest{UserCode: loginResp.UserCode, Hostname: hostName})
+	// The device sign-in may then wait for the user's 2FA approval
+	// (ADR-0028); WaitSSO shows the approval link and waits for it.
+	email, err := peerloginmfa.WaitSSO(ctx, client, loginResp.UserCode, hostName, openPeerLoginMFA(noBrowser),
+		func(url string, expiresIn time.Duration) { announcePeerLoginMFA(cmd, url, expiresIn, noBrowser) })
 	if err != nil {
+		if described, ok := peerLoginMFAError(err, ""); ok {
+			return described
+		}
 		return fmt.Errorf("waiting sso login failed with: %v", err)
 	}
 
-	if resp.Email != "" {
+	if email != "" {
 		err = pm.SetActiveProfileState(&profilemanager.ProfileState{
-			Email: resp.Email,
+			Email: email,
 		})
 		if err != nil {
 			log.Warnf("failed to set active profile email: %v", err)
@@ -291,7 +299,11 @@ func foregroundLogin(ctx context.Context, cmd *cobra.Command, config *profileman
 		jwtToken = tokenInfo.GetTokenToUse()
 	}
 
-	var lastError error
+	var lastError, peerMFAErr error
+	managementURL := ""
+	if config.ManagementURL != nil {
+		managementURL = config.ManagementURL.String()
+	}
 
 	err = WithBackOff(func() error {
 		err := internal.Login(ctx, config, setupKey, jwtToken)
@@ -299,8 +311,20 @@ func foregroundLogin(ctx context.Context, cmd *cobra.Command, config *profileman
 			lastError = err
 			return nil
 		}
+		// A refusal for the user's second factor is an answer, not a
+		// failure to retry (ADR-0028).
+		if _, ok := mfacontract.Parse(err, managementURL); ok {
+			peerMFAErr = err
+			return nil
+		}
 		return err
 	})
+
+	if peerMFAErr != nil {
+		return finishForegroundPeerLoginMFA(ctx, cmd, peerMFAErr, managementURL, noBrowser,
+			func(ctx context.Context) error { return internal.Login(ctx, config, setupKey, jwtToken) },
+			internal.DefaultPeerLoginMFAPoll)
+	}
 
 	if lastError != nil {
 		return fmt.Errorf("login failed: %v", lastError)
