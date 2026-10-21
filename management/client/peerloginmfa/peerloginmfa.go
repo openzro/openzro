@@ -85,7 +85,7 @@ func RateLimited(retryAfter time.Duration) error {
 func build(code codes.Code, msg, reason string, md map[string]string) error {
 	st, err := status.New(code, msg).WithDetails(&errdetails.ErrorInfo{Reason: reason, Domain: Domain, Metadata: md})
 	if err != nil {
-		// Only fails for a detail that cannot be marshalled.
+		// Only fails for a detail that cannot be marshaled.
 		return status.Error(code, msg)
 	}
 	return st.Err()
