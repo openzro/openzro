@@ -3,7 +3,13 @@
 import loadConfig from "@utils/config";
 import dayjs from "dayjs";
 import { ShieldCheck } from "lucide-react";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import OzButton from "@/components/v2/OzButton";
 import OzCard from "@/components/v2/OzCard";
 import OzInput from "@/components/v2/OzInput";
@@ -31,12 +37,14 @@ import usePeerLoginToken from "@/modules/mfa/peer-login/usePeerLoginToken";
 
 type Page =
   | { kind: "loading" }
-  | { kind: "loaded"; approval: PeerLoginApproval }
+  // The approval shown is tied to the token it was loaded with, so the
+  // buttons always act on the attempt on screen.
+  | { kind: "loaded"; token: string; approval: PeerLoginApproval }
   | { kind: PeerLoginNoticeKind };
 
-function fromLoad(result: LoadResult): Page {
+function fromLoad(token: string, result: LoadResult): Page {
   return result.kind === "ok"
-    ? { kind: "loaded", approval: result.approval }
+    ? { kind: "loaded", token, approval: result.approval }
     : result;
 }
 
@@ -48,32 +56,53 @@ export default function PeerLoginApprovalPage() {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // generation counts the links seen; a response for an older one is
+  // dropped, so it cannot overwrite the page of a newer link. inFlight
+  // blocks a second submit synchronously (busy only applies on the next
+  // render), so a held Enter key cannot send several codes at once.
+  const generation = useRef(0);
+  const inFlight = useRef(false);
 
-  const reload = useCallback(async () => {
-    if (!token) return;
-    setPage(fromLoad(await loadApproval(config.apiOrigin, token)));
-  }, [config.apiOrigin, token]);
+  const load = useCallback(
+    async (tok: string, gen: number) => {
+      const result = await loadApproval(config.apiOrigin, tok);
+      if (gen === generation.current) setPage(fromLoad(tok, result));
+    },
+    [config.apiOrigin],
+  );
 
   useEffect(() => {
     if (token === undefined) return;
-    // A new link may arrive in the same tab: start from a clean form.
+    const gen = ++generation.current;
+    // A new link may arrive in the same tab: start from a clean page.
+    inFlight.current = false;
+    setBusy(false);
     setCode("");
     setError("");
-    if (!token) setPage({ kind: "no_token" });
-    else void reload();
-  }, [token, reload]);
+    if (!token) {
+      setPage({ kind: "no_token" });
+      return;
+    }
+    setPage({ kind: "loading" });
+    void load(token, gen);
+  }, [token, load]);
 
   const approve = async () => {
-    if (!token || code.length < 6) return;
+    if (page.kind !== "loaded" || inFlight.current || code.length < 6) return;
+    const tok = page.token;
+    const gen = generation.current;
+    inFlight.current = true;
     setBusy(true);
     setError("");
-    const result = await approveWithCode(config.apiOrigin, token, code);
+    const result = await approveWithCode(config.apiOrigin, tok, code);
+    if (gen !== generation.current) return;
+    inFlight.current = false;
     setBusy(false);
     switch (result.kind) {
       case "approved":
       case "gone":
         setCode("");
-        return reload();
+        return load(tok, gen);
       case "wrong_code":
         return setError(
           "That code does not match. Check your authenticator app.",
@@ -98,7 +127,9 @@ export default function PeerLoginApprovalPage() {
   };
 
   const deny = async () => {
-    if (!token) return;
+    if (page.kind !== "loaded" || inFlight.current) return;
+    const tok = page.token;
+    const gen = generation.current;
     const sure = await confirm({
       title: "Deny this sign-in?",
       description:
@@ -107,12 +138,15 @@ export default function PeerLoginApprovalPage() {
       cancelText: "Cancel",
       type: "danger",
     });
-    if (!sure) return;
+    if (!sure || gen !== generation.current || inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
-    const result = await denyApproval(config.apiOrigin, token);
+    const result = await denyApproval(config.apiOrigin, tok);
+    if (gen !== generation.current) return;
+    inFlight.current = false;
     setBusy(false);
-    if (result.kind === "ok" || result.kind === "gone") return reload();
-    setPage(fromLoad(result));
+    if (result.kind === "ok" || result.kind === "gone") return load(tok, gen);
+    setPage(fromLoad(tok, result));
   };
 
   if (page.kind === "loading") return null;
