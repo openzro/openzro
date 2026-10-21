@@ -38,6 +38,7 @@ import (
 
 	"github.com/openzro/openzro/client/iface"
 	"github.com/openzro/openzro/client/internal"
+	"github.com/openzro/openzro/client/internal/peerloginmfa"
 	"github.com/openzro/openzro/client/internal/profilemanager"
 	"github.com/openzro/openzro/client/proto"
 	"github.com/openzro/openzro/client/ui/desktop"
@@ -272,7 +273,17 @@ type serviceClient struct {
 	sBlockLANAccess      *widget.Check
 
 	// observable settings over corresponding iMngURL and iPreSharedKey values.
-	managementURL       string
+	managementURL string
+
+	// approvalWin is the open window with a 2FA approval link, if any. It
+	// lives as long as the wait for that approval (ADR-0028).
+	approvalMu  sync.Mutex
+	approvalWin *approvalWindow
+	// approvalUIMu serializes changes to approval windows: fyne v2.5.3
+	// does not synchronize them across goroutines.
+	approvalUIMu sync.Mutex
+	// newWindow creates windows; nil means s.app.NewWindow. A test seam.
+	newWindow           func(title string) fyne.Window
 	preSharedKey        string
 	RosenpassPermissive bool
 	interfaceName       string
@@ -659,15 +670,18 @@ func (s *serviceClient) handleSSOLogin(loginResp *proto.LoginResponse, conn prot
 		return err
 	}
 
-	resp, err := conn.WaitSSOLogin(s.ctx, &proto.WaitSSOLoginRequest{UserCode: loginResp.UserCode})
+	// The device sign-in may then wait for the user's 2FA approval
+	// (ADR-0028): WaitSSO opens the approval page and waits for it.
+	email, err := s.waitSSO(s.ctx, conn, loginResp.UserCode, openURL)
 	if err != nil {
+		s.showPeerLoginMFAError(err)
 		log.Errorf("waiting sso login failed with: %v", err)
 		return err
 	}
 
-	if resp.Email != "" {
+	if email != "" {
 		err := s.profileManager.SetActiveProfileState(&profilemanager.ProfileState{
-			Email: resp.Email,
+			Email: email,
 		})
 		if err != nil {
 			log.Warnf("failed to set profile state: %v", err)
@@ -1631,9 +1645,15 @@ func (s *serviceClient) showLoginURL() {
 			return
 		}
 
-		_, err = conn.WaitSSOLogin(s.ctx, &proto.WaitSSOLoginRequest{UserCode: resp.UserCode})
+		label.SetText("Complete the sign-in in your browser.\nIf asked, approve it with your 2FA code.")
+		_, err = s.waitSSO(s.ctx, conn, resp.UserCode, openURL)
 		if err != nil {
 			log.Errorf("Waiting sso login failed with: %v", err)
+			if msg, _, ok := peerloginmfa.Describe(err, s.managementURL); ok {
+				label.SetText(msg)
+				s.showPeerLoginMFAError(err)
+				return
+			}
 			label.SetText("Waiting login failed, please create \na debug bundle in the settings and contact support.")
 			return
 		}
