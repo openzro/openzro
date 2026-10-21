@@ -51,6 +51,10 @@ const (
 type Server struct {
 	rootCtx   context.Context
 	actCancel context.CancelFunc
+	// actGen identifies the active operation: it grows each time an
+	// operation installs actCancel, and when Down stops it. An operation
+	// that is no longer current must not act for the daemon (ADR-0028 D6).
+	actGen uint64
 
 	logFile string
 
@@ -135,6 +139,14 @@ type Server struct {
 	// "development" in tests, which the go-version parser rejects
 	// before any other gate logic runs.
 	currentVersionFn func() string
+
+	// mfaFlows holds device logins waiting for the user's 2FA approval
+	// (ADR-0028 D6). peerLogin, mfaPoll and mfaProfile are test seams;
+	// production leaves peerLogin and mfaProfile nil.
+	mfaFlows   *mfaFlows
+	mfaPoll    internal.PeerLoginMFAPoll
+	peerLogin  func(ctx context.Context, cfg *profilemanager.Config, jwt string) error
+	mfaProfile func() string
 }
 
 type oauthAuthFlow struct {
@@ -146,14 +158,18 @@ type oauthAuthFlow struct {
 
 // New server instance constructor.
 func New(ctx context.Context, logFile string, profilesDisabled bool) *Server {
-	return &Server{
+	s := &Server{
 		rootCtx:           ctx,
 		logFile:           logFile,
 		persistNetworkMap: true,
 		statusRecorder:    peer.NewRecorder(""),
 		profileManager:    profilemanager.ServiceManager{},
 		profilesDisabled:  profilesDisabled,
+		mfaFlows:          newMFAFlows(),
+		mfaPoll:           internal.DefaultPeerLoginMFAPoll,
 	}
+	go s.reapMFAFlows(ctx)
+	return s
 }
 
 func (s *Server) Start() error {
@@ -182,7 +198,7 @@ func (s *Server) Start() error {
 	}
 
 	ctx, cancel := context.WithCancel(s.rootCtx)
-	s.actCancel = cancel
+	s.setActiveOpLocked(cancel)
 
 	// set the default config if not exists
 	if err := s.setDefaultConfigIfNotExists(ctx); err != nil {
@@ -386,8 +402,14 @@ func parseEnvDuration(envVar string, defaultDuration time.Duration) time.Duratio
 
 // loginAttempt attempts to login using the provided information. it returns a status in case something fails
 func (s *Server) loginAttempt(ctx context.Context, setupKey, jwtToken string) (internal.StatusType, error) {
+	return s.loginAttemptWith(ctx, s.config, setupKey, jwtToken)
+}
+
+// loginAttemptWith logs in with the given configuration.
+func (s *Server) loginAttemptWith(ctx context.Context, cfg *profilemanager.Config, setupKey,
+	jwtToken string) (internal.StatusType, error) {
 	var status internal.StatusType
-	err := internal.Login(ctx, s.config, setupKey, jwtToken)
+	err := internal.Login(ctx, cfg, setupKey, jwtToken)
 	if err != nil {
 		if s, ok := gstatus.FromError(err); ok && (s.Code() == codes.InvalidArgument || s.Code() == codes.PermissionDenied) {
 			log.Warnf("failed login: %v", err)
@@ -502,7 +524,7 @@ func (s *Server) Login(callerCtx context.Context, msg *proto.LoginRequest) (*pro
 		ctx = metadata.NewOutgoingContext(ctx, md)
 	}
 
-	s.actCancel = cancel
+	s.setActiveOpLocked(cancel)
 	s.mutex.Unlock()
 
 	if err := restoreResidualState(ctx, s.profileManager.GetStatePath()); err != nil {
@@ -662,7 +684,7 @@ func (s *Server) WaitSSOLogin(callerCtx context.Context, msg *proto.WaitSSOLogin
 		ctx = context.WithValue(ctx, system.DeviceNameCtxKey, msg.Hostname)
 	}
 
-	s.actCancel = cancel
+	opGen := s.setActiveOpLocked(cancel)
 	s.mutex.Unlock()
 
 	if s.oauthAuthFlow.flow == nil {
@@ -714,7 +736,18 @@ func (s *Server) WaitSSOLogin(callerCtx context.Context, msg *proto.WaitSSOLogin
 	s.oauthAuthFlow.expiresAt = time.Now()
 	s.mutex.Unlock()
 
-	if loginStatus, err := s.loginAttempt(ctx, "", tokenInfo.GetTokenToUse()); err != nil {
+	// The login and a 2FA flow it may turn into share one target, so the
+	// token cannot reach a server the login did not use.
+	binding, target := s.loginTarget()
+	if loginStatus, err := s.loginAttemptWith(ctx, target, "", tokenInfo.GetTokenToUse()); err != nil {
+		// The login may be waiting for the user's 2FA approval (ADR-0028);
+		// the caller then waits on it with WaitMFAApproval.
+		resp, handled, mfaErr := s.startPeerLoginMFA(msg, opGen, binding, target, tokenInfo.GetTokenToUse(),
+			tokenInfo.Email, msg.Hostname, err)
+		if handled {
+			state.Set(internal.StatusNeedsLogin)
+			return resp, mfaErr
+		}
 		state.Set(loginStatus)
 		return nil, err
 	}
@@ -757,7 +790,7 @@ func (s *Server) Up(callerCtx context.Context, msg *proto.UpRequest) (*proto.UpR
 		ctx = metadata.NewOutgoingContext(ctx, md)
 	}
 
-	s.actCancel = cancel
+	s.setActiveOpLocked(cancel)
 
 	if s.config == nil {
 		return nil, fmt.Errorf("config is not defined, please call login command first")
@@ -895,11 +928,16 @@ func (s *Server) Down(ctx context.Context, _ *proto.DownRequest) (*proto.DownRes
 	defer s.mutex.Unlock()
 
 	s.oauthAuthFlow = oauthAuthFlow{}
+	// Logins waiting for a 2FA approval end with the stop; a waiter ends
+	// through its canceled operation below.
+	s.mfaFlows.clear()
 
 	if s.actCancel == nil {
 		return nil, fmt.Errorf("service is not up")
 	}
 	s.actCancel()
+	// The stopped operation is no longer current.
+	s.actGen++
 	// User-initiated stop: the R6 fallback must not treat this as
 	// "unmanaged + should be managed" (#5 R6 review #2).
 	s.connectActive.Store(false)

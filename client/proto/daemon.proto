@@ -18,6 +18,11 @@ service DaemonService {
   // waits for the user to continue with the login on a browser
   rpc WaitSSOLogin(WaitSSOLoginRequest) returns (WaitSSOLoginResponse) {}
 
+  // WaitMFAApproval waits until the user approves, on the page at
+  // WaitSSOLoginResponse.mfaApprovalURL, the device login that
+  // WaitSSOLogin left waiting for their second factor (ADR-0028).
+  rpc WaitMFAApproval(WaitMFAApprovalRequest) returns (WaitMFAApprovalResponse) {}
+
   // Up starts engine work in the daemon.
   rpc Up(UpRequest) returns (UpResponse) {}
 
@@ -171,9 +176,27 @@ message LoginResponse {
 message WaitSSOLoginRequest {
   string userCode = 1;
   string hostname = 2;
+  // supportsMfaApproval tells the daemon the caller can open the 2FA
+  // approval link and wait with WaitMFAApproval. Without it, a login
+  // that needs the approval fails with an error saying so.
+  bool supportsMfaApproval = 3;
 }
 
 message WaitSSOLoginResponse {
+  string email = 1;
+  // Set when the device login waits for the user's 2FA approval: open
+  // mfaApprovalURL in a browser, then call WaitMFAApproval with
+  // mfaFlowId. The URL carries a secret in its fragment; do not log it.
+  string mfaFlowId = 2;
+  string mfaApprovalURL = 3;
+  int64 mfaExpiresInSec = 4;
+}
+
+message WaitMFAApprovalRequest {
+  string flowId = 1;
+}
+
+message WaitMFAApprovalResponse {
   string email = 1;
 }
 
