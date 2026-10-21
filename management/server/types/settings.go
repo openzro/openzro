@@ -153,6 +153,12 @@ type Settings struct {
 	// every such user enrolled (D10).
 	MFAEnforcePeerLogin bool `gorm:"default:false"`
 
+	// KeepMFAEnforcePeerLogin is not stored. An API caller that omitted
+	// MFAEnforcePeerLogin sets it, and UpdateAccountSettings keeps the
+	// value it reads under the settings row lock, so a concurrent change
+	// on another replica is not overwritten.
+	KeepMFAEnforcePeerLogin bool `gorm:"-"`
+
 	// AllowedEmailDomains, when non-empty, restricts which users may join
 	// the account on first login (and via SCIM / invite) to those whose
 	// verified email domain is listed exactly. Empty disables the check.

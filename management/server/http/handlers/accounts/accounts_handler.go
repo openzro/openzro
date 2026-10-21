@@ -146,17 +146,13 @@ func (h *handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 	} else if existing, err := h.settingsManager.GetSettings(r.Context(), accountID, userID); err == nil && existing != nil {
 		settings.MFAEnforceFederated = existing.MFAEnforceFederated
 	}
-	// The device-login gate (ADR-0028). Unlike the toggles above, a failed
-	// read fails the request: defaulting to false would switch the gate off.
+	// The device-login gate (ADR-0028). An omitted field is kept by the
+	// manager under the settings row lock, not read here: a read here
+	// could restore a value another replica changed meanwhile.
 	if req.Settings.MfaEnforcePeerLogin != nil {
 		settings.MFAEnforcePeerLogin = *req.Settings.MfaEnforcePeerLogin
 	} else {
-		existing, err := h.settingsManager.GetSettings(r.Context(), accountID, userID)
-		if err != nil {
-			util.WriteError(r.Context(), err, w)
-			return
-		}
-		settings.MFAEnforcePeerLogin = existing.MFAEnforcePeerLogin
+		settings.KeepMFAEnforcePeerLogin = true
 	}
 
 	// Email-domain allowlist (ADR-0025). Leave nil when omitted so the

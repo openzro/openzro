@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -105,4 +106,36 @@ func TestUpdateAccountSettings_PeerLoginMFAAudit(t *testing.T) {
 	require.NoError(t, err)
 	requireEventually(t, am, acc.Id, activity.AccountMFAPeerLoginDisabled)
 	assert.Len(t, mfaEvents(t, am, acc.Id, activity.AccountMFAPeerLoginEnabled), 1, "an unchanged setting is not audited")
+}
+
+// A save that omits the device-login setting keeps the value stored when
+// its transaction locks the settings row, not the one its caller read
+// earlier: a change another replica committed in between survives.
+func TestUpdateAccountSettings_PeerLoginMFAOmittedKeepsLockedValue(t *testing.T) {
+	for _, stored := range []bool{false, true} {
+		t.Run(fmt.Sprintf("stored %v", stored), func(t *testing.T) {
+			am := newMFATestManager(t)
+			ctx := context.Background()
+			acc, err := am.GetOrCreateAccountByUser(ctx, "owner", "example.com")
+			require.NoError(t, err)
+			settings := acc.Settings.Copy()
+			if settings.Extra == nil {
+				settings.Extra = &types.ExtraSettings{}
+			}
+			settings.MFAEnforcePeerLogin = stored
+			require.NoError(t, am.Store.SaveAccountSettings(ctx, store.LockingStrengthUpdate, acc.Id, settings))
+
+			// The caller read the opposite value before another replica
+			// changed it, and omitted the field.
+			update := settings.Copy()
+			update.MFAEnforcePeerLogin = !stored
+			update.KeepMFAEnforcePeerLogin = true
+			_, err = am.UpdateAccountSettings(ctx, acc.Id, "owner", update)
+			require.NoError(t, err)
+
+			got, err := am.Store.GetAccountSettings(ctx, store.LockingStrengthNone, acc.Id)
+			require.NoError(t, err)
+			assert.Equal(t, stored, got.MFAEnforcePeerLogin)
+		})
+	}
 }

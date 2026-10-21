@@ -670,14 +670,14 @@ func TestAccounts_PeerApprovalExemptGroups(t *testing.T) {
 		Return(nil, status.Errorf(status.Internal, "store unavailable")).AnyTimes()
 	handler.settingsManager = failing
 	captured = nil
-	put(`{"settings":{"peer_login_expiration":3600,"peer_login_expiration_enabled":false,"mfa_enforce_peer_login":false,"extra":{"peer_approval_enabled":true,"network_traffic_logs_enabled":false,"network_traffic_packet_counter_enabled":false}}}`)
+	put(`{"settings":{"peer_login_expiration":3600,"peer_login_expiration_enabled":false,"extra":{"peer_approval_enabled":true,"network_traffic_logs_enabled":false,"network_traffic_packet_counter_enabled":false}}}`)
 	require.NotNil(t, captured)
 	assert.Nil(t, captured.Extra.IntegratedValidatorGroups, "a failed read must not clear the stored list")
 
 	// Omitting the whole extra object reaches the manager as nil, which keeps
 	// every stored extra setting inside its transaction.
 	captured = nil
-	put(`{"settings":{"peer_login_expiration":3600,"peer_login_expiration_enabled":false,"mfa_enforce_peer_login":false}}`)
+	put(`{"settings":{"peer_login_expiration":3600,"peer_login_expiration_enabled":false}}`)
 	require.NotNil(t, captured)
 	assert.Nil(t, captured.Extra, "an omitted extra object reaches the manager as nil")
 }
@@ -720,9 +720,9 @@ func TestAccounts_MFAUnenrolledUsers(t *testing.T) {
 	assert.Nil(t, get(t, nil, status.Errorf(status.Internal, "store unavailable")).MfaUnenrolledUsers)
 }
 
-// The device-login 2FA setting is written when sent and kept when omitted.
-// When the handler cannot read the stored value for an omitted field, the
-// request fails rather than switching the gate off.
+// The device-login 2FA setting is written when sent. When omitted, the
+// handler asks the manager to keep the stored value, which it reads under
+// the settings row lock; the handler's own settings read plays no part.
 func TestAccounts_MFAEnforcePeerLogin(t *testing.T) {
 	adminUser := types.NewAdminUser("test_user")
 	account := &types.Account{
@@ -757,15 +757,11 @@ func TestAccounts_MFAEnforcePeerLogin(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	require.NotNil(t, captured)
 	assert.False(t, captured.MFAEnforcePeerLogin, "a sent value is written")
+	assert.False(t, captured.KeepMFAEnforcePeerLogin)
 	var got api.Account
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
 	require.NotNil(t, got.Settings.MfaEnforcePeerLogin)
 	assert.False(t, *got.Settings.MfaEnforcePeerLogin, "the response carries the setting")
-
-	rec = put(`{"settings":{` + base + `}}`)
-	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	require.NotNil(t, captured)
-	assert.True(t, captured.MFAEnforcePeerLogin, "an omitted value keeps the stored one")
 
 	ctrl := gomock.NewController(t)
 	failing := settings.NewMockManager(ctrl)
@@ -773,6 +769,7 @@ func TestAccounts_MFAEnforcePeerLogin(t *testing.T) {
 		Return(nil, status.Errorf(status.Internal, "store unavailable")).AnyTimes()
 	handler.settingsManager = failing
 	rec = put(`{"settings":{` + base + `}}`)
-	assert.NotEqual(t, http.StatusOK, rec.Code)
-	assert.Nil(t, captured, "a failed read must not reach the manager with the gate off")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	require.NotNil(t, captured)
+	assert.True(t, captured.KeepMFAEnforcePeerLogin, "an omitted value is kept by the manager")
 }

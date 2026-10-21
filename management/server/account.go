@@ -558,6 +558,11 @@ func (am *DefaultAccountManager) UpdateAccountSettings(ctx context.Context, acco
 			newSettings.Extra.IntegratedValidatorGroups = append([]string(nil), oldSettings.Extra.IntegratedValidatorGroups...)
 		}
 
+		if newSettings.KeepMFAEnforcePeerLogin {
+			newSettings.MFAEnforcePeerLogin = oldSettings.MFAEnforcePeerLogin
+			newSettings.KeepMFAEnforcePeerLogin = false
+		}
+
 		if err = am.validateSettingsUpdate(ctx, transaction, newSettings, oldSettings, userID, accountID); err != nil {
 			return err
 		}
