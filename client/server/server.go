@@ -135,6 +135,14 @@ type Server struct {
 	// "development" in tests, which the go-version parser rejects
 	// before any other gate logic runs.
 	currentVersionFn func() string
+
+	// mfaFlows holds device logins waiting for the user's 2FA approval
+	// (ADR-0028 D6). peerLogin, mfaPoll and mfaProfile are test seams;
+	// production leaves peerLogin and mfaProfile nil.
+	mfaFlows   *mfaFlows
+	mfaPoll    internal.PeerLoginMFAPoll
+	peerLogin  func(ctx context.Context, jwt string) error
+	mfaProfile func() string
 }
 
 type oauthAuthFlow struct {
@@ -146,14 +154,18 @@ type oauthAuthFlow struct {
 
 // New server instance constructor.
 func New(ctx context.Context, logFile string, profilesDisabled bool) *Server {
-	return &Server{
+	s := &Server{
 		rootCtx:           ctx,
 		logFile:           logFile,
 		persistNetworkMap: true,
 		statusRecorder:    peer.NewRecorder(""),
 		profileManager:    profilemanager.ServiceManager{},
 		profilesDisabled:  profilesDisabled,
+		mfaFlows:          newMFAFlows(),
+		mfaPoll:           internal.DefaultPeerLoginMFAPoll,
 	}
+	go s.reapMFAFlows(ctx)
+	return s
 }
 
 func (s *Server) Start() error {
@@ -715,6 +727,14 @@ func (s *Server) WaitSSOLogin(callerCtx context.Context, msg *proto.WaitSSOLogin
 	s.mutex.Unlock()
 
 	if loginStatus, err := s.loginAttempt(ctx, "", tokenInfo.GetTokenToUse()); err != nil {
+		// The login may be waiting for the user's 2FA approval (ADR-0028);
+		// the caller then waits on it with WaitMFAApproval.
+		resp, handled, mfaErr := s.startPeerLoginMFA(ctx, msg, tokenInfo.GetTokenToUse(), tokenInfo.Email,
+			msg.Hostname, err)
+		if handled {
+			state.Set(internal.StatusNeedsLogin)
+			return resp, mfaErr
+		}
 		state.Set(loginStatus)
 		return nil, err
 	}
