@@ -255,9 +255,18 @@ func handleSSOLogin(ctx context.Context, cmd *cobra.Command, loginResp *proto.Lo
 	// The device sign-in may then wait for the user's 2FA approval
 	// (ADR-0028); WaitSSO shows the approval link and waits for it.
 	email, err := peerloginmfa.WaitSSO(ctx, client, loginResp.UserCode, hostName, openPeerLoginMFA(noBrowser),
-		func(url string, expiresIn time.Duration) { announcePeerLoginMFA(cmd, url, expiresIn, noBrowser) })
+		func(url string, expiresIn time.Duration, opened bool) {
+			announcePeerLoginMFA(cmd, url, expiresIn, opened)
+		})
 	if err != nil {
-		if described, ok := peerLoginMFAError(err, ""); ok {
+		profileName, username := "", ""
+		if prof, profErr := pm.GetActiveProfile(); profErr == nil {
+			profileName = prof.Name
+		}
+		if u, userErr := user.Current(); userErr == nil {
+			username = u.Username
+		}
+		if described := daemonPeerLoginMFAError(ctx, client, profileName, username, err); described != nil {
 			return described
 		}
 		return fmt.Errorf("waiting sso login failed with: %v", err)

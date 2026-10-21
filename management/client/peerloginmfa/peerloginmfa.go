@@ -135,25 +135,37 @@ func (e *Error) Error() string {
 // be https:// (or http:// on loopback) is not recognized, so a client never
 // opens it.
 func Parse(err error, managementURL string) (*Error, bool) {
-	if err == nil {
+	info := infoOf(err)
+	if info == nil {
 		return nil, false
+	}
+	return fromInfo(info, managementURL)
+}
+
+// Is reports whether err is a refusal from this package, without building
+// its link; a client uses it to fetch what Parse needs first.
+func Is(err error) bool {
+	return infoOf(err) != nil
+}
+
+func infoOf(err error) *errdetails.ErrorInfo {
+	if err == nil {
+		return nil
 	}
 	st, ok := status.FromError(err)
 	if !ok {
 		var se interface{ GRPCStatus() *status.Status }
 		if !errors.As(err, &se) {
-			return nil, false
+			return nil
 		}
 		st = se.GRPCStatus()
 	}
 	for _, d := range st.Details() {
-		info, ok := d.(*errdetails.ErrorInfo)
-		if !ok || info.GetDomain() != Domain {
-			continue
+		if info, ok := d.(*errdetails.ErrorInfo); ok && info.GetDomain() == Domain {
+			return info
 		}
-		return fromInfo(info, managementURL)
 	}
-	return nil, false
+	return nil
 }
 
 func fromInfo(info *errdetails.ErrorInfo, managementURL string) (*Error, bool) {

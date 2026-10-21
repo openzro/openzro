@@ -80,6 +80,16 @@ func TestTokenStaysOutOfMessages(t *testing.T) {
 	assert.NotContains(t, fmt.Sprintf("%+v", got), "secret-token")
 }
 
+// Is recognizes a refusal even when no link can be built for it.
+func TestIs(t *testing.T) {
+	assert.True(t, Is(EnrollmentRequired("")))
+	assert.True(t, Is(fmt.Errorf("x: %w", Denied(time.Minute))))
+	assert.False(t, Is(status.Error(codes.FailedPrecondition, "other")))
+	assert.False(t, Is(nil))
+	_, ok := Parse(EnrollmentRequired(""), "")
+	assert.False(t, ok, "no link without a URL, so Parse cannot use it")
+}
+
 // Other errors, and wrapped ones, are told apart.
 func TestParseOtherErrors(t *testing.T) {
 	_, ok := Parse(status.Error(codes.FailedPrecondition, "something else"), "")
