@@ -32,8 +32,8 @@ var errMFATargetChanged = gstatus.Error(codes.FailedPrecondition,
 // not such a wait. A caller that cannot open the approval link gets an
 // error saying so, and no flow keeps the token. The approval URL is
 // returned to the caller only; it is never logged.
-func (s *Server) startPeerLoginMFA(msg *proto.WaitSSOLoginRequest, binding mfaFlowBinding, cfg *profilemanager.Config,
-	jwt, email, hostname string, loginErr error) (*proto.WaitSSOLoginResponse, bool, error) {
+func (s *Server) startPeerLoginMFA(msg *proto.WaitSSOLoginRequest, opGen uint64, binding mfaFlowBinding,
+	cfg *profilemanager.Config, jwt, email, hostname string, loginErr error) (*proto.WaitSSOLoginResponse, bool, error) {
 	refusal, ok := peerloginmfa.Parse(loginErr, binding.managementURL)
 	if !ok || refusal.Reason != peerloginmfa.ReasonRequired {
 		return nil, false, nil
@@ -48,7 +48,8 @@ func (s *Server) startPeerLoginMFA(msg *proto.WaitSSOLoginRequest, binding mfaFl
 	}
 	now := time.Now()
 	id, err := s.mfaFlows.add(&mfaFlow{
-		binding: binding, config: cfg, jwt: jwt, email: email, hostname: hostname, expiresAt: now.Add(ttl),
+		binding: binding, opGen: opGen, config: cfg, jwt: jwt, email: email, hostname: hostname,
+		expiresAt: now.Add(ttl),
 	}, now)
 	if err != nil {
 		return nil, true, err
@@ -71,49 +72,77 @@ func (s *Server) startPeerLoginMFA(msg *proto.WaitSSOLoginRequest, binding mfaFl
 // token, however the wait ends.
 func (s *Server) WaitMFAApproval(callerCtx context.Context, msg *proto.WaitMFAApprovalRequest) (*proto.WaitMFAApprovalResponse, error) {
 	binding, _ := s.loginTarget()
+	// Claiming the flow and taking over as the active operation happen
+	// together under the daemon lock, and only while no newer operation
+	// started since the flow's SSO login: a new login always wins over an
+	// older flow, never the reverse.
+	s.mutex.Lock()
 	flow, err := s.mfaFlows.claim(msg.GetFlowId(), binding, time.Now())
 	if err != nil {
+		s.mutex.Unlock()
 		return nil, err
 	}
 	defer s.mfaFlows.finish(flow.id)
-	jwt, email, deadline, cfg := flow.jwt, flow.email, flow.expiresAt, flow.config
-
-	s.mutex.Lock()
+	if flow.opGen != s.actGen {
+		s.mutex.Unlock()
+		return nil, gstatus.Error(codes.FailedPrecondition, "a newer sign-in replaced this one; sign in again")
+	}
 	if s.actCancel != nil {
 		s.actCancel()
 	}
 	ctx, cancel := context.WithCancel(s.rootCtx)
-	s.actCancel = cancel
+	opGen := s.setActiveOpLocked(cancel)
 	s.mutex.Unlock()
 	defer cancel()
+	jwt, email, deadline, cfg := flow.jwt, flow.email, flow.expiresAt, flow.config
 	stop := context.AfterFunc(callerCtx, cancel)
 	defer stop()
 	if flow.hostname != "" {
 		ctx = context.WithValue(ctx, system.DeviceNameCtxKey, flow.hostname) //nolint:staticcheck // existing key type
 	}
 
-	state := internal.CtxGetState(s.rootCtx)
-	state.Set(internal.StatusConnecting)
+	s.setStateIfCurrent(opGen, internal.StatusConnecting)
 	err = internal.WaitPeerLoginMFA(ctx, deadline, func(ctx context.Context) error {
 		if current, _ := s.loginTarget(); current != flow.binding {
 			return errMFATargetChanged
 		}
 		return s.loginWithJWT(ctx, cfg, jwt)
 	}, binding.managementURL, s.mfaPoll)
+	// Only an operation that is still current publishes its outcome, so a
+	// wait ended by a newer operation or by Down leaves their state alone.
 	switch {
 	case err == nil:
-		state.Set(internal.StatusIdle)
+		s.setStateIfCurrent(opGen, internal.StatusIdle)
 		return &proto.WaitMFAApprovalResponse{Email: email}, nil
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
-		state.Set(internal.StatusNeedsLogin)
+		s.setStateIfCurrent(opGen, internal.StatusNeedsLogin)
 		return nil, gstatus.Error(codes.Canceled, "stopped waiting for the 2FA approval")
 	case errors.Is(err, internal.ErrPeerLoginMFAExpired):
-		state.Set(internal.StatusNeedsLogin)
+		s.setStateIfCurrent(opGen, internal.StatusNeedsLogin)
 		return nil, gstatus.Error(codes.DeadlineExceeded, err.Error())
 	default:
-		state.Set(internal.StatusNeedsLogin)
+		s.setStateIfCurrent(opGen, internal.StatusNeedsLogin)
 		log.Warnf("device sign-in waiting for 2FA approval ended: %v", err)
 		return nil, err
+	}
+}
+
+// setActiveOpLocked makes cancel the daemon's active operation, after the
+// caller canceled the previous one, and returns its generation. Callers
+// hold s.mutex.
+func (s *Server) setActiveOpLocked(cancel context.CancelFunc) uint64 {
+	s.actCancel = cancel
+	s.actGen++
+	return s.actGen
+}
+
+// setStateIfCurrent publishes status only while the operation opGen is
+// still the daemon's active one.
+func (s *Server) setStateIfCurrent(opGen uint64, status internal.StatusType) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	if s.actGen == opGen {
+		internal.CtxGetState(s.rootCtx).Set(status)
 	}
 }
 

@@ -51,6 +51,10 @@ const (
 type Server struct {
 	rootCtx   context.Context
 	actCancel context.CancelFunc
+	// actGen identifies the active operation: it grows each time an
+	// operation installs actCancel, and when Down stops it. An operation
+	// that is no longer current must not act for the daemon (ADR-0028 D6).
+	actGen uint64
 
 	logFile string
 
@@ -194,7 +198,7 @@ func (s *Server) Start() error {
 	}
 
 	ctx, cancel := context.WithCancel(s.rootCtx)
-	s.actCancel = cancel
+	s.setActiveOpLocked(cancel)
 
 	// set the default config if not exists
 	if err := s.setDefaultConfigIfNotExists(ctx); err != nil {
@@ -520,7 +524,7 @@ func (s *Server) Login(callerCtx context.Context, msg *proto.LoginRequest) (*pro
 		ctx = metadata.NewOutgoingContext(ctx, md)
 	}
 
-	s.actCancel = cancel
+	s.setActiveOpLocked(cancel)
 	s.mutex.Unlock()
 
 	if err := restoreResidualState(ctx, s.profileManager.GetStatePath()); err != nil {
@@ -680,7 +684,7 @@ func (s *Server) WaitSSOLogin(callerCtx context.Context, msg *proto.WaitSSOLogin
 		ctx = context.WithValue(ctx, system.DeviceNameCtxKey, msg.Hostname)
 	}
 
-	s.actCancel = cancel
+	opGen := s.setActiveOpLocked(cancel)
 	s.mutex.Unlock()
 
 	if s.oauthAuthFlow.flow == nil {
@@ -738,8 +742,8 @@ func (s *Server) WaitSSOLogin(callerCtx context.Context, msg *proto.WaitSSOLogin
 	if loginStatus, err := s.loginAttemptWith(ctx, target, "", tokenInfo.GetTokenToUse()); err != nil {
 		// The login may be waiting for the user's 2FA approval (ADR-0028);
 		// the caller then waits on it with WaitMFAApproval.
-		resp, handled, mfaErr := s.startPeerLoginMFA(msg, binding, target, tokenInfo.GetTokenToUse(), tokenInfo.Email,
-			msg.Hostname, err)
+		resp, handled, mfaErr := s.startPeerLoginMFA(msg, opGen, binding, target, tokenInfo.GetTokenToUse(),
+			tokenInfo.Email, msg.Hostname, err)
 		if handled {
 			state.Set(internal.StatusNeedsLogin)
 			return resp, mfaErr
@@ -786,7 +790,7 @@ func (s *Server) Up(callerCtx context.Context, msg *proto.UpRequest) (*proto.UpR
 		ctx = metadata.NewOutgoingContext(ctx, md)
 	}
 
-	s.actCancel = cancel
+	s.setActiveOpLocked(cancel)
 
 	if s.config == nil {
 		return nil, fmt.Errorf("config is not defined, please call login command first")
@@ -932,6 +936,8 @@ func (s *Server) Down(ctx context.Context, _ *proto.DownRequest) (*proto.DownRes
 		return nil, fmt.Errorf("service is not up")
 	}
 	s.actCancel()
+	// The stopped operation is no longer current.
+	s.actGen++
 	// User-initiated stop: the R6 fallback must not treat this as
 	// "unmanaged + should be managed" (#5 R6 review #2).
 	s.connectActive.Store(false)

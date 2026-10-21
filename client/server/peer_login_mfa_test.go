@@ -46,7 +46,7 @@ func TestMFAFlows_SingleUseSingleWaiter(t *testing.T) {
 	flows.finish(id)
 	_, err = flows.claim(id, testBinding, now)
 	assert.Equal(t, codes.NotFound, status.Code(err), "a finished flow is gone")
-	assert.Empty(t, flow.jwt, "the JWT is dropped when the flow ends")
+	assert.Equal(t, 1, flows.len(), "only the other flow is left; this one and its JWT are gone")
 }
 
 // A flow belongs to the profile and management URL it was made for; a
@@ -215,12 +215,25 @@ func TestPeerLoginMFA_CancelledWait(t *testing.T) {
 	assert.Equal(t, 0, s.mfaFlows.len())
 }
 
-// startFlow starts a flow the way WaitSSOLogin does, from the login target
-// it would have used.
+// startFlow starts a flow the way WaitSSOLogin does: as the daemon's
+// active operation, from the login target it would have used.
 func startFlow(s *Server, msg *proto.WaitSSOLoginRequest, jwt, email, hostname string,
 	loginErr error) (*proto.WaitSSOLoginResponse, bool, error) {
+	opGen := startOperation(s)
 	binding, cfg := s.loginTarget()
-	return s.startPeerLoginMFA(msg, binding, cfg, jwt, email, hostname, loginErr)
+	return s.startPeerLoginMFA(msg, opGen, binding, cfg, jwt, email, hostname, loginErr)
+}
+
+// startOperation installs a new active operation, as Login, Up and
+// WaitSSOLogin do, and returns its generation.
+func startOperation(s *Server) uint64 {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	if s.actCancel != nil {
+		s.actCancel()
+	}
+	_, cancel := context.WithCancel(s.rootCtx)
+	return s.setActiveOpLocked(cancel)
 }
 
 // The token goes only to the management server it was minted for: retries
@@ -253,29 +266,27 @@ func TestPeerLoginMFA_ProfileSwitchStopsTheWait(t *testing.T) {
 }
 
 // The flow keeps its own copy of the configuration: changing the daemon's
-// in place does not redirect the token.
+// in place, after the wait started, does not change the target the login
+// in progress uses.
 func TestPeerLoginMFA_FlowConfigIsACopy(t *testing.T) {
-	var hosts []string
-	pending := 1
-	s := newMFATestServerWithConfig(t, func(_ context.Context, cfg *profilemanager.Config, _ string) error {
-		hosts = append(hosts, cfg.ManagementURL.Host)
-		if pending > 0 {
-			pending--
-			return required()
+	var s *Server
+	var seen []string
+	s = newMFATestServerWithConfig(t, func(_ context.Context, cfg *profilemanager.Config, _ string) error {
+		if len(seen) == 0 {
+			s.mutex.Lock()
+			s.config.ManagementURL.Host = "tampered.example.com"
+			s.mutex.Unlock()
 		}
-		return nil
+		// Read after the change: a shared URL would show it.
+		seen = append(seen, cfg.ManagementURL.Host)
+		return required()
 	})
 	resp, _, err := startFlow(s, &proto.WaitSSOLoginRequest{SupportsMfaApproval: true}, "sso-jwt", "", "", required())
 	require.NoError(t, err)
-	s.mutex.Lock()
-	s.config.ManagementURL.Host = "tampered.example.com"
-	s.mutex.Unlock()
 
 	_, err = s.WaitMFAApproval(context.Background(), &proto.WaitMFAApprovalRequest{FlowId: resp.MfaFlowId})
-	// The in-place change alters the binding, so the wait stops; either
-	// way the token never reached the tampered host.
-	assert.NotContains(t, hosts, "tampered.example.com")
-	_ = err
+	assert.Equal(t, []string{"mgmt.example.com:443"}, seen, "the call saw the flow's copy, and the change then stopped the wait")
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
 }
 
 // The wait is the daemon's active operation: Down, a new login or any
@@ -318,4 +329,85 @@ func TestPeerLoginMFA_StopDropsPendingFlows(t *testing.T) {
 	require.Equal(t, 1, s.mfaFlows.len())
 	s.mfaFlows.clear()
 	assert.Equal(t, 0, s.mfaFlows.len())
+}
+
+// A newer operation wins over an older flow: waiting on a flow created
+// before the daemon started another operation is refused, and does not
+// cancel that operation.
+func TestPeerLoginMFA_NewerOperationWins(t *testing.T) {
+	s := newMFATestServer(t, func(context.Context, string) error { return nil })
+	respA, _, err := startFlow(s, &proto.WaitSSOLoginRequest{SupportsMfaApproval: true}, "jwt-a", "", "", required())
+	require.NoError(t, err)
+
+	// A new login B starts on the same profile and server.
+	ctxB, cancelB := context.WithCancel(s.rootCtx)
+	defer cancelB()
+	s.mutex.Lock()
+	s.actCancel()
+	s.setActiveOpLocked(cancelB)
+	s.mutex.Unlock()
+
+	_, err = s.WaitMFAApproval(context.Background(), &proto.WaitMFAApprovalRequest{FlowId: respA.MfaFlowId})
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err), "the older flow is refused")
+	assert.NoError(t, ctxB.Err(), "the newer operation was not canceled")
+	assert.Equal(t, 0, s.mfaFlows.len())
+}
+
+// Clearing the flows (Down) while a waiter reads what it claimed is safe:
+// the waiter holds a copy made under the lock. The order is the daemon's:
+// the waiter claims, then reads its data in its own goroutine while Down
+// clears the set.
+func TestMFAFlows_ClaimRacesClear(t *testing.T) {
+	for i := 0; i < 50; i++ {
+		flows := newMFAFlows()
+		now := time.Now()
+		id := newTestFlow(t, flows, now)
+		claimed := make(chan *mfaFlow)
+		read := make(chan string)
+		go func() {
+			flow, err := flows.claim(id, testBinding, now)
+			if !assert.NoError(t, err) {
+				close(claimed)
+				return
+			}
+			claimed <- flow
+			read <- flow.jwt
+		}()
+		if <-claimed == nil {
+			return
+		}
+		flows.clear()
+		assert.Equal(t, "jwt", <-read, "the claimed copy is intact")
+	}
+}
+
+// A waiter ended by a newer operation does not overwrite that operation's
+// state when its last call finally returns.
+func TestPeerLoginMFA_StaleWaiterKeepsItsHandsOffTheState(t *testing.T) {
+	entered, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	s := newMFATestServer(t, func(ctx context.Context, _ string) error {
+		once.Do(func() { close(entered) })
+		<-ctx.Done()
+		<-release // the old call returns late, after the newer operation
+		return status.Error(codes.Canceled, "canceled")
+	})
+	resp, _, err := startFlow(s, &proto.WaitSSOLoginRequest{SupportsMfaApproval: true}, "sso-jwt", "", "", required())
+	require.NoError(t, err)
+	done := make(chan error, 1)
+	go func() {
+		_, err := s.WaitMFAApproval(context.Background(), &proto.WaitMFAApprovalRequest{FlowId: resp.MfaFlowId})
+		done <- err
+	}()
+	<-entered
+
+	// A newer operation takes over and reaches Idle.
+	startOperation(s)
+	state := internal.CtxGetState(s.rootCtx)
+	state.Set(internal.StatusIdle)
+	close(release)
+	<-done
+
+	got, _ := state.Status()
+	assert.Equal(t, internal.StatusIdle, got, "the stale waiter left the newer state alone")
 }

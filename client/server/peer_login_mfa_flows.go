@@ -33,8 +33,11 @@ type mfaFlowBinding struct {
 // and its own copy of the configuration the login was made with, so the
 // token only ever goes to that management server.
 type mfaFlow struct {
-	id        string
-	binding   mfaFlowBinding
+	id      string
+	binding mfaFlowBinding
+	// opGen is the daemon operation the flow's SSO login ran in; the flow
+	// is only valid while no newer operation started.
+	opGen     uint64
 	config    *profilemanager.Config
 	jwt       string
 	email     string
@@ -84,7 +87,8 @@ func (f *mfaFlows) add(flow *mfaFlow, now time.Time) (string, error) {
 	return id, nil
 }
 
-// claim hands the flow to its one waiter.
+// claim hands the flow to its one waiter, as a copy made under the lock:
+// clearing the set later cannot touch what the waiter holds.
 func (f *mfaFlows) claim(id string, binding mfaFlowBinding, now time.Time) (*mfaFlow, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -102,7 +106,8 @@ func (f *mfaFlows) claim(id string, binding mfaFlowBinding, now time.Time) (*mfa
 		return nil, gstatus.Error(codes.FailedPrecondition, "the profile or management server changed; sign in again")
 	}
 	flow.waiting = true
-	return flow, nil
+	snapshot := *flow
+	return &snapshot, nil
 }
 
 // finish ends a flow and drops its token.
