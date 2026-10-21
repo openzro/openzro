@@ -112,6 +112,8 @@ func NewSqlStore(ctx context.Context, db *gorm.DB, storeEngine types.Engine, met
 		// reservations (ADR-0024); see accountLock.
 		&accountLock{},
 		&credentialsRecheck{},
+		// Peer login approvals (ADR-0028 D3).
+		&types.PeerLoginMFAApproval{},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("auto migratePreAuto: %w", err)

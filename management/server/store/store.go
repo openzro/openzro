@@ -119,6 +119,17 @@ type Store interface {
 	// GetAccountUserMFAs returns the 2FA state of every user in the account
 	// that has one. The secret and the backup code hashes are not read.
 	GetAccountUserMFAs(ctx context.Context, lockStrength LockingStrength, accountID string) ([]*types.UserMFA, error)
+
+	// Peer login approvals (ADR-0028 D3).
+	CreatePeerLoginMFAApproval(ctx context.Context, approval *types.PeerLoginMFAApproval) error
+	GetPeerLoginMFAApprovalByID(ctx context.Context, lockStrength LockingStrength, id string) (*types.PeerLoginMFAApproval, error)
+	GetUserPeerLoginMFAApprovals(ctx context.Context, lockStrength LockingStrength, accountID, userID string, now time.Time) ([]*types.PeerLoginMFAApproval, error)
+	ApprovePeerLoginMFAApproval(ctx context.Context, id string, now, expiresAt time.Time) (bool, error)
+	DenyPeerLoginMFAApproval(ctx context.Context, id string, now time.Time) (bool, error)
+	ConsumePeerLoginMFAApproval(ctx context.Context, accountID, userID, wgPubKey string, now time.Time) (bool, error)
+	GetExpiredPeerLoginMFAApprovals(ctx context.Context, now time.Time, limit int) ([]*types.PeerLoginMFAApproval, error)
+	DeleteExpiredPeerLoginMFAApproval(ctx context.Context, id string, now time.Time) (bool, error)
+	DeleteUserPeerLoginMFAApprovals(ctx context.Context, accountID, userID string) (int64, error)
 	GetTokenIDByHashedToken(ctx context.Context, secret string) (string, error)
 	DeleteHashedPAT2TokenIDIndex(hashedToken string) error
 	DeleteTokenID2UserIDIndex(tokenID string) error
