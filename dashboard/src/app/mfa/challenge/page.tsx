@@ -31,6 +31,8 @@ interface ChallengeResponse {
   used_backup_code?: boolean;
   locked?: boolean;
   locked_until?: string;
+  // The code was right but already used; each code works once.
+  code_reused?: boolean;
   mfa_session_token?: string;
 }
 
@@ -77,6 +79,12 @@ export default function MFAChallengePage() {
           body.locked_until
             ? `Locked until ${new Date(body.locked_until).toLocaleTimeString()} after too many failed attempts.`
             : "Locked after too many failed attempts.",
+        );
+        return;
+      }
+      if (body.code_reused) {
+        setError(
+          "That code was already used. Wait for the next one from your app.",
         );
         return;
       }

@@ -78,6 +78,18 @@ type UserMFA struct {
 	// 423 (Locked) without consuming a slot. Lockout duration is
 	// 15min from the 5th failure.
 	LockedUntil *time.Time
+
+	// LastUsedStep is the TOTP time step (Unix seconds / 30) of the last
+	// accepted code, including the one that finished enrollment. A code
+	// whose step is at or below it is refused, so a code works once
+	// (RFC 6238 §5.2). Read and written under the row lock.
+	LastUsedStep uint64 `gorm:"not null;default:0"`
+
+	// FactorID identifies this enrollment; every enrollment writes a new
+	// random one. A re-enrollment token carries the FactorID it was started
+	// from and is refused once the row has another, so an old token cannot
+	// restore an old secret. Rows from before the column have "".
+	FactorID string `gorm:"size:32;not null;default:''"`
 }
 
 // MFASessionTTL bounds how long a successful TOTP challenge keeps a

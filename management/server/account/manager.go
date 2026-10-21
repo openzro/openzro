@@ -205,19 +205,28 @@ type Manager interface {
 	// case any enforcement-on request fails closed.
 	MFAEnabled() bool
 
-	// MFAStartEnrollment provisions a fresh TOTP secret for the
-	// user. The secret is NOT persisted — instead it rides in the
-	// returned `PendingToken` (HS256-signed, 15min TTL) which
-	// /enroll/finish must echo back. Stateless across HA replicas.
+	// MFAStartEnrollment begins an initial enrollment: a fresh TOTP
+	// secret that rides in the returned `PendingToken` (HS256-signed,
+	// 15min TTL) which finish must echo back. Refused when the user
+	// already has 2FA.
 	MFAStartEnrollment(ctx context.Context, accountID, userID string) (*MFAStartEnrollmentResult, error)
 
-	// MFAFinishEnrollment validates the pending_enrollment_token,
-	// verifies the user-supplied TOTP code against the secret it
-	// carries, persists the user_mfa row (secret AES-256-GCM
-	// encrypted), and mints an mfa_session_token bound to
-	// `jwtSessionID`. Returns the plaintext backup codes (only
-	// chance to see them) and the session token.
+	// MFAStartReEnrollment is MFAStartEnrollment for a user who may already
+	// have 2FA. Callers must have verified the user's 2FA session.
+	MFAStartReEnrollment(ctx context.Context, accountID, userID string) (*MFAStartEnrollmentResult, error)
+
+	// MFAFinishEnrollment completes an initial enrollment: it verifies the
+	// code against the pending secret, creates the user_mfa row (secret
+	// AES-256-GCM encrypted) and mints an mfa_session_token bound to
+	// `jwtSessionID`. It succeeds once; it is refused when the user already
+	// has 2FA. Returns the backup codes (only chance to see them) and the
+	// session token.
 	MFAFinishEnrollment(ctx context.Context, accountID, userID, pendingToken, code, jwtSessionID string) (*MFAFinishEnrollmentResult, error)
+
+	// MFAFinishReEnrollment is MFAFinishEnrollment that may replace the
+	// user's current 2FA with a different secret. Callers must have verified
+	// the user's 2FA session. The same pending secret cannot finish twice.
+	MFAFinishReEnrollment(ctx context.Context, accountID, userID, pendingToken, code, jwtSessionID string) (*MFAFinishEnrollmentResult, error)
 
 	// MFAChallenge verifies a TOTP code OR a single-use backup
 	// code against the stored row, with lockout after 5 consecutive
@@ -353,7 +362,10 @@ type MFAChallengeOutcome struct {
 	Locked         bool
 	LockedUntil    *time.Time
 	UsedBackupCode bool
-	SessionToken   string
+	// CodeReused is set when the code is right but its time step was
+	// already used (RFC 6238 §5.2): the user should wait for the next code.
+	CodeReused   bool
+	SessionToken string
 }
 
 // MFAStatus is the response of GET /api/users/me/mfa for the

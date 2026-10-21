@@ -65,113 +65,11 @@ func (am *DefaultAccountManager) MFAStatus(ctx context.Context, userID string) (
 		LastVerifiedAt:       row.LastVerifiedAt,
 		BackupCodesRemaining: len(row.BackupCodesHash),
 	}
-	if row.LockedUntil != nil && row.LockedUntil.After(time.Now().UTC()) {
+	if row.LockedUntil != nil && row.LockedUntil.After(am.mfaNow()) {
 		st.Locked = true
 		st.LockedUntil = row.LockedUntil
 	}
 	return st, nil
-}
-
-// MFAStartEnrollment provisions a fresh TOTP secret for `userID`
-// and packs it into a 15min pending_enrollment_token. The secret is
-// NOT persisted; it lives only in the token, which the dashboard
-// echoes back to /enroll/finish. Stateless across daemon restarts
-// AND across HA replicas.
-func (am *DefaultAccountManager) MFAStartEnrollment(ctx context.Context, accountID, userID string) (*account.MFAStartEnrollmentResult, error) {
-	if !am.MFAEnabled() {
-		return nil, status.Errorf(status.Internal, "mfa: subsystem not initialized")
-	}
-	user, err := am.Store.GetUserByUserID(ctx, store.LockingStrengthShare, userID)
-	if err != nil {
-		return nil, err
-	}
-	if user.AccountID != accountID {
-		return nil, status.NewUserNotFoundError(userID)
-	}
-	dnsDomain := am.GetDNSDomain(nil) // settings ignored; dnsDomain is account-level
-	if dnsDomain == "" {
-		dnsDomain = "openzro"
-	}
-	key, err := mfa.NewTOTPKey(dnsDomain, user.Email)
-	if err != nil {
-		return nil, fmt.Errorf("mfa: generate key: %w", err)
-	}
-	pending, err := am.mfaSigner.IssuePending(userID, key.Secret())
-	if err != nil {
-		return nil, fmt.Errorf("mfa: issue pending token: %w", err)
-	}
-	return &account.MFAStartEnrollmentResult{
-		OTPAuthURL:   key.URL(),
-		Secret:       key.Secret(),
-		PendingToken: pending,
-	}, nil
-}
-
-// MFAFinishEnrollment verifies the pending_enrollment_token, runs
-// the supplied 6-digit code through TOTP against the secret it
-// carries, persists the user_mfa row (secret encrypted at rest),
-// and mints an mfa_session_token bound to `jwtSessionID`. Returns
-// the plaintext backup codes (only chance to see them) and the
-// session token.
-func (am *DefaultAccountManager) MFAFinishEnrollment(ctx context.Context, accountID, userID, pendingToken, code, jwtSessionID string) (*account.MFAFinishEnrollmentResult, error) {
-	if !am.MFAEnabled() {
-		return nil, status.Errorf(status.Internal, "mfa: subsystem not initialized")
-	}
-	if jwtSessionID == "" {
-		return nil, status.Errorf(status.InvalidArgument, "mfa: missing session binding")
-	}
-	user, err := am.Store.GetUserByUserID(ctx, store.LockingStrengthShare, userID)
-	if err != nil {
-		return nil, err
-	}
-	if user.AccountID != accountID {
-		return nil, status.NewUserNotFoundError(userID)
-	}
-	pending, err := am.mfaSigner.Verify(pendingToken, mfa.PurposePendingEnrollment)
-	if err != nil {
-		return nil, status.Errorf(status.InvalidArgument, "mfa: pending token invalid — start again")
-	}
-	if pending.UserID != userID {
-		return nil, status.Errorf(status.InvalidArgument, "mfa: pending token subject mismatch")
-	}
-	if pending.Secret == "" {
-		return nil, status.Errorf(status.InvalidArgument, "mfa: pending token missing secret")
-	}
-	valid, err := mfa.ValidateTOTP(code, pending.Secret)
-	if err != nil {
-		return nil, fmt.Errorf("mfa: validate: %w", err)
-	}
-	if !valid {
-		return nil, status.Errorf(status.InvalidArgument, "mfa: code does not match")
-	}
-	plaintext, hashes, err := mfa.GenerateBackupCodes()
-	if err != nil {
-		return nil, fmt.Errorf("mfa: backup codes: %w", err)
-	}
-	secretEnc, err := am.mfaSecretCipher.Encrypt(pending.Secret)
-	if err != nil {
-		return nil, fmt.Errorf("mfa: encrypt secret: %w", err)
-	}
-	now := time.Now().UTC()
-	row := &types.UserMFA{
-		UserID:          userID,
-		Method:          types.MFAMethodTOTP,
-		TOTPSecretEnc:   secretEnc,
-		BackupCodesHash: hashes,
-		EnrolledAt:      now,
-		LastVerifiedAt:  &now,
-	}
-	if err := am.Store.SaveUserMFA(ctx, store.LockingStrengthUpdate, row); err != nil {
-		return nil, err
-	}
-	sessionToken, err := am.mfaSigner.IssueSession(userID, jwtSessionID)
-	if err != nil {
-		return nil, fmt.Errorf("mfa: issue session token: %w", err)
-	}
-	return &account.MFAFinishEnrollmentResult{
-		BackupCodes:  plaintext,
-		SessionToken: sessionToken,
-	}, nil
 }
 
 // MFAChallenge verifies a TOTP code OR a backup code against the
@@ -194,7 +92,7 @@ func (am *DefaultAccountManager) MFAChallenge(ctx context.Context, userID, code,
 		if err != nil {
 			return err
 		}
-		now := time.Now().UTC()
+		now := am.mfaNow()
 		if row.LockedUntil != nil && row.LockedUntil.After(now) {
 			outcome = &account.MFAChallengeOutcome{Locked: true, LockedUntil: row.LockedUntil}
 			return nil
@@ -205,9 +103,18 @@ func (am *DefaultAccountManager) MFAChallenge(ctx context.Context, userID, code,
 		if err != nil {
 			return fmt.Errorf("mfa: decrypt secret: %w", err)
 		}
-		totpOK, err := mfa.ValidateTOTP(code, secret)
+		// The row is locked for update, so reading LastUsedStep and writing
+		// the accepted step below cannot interleave with another challenge
+		// on any replica.
+		step, matched, err := mfa.MatchTOTPStep(code, secret, now)
 		if err != nil {
 			return fmt.Errorf("mfa: validate totp: %w", err)
+		}
+		totpOK := matched && step > row.LastUsedStep
+		if matched && !totpOK {
+			// Right code, already used: refused, but not a failed guess.
+			outcome = &account.MFAChallengeOutcome{CodeReused: true}
+			return nil
 		}
 
 		usedBackup := false
@@ -240,6 +147,9 @@ func (am *DefaultAccountManager) MFAChallenge(ctx context.Context, userID, code,
 		}
 
 		// Success.
+		if totpOK {
+			row.LastUsedStep = step
+		}
 		row.FailedAttempts = 0
 		row.LockedUntil = nil
 		row.LastVerifiedAt = &now
@@ -260,6 +170,14 @@ func (am *DefaultAccountManager) MFAChallenge(ctx context.Context, userID, code,
 		outcome.SessionToken = tok
 	}
 	return outcome, nil
+}
+
+// mfaNow is the clock for TOTP checks and lockouts.
+func (am *DefaultAccountManager) mfaNow() time.Time {
+	if am.mfaClock != nil {
+		return am.mfaClock().UTC()
+	}
+	return time.Now().UTC()
 }
 
 // MFAVerifyToken validates a challenge_token / enrollment_token /
@@ -356,16 +274,23 @@ func (am *DefaultAccountManager) MFARegenerateBackupCodes(ctx context.Context, u
 	if !am.MFAEnabled() {
 		return nil, status.Errorf(status.Internal, "mfa: subsystem not initialized")
 	}
-	row, err := am.Store.GetUserMFA(ctx, store.LockingStrengthUpdate, userID)
-	if err != nil {
-		return nil, err
-	}
+	// Hashing is slow, so it happens before the row is locked.
 	plaintext, hashes, err := mfa.GenerateBackupCodes()
 	if err != nil {
 		return nil, fmt.Errorf("mfa: backup codes: %w", err)
 	}
-	row.BackupCodesHash = hashes
-	if err := am.Store.SaveUserMFA(ctx, store.LockingStrengthUpdate, row); err != nil {
+	// Re-read under the row lock and change only the backup codes, so the
+	// save cannot write back a stale LastUsedStep or lockout state from
+	// before a challenge that committed meanwhile.
+	err = am.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
+		row, err := tx.GetUserMFA(ctx, store.LockingStrengthUpdate, userID)
+		if err != nil {
+			return err
+		}
+		row.BackupCodesHash = hashes
+		return tx.SaveUserMFA(ctx, store.LockingStrengthUpdate, row)
+	})
+	if err != nil {
 		return nil, err
 	}
 	return plaintext, nil
