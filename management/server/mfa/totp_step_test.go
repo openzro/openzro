@@ -1,6 +1,7 @@
 package mfa
 
 import (
+	"encoding/base64"
 	"testing"
 	"time"
 
@@ -71,4 +72,19 @@ func TestMatchTOTPStep(t *testing.T) {
 		_, _, err := MatchTOTPStep(code(now), "not base32!", now)
 		require.Error(t, err)
 	})
+}
+
+// A pending-enrollment token carries the factor it replaces, empty for an
+// initial enrollment.
+func TestPendingTokenCarriesReplacedFactor(t *testing.T) {
+	s, err := NewSigner(base64.StdEncoding.EncodeToString(make([]byte, 32)))
+	require.NoError(t, err)
+	for _, factor := range []string{"", "factor-1"} {
+		raw, err := s.IssuePending("user-1", "JBSWY3DPEHPK3PXP", factor)
+		require.NoError(t, err)
+		res, err := s.Verify(raw, PurposePendingEnrollment)
+		require.NoError(t, err)
+		assert.Equal(t, factor, res.ReplacesFactor)
+		assert.Equal(t, "JBSWY3DPEHPK3PXP", res.Secret)
+	}
 }

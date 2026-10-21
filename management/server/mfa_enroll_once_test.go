@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/openzro/openzro/management/server/account"
 	"github.com/openzro/openzro/management/server/status"
 	"github.com/openzro/openzro/management/server/store"
 )
@@ -139,4 +140,66 @@ func TestMFAEnrollment_ConcurrentDuplicateFinish(t *testing.T) {
 		}
 	}
 	assert.Equal(t, 1, succeeded, "one pending enrollment, one success")
+}
+
+// A re-enrollment token is bound to the factor it replaces. Once any
+// enrollment replaces that factor, or a reset removes it, the token is
+// refused, so an old token cannot restore an old secret.
+func TestMFAEnrollment_ReEnrollmentTokenBoundToFactor(t *testing.T) {
+	am := newMFATestManager(t)
+	clock := newMFATestClock()
+	am.mfaClock = clock.Now
+	ctx := context.Background()
+	acc, err := am.GetOrCreateAccountByUser(ctx, "hal", "example.com")
+	require.NoError(t, err)
+	setUserEmail(t, am, "hal", "hal@example.com")
+	enrollAt(t, am, clock, acc.Id, "hal")
+
+	reenroll := func(jti string) (*account.MFAStartEnrollmentResult, string) {
+		t.Helper()
+		start, err := am.MFAStartReEnrollment(ctx, acc.Id, "hal")
+		require.NoError(t, err)
+		return start, totpCodeAt(t, start.Secret, clock.Now())
+	}
+
+	startA, codeA := reenroll("a")
+	_, err = am.MFAFinishReEnrollment(ctx, acc.Id, "hal", startA.PendingToken, codeA, "jti-a")
+	require.NoError(t, err)
+	clock.Advance(30 * time.Second)
+	startB, codeB := reenroll("b")
+	_, err = am.MFAFinishReEnrollment(ctx, acc.Id, "hal", startB.PendingToken, codeB, "jti-b")
+	require.NoError(t, err)
+	secretB, backupsB := storedMFA(t, am, "hal")
+
+	// A's token and code again: refused, B stays.
+	codeA = totpCodeAt(t, startA.Secret, clock.Now())
+	out, err := am.MFAFinishReEnrollment(ctx, acc.Id, "hal", startA.PendingToken, codeA, "jti-a2")
+	requireStatus(t, err, status.PreconditionFailed)
+	assert.Nil(t, out)
+	gotSecret, gotBackups := storedMFA(t, am, "hal")
+	assert.Equal(t, secretB, gotSecret)
+	assert.Equal(t, backupsB, gotBackups)
+
+	// Two re-enrollments started from the same factor: only the first to
+	// finish wins.
+	clock.Advance(30 * time.Second)
+	startC, codeC := reenroll("c")
+	startD, codeD := reenroll("d")
+	_, err = am.MFAFinishReEnrollment(ctx, acc.Id, "hal", startC.PendingToken, codeC, "jti-c")
+	require.NoError(t, err)
+	_, err = am.MFAFinishReEnrollment(ctx, acc.Id, "hal", startD.PendingToken, codeD, "jti-d")
+	requireStatus(t, err, status.PreconditionFailed)
+
+	// After a reset, a re-enrollment token from before it is refused, by
+	// either finish: re-enrolling needs the factor it was started from, and
+	// an initial enrollment needs an initial token.
+	clock.Advance(30 * time.Second)
+	startE, codeE := reenroll("e")
+	require.NoError(t, am.MFADisenroll(ctx, acc.Id, "hal", "hal"))
+	_, err = am.MFAFinishReEnrollment(ctx, acc.Id, "hal", startE.PendingToken, codeE, "jti-e")
+	requireStatus(t, err, status.PreconditionFailed)
+	_, err = am.MFAFinishEnrollment(ctx, acc.Id, "hal", startE.PendingToken, codeE, "jti-e2")
+	requireStatus(t, err, status.PreconditionFailed)
+	_, err = am.Store.GetUserMFA(ctx, store.LockingStrengthNone, "hal")
+	require.ErrorIs(t, err, store.ErrUserMFANotFound)
 }

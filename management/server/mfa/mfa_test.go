@@ -209,7 +209,7 @@ func TestSigner_RejectsEmpty(t *testing.T) {
 // validate the user-supplied TOTP code against it.
 func TestSigner_PendingCarriesSecret(t *testing.T) {
 	signer := newTestSigner(t)
-	tok, err := signer.IssuePending("user-1", "JBSWY3DPEHPK3PXP")
+	tok, err := signer.IssuePending("user-1", "JBSWY3DPEHPK3PXP", "")
 	require.NoError(t, err)
 
 	res, err := signer.Verify(tok, PurposePendingEnrollment)

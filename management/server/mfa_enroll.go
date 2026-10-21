@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/rs/xid"
+
 	"github.com/openzro/openzro/management/server/account"
 	"github.com/openzro/openzro/management/server/mfa"
 	"github.com/openzro/openzro/management/server/status"
@@ -18,11 +20,11 @@ import (
 var errMFAAlreadyEnrolled = status.Errorf(status.PreconditionFailed,
 	"two-factor authentication is already set up for this account")
 
-// errMFAEnrollmentUsed refuses finishing an enrollment whose pending
-// secret is already the stored one: the same enrollment cannot complete
-// twice.
-var errMFAEnrollmentUsed = status.Errorf(status.PreconditionFailed,
-	"this enrollment was already completed; start again")
+// errMFAEnrollmentStale refuses a re-enrollment whose token was started
+// from a factor that has since been replaced or removed, including by the
+// same re-enrollment finishing before.
+var errMFAEnrollmentStale = status.Errorf(status.PreconditionFailed,
+	"this enrollment is no longer valid; start again")
 
 // MFAStartEnrollment begins an initial enrollment: it provisions a fresh
 // TOTP secret and packs it into a pending_enrollment_token. The secret is
@@ -39,19 +41,27 @@ func (am *DefaultAccountManager) MFAStartEnrollment(ctx context.Context, account
 	} else if !errors.Is(err, store.ErrUserMFANotFound) {
 		return nil, err
 	}
-	return am.startEnrollment(ctx, accountID, userID)
+	return am.startEnrollment(ctx, accountID, userID, "")
 }
 
 // MFAStartReEnrollment begins an enrollment that may replace the user's
-// current 2FA. The caller must have verified the user's 2FA session.
+// current 2FA. The caller must have verified the user's 2FA session. The
+// token is bound to the current factor (see MFAFinishReEnrollment).
 func (am *DefaultAccountManager) MFAStartReEnrollment(ctx context.Context, accountID, userID string) (*account.MFAStartEnrollmentResult, error) {
 	if !am.MFAEnabled() {
 		return nil, status.Errorf(status.Internal, "mfa: subsystem not initialized")
 	}
-	return am.startEnrollment(ctx, accountID, userID)
+	row, err := am.Store.GetUserMFA(ctx, store.LockingStrengthNone, userID)
+	if errors.Is(err, store.ErrUserMFANotFound) {
+		return nil, errMFAEnrollmentStale
+	}
+	if err != nil {
+		return nil, err
+	}
+	return am.startEnrollment(ctx, accountID, userID, row.FactorID)
 }
 
-func (am *DefaultAccountManager) startEnrollment(ctx context.Context, accountID, userID string) (*account.MFAStartEnrollmentResult, error) {
+func (am *DefaultAccountManager) startEnrollment(ctx context.Context, accountID, userID, replacesFactor string) (*account.MFAStartEnrollmentResult, error) {
 	user, err := am.Store.GetUserByUserID(ctx, store.LockingStrengthShare, userID)
 	if err != nil {
 		return nil, err
@@ -67,7 +77,7 @@ func (am *DefaultAccountManager) startEnrollment(ctx context.Context, accountID,
 	if err != nil {
 		return nil, fmt.Errorf("mfa: generate key: %w", err)
 	}
-	pending, err := am.mfaSigner.IssuePending(userID, key.Secret())
+	pending, err := am.mfaSigner.IssuePending(userID, key.Secret(), replacesFactor)
 	if err != nil {
 		return nil, fmt.Errorf("mfa: issue pending token: %w", err)
 	}
@@ -90,9 +100,10 @@ func (am *DefaultAccountManager) MFAFinishEnrollment(ctx context.Context, accoun
 }
 
 // MFAFinishReEnrollment completes an enrollment that replaces the user's
-// current 2FA, or creates it if there is none. The caller must have
-// verified the user's 2FA session. Finishing the same pending secret
-// twice is refused.
+// current 2FA. The caller must have verified the user's 2FA session. The
+// token is bound to the factor it was started from: once any enrollment
+// replaces that factor, including this one finishing before, or a reset
+// removes it, the token is refused.
 func (am *DefaultAccountManager) MFAFinishReEnrollment(ctx context.Context, accountID, userID, pendingToken, code, jwtSessionID string) (*account.MFAFinishEnrollmentResult, error) {
 	return am.finishEnrollment(ctx, accountID, userID, pendingToken, code, jwtSessionID, true)
 }
@@ -144,20 +155,11 @@ func (am *DefaultAccountManager) finishEnrollment(ctx context.Context, accountID
 			return status.NewUserNotFoundError(userID)
 		}
 		existing, err := tx.GetUserMFA(ctx, store.LockingStrengthUpdate, userID)
-		switch {
-		case errors.Is(err, store.ErrUserMFANotFound):
-		case err != nil:
+		if err != nil && !errors.Is(err, store.ErrUserMFANotFound) {
 			return err
-		case !replace:
-			return errMFAAlreadyEnrolled
-		default:
-			current, err := am.mfaSecretCipher.Decrypt(existing.TOTPSecretEnc)
-			if err != nil {
-				return fmt.Errorf("mfa: decrypt secret: %w", err)
-			}
-			if current == pending.Secret {
-				return errMFAEnrollmentUsed
-			}
+		}
+		if err := checkEnrollmentBinding(existing, pending.ReplacesFactor, replace); err != nil {
+			return err
 		}
 		// The code that finished enrollment counts as used, so it cannot
 		// also pass a challenge within its 30-second window.
@@ -169,6 +171,7 @@ func (am *DefaultAccountManager) finishEnrollment(ctx context.Context, accountID
 			EnrolledAt:      now,
 			LastVerifiedAt:  &now,
 			LastUsedStep:    step,
+			FactorID:        xid.New().String(),
 		})
 	})
 	if err != nil {
@@ -183,4 +186,24 @@ func (am *DefaultAccountManager) finishEnrollment(ctx context.Context, accountID
 		BackupCodes:  plaintext,
 		SessionToken: sessionToken,
 	}, nil
+}
+
+// checkEnrollmentBinding decides whether a pending enrollment may write
+// over the user's current factor, existing (nil when there is none). An
+// initial enrollment needs no factor and an initial token. A re-enrollment
+// needs the very factor its token was started from.
+func checkEnrollmentBinding(existing *types.UserMFA, replacesFactor string, replace bool) error {
+	if !replace {
+		if existing != nil {
+			return errMFAAlreadyEnrolled
+		}
+		if replacesFactor != "" {
+			return errMFAEnrollmentStale
+		}
+		return nil
+	}
+	if existing == nil || existing.FactorID != replacesFactor {
+		return errMFAEnrollmentStale
+	}
+	return nil
 }

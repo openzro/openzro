@@ -117,6 +117,9 @@ type tokenClaims struct {
 	Purpose    TokenPurpose `json:"purpose"`
 	JTIBinding string       `json:"jti_binding,omitempty"`
 	Secret     string       `json:"secret,omitempty"`
+	// ReplacesFactor is the user_mfa factor ID a re-enrollment was started
+	// from; empty for an initial enrollment. PurposePendingEnrollment only.
+	ReplacesFactor string `json:"replaces_factor,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -139,11 +142,18 @@ func (s *Signer) IssueRedirect(userID, jtiBinding string, purpose TokenPurpose) 
 // base32-encoded TOTP secret. The token replaces the in-memory
 // PendingStore so /enroll/finish can land on any HA replica.
 // Lifetime is 15min, matching the legacy cache TTL.
-func (s *Signer) IssuePending(userID, secretBase32 string) (string, error) {
+// replacesFactor binds a re-enrollment to the factor it was started from,
+// so the token stops working once that factor is replaced or removed; it
+// is empty for an initial enrollment.
+func (s *Signer) IssuePending(userID, secretBase32, replacesFactor string) (string, error) {
 	if userID == "" || secretBase32 == "" {
 		return "", errors.New("mfa: IssuePending requires userID and secret")
 	}
-	return s.issue(userID, "", secretBase32, PurposePendingEnrollment, pendingTokenTTL)
+	return s.issueWith(tokenClaims{
+		Purpose:        PurposePendingEnrollment,
+		Secret:         secretBase32,
+		ReplacesFactor: replacesFactor,
+	}, userID, pendingTokenTTL)
 }
 
 // IssueSession mints an mfa_session_token bound to a specific JWT
@@ -159,16 +169,16 @@ func (s *Signer) IssueSession(userID, jtiBinding string) (string, error) {
 }
 
 func (s *Signer) issue(userID, jtiBinding, secret string, purpose TokenPurpose, ttl time.Duration) (string, error) {
+	return s.issueWith(tokenClaims{Purpose: purpose, JTIBinding: jtiBinding, Secret: secret}, userID, ttl)
+}
+
+// issueWith signs claims for userID with the given lifetime.
+func (s *Signer) issueWith(claims tokenClaims, userID string, ttl time.Duration) (string, error) {
 	now := time.Now().UTC()
-	claims := tokenClaims{
-		Purpose:    purpose,
-		JTIBinding: jtiBinding,
-		Secret:     secret,
-		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   userID,
-			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
-		},
+	claims.RegisteredClaims = jwt.RegisteredClaims{
+		Subject:   userID,
+		IssuedAt:  jwt.NewNumericDate(now),
+		ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
 	}
 	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return tok.SignedString(s.key)
@@ -180,9 +190,10 @@ func (s *Signer) issue(userID, jtiBinding, secret string, purpose TokenPurpose, 
 // failure path returns a zero result + non-nil error; the caller
 // maps that to 401 with no detail leak.
 type VerifyResult struct {
-	UserID     string
-	JTIBinding string
-	Secret     string
+	UserID         string
+	JTIBinding     string
+	Secret         string
+	ReplacesFactor string
 }
 
 // Verify parses, validates signature + expiry, and asserts the
@@ -211,8 +222,9 @@ func (s *Signer) Verify(raw string, want TokenPurpose) (VerifyResult, error) {
 		return VerifyResult{}, errors.New("mfa: token missing subject")
 	}
 	return VerifyResult{
-		UserID:     claims.Subject,
-		JTIBinding: claims.JTIBinding,
-		Secret:     claims.Secret,
+		UserID:         claims.Subject,
+		JTIBinding:     claims.JTIBinding,
+		Secret:         claims.Secret,
+		ReplacesFactor: claims.ReplacesFactor,
 	}, nil
 }
