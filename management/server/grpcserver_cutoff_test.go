@@ -22,7 +22,8 @@ import (
 
 // ADR-0027 D5: the peer login path must carry the JWT iat to LoginPeer,
 // which compares it with the user's credentials cutoff. Dropping it would
-// make every JWT look like one without iat.
+// make every JWT look like one without iat. The connector rides along for
+// the device-login 2FA gate (ADR-0028 D2).
 func TestProcessJWTToken_ReturnsIssuedAt(t *testing.T) {
 	iat := time.Date(2026, 10, 18, 12, 0, 5, 0, time.UTC)
 	server := &GRPCServer{
@@ -33,7 +34,7 @@ func TestProcessJWTToken_ReturnsIssuedAt(t *testing.T) {
 		},
 		authManager: &auth.MockManager{
 			ValidateAndParseTokenFunc: func(context.Context, string) (nbcontext.UserAuth, *jwt.Token, error) {
-				return nbcontext.UserAuth{UserId: "u", IssuedAt: iat}, &jwt.Token{}, nil
+				return nbcontext.UserAuth{UserId: "u", IssuedAt: iat, ConnectorID: "local"}, &jwt.Token{}, nil
 			},
 			EnsureUserAccessByJWTGroupsFunc: func(_ context.Context, ua nbcontext.UserAuth,
 				_ *jwt.Token) (nbcontext.UserAuth, error) {
@@ -42,17 +43,19 @@ func TestProcessJWTToken_ReturnsIssuedAt(t *testing.T) {
 		},
 	}
 
-	userID, issuedAt, err := server.processJwtToken(context.Background(),
+	identity, err := server.processJwtToken(context.Background(),
 		&proto.LoginRequest{JwtToken: "token"}, wgtypes.Key{})
 	require.NoError(t, err)
-	require.Equal(t, "u", userID)
-	require.True(t, iat.Equal(issuedAt), "iat: want %s, got %s", iat, issuedAt)
+	require.Equal(t, "u", identity.userID)
+	require.True(t, iat.Equal(identity.issuedAt), "iat: want %s, got %s", iat, identity.issuedAt)
+	require.Equal(t, "local", identity.connectorID, "the 2FA gate follows the token's connector")
 
 	// No JWT at all (setup key or already-registered peer): no user, no iat.
-	userID, issuedAt, err = server.processJwtToken(context.Background(), &proto.LoginRequest{}, wgtypes.Key{})
+	identity, err = server.processJwtToken(context.Background(), &proto.LoginRequest{}, wgtypes.Key{})
 	require.NoError(t, err)
-	require.Empty(t, userID)
-	require.True(t, issuedAt.IsZero())
+	require.Empty(t, identity.userID)
+	require.True(t, identity.issuedAt.IsZero())
+	require.Empty(t, identity.connectorID)
 }
 
 // A JWT revoked by a reset must reach the client as PermissionDenied: its
@@ -80,7 +83,7 @@ func TestProcessJWTToken_MapsValidationFailures(t *testing.T) {
 					},
 				},
 			}
-			_, _, err := server.processJwtToken(context.Background(),
+			_, err := server.processJwtToken(context.Background(),
 				&proto.LoginRequest{JwtToken: "token"}, wgtypes.Key{})
 			require.Equal(t, tc.want, status.Code(err), "error: %v", err)
 			if tc.want == codes.Internal {
