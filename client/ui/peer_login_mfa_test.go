@@ -83,7 +83,7 @@ func TestShowPeerLoginMFAError(t *testing.T) {
 
 	// A browser that did not open leaves the user the link, in a window.
 	count := len(app.Driver().AllWindows())
-	s.showPeerLoginMFAApproval("https://app.example.com/mfa/peer-login#t=tok", true, func() {})
+	assert.Nil(t, s.showPeerLoginMFAApproval("https://app.example.com/mfa/peer-login#t=tok", true, func() {}))
 	assert.Len(t, app.Driver().AllWindows(), count, "no window when the browser opened")
 	s.showPeerLoginMFAApproval("https://app.example.com/mfa/peer-login#t=tok", false, func() {})
 	_, buttons = windowTexts(newest())
@@ -152,7 +152,10 @@ func TestWaitSSO_ClosingTheLinkWindowCancelsTheWait(t *testing.T) {
 		done <- err
 	}()
 	require.Eventually(t, func() bool { return s.approvalWindowOpen() }, 2*time.Second, 10*time.Millisecond)
-	s.closeApprovalWindow(s.currentApprovalWindow())
+	s.approvalMu.Lock()
+	aw := s.approvalWin
+	s.approvalMu.Unlock()
+	s.closeApprovalWindow(aw)
 	select {
 	case err := <-done:
 		assert.Equal(t, codes.Canceled, status.Code(err))
@@ -260,7 +263,11 @@ func TestWaitSSO_ReplacedWindowBeforeItShows(t *testing.T) {
 		w := window(0)
 		return w != nil && s.currentApprovalWindow() == fyne.Window(w)
 	}, 2*time.Second, 10*time.Millisecond)
-	go func() { _, _ = s.waitSSO(context.Background(), b, "code-b", noBrowser) }()
+	doneB := make(chan error, 1)
+	go func() {
+		_, err := s.waitSSO(context.Background(), b, "code-b", noBrowser)
+		doneB <- err
+	}()
 	require.Eventually(t, func() bool { return window(1) != nil }, 2*time.Second, 10*time.Millisecond)
 
 	select {
@@ -275,5 +282,8 @@ func TestWaitSSO_ReplacedWindowBeforeItShows(t *testing.T) {
 	// The driver finally shows the old window: it gets closed.
 	old.shown.Store(true)
 	require.Eventually(t, old.closed.Load, 3*time.Second, 20*time.Millisecond)
+	// B ends and retires its window before the test does, so no fyne change
+	// outlives it.
 	close(b.release)
+	require.NoError(t, <-doneB)
 }

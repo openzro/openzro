@@ -15,18 +15,27 @@ import (
 	"github.com/openzro/openzro/client/proto"
 )
 
+// approvalWindow is a window with a 2FA approval link and the wait it
+// serves. closed is set by the window's own close callback, installed once
+// before the window is shown, so it reports a close that took effect.
+type approvalWindow struct {
+	w      fyne.Window
+	cancel func()
+	closed atomic.Bool
+}
+
 // waitSSO finishes an SSO login through the daemon, showing the 2FA
 // approval step when the device sign-in needs it. A window with the
 // approval link (when the browser did not open) lives as long as the wait:
-// it closes when the wait ends, so no stale link stays on screen, and
+// it is retired when the wait ends, so no stale link stays on screen, and
 // closing it gives up the wait, since without it the user cannot approve.
 func (s *serviceClient) waitSSO(ctx context.Context, conn proto.DaemonServiceClient, userCode string,
 	open func(string) error) (string, error) {
 	waitCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	// Each wait closes its own window only: a newer wait may have replaced
+	// Each wait retires its own window only: a newer wait may have replaced
 	// it, and must keep its window and its wait.
-	var mine fyne.Window
+	var mine *approvalWindow
 	defer func() { s.closeApprovalWindow(mine) }()
 	return peerloginmfa.WaitSSO(waitCtx, conn, userCode, "", open,
 		func(url string, _ time.Duration, opened bool) { mine = s.showPeerLoginMFAApproval(url, opened, cancel) })
@@ -37,19 +46,28 @@ func (s *serviceClient) waitSSO(ctx context.Context, conn proto.DaemonServiceCli
 // notification says so; the link carries a secret, so it is neither logged
 // nor put in the notification. When the browser did not open, a window
 // gives the user the link, to copy or to try opening again, and is
-// returned; onClose runs when it closes. A newer window replaces, and
-// closes, an older one.
-func (s *serviceClient) showPeerLoginMFAApproval(url string, opened bool, onClose func()) fyne.Window {
+// returned; cancel ends its wait when it closes. A newer window replaces,
+// and retires, an older one.
+//
+// Fyne v2.5.3 does not synchronize window and widget changes made from
+// several goroutines, so every change to approval windows happens under
+// approvalUIMu.
+func (s *serviceClient) showPeerLoginMFAApproval(url string, opened bool, cancel func()) *approvalWindow {
 	if opened {
 		s.app.SendNotification(fyne.NewNotification("Approve this sign-in",
 			"Enter your 2FA code on the page that opened in your browser. openZro connects once you approve."))
 		return nil
 	}
+
+	s.approvalUIMu.Lock()
+	defer s.approvalUIMu.Unlock()
+
 	newWindow := s.app.NewWindow
 	if s.newWindow != nil {
 		newWindow = s.newWindow
 	}
-	w := newWindow("Approve this sign-in")
+	aw := &approvalWindow{w: newWindow("Approve this sign-in"), cancel: cancel}
+	w := aw.w
 	label := widget.NewLabel("Your browser did not open. Open this link in a browser and enter your 2FA code " +
 		"to approve this sign-in. openZro connects once you approve. Closing this window cancels the sign-in.")
 	label.Wrapping = fyne.TextWrapWord
@@ -64,54 +82,53 @@ func (s *serviceClient) showPeerLoginMFAApproval(url string, opened bool, onClos
 	w.SetContent(container.NewPadded(content))
 	w.Resize(fyne.NewSize(460, 240))
 	w.SetOnClosed(func() {
+		aw.closed.Store(true)
 		s.approvalMu.Lock()
-		if s.approvalWin == w {
-			s.approvalWin, s.approvalCancel = nil, nil
+		if s.approvalWin == aw {
+			s.approvalWin = nil
 		}
 		s.approvalMu.Unlock()
-		onClose()
+		cancel()
 	})
 
 	s.approvalMu.Lock()
-	previous, previousCancel := s.approvalWin, s.approvalCancel
-	s.approvalWin, s.approvalCancel = w, onClose
+	previous := s.approvalWin
+	s.approvalWin = aw
 	s.approvalMu.Unlock()
 	if previous != nil {
-		retireApprovalWindow(previous, previousCancel)
+		s.retireApprovalWindowLocked(previous)
 	}
 	w.Show()
-	return w
+	return aw
 }
 
 // approvalRetryClose is how long a retired window is closed again: the
-// desktop driver shows windows asynchronously and ignores Close until the
-// native window exists.
+// desktop driver shows windows asynchronously and ignores Close, firing no
+// callback, until the native window exists.
 const approvalRetryClose = 5 * time.Second
 
-// retireApprovalWindow ends an approval window that may not have appeared
-// yet. Its link is replaced first, so a window the driver shows late never
-// shows it; its wait is canceled directly, since a close that the driver
-// ignored fires no callback; and it is closed again until it can be.
-func retireApprovalWindow(w fyne.Window, cancel func()) {
+// retireApprovalWindowLocked ends an approval window that may not have
+// appeared yet; callers hold approvalUIMu. Its link is replaced first, so a
+// window the driver shows late never shows it; its wait is canceled
+// directly, since an ignored close fires no callback; and it is closed
+// again until its close callback reports that a close took effect.
+func (s *serviceClient) retireApprovalWindowLocked(aw *approvalWindow) {
 	ended := widget.NewLabel("This sign-in request has ended.")
-	w.SetContent(container.NewPadded(container.NewVBox(ended, widget.NewButton("Close", w.Close))))
-	if cancel != nil {
-		cancel()
-	}
-	// onClosed fires only when a close took effect; until then, try again.
-	var closed atomic.Bool
-	w.SetOnClosed(func() { closed.Store(true) })
-	w.Close()
+	aw.w.SetContent(container.NewPadded(container.NewVBox(ended, widget.NewButton("Close", aw.w.Close))))
+	aw.cancel()
+	aw.w.Close()
 	go func() {
 		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
 		deadline := time.After(approvalRetryClose)
-		for !closed.Load() {
+		for !aw.closed.Load() {
 			select {
 			case <-ticker.C:
-				if !closed.Load() {
-					w.Close()
+				s.approvalUIMu.Lock()
+				if !aw.closed.Load() {
+					aw.w.Close()
 				}
+				s.approvalUIMu.Unlock()
 			case <-deadline:
 				return
 			}
@@ -119,22 +136,22 @@ func retireApprovalWindow(w fyne.Window, cancel func()) {
 	}()
 }
 
-// closeApprovalWindow closes w if it is still the open approval window. A
-// window a newer one replaced was closed then, and is left alone.
-func (s *serviceClient) closeApprovalWindow(w fyne.Window) {
-	if w == nil {
+// closeApprovalWindow retires aw if it is still the open approval window.
+// A window a newer one replaced was retired then, and is left alone.
+func (s *serviceClient) closeApprovalWindow(aw *approvalWindow) {
+	if aw == nil {
 		return
 	}
 	s.approvalMu.Lock()
-	current := s.approvalWin == w
-	var cancel func()
+	current := s.approvalWin == aw
 	if current {
-		cancel = s.approvalCancel
-		s.approvalWin, s.approvalCancel = nil, nil
+		s.approvalWin = nil
 	}
 	s.approvalMu.Unlock()
 	if current {
-		retireApprovalWindow(w, cancel)
+		s.approvalUIMu.Lock()
+		s.retireApprovalWindowLocked(aw)
+		s.approvalUIMu.Unlock()
 	}
 }
 
@@ -142,6 +159,15 @@ func (s *serviceClient) approvalWindowOpen() bool {
 	s.approvalMu.Lock()
 	defer s.approvalMu.Unlock()
 	return s.approvalWin != nil
+}
+
+func (s *serviceClient) currentApprovalWindow() fyne.Window {
+	s.approvalMu.Lock()
+	defer s.approvalMu.Unlock()
+	if s.approvalWin == nil {
+		return nil
+	}
+	return s.approvalWin.w
 }
 
 // showPeerLoginMFAError explains a sign-in refused for the user's second
@@ -167,10 +193,4 @@ func (s *serviceClient) showPeerLoginMFAError(err error) bool {
 	w.Resize(fyne.NewSize(420, 160))
 	w.Show()
 	return true
-}
-
-func (s *serviceClient) currentApprovalWindow() fyne.Window {
-	s.approvalMu.Lock()
-	defer s.approvalMu.Unlock()
-	return s.approvalWin
 }
