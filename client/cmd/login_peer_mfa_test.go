@@ -98,3 +98,20 @@ func TestFinishForegroundPeerLoginMFA_Refusals(t *testing.T) {
 	assert.Contains(t, err.Error(), "denied")
 	assert.NotContains(t, err.Error(), "tok", "the approval token stays out of the error")
 }
+
+// The 2FA setup link is built from the profile the sign-in was for, not
+// whatever profile is active once the refusal arrives.
+func TestHandleSSOLogin_UsesTheRequestProfile(t *testing.T) {
+	prev := noBrowser
+	noBrowser = true
+	defer func() { noBrowser = prev }()
+	cmd, _ := testCmd()
+	d := &fakeDaemonClient{ssoErr: contract.EnrollmentRequired(""), mgmtURL: "https://work.example.com"}
+
+	err := handleSSOLogin(context.Background(), cmd, &proto.LoginResponse{UserCode: "code"}, d, nil, "work", "ana")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "https://work.example.com/")
+	require.NotNil(t, d.asked)
+	assert.Equal(t, "work", d.asked.ProfileName)
+	assert.Equal(t, "ana", d.asked.Username)
+}

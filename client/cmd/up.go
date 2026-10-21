@@ -296,7 +296,7 @@ func doDaemonUp(ctx context.Context, cmd *cobra.Command, client proto.DaemonServ
 	}
 
 	if loginResp.NeedsSSOLogin {
-		if err := handleSSOLogin(ctx, cmd, loginResp, client, pm); err != nil {
+		if err := handleSSOLogin(ctx, cmd, loginResp, client, pm, activeProf.Name, username); err != nil {
 			return fmt.Errorf("sso login failed: %v", err)
 		}
 	}

@@ -135,7 +135,7 @@ func doDaemonLogin(ctx context.Context, cmd *cobra.Command, providedSetupKey str
 	}
 
 	if loginResp.NeedsSSOLogin {
-		if err := handleSSOLogin(ctx, cmd, loginResp, client, pm); err != nil {
+		if err := handleSSOLogin(ctx, cmd, loginResp, client, pm, activeProf.Name, username); err != nil {
 			return fmt.Errorf("sso login failed: %v", err)
 		}
 	}
@@ -249,7 +249,10 @@ func doForegroundLogin(ctx context.Context, cmd *cobra.Command, setupKey string,
 	return nil
 }
 
-func handleSSOLogin(ctx context.Context, cmd *cobra.Command, loginResp *proto.LoginResponse, client proto.DaemonServiceClient, pm *profilemanager.ProfileManager) error {
+// handleSSOLogin finishes the SSO login of the request made for profileName
+// and username.
+func handleSSOLogin(ctx context.Context, cmd *cobra.Command, loginResp *proto.LoginResponse, client proto.DaemonServiceClient,
+	pm *profilemanager.ProfileManager, profileName, username string) error {
 	openURL(cmd, loginResp.VerificationURIComplete, loginResp.UserCode, noBrowser)
 
 	// The device sign-in may then wait for the user's 2FA approval
@@ -259,13 +262,7 @@ func handleSSOLogin(ctx context.Context, cmd *cobra.Command, loginResp *proto.Lo
 			announcePeerLoginMFA(cmd, url, expiresIn, opened)
 		})
 	if err != nil {
-		profileName, username := "", ""
-		if prof, profErr := pm.GetActiveProfile(); profErr == nil {
-			profileName = prof.Name
-		}
-		if u, userErr := user.Current(); userErr == nil {
-			username = u.Username
-		}
+		// The profile of the request, not whichever is active by now.
 		if described := daemonPeerLoginMFAError(ctx, client, profileName, username, err); described != nil {
 			return described
 		}
