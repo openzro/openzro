@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/openzro/openzro/management/server/account"
 	nbcontext "github.com/openzro/openzro/management/server/context"
 	"github.com/openzro/openzro/management/server/http/api"
 	"github.com/openzro/openzro/management/server/mock_server"
@@ -751,4 +752,66 @@ func stringifyPermissionsKeys(permissions roles.Permissions) map[string]map[stri
 		}
 	}
 	return modules
+}
+
+// Admins see each user's 2FA state in the list. Anyone else, or an admin
+// when the state cannot be read, gets the list without it.
+func TestGetUsers_MFAState(t *testing.T) {
+	lockedUntil := time.Date(2026, 10, 20, 12, 15, 0, 0, time.UTC)
+	list := func(t *testing.T, h *handler) map[string]api.User {
+		t.Helper()
+		recorder := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
+		req = nbcontext.SetUserAuthInRequest(req, nbcontext.UserAuth{
+			UserId: existingUserID, Domain: testDomain, AccountId: existingAccountID,
+		})
+		h.getAllUsers(recorder, req)
+		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+		var users []api.User
+		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &users))
+		byID := make(map[string]api.User, len(users))
+		for _, u := range users {
+			byID[u.Id] = u
+		}
+		return byID
+	}
+
+	t.Run("admin", func(t *testing.T) {
+		h := initUsersTestData()
+		m, ok := h.accountManager.(*mock_server.MockAccountManager)
+		require.True(t, ok)
+		m.GetAccountUsersMFAStateFunc = func(_ context.Context, _, _ string) (map[string]account.UserMFAState, error) {
+			return map[string]account.UserMFAState{
+				existingUserID: {Enrolled: true},
+				regularUserID:  {Enrolled: true, LockedUntil: &lockedUntil},
+			}, nil
+		}
+		users := list(t, h)
+
+		require.NotNil(t, users[existingUserID].MfaEnrolled)
+		assert.True(t, *users[existingUserID].MfaEnrolled)
+		assert.Nil(t, users[existingUserID].MfaLockedUntil)
+		require.NotNil(t, users[regularUserID].MfaLockedUntil)
+		assert.True(t, lockedUntil.Equal(*users[regularUserID].MfaLockedUntil))
+		require.NotNil(t, users[serviceUserID].MfaEnrolled, "a user without 2FA is reported as not enrolled")
+		assert.False(t, *users[serviceUserID].MfaEnrolled)
+	})
+
+	for name, err := range map[string]error{
+		"not an admin": status.NewPermissionDeniedError(),
+		"read failed":  status.Errorf(status.Internal, "store unavailable"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := initUsersTestData()
+			m, ok := h.accountManager.(*mock_server.MockAccountManager)
+			require.True(t, ok)
+			m.GetAccountUsersMFAStateFunc = func(_ context.Context, _, _ string) (map[string]account.UserMFAState, error) {
+				return nil, err
+			}
+			for id, u := range list(t, h) {
+				assert.Nil(t, u.MfaEnrolled, "user %s", id)
+				assert.Nil(t, u.MfaLockedUntil, "user %s", id)
+			}
+		})
+	}
 }

@@ -114,7 +114,7 @@ func TestParseDexSubConnector(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := parseDexSubConnector(tc.sub)
+			got := ParseDexSubConnector(tc.sub)
 			if got != tc.want {
 				t.Fatalf("got %q want %q", got, tc.want)
 			}
@@ -192,7 +192,7 @@ func TestEncodeDecodeDexSubject(t *testing.T) {
 	if sub != dexSub(t, "3f0c1d2e-uid", "local") {
 		t.Fatalf("EncodeDexSubject does not match Dex's encoding")
 	}
-	if got := parseDexSubConnector(sub); got != "local" {
+	if got := ParseDexSubConnector(sub); got != "local" {
 		t.Fatalf("connector: got %q", got)
 	}
 	userID, connID, ok := DecodeDexSubject(sub)

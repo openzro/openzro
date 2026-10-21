@@ -154,6 +154,12 @@ type MockAccountManager struct {
 	GetOrCreateAccountByPrivateDomainFunc func(ctx context.Context, initiatorId, domain string) (*types.Account, bool, error)
 	UpdateAccountPeersFunc                func(ctx context.Context, accountID string)
 	BufferUpdateAccountPeersFunc          func(ctx context.Context, accountID string)
+	GetAccountUsersMFAStateFunc           func(ctx context.Context, accountID, initiatorUserID string) (map[string]account.UserMFAState, error)
+	GetMFAEnrollmentGapsFunc              func(ctx context.Context, accountID, initiatorUserID string) (*account.MFAEnrollmentGaps, error)
+	MFADisenrollFunc                      func(ctx context.Context, accountID, initiatorUserID, targetUserID string) error
+	MFAStatusFunc                         func(ctx context.Context, userID string) (*account.MFAStatus, error)
+	MFASessionValidFunc                   func(userID, mfaSessionToken, jwtSessionID string) bool
+	MFAIssueChallengeTokenFunc            func(userID, jwtSessionID string) (string, error)
 }
 
 func (am *MockAccountManager) UpdateAccountPeers(ctx context.Context, accountID string) {
@@ -1179,8 +1185,27 @@ func (am *MockAccountManager) MFAChallenge(ctx context.Context, userID, code, jw
 	return nil, status.Errorf(codes.Unimplemented, "method MFAChallenge is not implemented")
 }
 
-func (am *MockAccountManager) MFADisenroll(ctx context.Context, userID string) error {
+func (am *MockAccountManager) MFADisenroll(ctx context.Context, accountID, initiatorUserID, targetUserID string) error {
+	if am.MFADisenrollFunc != nil {
+		return am.MFADisenrollFunc(ctx, accountID, initiatorUserID, targetUserID)
+	}
 	return status.Errorf(codes.Unimplemented, "method MFADisenroll is not implemented")
+}
+
+// GetAccountUsersMFAState mocks GetAccountUsersMFAState of the AccountManager interface
+func (am *MockAccountManager) GetAccountUsersMFAState(ctx context.Context, accountID, initiatorUserID string) (map[string]account.UserMFAState, error) {
+	if am.GetAccountUsersMFAStateFunc != nil {
+		return am.GetAccountUsersMFAStateFunc(ctx, accountID, initiatorUserID)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method GetAccountUsersMFAState is not implemented")
+}
+
+// GetMFAEnrollmentGaps mocks GetMFAEnrollmentGaps of the AccountManager interface
+func (am *MockAccountManager) GetMFAEnrollmentGaps(ctx context.Context, accountID, initiatorUserID string) (*account.MFAEnrollmentGaps, error) {
+	if am.GetMFAEnrollmentGapsFunc != nil {
+		return am.GetMFAEnrollmentGapsFunc(ctx, accountID, initiatorUserID)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method GetMFAEnrollmentGaps is not implemented")
 }
 
 func (am *MockAccountManager) MFARegenerateBackupCodes(ctx context.Context, userID string) ([]string, error) {
@@ -1188,6 +1213,9 @@ func (am *MockAccountManager) MFARegenerateBackupCodes(ctx context.Context, user
 }
 
 func (am *MockAccountManager) MFAStatus(ctx context.Context, userID string) (*account.MFAStatus, error) {
+	if am.MFAStatusFunc != nil {
+		return am.MFAStatusFunc(ctx, userID)
+	}
 	return &account.MFAStatus{Enrolled: false}, nil
 }
 
@@ -1196,9 +1224,15 @@ func (am *MockAccountManager) MFAVerifyToken(raw string, purpose account.MFAToke
 }
 
 func (am *MockAccountManager) MFASessionValid(userID, mfaSessionToken, jwtSessionID string) bool {
+	if am.MFASessionValidFunc != nil {
+		return am.MFASessionValidFunc(userID, mfaSessionToken, jwtSessionID)
+	}
 	return false
 }
 
 func (am *MockAccountManager) MFAIssueChallengeToken(userID, jwtSessionID string) (string, error) {
+	if am.MFAIssueChallengeTokenFunc != nil {
+		return am.MFAIssueChallengeTokenFunc(userID, jwtSessionID)
+	}
 	return "", status.Errorf(codes.Unimplemented, "method MFAIssueChallengeToken is not implemented")
 }

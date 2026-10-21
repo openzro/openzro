@@ -1,6 +1,7 @@
 package users
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -209,6 +210,7 @@ func (h *handler) getAllUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	serviceUser := r.URL.Query().Get("service_user")
+	mfaStates := h.usersMFAState(r.Context(), accountID, userID)
 
 	users := make([]*api.User, 0)
 	for _, d := range data {
@@ -216,7 +218,7 @@ func (h *handler) getAllUsers(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if serviceUser == "" {
-			users = append(users, toUserResponse(d, userID))
+			users = append(users, withMFAState(toUserResponse(d, userID), mfaStates))
 			continue
 		}
 
@@ -227,11 +229,38 @@ func (h *handler) getAllUsers(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if includeServiceUser == d.IsServiceUser {
-			users = append(users, toUserResponse(d, userID))
+			users = append(users, withMFAState(toUserResponse(d, userID), mfaStates))
 		}
 	}
 
 	util.WriteJSONObject(r.Context(), w, users)
+}
+
+// usersMFAState reads the account users' 2FA state for an admin. It
+// returns nil for anyone else, and when the read fails, so the list is
+// still served, just without the 2FA fields.
+func (h *handler) usersMFAState(ctx context.Context, accountID, userID string) map[string]account.UserMFAState {
+	states, err := h.accountManager.GetAccountUsersMFAState(ctx, accountID, userID)
+	if err != nil {
+		if sErr, ok := status.FromError(err); !ok || sErr.Type() != status.PermissionDenied {
+			log.WithContext(ctx).Warnf("users list served without 2FA state: %v", err)
+		}
+		return nil
+	}
+	return states
+}
+
+// withMFAState fills in the user's 2FA fields when states is set. A user
+// missing from states has no 2FA.
+func withMFAState(user *api.User, states map[string]account.UserMFAState) *api.User {
+	if states == nil {
+		return user
+	}
+	state := states[user.Id]
+	enrolled := state.Enrolled
+	user.MfaEnrolled = &enrolled
+	user.MfaLockedUntil = state.LockedUntil
+	return user
 }
 
 // inviteUser resend invitations to users who haven't activated their accounts,

@@ -244,6 +244,10 @@ const (
 	// AccountPeerApprovalExemptGroupsUpdated records a change to the groups
 	// whose peers skip peer approval (ExtraSettings.IntegratedValidatorGroups).
 	AccountPeerApprovalExemptGroupsUpdated Activity = 110
+	// UserMFAReset records an admin removing another user's 2FA.
+	UserMFAReset Activity = 111
+	// UserMFADisabled records a user turning off their own 2FA.
+	UserMFADisabled Activity = 112
 
 	AccountDeleted Activity = 99999
 )
@@ -371,6 +375,8 @@ var activityMap = map[Activity]Code{
 	AccountAllowedEmailDomainsUpdated:      {"Account allowed email domains updated", "account.setting.allowed_email_domains.update"},
 	UserLocalPasswordReset:                 {"Local user password reset", "user.password.reset"},
 	AccountPeerApprovalExemptGroupsUpdated: {"Account peer approval exempt groups updated", "account.setting.peer.approval.exempt_groups.update"},
+	UserMFAReset:                           {"User 2FA reset", "user.mfa.reset"},
+	UserMFADisabled:                        {"User 2FA disabled", "user.mfa.disable"},
 }
 
 // StringCode returns a string code of the activity

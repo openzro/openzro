@@ -225,9 +225,19 @@ type Manager interface {
 	// `jwtSessionID` so the dashboard can resume gated calls.
 	MFAChallenge(ctx context.Context, userID, code, jwtSessionID string) (*MFAChallengeOutcome, error)
 
-	// MFADisenroll removes the user's MFA row (admin override OR
-	// user-initiated reset).
-	MFADisenroll(ctx context.Context, userID string) error
+	// MFADisenroll removes the target user's MFA row and audits it in the
+	// account: as a reset when initiatorUserID is another user (an admin),
+	// as a self-disable otherwise. A no-op when the target has no 2FA.
+	// Authorization is the caller's job.
+	MFADisenroll(ctx context.Context, accountID, initiatorUserID, targetUserID string) error
+
+	// GetAccountUsersMFAState returns the 2FA state of the account's users
+	// that have 2FA, keyed by user ID. Admin only.
+	GetAccountUsersMFAState(ctx context.Context, accountID, initiatorUserID string) (map[string]UserMFAState, error)
+
+	// GetMFAEnrollmentGaps counts the account's active users without 2FA,
+	// split by the connector the 2FA gate classifies them under. Admin only.
+	GetMFAEnrollmentGaps(ctx context.Context, accountID, initiatorUserID string) (*MFAEnrollmentGaps, error)
 
 	// MFARegenerateBackupCodes mints fresh codes, invalidating all
 	// previous ones atomically.
@@ -258,6 +268,21 @@ type Manager interface {
 	// this, voluntary MFA users (enforcement OFF) hit a dead-end on
 	// disable after a tab reset wiped sessionStorage.
 	MFAIssueChallengeToken(userID, jwtSessionID string) (string, error)
+}
+
+// UserMFAState is a user's 2FA state as an admin sees it. LockedUntil is
+// set only while a brute-force lockout is in effect.
+type UserMFAState struct {
+	Enrolled    bool
+	LockedUntil *time.Time
+}
+
+// MFAEnrollmentGaps counts active users without 2FA. Local users follow
+// the "Require 2FA for local accounts" setting, everyone else the
+// federated one.
+type MFAEnrollmentGaps struct {
+	Local     int
+	Federated int
 }
 
 // MFATokenPurpose identifies what a short-lived MFA token can be

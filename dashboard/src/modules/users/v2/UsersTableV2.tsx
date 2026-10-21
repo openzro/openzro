@@ -57,6 +57,7 @@ import UserBlockCell from "@/modules/users/table-cells/UserBlockCell";
 import UserGroupCell from "@/modules/users/table-cells/UserGroupCell";
 import { UserInviteModalContent } from "@/modules/users/UserInviteModal";
 import UserActionCellV2 from "@/modules/users/v2/UserActionCellV2";
+import UserMFACellV2 from "@/modules/users/v2/UserMFACellV2";
 import UserNameCellV2 from "@/modules/users/v2/UserNameCellV2";
 import UserRoleCellV2 from "@/modules/users/v2/UserRoleCellV2";
 import UserStatusCellV2 from "@/modules/users/v2/UserStatusCellV2";
@@ -146,6 +147,12 @@ export default function UsersTableV2({ users, isLoading }: Props) {
   });
 
   const all = useMemo(() => users ?? [], [users]);
+  // The server sends the 2FA fields to admins only; without them the
+  // column would be a row of dashes, so it is hidden.
+  const showMFA = useMemo(
+    () => all.some((u) => u.mfa_enrolled !== undefined),
+    [all],
+  );
 
   const counts = useMemo(() => {
     let owner = 0;
@@ -216,6 +223,13 @@ export default function UsersTableV2({ users, isLoading }: Props) {
         cell: ({ row }) => <UserGroupCell user={row.original} />,
       },
       {
+        id: "mfa",
+        accessorFn: (u) => (u.mfa_locked_until ? 2 : u.mfa_enrolled ? 1 : 0),
+        sortingFn: "basic",
+        header: ({ column }) => <SortHeader column={column} label="2FA" />,
+        cell: ({ row }) => <UserMFACellV2 user={row.original} />,
+      },
+      {
         id: "is_blocked",
         accessorFn: (u) => Boolean(u.is_blocked),
         sortingFn: "basic",
@@ -255,7 +269,7 @@ export default function UsersTableV2({ users, isLoading }: Props) {
     state: {
       sorting,
       pagination,
-      columnVisibility: { is_current: false },
+      columnVisibility: { is_current: false, mfa: showMFA },
     },
     onSortingChange: setSorting,
     onPaginationChange: setPagination,

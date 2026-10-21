@@ -9,14 +9,16 @@ import (
 	"net/http/httptest"
 	"reflect"
 
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/golang/mock/gomock"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 
+	serverAccount "github.com/openzro/openzro/management/server/account"
 	nbcontext "github.com/openzro/openzro/management/server/context"
 	"github.com/openzro/openzro/management/server/http/api"
 	"github.com/openzro/openzro/management/server/mock_server"
@@ -673,4 +675,42 @@ func TestAccounts_PeerApprovalExemptGroups(t *testing.T) {
 	put(`{"settings":{"peer_login_expiration":3600,"peer_login_expiration_enabled":false}}`)
 	require.NotNil(t, captured)
 	assert.Nil(t, captured.Extra, "an omitted extra object reaches the manager as nil")
+}
+
+// Admins get the count of users without 2FA with the account. Anyone else,
+// or an admin when the count cannot be read, gets the account without it.
+func TestAccounts_MFAUnenrolledUsers(t *testing.T) {
+	adminUser := types.NewAdminUser("test_user")
+	account := &types.Account{
+		Id:       "test_account",
+		Domain:   "hotmail.com",
+		Network:  types.NewNetwork(),
+		Users:    map[string]*types.User{adminUser.Id: adminUser},
+		Settings: &types.Settings{PeerLoginExpiration: time.Hour},
+	}
+	get := func(t *testing.T, gaps *serverAccount.MFAEnrollmentGaps, err error) api.Account {
+		t.Helper()
+		h := initAccountsTestData(t, account)
+		m, ok := h.accountManager.(*mock_server.MockAccountManager)
+		require.True(t, ok)
+		m.GetMFAEnrollmentGapsFunc = func(_ context.Context, _, _ string) (*serverAccount.MFAEnrollmentGaps, error) {
+			return gaps, err
+		}
+		recorder := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/accounts", nil)
+		req = nbcontext.SetUserAuthInRequest(req, nbcontext.UserAuth{UserId: adminUser.Id, AccountId: account.Id, Domain: "hotmail.com"})
+		h.getAllAccounts(recorder, req)
+		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+		var got []api.Account
+		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &got))
+		require.Len(t, got, 1)
+		return got[0]
+	}
+
+	got := get(t, &serverAccount.MFAEnrollmentGaps{Local: 3, Federated: 1}, nil)
+	require.NotNil(t, got.MfaUnenrolledUsers)
+	assert.Equal(t, api.MFAUnenrolledUsers{Local: 3, Federated: 1}, *got.MfaUnenrolledUsers)
+
+	assert.Nil(t, get(t, nil, status.NewPermissionDeniedError()).MfaUnenrolledUsers)
+	assert.Nil(t, get(t, nil, status.Errorf(status.Internal, "store unavailable")).MfaUnenrolledUsers)
 }

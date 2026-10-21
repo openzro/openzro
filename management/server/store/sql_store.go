@@ -735,6 +735,28 @@ func (s *SqlStore) GetUserMFA(ctx context.Context, lockStrength LockingStrength,
 	return &mfa, nil
 }
 
+// GetAccountUserMFAs returns the 2FA state of every user in the account
+// that has one. Only non-secret columns are selected: the encrypted secret
+// and the backup code hashes never leave the table on this path.
+func (s *SqlStore) GetAccountUserMFAs(ctx context.Context, lockStrength LockingStrength, accountID string) ([]*types.UserMFA, error) {
+	tx := s.db
+	if lockStrength != LockingStrengthNone {
+		tx = tx.Clauses(clause.Locking{Strength: string(lockStrength)})
+	}
+
+	var rows []*types.UserMFA
+	accountUsers := s.db.Model(&types.User{}).Select("id").Where(accountIDCondition, accountID)
+	result := tx.Model(&types.UserMFA{}).
+		Select("user_id", "method", "enrolled_at", "last_verified_at", "failed_attempts", "locked_until").
+		Where("user_id IN (?)", accountUsers).
+		Find(&rows)
+	if result.Error != nil {
+		log.WithContext(ctx).Errorf("failed to get account user_mfa rows from store: %s", result.Error)
+		return nil, status.Errorf(status.Internal, "failed to get account user_mfa rows from store")
+	}
+	return rows, nil
+}
+
 // SaveUserMFA upserts the user_mfa row by its UserID primary key.
 // Used by enrollment, challenge (to bump last_verified_at and
 // reset failed_attempts), backup-code consumption, and regenerate.
@@ -751,14 +773,16 @@ func (s *SqlStore) SaveUserMFA(ctx context.Context, lockStrength LockingStrength
 // disenrollment path (operator override OR user reset). A delete
 // for a user with no MFA enrolled is a no-op (no error) so the
 // idempotent caller doesn't have to GetUserMFA first.
-func (s *SqlStore) DeleteUserMFA(ctx context.Context, lockStrength LockingStrength, userID string) error {
+func (s *SqlStore) DeleteUserMFA(ctx context.Context, lockStrength LockingStrength, userID string) (bool, error) {
 	result := s.db.Clauses(clause.Locking{Strength: string(lockStrength)}).
 		Delete(&types.UserMFA{}, "user_id = ?", userID)
 	if result.Error != nil {
 		log.WithContext(ctx).Errorf("failed to delete user_mfa from store: %s", result.Error)
-		return status.Errorf(status.Internal, "failed to delete user_mfa from store")
+		return false, status.Errorf(status.Internal, "failed to delete user_mfa from store")
 	}
-	return nil
+	// The DELETE is the linearization point: of concurrent deletes of the
+	// same row, only one affects it.
+	return result.RowsAffected > 0, nil
 }
 
 func (s *SqlStore) DeleteUser(ctx context.Context, lockStrength LockingStrength, accountID, userID string) error {

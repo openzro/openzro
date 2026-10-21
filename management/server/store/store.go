@@ -113,7 +113,12 @@ type Store interface {
 	// distinguish that from a real store error.
 	GetUserMFA(ctx context.Context, lockStrength LockingStrength, userID string) (*types.UserMFA, error)
 	SaveUserMFA(ctx context.Context, lockStrength LockingStrength, mfa *types.UserMFA) error
-	DeleteUserMFA(ctx context.Context, lockStrength LockingStrength, userID string) error
+	// DeleteUserMFA removes the user's 2FA row and reports whether there was
+	// one. Of concurrent deletes of the same row, exactly one reports true.
+	DeleteUserMFA(ctx context.Context, lockStrength LockingStrength, userID string) (bool, error)
+	// GetAccountUserMFAs returns the 2FA state of every user in the account
+	// that has one. The secret and the backup code hashes are not read.
+	GetAccountUserMFAs(ctx context.Context, lockStrength LockingStrength, accountID string) ([]*types.UserMFA, error)
 	GetTokenIDByHashedToken(ctx context.Context, secret string) (string, error)
 	DeleteHashedPAT2TokenIDIndex(hashedToken string) error
 	DeleteTokenID2UserIDIndex(tokenID string) error

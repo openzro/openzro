@@ -286,13 +286,13 @@ func TestMFADisenroll(t *testing.T) {
 	require.NoError(t, err)
 
 	// Disenroll + verify status.
-	require.NoError(t, am.MFADisenroll(ctx, userID))
+	require.NoError(t, am.MFADisenroll(ctx, acc.Id, userID, userID))
 	st, err := am.MFAStatus(ctx, userID)
 	require.NoError(t, err)
 	require.False(t, st.Enrolled)
 
 	// Idempotent: second Disenroll is a no-op.
-	require.NoError(t, am.MFADisenroll(ctx, userID))
+	require.NoError(t, am.MFADisenroll(ctx, acc.Id, userID, userID))
 }
 
 // TestMFAVerifyToken pins the token round-trip + the cross-purpose
