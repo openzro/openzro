@@ -266,7 +266,8 @@ func TestLoginPeer_MFAGate_Metrics(t *testing.T) {
 	read := f.peerLoginMFAMeter(t)
 
 	required := f.requireApproval(t, wgKeyA)
-	f.requireApproval(t, wgKeyA)
+	poll := f.requireApproval(t, wgKeyA)
+	require.Equal(t, required.Challenge.ApprovalID, poll.Challenge.ApprovalID, "a poll waits on the same approval")
 	outcome, err := f.am.ApprovePeerLoginMFA(context.Background(), required.Challenge.Token, "000000")
 	require.NoError(t, err)
 	require.False(t, outcome.Approved)
