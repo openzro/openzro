@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"testing"
 	"time"
@@ -47,6 +48,7 @@ func (f *peerLoginFixture) request(t *testing.T, key string) (*PeerLoginMFAChall
 	return f.am.RequestPeerLoginMFAApproval(context.Background(), PeerLoginMFARequest{
 		AccountID: f.accountID, UserID: f.userID, WGPubKey: key,
 		Hostname: "ana-laptop", OS: "linux", IP: "203.0.113.7", GeoCountry: "BR", GeoCity: "São Paulo", NewPeer: true,
+		JWTIssuedAt: f.clock.Now(),
 	})
 }
 
@@ -380,4 +382,54 @@ func TestSCIMResetLocalPassword_ClearsPeerLoginApprovals(t *testing.T) {
 	live, err := m.Store.GetUserPeerLoginMFAApprovals(ctx, store.LockingStrengthNone, accountID, u.Id, now)
 	require.NoError(t, err)
 	assert.Empty(t, live)
+}
+
+// The token never expires before its record: record times are stored at
+// the token's one-second precision, so a record created mid-second is
+// still approvable through its token just before the deadline.
+func TestPeerLoginMFA_TokenOutlivesRecordAtSubSecondBoundary(t *testing.T) {
+	f := newPeerLoginFixture(t, "ana")
+	ctx := context.Background()
+	f.clock.Advance(900 * time.Millisecond)
+	ch, err := f.request(t, wgKeyA)
+	require.NoError(t, err)
+	out, err := f.am.ApprovePeerLoginMFA(ctx, ch.Token, f.code(t))
+	require.NoError(t, err)
+	require.True(t, out.Approved)
+
+	rec := f.record(t, ch.ApprovalID)
+	assert.Zero(t, rec.Deadline.Nanosecond(), "the deadline is a whole second")
+	f.clock.Advance(rec.ExpiresAt.Sub(f.clock.Now()) - 500*time.Millisecond)
+
+	view, err := f.am.GetPeerLoginMFAApproval(ctx, ch.Token)
+	require.NoError(t, err, "the token is valid while the record is")
+	assert.Equal(t, account.PeerLoginMFAApproved, view.State)
+	out, err = f.am.ApprovePeerLoginMFA(ctx, ch.Token, "")
+	require.NoError(t, err)
+	assert.True(t, out.Approved, "the idempotent retry still works")
+}
+
+// A login authenticated before a password reset cannot start an approval
+// after it: the request rechecks the token's issue time against the
+// credentials cutoff under the user lock.
+func TestRequestPeerLoginMFAApproval_RefusesTokensFromBeforeAReset(t *testing.T) {
+	m, accountID, _ := setupLocalUsers(t)
+	require.NoError(t, m.SetMFA(base64.StdEncoding.EncodeToString(make([]byte, 32))))
+	ctx := context.Background()
+	u := createLocal(t, m, accountID, "ana@example.com")
+	issuedAt := time.Now().Add(-time.Minute)
+
+	_, err := m.SCIMResetLocalPassword(ctx, accountID, userID, u.Id, newPassword, nil)
+	require.NoError(t, err)
+
+	_, err = m.RequestPeerLoginMFAApproval(ctx, PeerLoginMFARequest{
+		AccountID: accountID, UserID: u.Id, WGPubKey: wgKeyA, JWTIssuedAt: issuedAt})
+	requireStatus(t, err, status.Unauthenticated)
+	live, err := m.Store.GetUserPeerLoginMFAApprovals(ctx, store.LockingStrengthNone, accountID, u.Id, time.Now())
+	require.NoError(t, err)
+	assert.Empty(t, live, "no approval outlives the reset")
+
+	_, err = m.RequestPeerLoginMFAApproval(ctx, PeerLoginMFARequest{
+		AccountID: accountID, UserID: u.Id, WGPubKey: wgKeyA, JWTIssuedAt: time.Now().Add(2 * time.Second)})
+	require.NoError(t, err, "a token from after the reset is accepted")
 }

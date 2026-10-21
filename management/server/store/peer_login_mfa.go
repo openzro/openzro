@@ -140,6 +140,20 @@ func (s *SqlStore) DeleteExpiredPeerLoginMFAApproval(ctx context.Context, id str
 	return result.RowsAffected == 1, nil
 }
 
+// DeleteUntouchedExpiredPeerLoginMFAApproval deletes a record expired at
+// now that nobody approved, denied or consumed, and reports whether this
+// call deleted it. Its WHERE is evaluated against the row as it stands
+// when the DELETE gets the row, so a denial that committed meanwhile makes
+// it delete nothing.
+func (s *SqlStore) DeleteUntouchedExpiredPeerLoginMFAApproval(ctx context.Context, id string, now time.Time) (bool, error) {
+	result := s.db.Where("id = ? AND expires_at <= ? AND approved_at IS NULL AND denied_at IS NULL AND consumed_at IS NULL",
+		id, now).Delete(&types.PeerLoginMFAApproval{})
+	if result.Error != nil {
+		return false, peerLoginMFAInternal(ctx, "sweep", result.Error)
+	}
+	return result.RowsAffected == 1, nil
+}
+
 // DeleteUserPeerLoginMFAApprovals deletes every record of the user, as a
 // 2FA reset, a password reset or the user's deletion requires.
 func (s *SqlStore) DeleteUserPeerLoginMFAApprovals(ctx context.Context, accountID, userID string) (int64, error) {

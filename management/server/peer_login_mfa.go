@@ -31,6 +31,11 @@ type PeerLoginMFARequest struct {
 	GeoCountry string
 	GeoCity    string
 	NewPeer    bool
+	// JWTIssuedAt is the issue time of the token the login presented. It is
+	// checked again under the user lock against the credentials cutoff, so a
+	// login authenticated before a password reset cannot start an approval
+	// after the reset cleared them.
+	JWTIssuedAt time.Time
 }
 
 // PeerLoginMFAChallenge is the approval a refused login points the client
@@ -72,12 +77,21 @@ func (am *DefaultAccountManager) RequestPeerLoginMFAApproval(ctx context.Context
 	if !am.MFAEnabled() {
 		return nil, status.Errorf(status.Internal, "mfa: subsystem not initialized")
 	}
-	now := am.mfaNow()
+	// Whole seconds: the page token's expiry has one-second precision, and
+	// it must not end before the record's deadline.
+	now := am.mfaNow().Truncate(time.Second)
 	var approval *types.PeerLoginMFAApproval
 	var created bool
 	err := am.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
-		if err := lockMFAUser(ctx, tx, req.AccountID, req.UserID); err != nil {
+		user, err := lockMFAUser(ctx, tx, req.AccountID, req.UserID)
+		if err != nil {
 			return err
+		}
+		// The login's token was checked before this lock; a password reset
+		// may have cut it since, and its cleanup would not see a record
+		// inserted now. The cutoff is written under this same lock.
+		if user.IsBlocked() || user.JWTRevoked(req.JWTIssuedAt) {
+			return status.Errorf(status.Unauthenticated, "the login's credentials are no longer valid")
 		}
 		live, err := tx.GetUserPeerLoginMFAApprovals(ctx, store.LockingStrengthUpdate, req.AccountID, req.UserID, now)
 		if err != nil {
@@ -353,15 +367,15 @@ func approveFailureReason(o *account.PeerLoginMFAApproveOutcome) string {
 
 // lockMFAUser locks the user row, the first lock of every approval write,
 // and checks the user belongs to the account.
-func lockMFAUser(ctx context.Context, tx store.Store, accountID, userID string) error {
+func lockMFAUser(ctx context.Context, tx store.Store, accountID, userID string) (*types.User, error) {
 	user, err := tx.GetUserByUserID(ctx, store.LockingStrengthUpdate, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if user.AccountID != accountID {
-		return status.NewUserNotFoundError(userID)
+		return nil, status.NewUserNotFoundError(userID)
 	}
-	return nil
+	return user, nil
 }
 
 // keyFingerprint shortens a WireGuard key for display: enough to tell keys
@@ -410,9 +424,12 @@ func (am *DefaultAccountManager) runPeerLoginMFASweeper(ctx context.Context) {
 }
 
 // sweepPeerLoginMFAApprovals deletes records expired at now, batch at a
-// time. Each record is deleted by its own conditional DELETE, so when
-// replicas sweep together exactly one deletes it, and only that one audits
-// it as expired, and only if nobody approved or denied it.
+// time. The listing only finds candidates; the DELETEs decide. A first
+// DELETE removes the record only if nobody ever approved, denied or
+// consumed it, and only that one is audited as expired, so a denial
+// committed while the sweep waited on its lock is not also reported as
+// expired. A second DELETE removes the record in its final state, without
+// an audit. Replicas sweeping together delete each record once.
 func (am *DefaultAccountManager) sweepPeerLoginMFAApprovals(ctx context.Context, now time.Time, batch int) {
 	for range peerLoginMFASweepMaxBatches {
 		if ctx.Err() != nil {
@@ -424,12 +441,15 @@ func (am *DefaultAccountManager) sweepPeerLoginMFAApprovals(ctx context.Context,
 			return
 		}
 		for _, a := range expired {
-			deleted, err := am.Store.DeleteExpiredPeerLoginMFAApproval(ctx, a.ID, now)
+			untouched, err := am.Store.DeleteUntouchedExpiredPeerLoginMFAApproval(ctx, a.ID, now)
+			if err == nil && !untouched {
+				_, err = am.Store.DeleteExpiredPeerLoginMFAApproval(ctx, a.ID, now)
+			}
 			if err != nil {
 				log.WithContext(ctx).Errorf("failed to sweep peer login approval %s: %v", a.ID, err)
 				return
 			}
-			if deleted && a.ApprovedAt == nil && a.DeniedAt == nil {
+			if untouched {
 				am.StoreEvent(ctx, activity.SystemInitiator, a.UserID, a.AccountID, activity.PeerLoginMFAExpired,
 					map[string]any{"approval_id": a.ID})
 			}

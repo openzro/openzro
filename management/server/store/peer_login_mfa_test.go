@@ -163,3 +163,31 @@ func TestSqlStore_DeletionClearsPeerLoginMFAApprovals(t *testing.T) {
 		require.ErrorIs(t, err, ErrPeerLoginMFAApprovalNotFound)
 	})
 }
+
+// Only a record nobody acted on is swept as untouched; a denied, approved
+// or consumed one is left for the plain sweep.
+func TestSqlStore_DeleteUntouchedExpiredPeerLoginMFAApproval(t *testing.T) {
+	runTestForAllEngines(t, "../testdata/store.sql", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		t0 := time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
+		require.NoError(t, s.CreatePeerLoginMFAApproval(ctx, newApproval("untouched", "key-1", t0)))
+		require.NoError(t, s.CreatePeerLoginMFAApproval(ctx, newApproval("denied", "key-2", t0)))
+		ok, err := s.DenyPeerLoginMFAApproval(ctx, "denied", t0)
+		require.NoError(t, err)
+		require.True(t, ok)
+		after := t0.Add(types.PeerLoginMFAWindow)
+
+		ok, err = s.DeleteUntouchedExpiredPeerLoginMFAApproval(ctx, "denied", after)
+		require.NoError(t, err)
+		assert.False(t, ok, "a denied record is not untouched")
+		ok, err = s.DeleteUntouchedExpiredPeerLoginMFAApproval(ctx, "untouched", t0)
+		require.NoError(t, err)
+		assert.False(t, ok, "an unexpired record is not swept")
+		ok, err = s.DeleteUntouchedExpiredPeerLoginMFAApproval(ctx, "untouched", after)
+		require.NoError(t, err)
+		assert.True(t, ok)
+		ok, err = s.DeleteExpiredPeerLoginMFAApproval(ctx, "denied", after)
+		require.NoError(t, err)
+		assert.True(t, ok)
+	})
+}

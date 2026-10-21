@@ -5,11 +5,13 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 
 	"github.com/openzro/openzro/management/server/activity"
 	"github.com/openzro/openzro/management/server/status"
@@ -78,7 +80,7 @@ func TestRequestPeerLoginMFAApproval_ConcurrentSameKey(t *testing.T) {
 	ctx := context.Background()
 	ids := runOnBoth(t, r, 4, func(am *DefaultAccountManager, _ int) string {
 		ch, err := am.RequestPeerLoginMFAApproval(ctx, PeerLoginMFARequest{
-			AccountID: accountID, UserID: userID, WGPubKey: "same-key"})
+			AccountID: accountID, UserID: userID, WGPubKey: "same-key", JWTIssuedAt: time.Now()})
 		if err != nil {
 			return "error: " + err.Error()
 		}
@@ -99,7 +101,7 @@ func TestRequestPeerLoginMFAApproval_ConcurrentCap(t *testing.T) {
 	const n = types.PeerLoginMFAMaxPerUser + 3
 	errs := runOnBoth(t, r, n, func(am *DefaultAccountManager, i int) error {
 		_, err := am.RequestPeerLoginMFAApproval(ctx, PeerLoginMFARequest{
-			AccountID: accountID, UserID: userID, WGPubKey: fmt.Sprintf("key-%d", i)})
+			AccountID: accountID, UserID: userID, WGPubKey: fmt.Sprintf("key-%d", i), JWTIssuedAt: time.Now()})
 		return err
 	})
 	limited := 0
@@ -123,7 +125,7 @@ func TestApprovePeerLoginMFA_ConcurrentWrongCodes(t *testing.T) {
 	r, accountID, userID, _ := twoReplicaPeerLogin(t)
 	ctx := context.Background()
 	ch, err := r.A.RequestPeerLoginMFAApproval(ctx, PeerLoginMFARequest{
-		AccountID: accountID, UserID: userID, WGPubKey: "key"})
+		AccountID: accountID, UserID: userID, WGPubKey: "key", JWTIssuedAt: time.Now()})
 	require.NoError(t, err)
 
 	const n = types.MFALockoutThreshold + 3
@@ -157,7 +159,7 @@ func TestSweepPeerLoginMFAApprovals_ConcurrentReplicas(t *testing.T) {
 	const n = types.PeerLoginMFAMaxPerUser
 	for i := 0; i < n; i++ {
 		_, err := r.A.RequestPeerLoginMFAApproval(ctx, PeerLoginMFARequest{
-			AccountID: accountID, UserID: userID, WGPubKey: fmt.Sprintf("key-%d", i)})
+			AccountID: accountID, UserID: userID, WGPubKey: fmt.Sprintf("key-%d", i), JWTIssuedAt: time.Now()})
 		require.NoError(t, err)
 	}
 	later := time.Now().Add(types.PeerLoginMFADeadline)
@@ -184,7 +186,7 @@ func TestApprovePeerLoginMFA_RacesReset(t *testing.T) {
 		r, accountID, userID, secret := twoReplicaPeerLogin(t)
 		ctx := context.Background()
 		ch, err := r.A.RequestPeerLoginMFAApproval(ctx, PeerLoginMFARequest{
-			AccountID: accountID, UserID: userID, WGPubKey: "key"})
+			AccountID: accountID, UserID: userID, WGPubKey: "key", JWTIssuedAt: time.Now()})
 		require.NoError(t, err)
 		code := totpCodeAt(t, secret, time.Now().Add(30*time.Second))
 
@@ -206,4 +208,81 @@ func TestApprovePeerLoginMFA_RacesReset(t *testing.T) {
 		_, err = r.A.Store.GetUserMFA(ctx, store.LockingStrengthNone, userID)
 		require.ErrorIs(t, err, store.ErrUserMFANotFound)
 	}
+}
+
+// pauseAfterApprovalLock holds the replica's next locking read of the
+// approvals table until release closes.
+func pauseAfterApprovalLock(t *testing.T, s store.Store, locked chan<- struct{}, release <-chan struct{}) {
+	t.Helper()
+	sqlStore, ok := s.(*store.SqlStore)
+	require.True(t, ok)
+	var once sync.Once
+	hook := func(tx *gorm.DB) {
+		if tx.Statement.Table != "peer_login_mfa_approvals" {
+			return
+		}
+		if _, locking := tx.Statement.Clauses["FOR"]; !locking {
+			return
+		}
+		once.Do(func() {
+			close(locked)
+			select {
+			case <-release:
+			case <-time.After(barrierTimeout):
+			}
+		})
+	}
+	// Not removed on cleanup; see pauseAfterFirstLock.
+	require.NoError(t, sqlStore.GetDB().Callback().Query().After("gorm:query").Register("test:pause-approval-lock", hook))
+}
+
+// A denial that locked the record just before it expired, racing the sweep
+// that deletes it just after, is audited once: as denied, never also as
+// expired. The sweep's DELETE, not its earlier read, decides.
+func TestSweepPeerLoginMFAApprovals_RacesDeny(t *testing.T) {
+	r, accountID, userID, _ := twoReplicaPeerLogin(t)
+	ctx := context.Background()
+	start := time.Now().UTC()
+	clock := &mfaTestClock{now: start}
+	r.A.mfaClock = clock.Now
+	r.A.mfaSigner.SetClock(clock.Now)
+	ch, err := r.A.RequestPeerLoginMFAApproval(ctx, PeerLoginMFARequest{
+		AccountID: accountID, UserID: userID, WGPubKey: "key", JWTIssuedAt: start})
+	require.NoError(t, err)
+	// The denial runs just before expiry; the sweep, just after.
+	clock.Advance(types.PeerLoginMFAWindow - time.Second)
+	afterExpiry := start.Add(types.PeerLoginMFAWindow + time.Second)
+
+	locked, release := make(chan struct{}), make(chan struct{})
+	pauseAfterApprovalLock(t, r.A.Store, locked, release)
+	denyErr := make(chan error, 1)
+	go func() {
+		_, err := r.A.DenyPeerLoginMFA(ctx, ch.Token)
+		denyErr <- err
+	}()
+	select {
+	case <-locked:
+	case <-time.After(barrierTimeout):
+		t.Fatal("the denial never locked the record")
+	}
+	swept := make(chan struct{})
+	go func() {
+		r.B.sweepPeerLoginMFAApprovals(ctx, afterExpiry, 10)
+		close(swept)
+	}()
+	// Let the sweep read the record and block on its lock, then let the
+	// denial commit.
+	time.Sleep(time.Second)
+	close(release)
+	require.NoError(t, <-denyErr)
+	<-swept
+
+	events := func(code activity.Activity) int {
+		return countEvents(t, r.A, accountID, code) + countEvents(t, r.B, accountID, code)
+	}
+	require.Eventually(t, func() bool { return events(activity.PeerLoginMFADenied) == 1 }, 3*time.Second, 20*time.Millisecond)
+	assert.Never(t, func() bool { return events(activity.PeerLoginMFAExpired) != 0 }, 500*time.Millisecond, 20*time.Millisecond,
+		"a denied attempt is not also audited as expired")
+	_, err = r.A.Store.GetPeerLoginMFAApprovalByID(ctx, store.LockingStrengthNone, ch.ApprovalID)
+	require.ErrorIs(t, err, store.ErrPeerLoginMFAApprovalNotFound, "the expired record is still swept")
 }

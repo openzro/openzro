@@ -129,6 +129,7 @@ type Store interface {
 	ConsumePeerLoginMFAApproval(ctx context.Context, accountID, userID, wgPubKey string, now time.Time) (bool, error)
 	GetExpiredPeerLoginMFAApprovals(ctx context.Context, now time.Time, limit int) ([]*types.PeerLoginMFAApproval, error)
 	DeleteExpiredPeerLoginMFAApproval(ctx context.Context, id string, now time.Time) (bool, error)
+	DeleteUntouchedExpiredPeerLoginMFAApproval(ctx context.Context, id string, now time.Time) (bool, error)
 	DeleteUserPeerLoginMFAApprovals(ctx context.Context, accountID, userID string) (int64, error)
 	GetTokenIDByHashedToken(ctx context.Context, secret string) (string, error)
 	DeleteHashedPAT2TokenIDIndex(hashedToken string) error
