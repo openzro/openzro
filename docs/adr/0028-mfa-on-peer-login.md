@@ -368,7 +368,8 @@ hope they approve it. The design narrows this:
   reported name and OS, the observed IP and location, and the time;
 - the "Not me" button denies the attempt, and the key stays denied until the
   record expires;
-- records last 5 minutes;
+- a record can be approved only within 5 minutes of the attempt, and neither
+  it nor its token outlives the 7-minute deadline;
 - per-user creation is capped (D3);
 - the page and its endpoints send no referrer.
 
@@ -409,8 +410,12 @@ and metric.
   on. D10 makes that an explicit operator decision.
 - One new table, swept in batches, and one new column (`last_used_step`).
 - The approval page is reachable by anyone who holds a link. Its exposure is
-  bounded by the token's binding, the 5-minute life, the per-user cap, the
-  masked email and no-referrer.
+  bounded by:
+  - the token's binding to one record and one user;
+  - the 5-minute approval window, and the 7-minute deadline on the token and
+    the record;
+  - the per-user cap;
+  - the masked email and no-referrer.
 
 ## Alternatives considered
 
