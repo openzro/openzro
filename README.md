@@ -10,6 +10,10 @@
     <a href="go.mod"><img src="https://img.shields.io/badge/go-1.23%2B-7c3aed" alt="Go 1.23+"/></a>
     <a href="docs/adr/0001-openzro-foundation.md"><img src="https://img.shields.io/badge/ADR-0001-7c3aed" alt="ADR-0001"/></a>
   </p>
+  <p>
+    <a href="CODE_SIGNING_POLICY.md">Code signing policy</a> ·
+    <a href="PRIVACY.md">Privacy policy</a>
+  </p>
 </div>
 
 ---
@@ -156,9 +160,11 @@ sudo apt-get update && sudo apt-get install openzro
 - Tray UI: extract `openzro-ui_<version>_windows_amd64.zip`, run `openzro-ui.exe` as administrator
 
 The MSI is currently unsigned (Windows shows a SmartScreen warning on first
-run; click *More info → Run anyway*). EV signing via [SignPath
-Foundation](https://signpath.org/foundation) is tracked as
-[issue #1](https://github.com/openzro/openzro/issues/1).
+run; click *More info → Run anyway*). Signing via the [SignPath
+Foundation](https://signpath.org) is tracked as
+[issue #1](https://github.com/openzro/openzro/issues/1); see the
+[code signing policy](CODE_SIGNING_POLICY.md) and the
+[privacy policy](PRIVACY.md).
 
 **macOS** — universal `.pkg` installer or Homebrew tap:
 
