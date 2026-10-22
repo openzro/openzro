@@ -78,13 +78,13 @@ export default function DockerTab({
                   <span className={"text-openzro"}>{GRPC_API_ORIGIN}</span> \
                 </Code.Line>
               )}
-              <Code.Line> openzro/openzro:latest</Code.Line>
+              <Code.Line> ghcr.io/openzro/openzro:latest</Code.Line>
             </Code>
           </Steps.Step>
           <Steps.Step step={3} line={false}>
             <p>Read our documentation</p>
             <InlineLink
-              href={"https://docs.openzro.io/how-to/installation/docker"}
+              href={"https://docs.openzro.io/get-started/install/docker"}
               passHref={true}
               target={"_blank"}
             >

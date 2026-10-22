@@ -262,11 +262,8 @@ function MacOSPrimary({
           Universal installer — works on both Intel and Apple Silicon. Double-click
           the .pkg, follow the prompts, and the daemon registers as a LaunchDaemon
           while the openZro UI lands in <Code>/Applications/openZro UI.app</Code>.
-          On first run macOS may show a Gatekeeper warning (&quot;cannot be opened
-          because Apple cannot check it&quot;) — right-click → <em>Open</em> to
-          bypass once, or run{" "}
-          <Code>xattr -d com.apple.quarantine ~/Downloads/openzro.pkg</Code>. Apple
-          Developer ID notarization is coming soon and will eliminate the warning.
+          The installer is signed with an Apple Developer ID and notarized, so
+          macOS opens it without a Gatekeeper warning.
         </StepNote>
       </Step>
 
@@ -401,7 +398,7 @@ function DockerPrimary({
       </>,
     );
   }
-  dockerLines.push(<> openzro/openzro:latest</>);
+  dockerLines.push(<> ghcr.io/openzro/openzro:latest</>);
 
   const copyText = [
     "docker run --rm -d \\",
@@ -410,7 +407,7 @@ function DockerPrimary({
     ...(hostname ? [`  -e OZ_HOSTNAME='${hostname}' \\`] : []),
     "  -v openzro-client:/var/lib/openzro \\",
     ...(GRPC_API_ORIGIN ? [`  -e OZ_MANAGEMENT_URL=${GRPC_API_ORIGIN} \\`] : []),
-    "  openzro/openzro:latest",
+    "  ghcr.io/openzro/openzro:latest",
   ].join("\n");
 
   return (
@@ -459,12 +456,12 @@ function ManualAccordion({
 }) {
   const [open, setOpen] = useState(false);
 
-  // Legacy: only Linux + macOS expose a manual-install accordion.
+  // Only Linux exposes a manual-install accordion; macOS has no Homebrew
+  // formula published yet, so the .pkg is its only install path.
   // Windows + Docker have no advanced manual section in the legacy
   // SetupModal, so we hide the row for those tabs.
   const labels: Partial<Record<OS, string>> = {
     linux: "Install manually on Ubuntu",
-    macos: "Install manually with Homebrew",
   };
   const label = labels[os];
   if (!label) return null;
@@ -494,9 +491,6 @@ function ManualAccordion({
         <StepsList className="pb-4 pt-1">
           {os === "linux" && (
             <LinuxManual setupKey={setupKey} hostname={hostname} />
-          )}
-          {os === "macos" && (
-            <MacOSManualHomebrew setupKey={setupKey} hostname={hostname} />
           )}
         </StepsList>
       )}
@@ -555,58 +549,6 @@ function LinuxManual({
         />
       </Step>
       <Step n={3} isLast>
-        <StepLabel>
-          Run openZro {!setupKey && "and log in the browser"}
-        </StepLabel>
-        <UpCommand setupKey={setupKey} hostname={hostname} />
-      </Step>
-    </>
-  );
-}
-
-function MacOSManualHomebrew({
-  setupKey,
-  hostname,
-}: {
-  setupKey?: string;
-  hostname?: string;
-}) {
-  return (
-    <>
-      <Step n={1}>
-        <StepLabel>Download and install HomeBrew</StepLabel>
-        <ExternalButton
-          href="https://brew.sh/"
-          label="HomeBrew Installation Guide"
-        />
-      </Step>
-      <Step n={2}>
-        <StepLabel>Install the openzro CLI</StepLabel>
-        <CodeBlock
-          lines={[<>brew install openzro/tap/openzro</>]}
-          copyText="brew install openzro/tap/openzro"
-          message="brew install command copied to your clipboard"
-        />
-        <StepNote>
-          For the system-tray GUI app, use the .pkg installer above instead — a
-          Homebrew Cask for openzro-ui will ship once we publish the macOS .app
-          bundle (tracked as part of the packaging epic).
-        </StepNote>
-      </Step>
-      <Step n={3}>
-        <StepLabel>Start openZro daemon</StepLabel>
-        <CodeBlock
-          lines={[
-            <span key="comment" className="text-oz2-text-faint">
-              # daemon needs root to manage WireGuard interfaces
-            </span>,
-            <span key="start">sudo brew services start openzro</span>,
-          ]}
-          copyText="sudo brew services start openzro"
-          message="brew services command copied to your clipboard"
-        />
-      </Step>
-      <Step n={4} isLast>
         <StepLabel>
           Run openZro {!setupKey && "and log in the browser"}
         </StepLabel>
