@@ -361,7 +361,7 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
             onChange={toggleNetworkDNSSetting}
             disabled={editDisabled}
             label="Enable DNS wildcard routing"
-            desc="Requires openZro client v0.35 or higher; changes apply after each client restarts."
+            desc="Changes apply after each client and routing peer restarts."
           />
         </OzSettingsCard>
       </div>
