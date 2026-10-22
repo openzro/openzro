@@ -693,7 +693,8 @@ func (am *DefaultAccountManager) addPeer(ctx context.Context, setupKey, userID, 
 		}
 	}
 
-	newPeer = am.integratedPeerValidator.PreparePeer(ctx, accountID, newPeer, groupsToAdd, settings.Extra)
+	// Peer approval (PreparePeer) is decided inside the transaction below,
+	// from the settings read behind the gate row.
 
 	// Admission gate: refuse to enroll brand new peers that fail the
 	// account-wide posture checks. Runs before IP allocation so a
