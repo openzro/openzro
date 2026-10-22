@@ -26,8 +26,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/acme/autocert"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
@@ -859,12 +857,7 @@ func serveGRPCWithHTTP(ctx context.Context, listener net.Listener, handler http.
 		if tlsEnabled {
 			err = http.Serve(listener, handler)
 		} else {
-			// the following magic is needed to support HTTP2 without TLS
-			// and still share a single port between gRPC and HTTP APIs
-			h1s := &http.Server{
-				Handler: h2c.NewHandler(handler, &http2.Server{}),
-			}
-			err = h1s.Serve(listener)
+			err = newPlaintextServer(handler).Serve(listener)
 		}
 
 		if err != nil {
@@ -876,6 +869,17 @@ func serveGRPCWithHTTP(ctx context.Context, listener net.Listener, handler http.
 			}
 		}
 	}()
+}
+
+// newPlaintextServer serves HTTP/1.1 and unencrypted HTTP/2 on one port,
+// so gRPC clients (HTTP/2 with prior knowledge) and the HTTP API share it
+// without TLS. It replaces the deprecated x/net h2c handler; HTTP/1.1
+// "Upgrade: h2c" is not supported, and gRPC clients do not use it.
+func newPlaintextServer(handler http.Handler) *http.Server {
+	var protocols http.Protocols
+	protocols.SetHTTP1(true)
+	protocols.SetUnencryptedHTTP2(true)
+	return &http.Server{Handler: handler, Protocols: &protocols}
 }
 
 func handlerFunc(gRPCHandler *grpc.Server, httpHandler http.Handler) http.Handler {
