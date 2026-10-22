@@ -522,3 +522,47 @@ func TestLoginPeer_MFAGate_RegistrationAndExemptGroupSave(t *testing.T) {
 	require.NoError(t, requireBlockedThenResult(t, replicas.B.Store, saved, pause.release, holder))
 	assert.True(t, f.peerExists(t, wgKeyA))
 }
+
+// A re-login decides whether the device's login expired from the settings
+// it reads under the gate row, not from an earlier read: replica B
+// switching expiration and the gate on together, or shortening the
+// expiration with the gate on, after replica A's earlier read still gates
+// A's re-login.
+func TestLoginPeer_MFAGate_ExpirationChangedMeanwhile(t *testing.T) {
+	tests := []struct {
+		name   string
+		before func(*types.Settings)
+		after  func(*types.Settings)
+	}{
+		{"expiration and gate switched on together",
+			func(s *types.Settings) { s.MFAEnforcePeerLogin, s.PeerLoginExpirationEnabled = false, false },
+			func(s *types.Settings) {
+				s.MFAEnforcePeerLogin, s.PeerLoginExpirationEnabled, s.PeerLoginExpiration = true, true, time.Hour
+			}},
+		{"expiration shortened with the gate on",
+			func(s *types.Settings) { s.PeerLoginExpiration = 24 * time.Hour },
+			func(s *types.Settings) { s.PeerLoginExpiration = time.Hour }},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			replicas, f := newGateReplicas(t)
+			f.gateOn(t, func(s *types.Settings) { s.MFAEnforcePeerLogin = false })
+			require.NoError(t, f.login(wgKeyA, "local"))
+			f.gateOn(t, tc.before)
+			f.expire(t, wgKeyA) // two hours ago
+
+			change, err := replicas.B.Store.GetAccountSettings(context.Background(), store.LockingStrengthNone, f.accountID)
+			require.NoError(t, err)
+			tc.after(change)
+			inner := replicas.A.Store
+			replicas.A.Store = &beforeTxStore{Store: inner, before: func() {
+				_, err := replicas.B.UpdateAccountSettings(context.Background(), f.accountID, "admin", change)
+				require.NoError(t, err)
+			}}
+			t.Cleanup(func() { replicas.A.Store = inner })
+
+			required := f.requireApproval(t, wgKeyA)
+			assert.False(t, f.record(t, required.Challenge.ApprovalID).NewPeer)
+		})
+	}
+}

@@ -2321,10 +2321,9 @@ func (am *DefaultAccountManager) handleUserPeer(ctx context.Context, transaction
 
 	if peerLoginExpired(ctx, peer, settings) {
 		// Re-activating an expired login asks the second factor again
-		// (ADR-0028 D1). The gate reads its setting after the user row
-		// lock above, not from settings, which was read before the
-		// transaction.
-		if err = am.gatePeerLoginMFA(ctx, transaction, user, connectorID, peer.Key, false); err != nil {
+		// (ADR-0028 D1), with the settings LoginPeer read under the gate
+		// row.
+		if err = am.gatePeerLoginMFA(ctx, transaction, settings, user, connectorID, peer.Key, false); err != nil {
 			return false, err
 		}
 		err = am.handleExpiredPeer(ctx, transaction, user, peer)

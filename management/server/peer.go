@@ -751,11 +751,15 @@ func (am *DefaultAccountManager) addPeer(ctx context.Context, setupKey, userID, 
 				if err := transaction.LockPeerLoginGate(ctx, store.LockingStrengthShare, accountID); err != nil {
 					return err
 				}
+				gateSettings, err := transaction.GetAccountSettings(ctx, store.LockingStrengthNone, accountID)
+				if err != nil {
+					return err
+				}
 				user, err := lockRegisteringUser(ctx, transaction, userID, jwtIssuedAt)
 				if err != nil {
 					return err
 				}
-				if err := am.gatePeerLoginMFA(ctx, transaction, user, connectorID, newPeer.Key, true); err != nil {
+				if err := am.gatePeerLoginMFA(ctx, transaction, gateSettings, user, connectorID, newPeer.Key, true); err != nil {
 					return err
 				}
 			}
@@ -1029,11 +1033,7 @@ func (am *DefaultAccountManager) loginPeer(ctx context.Context, login types.Peer
 	var isPeerUpdated bool
 	var postureChecks []*posture.Checks
 
-	settings, err := am.Store.GetAccountSettings(ctx, store.LockingStrengthShare, accountID)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
+	var settings *types.Settings
 	err = am.Store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
 		if login.UserID != "" {
 			// The device-login 2FA gate's boundary, taken first; see
@@ -1041,6 +1041,13 @@ func (am *DefaultAccountManager) loginPeer(ctx context.Context, login types.Peer
 			if err = transaction.LockPeerLoginGate(ctx, store.LockingStrengthShare, accountID); err != nil {
 				return err
 			}
+		}
+		// Every decision below, whether the login expired included, uses
+		// the settings read here, after the gate row: a save that changed
+		// them has committed, or waits for this login (ADR-0028).
+		settings, err = transaction.GetAccountSettings(ctx, store.LockingStrengthNone, accountID)
+		if err != nil {
+			return err
 		}
 		peer, err = transaction.GetPeerByPeerPubKey(ctx, store.LockingStrengthUpdate, login.WireGuardPubKey)
 		if err != nil {
