@@ -113,8 +113,8 @@ func (am *DefaultAccountManager) peerLoginMFARequired(settings *types.Settings, 
 // as its first lock, and UpdateAccountSettings locks it exclusively as its
 // first, so a save that switches the gate on either committed before those
 // settings were read, or waits for this login to commit and returns after
-// it. Nothing else takes that row, so it adds no lock-order edge, and the
-// settings are read without locking the account row. That read is the
+// it. The row's lock contract, with every participant, is on the store's
+// peerLoginGate; the settings are read without locking the account row. That read is the
 // transaction's first plain one, so a MySQL REPEATABLE READ snapshot starts
 // after a save that held the gate.
 func (am *DefaultAccountManager) gatePeerLoginMFA(ctx context.Context, tx store.Store, settings *types.Settings,

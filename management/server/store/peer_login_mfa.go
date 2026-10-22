@@ -166,12 +166,13 @@ func (s *SqlStore) DeleteUserPeerLoginMFAApprovals(ctx context.Context, accountI
 }
 
 // peerLoginGate is the per-account row that orders device logins against
-// settings saves for the device-login 2FA gate (ADR-0028 D3). A login with
-// a JWT share-locks it and a settings save locks it exclusively, each as
-// its first lock, and nothing else takes it, so it adds no lock-order edge.
-// It is not the account row: SaveAccount deletes and re-inserts that row,
-// and many writers lock it after groups or users. Rows are created on first
-// use and removed with the account.
+// settings saves (ADR-0028 D3). Every registration, by a user or a setup
+// key, and every login with a JWT share-locks it; UpdateAccountSettings
+// locks it exclusively; each takes it as its first lock. Apart from
+// deleting it with the account, nothing else takes it, so it adds no
+// lock-order edge. It is not the account row: SaveAccount deletes and
+// re-inserts that row, and many writers lock it after groups or users.
+// Rows are created on first use.
 type peerLoginGate struct {
 	AccountID string `gorm:"primaryKey;size:255"`
 }
