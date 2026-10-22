@@ -134,7 +134,7 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
             Learn more about{" "}
             <a
               href={
-                "https://docs.openzro.io/how-to/manage-posture-checks#endpoint-security"
+                "https://docs.openzro.io/manage/access-control/posture-checks#endpoint-security-mdm-edr"
               }
               target={"_blank"}
               rel="noopener noreferrer"

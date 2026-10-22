@@ -847,7 +847,7 @@ function Footer() {
       manage your existing devices in the admin panel. If you have further
       questions check out our{" "}
       <a
-        href="https://docs.openzro.io/how-to/getting-started#installation"
+        href="https://docs.openzro.io/get-started/install"
         target="_blank"
         rel="noopener noreferrer"
         className="font-medium text-oz2-acc-text underline-offset-2 hover:underline"

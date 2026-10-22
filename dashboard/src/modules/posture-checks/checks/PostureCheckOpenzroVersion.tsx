@@ -102,7 +102,7 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
             Learn more about{" "}
             <a
               href={
-                "https://docs.openzro.io/how-to/manage-posture-checks#net-bird-client-version-check"
+                "https://docs.openzro.io/manage/access-control/posture-checks#open-zro-client-version"
               }
               target={"_blank"}
               rel="noopener noreferrer"

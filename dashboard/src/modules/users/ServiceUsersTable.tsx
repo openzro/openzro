@@ -145,7 +145,7 @@ export default function ServiceUsersTable({
               Learn more about
               <InlineLink
                 href={
-                  "https://docs.openzro.io/how-to/access-openzro-public-api"
+                  "https://docs.openzro.io/ipa/guides/authentication#using-personal-access-tokens"
                 }
                 target={"_blank"}
               >

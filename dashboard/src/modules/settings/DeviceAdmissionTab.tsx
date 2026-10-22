@@ -176,7 +176,7 @@ export default function DeviceAdmissionTab({ account }: Readonly<Props>) {
               <InlineLink href="/events/audit">Activity</InlineLink> with the
               failing check and reason.{" "}
               <InlineLink
-                href="https://docs.openzro.io/how-to/manage-posture-checks#device-admission"
+                href="https://docs.openzro.io/manage/access-control/posture-checks/device-admission"
                 target="_blank"
               >
                 Learn more

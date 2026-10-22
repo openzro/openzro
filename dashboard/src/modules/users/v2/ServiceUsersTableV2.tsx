@@ -476,7 +476,7 @@ function ServiceUsersEmptyState({
         <>
           Learn more about{" "}
           <a
-            href="https://docs.openzro.io/how-to/access-openzro-public-api"
+            href="https://docs.openzro.io/ipa/guides/authentication#using-personal-access-tokens"
             target="_blank"
             rel="noopener noreferrer"
             className="font-medium text-oz2-acc-text underline-offset-2 hover:underline"
@@ -492,28 +492,28 @@ function ServiceUsersEmptyState({
           title: "When to use a service user",
           description:
             "Long-lived automations, CI pipelines, infra-as-code agents — anywhere a human session would expire.",
-          href: "https://docs.openzro.io/how-to/access-openzro-public-api",
+          href: "https://docs.openzro.io/ipa/guides/authentication#using-personal-access-tokens",
         },
         {
           icon: <KeyRound size={16} />,
           title: "Issue an API token",
           description:
             "Each service user can mint scoped Personal Access Tokens to call the openZro public API.",
-          href: "https://docs.openzro.io/how-to/access-openzro-public-api",
+          href: "https://docs.openzro.io/ipa/guides/authentication#using-personal-access-tokens",
         },
         {
           icon: <ShieldCheck size={16} />,
           title: "Role-bound access",
           description:
             "Assign Admin or User role so the token inherits the right policy surface — least privilege by default.",
-          href: "https://docs.openzro.io/how-to/manage-users",
+          href: "https://docs.openzro.io/manage/team/add-users-to-your-network",
         },
         {
           icon: <BookOpen size={16} />,
           title: "Public API reference",
           description:
             "Explore the full set of endpoints a service user can drive against your workspace.",
-          href: "https://docs.openzro.io/how-to/access-openzro-public-api",
+          href: "https://docs.openzro.io/ipa/guides/authentication#using-personal-access-tokens",
         },
       ]}
     />

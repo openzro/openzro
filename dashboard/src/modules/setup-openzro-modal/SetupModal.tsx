@@ -223,7 +223,7 @@ export function SetupModalContent({
               have further questions check out our{" "}
               <a
                 href={
-                  "https://docs.openzro.io/how-to/getting-started#installation"
+                  "https://docs.openzro.io/get-started/install"
                 }
                 target={"_blank"}
                 rel="noopener noreferrer"
