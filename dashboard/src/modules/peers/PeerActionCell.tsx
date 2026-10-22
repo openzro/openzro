@@ -10,6 +10,7 @@ import FullTooltip from "@components/FullTooltip";
 import { notify } from "@components/Notification";
 import { IconInfoCircle } from "@tabler/icons-react";
 import {
+  CircleCheck,
   MonitorIcon,
   MoreVertical,
   ShieldHalf,
@@ -24,6 +25,7 @@ import { usePeer } from "@/contexts/PeerProvider";
 import { usePermissions } from "@/contexts/PermissionsProvider";
 import { ExitNodeDropdownButton } from "@/modules/exit-node/ExitNodeDropdownButton";
 import AdmissionBypassModal from "@/modules/peers/AdmissionBypassModal";
+import { usePeerApproval } from "@/modules/peers/usePeerApproval";
 
 export default function PeerActionCell() {
   const { peer, deletePeer, update, openSSHDialog } = usePeer();
@@ -31,6 +33,7 @@ export default function PeerActionCell() {
   const { mutate } = useSWRConfig();
   const { permission } = usePermissions();
   const [bypassOpen, setBypassOpen] = useState(false);
+  const approval = usePeerApproval();
 
   const toggleLoginExpiration = async () => {
     const text = peer.login_expiration_enabled ? "disabled" : "enabled";
@@ -81,6 +84,20 @@ export default function PeerActionCell() {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-auto" align="end">
+          {approval.pending && (
+            <>
+              <DropdownMenuItem
+                onClick={approval.approve}
+                disabled={!approval.canApprove}
+              >
+                <div className={"flex gap-3 items-center"}>
+                  <CircleCheck size={14} className={"shrink-0"} />
+                  Approve
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
           <DropdownMenuItem
             onClick={() => router.push("/peer?id=" + peer.id)}
             disabled={!permission.peers.read}

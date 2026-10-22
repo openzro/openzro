@@ -66,6 +66,7 @@ import { AccessiblePeersSection } from "@/modules/peer/AccessiblePeersSection";
 import { PeerExpirationToggle } from "@/modules/peer/PeerExpirationToggle";
 import { PeerNetworkRoutesSection } from "@/modules/peer/PeerNetworkRoutesSection";
 import { PostureEvaluationsSection } from "@/modules/peer/PostureEvaluationsSection";
+import { usePeerApproval } from "@/modules/peers/usePeerApproval";
 import OzSettingsCard from "@/modules/settings/v2/OzSettingsCard";
 import OzSettingsToggle from "@/modules/settings/v2/OzSettingsToggle";
 
@@ -257,6 +258,7 @@ const PeerGeneralInformation = () => {
                   <TextWithTooltip text={name} maxChars={30} />
                 </h1>
                 <LoginExpiredBadge loginExpired={peer.login_expired} />
+                <PeerApprovalControl />
                 {permission.peers.update && (
                   <Modal
                     open={showEditNameModal}
@@ -730,5 +732,27 @@ function EditNameModal({ onSuccess, peer, initialName }: Readonly<ModalProps>) {
         </ModalFooter>
       </form>
     </ModalContent>
+  );
+}
+
+// PeerApprovalControl shows that the peer waits for an admin's approval,
+// and lets one approve it.
+function PeerApprovalControl() {
+  const { pending, canApprove, approve } = usePeerApproval();
+  if (!pending) return null;
+  return (
+    <span className="inline-flex items-center gap-2">
+      <span className="rounded-full border border-oz2-border bg-oz2-surface px-2.5 py-0.5 text-[12px] font-medium text-oz2-text-2">
+        Approval pending
+      </span>
+      <OzButton
+        variant="primary"
+        type="button"
+        onClick={approve}
+        disabled={!canApprove}
+      >
+        Approve
+      </OzButton>
+    </span>
   );
 }
