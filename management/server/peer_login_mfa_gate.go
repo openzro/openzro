@@ -108,19 +108,18 @@ func (am *DefaultAccountManager) peerLoginMFARequired(settings *types.Settings, 
 }
 
 // gatePeerLoginMFA applies the gate inside the login's transaction, after
-// the user row is locked. It reads the setting there with a lock on the
-// settings row, which UpdateAccountSettings holds exclusively while it
-// saves: a gate switched on by this or another replica either applies to
-// this login, or its save commits only after this login does.
-//
-// lock is FOR UPDATE on registration, which writes that row later (the
-// network serial): a share lock there would let two registrations on two
-// replicas each hold it and wait to upgrade. A re-activation never writes
-// the row and shares it; LoginPeer takes it before the peer row, the order
-// UpdateAccountSettings uses (settings row, then peers).
-func (am *DefaultAccountManager) gatePeerLoginMFA(ctx context.Context, tx store.Store, lock store.LockingStrength,
-	user *types.User, connectorID, wgPubKey string, newPeer bool) error {
-	settings, err := tx.GetAccountSettings(ctx, lock, user.AccountID)
+// the user row is locked. Its boundary is the account's gate row: the login
+// share-locked it as its first lock, and UpdateAccountSettings locks it
+// exclusively as its first, so a save that switches the gate on either
+// commits before this login reads the settings below, or waits for this
+// login to commit and returns after it. Nothing else takes that row, so it
+// adds no lock-order edge; the settings are read without locking the
+// account row. That read is the transaction's first plain one, after the
+// gate lock, so a MySQL REPEATABLE READ snapshot starts after a save that
+// held the gate.
+func (am *DefaultAccountManager) gatePeerLoginMFA(ctx context.Context, tx store.Store, user *types.User,
+	connectorID, wgPubKey string, newPeer bool) error {
+	settings, err := tx.GetAccountSettings(ctx, store.LockingStrengthNone, user.AccountID)
 	if err != nil {
 		return err
 	}

@@ -530,6 +530,13 @@ func (am *DefaultAccountManager) UpdateAccountSettings(ctx context.Context, acco
 	err = am.Store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
 		var groupsUpdated bool
 
+		// The device-login 2FA gate's boundary, taken first: a login that
+		// decided the gate under the old settings commits before this
+		// save, and one that waits reads the new settings (ADR-0028).
+		if err = transaction.LockPeerLoginGate(ctx, store.LockingStrengthUpdate, accountID); err != nil {
+			return err
+		}
+
 		// Lock order: groups before the account row (which holds the
 		// settings), the same order group writers such as DeleteGroups take.
 		// Locking the settings first would deadlock against them across
@@ -2317,7 +2324,7 @@ func (am *DefaultAccountManager) handleUserPeer(ctx context.Context, transaction
 		// (ADR-0028 D1). The gate reads its setting after the user row
 		// lock above, not from settings, which was read before the
 		// transaction.
-		if err = am.gatePeerLoginMFA(ctx, transaction, store.LockingStrengthShare, user, connectorID, peer.Key, false); err != nil {
+		if err = am.gatePeerLoginMFA(ctx, transaction, user, connectorID, peer.Key, false); err != nil {
 			return false, err
 		}
 		err = am.handleExpiredPeer(ctx, transaction, user, peer)

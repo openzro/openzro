@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -348,39 +349,104 @@ func TestLoginPeer_MFAGate_ExpiredPeerSeesGateEnabledMeanwhile(t *testing.T) {
 	assert.False(t, f.record(t, required.Challenge.ApprovalID).NewPeer)
 }
 
-// settingsReadHookStore runs onRead once, right after the first read of
-// the account settings inside a transaction: the read the gate decides on,
-// whether or not it locks.
-type settingsReadHookStore struct {
+// pauseStore pauses the first transaction that reaches its point, right
+// after the lock taken there, until release is closed: a login holding
+// that lock while another replica runs.
+type pauseStore struct {
 	store.Store
-	onRead func()
+	// at is "user": right after the transaction locks a user row.
+	at      string
+	held    chan struct{}
+	release chan struct{}
+	once    sync.Once
 }
 
-func (s *settingsReadHookStore) ExecuteInTransaction(ctx context.Context, operation func(store.Store) error) error {
+func newPauseStore(inner store.Store, at string) *pauseStore {
+	return &pauseStore{Store: inner, at: at, held: make(chan struct{}), release: make(chan struct{})}
+}
+
+func (s *pauseStore) ExecuteInTransaction(ctx context.Context, operation func(store.Store) error) error {
 	return s.Store.ExecuteInTransaction(ctx, func(tx store.Store) error {
-		return operation(&settingsReadHookTx{Store: tx, parent: s})
+		return operation(&pauseTx{Store: tx, parent: s})
 	})
 }
 
-type settingsReadHookTx struct {
-	store.Store
-	parent *settingsReadHookStore
+func (s *pauseStore) pause(point string) {
+	if point != s.at {
+		return
+	}
+	s.once.Do(func() {
+		close(s.held)
+		<-s.release
+	})
 }
 
-func (tx *settingsReadHookTx) GetAccountSettings(ctx context.Context, lock store.LockingStrength,
-	accountID string) (*types.Settings, error) {
-	settings, err := tx.Store.GetAccountSettings(ctx, lock, accountID)
-	if onRead := tx.parent.onRead; err == nil && onRead != nil {
-		tx.parent.onRead = nil
-		onRead()
+type pauseTx struct {
+	store.Store
+	parent *pauseStore
+}
+
+func (tx *pauseTx) GetUserByUserID(ctx context.Context, lock store.LockingStrength, userID string) (*types.User, error) {
+	user, err := tx.Store.GetUserByUserID(ctx, lock, userID)
+	if err == nil && lock == store.LockingStrengthUpdate {
+		tx.parent.pause("user")
 	}
-	return settings, err
+	return user, err
+}
+
+// newGateReplicas is a peer login fixture on replica A of a two-replica
+// pair, with the MFA subsystem set up on both and an admin who can save
+// settings without touching the signing-in user's row.
+func newGateReplicas(t *testing.T) (*twoReplicas, *peerLoginFixture) {
+	t.Helper()
+	replicas := newTwoReplicas(t)
+	key := make([]byte, 32)
+	_, err := rand.Read(key)
+	require.NoError(t, err)
+	for _, am := range []*DefaultAccountManager{replicas.A, replicas.B} {
+		require.NoError(t, am.SetMFA(base64.StdEncoding.EncodeToString(key)))
+	}
+	f := newPeerLoginFixtureOn(t, replicas.A, "ana")
+	seedMFAUser(t, replicas.B, f.accountID, "admin", types.UserRoleAdmin)
+	return replicas, f
+}
+
+// loginOn logs the fixture's user in through am.
+func (f *peerLoginFixture) loginOn(am *DefaultAccountManager, key string) error {
+	_, _, _, err := am.LoginPeer(context.Background(), types.PeerLogin{
+		WireGuardPubKey: key,
+		Meta:            nbpeer.PeerSystemMeta{Hostname: "ana-laptop", GoOS: "linux", OS: "Ubuntu"},
+		UserID:          f.userID,
+		ConnectorID:     "local",
+		JWTIssuedAt:     f.clock.Now(),
+		ConnectionIP:    net.IP{203, 0, 113, 7},
+	})
+	return err
+}
+
+// holdOnA runs login on replica A, paused at point while it holds that
+// lock, and returns A's result channel once A holds it.
+func holdOnA(t *testing.T, replicas *twoReplicas, at string, login func() error) (*pauseStore, <-chan error) {
+	t.Helper()
+	inner := replicas.A.Store
+	pause := newPauseStore(inner, at)
+	replicas.A.Store = pause
+	t.Cleanup(func() { replicas.A.Store = inner })
+	holder := make(chan error, 1)
+	go func() { holder <- login() }()
+	select {
+	case <-pause.held:
+	case err := <-holder:
+		t.Fatalf("A finished before reaching %s: %v", at, err)
+	case <-time.After(barrierTimeout):
+		t.Fatalf("A never reached %s", at)
+	}
+	return pause, holder
 }
 
 // An admin switching the gate on through replica B while replica A signs a
-// device in under the gate's old value: B's save returns only after A's
-// login commits, so once the activation returns no login decided under
-// the old value can still commit, and the next one is gated.
+// device in under the gate's old value: the database reports B waiting on
+// A's lock, B returns only after A commits, and the next login is gated.
 func TestLoginPeer_MFAGate_ActivationWaitsForInflightLogin(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -394,54 +460,65 @@ func TestLoginPeer_MFAGate_ActivationWaitsForInflightLogin(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			replicas := newTwoReplicas(t)
-			key := make([]byte, 32)
-			_, err := rand.Read(key)
-			require.NoError(t, err)
-			for _, am := range []*DefaultAccountManager{replicas.A, replicas.B} {
-				require.NoError(t, am.SetMFA(base64.StdEncoding.EncodeToString(key)))
-			}
-			f := newPeerLoginFixtureOn(t, replicas.A, "ana")
+			replicas, f := newGateReplicas(t)
 			f.gateOn(t, func(s *types.Settings) { s.MFAEnforcePeerLogin = false })
 			tc.setup(t, f)
-
-			// A different admin saves, so B never waits on the row of the
-			// user A is signing in.
-			seedMFAUser(t, replicas.B, f.accountID, "admin", types.UserRoleAdmin)
 			enable, err := replicas.B.Store.GetAccountSettings(context.Background(), store.LockingStrengthNone, f.accountID)
 			require.NoError(t, err)
 			enable.MFAEnforcePeerLogin = true
 
-			inner := replicas.A.Store
+			// Paused at the user row, which both paths lock after the gate
+			// row: B must already be waiting on what A took before it.
+			pause, holder := holdOnA(t, replicas, "user", func() error { return f.login(wgKeyA, "local") })
 			saved := make(chan error, 1)
-			savedDuringLogin := false
-			replicas.A.Store = &settingsReadHookStore{Store: inner, onRead: func() {
-				go func() {
-					_, err := replicas.B.UpdateAccountSettings(context.Background(), f.accountID, "admin", enable)
-					saved <- err
-				}()
-				// Give B's save time to return if nothing holds it back,
-				// while A's login transaction is still open.
-				select {
-				case err := <-saved:
-					savedDuringLogin = true
-					saved <- err
-				case <-time.After(300 * time.Millisecond):
-				}
-			}}
-			t.Cleanup(func() { replicas.A.Store = inner })
-
-			require.NoError(t, f.login(wgKeyA, "local"), "A's login read the gate off")
-			assert.False(t, savedDuringLogin, "B's activation returned while A's login under the old value was open")
-			select {
-			case err := <-saved:
-				require.NoError(t, err)
-			case <-time.After(barrierTimeout):
-				t.Fatal("B's activation never returned")
-			}
+			go func() {
+				_, err := replicas.B.UpdateAccountSettings(context.Background(), f.accountID, "admin", enable)
+				saved <- err
+			}()
+			require.NoError(t, requireBlockedThenResult(t, replicas.B.Store, saved, pause.release, holder))
 
 			const wgKeyB = "Pxc1ylvTfBm7y8MbEZvyMMYw5LwMqLbqvPxbTN0cCVQ="
-			f.requireApproval(t, wgKeyB)
+			required := f.requireApproval(t, wgKeyB)
+			assert.True(t, f.record(t, required.Challenge.ApprovalID).NewPeer)
 		})
 	}
+}
+
+// A registration holding the user row and an expired device's re-login of
+// the same user on another replica do not deadlock: the re-login waits for
+// the user and both commit.
+func TestLoginPeer_MFAGate_RegistrationAndRelogin(t *testing.T) {
+	replicas, f := newGateReplicas(t)
+	f.gateOn(t, func(s *types.Settings) { s.MFAEnforcePeerLogin = false })
+	require.NoError(t, f.login(wgKeyA, "local"))
+	f.expire(t, wgKeyA)
+
+	const wgKeyB = "Pxc1ylvTfBm7y8MbEZvyMMYw5LwMqLbqvPxbTN0cCVQ="
+	pause, holder := holdOnA(t, replicas, "user", func() error { return f.login(wgKeyB, "local") })
+	relogin := make(chan error, 1)
+	go func() { relogin <- f.loginOn(replicas.B, wgKeyA) }()
+	require.NoError(t, requireBlockedThenResult(t, replicas.B.Store, relogin, pause.release, holder))
+	assert.True(t, f.peerExists(t, wgKeyB))
+}
+
+// A registration and a settings save naming one of the groups it joins as
+// exempt from peer approval do not deadlock: the save waits and both
+// commit.
+func TestLoginPeer_MFAGate_RegistrationAndExemptGroupSave(t *testing.T) {
+	replicas, f := newGateReplicas(t)
+	f.gateOn(t, func(s *types.Settings) { s.MFAEnforcePeerLogin = false })
+	all, err := replicas.B.Store.GetGroupByName(context.Background(), store.LockingStrengthNone, f.accountID, "All")
+	require.NoError(t, err)
+	exempt, err := replicas.B.Store.GetAccountSettings(context.Background(), store.LockingStrengthNone, f.accountID)
+	require.NoError(t, err)
+	exempt.Extra = &types.ExtraSettings{PeerApprovalEnabled: true, IntegratedValidatorGroups: []string{all.ID}}
+
+	pause, holder := holdOnA(t, replicas, "user", func() error { return f.login(wgKeyA, "local") })
+	saved := make(chan error, 1)
+	go func() {
+		_, err := replicas.B.UpdateAccountSettings(context.Background(), f.accountID, "admin", exempt)
+		saved <- err
+	}()
+	require.NoError(t, requireBlockedThenResult(t, replicas.B.Store, saved, pause.release, holder))
+	assert.True(t, f.peerExists(t, wgKeyA))
 }
