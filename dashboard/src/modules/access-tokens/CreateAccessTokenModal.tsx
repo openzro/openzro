@@ -163,7 +163,7 @@ export function AccessTokenModalContent({
       <ModalHeader
         icon={<IconApi />}
         title={"Create Access Token"}
-        description={"Use this token to access Openzro's public API"}
+        description={"Use this token to access openZro's public API"}
         color={"openzro"}
       />
 

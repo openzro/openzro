@@ -11,7 +11,7 @@ function OpenzroIcon({ size = 16, className }: Props) {
   return (
     <Image
       src={OpenzroLogo}
-      alt={"Openzro Icon"}
+      alt={"openZro Icon"}
       width={size}
       className={className}
     />

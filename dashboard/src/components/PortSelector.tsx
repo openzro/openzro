@@ -273,7 +273,7 @@ export function PortSelector({
       </Popover>
       {portRanges?.length > 0 && (
         <Callout variant={"info"} className={"mt-4"}>
-          Port ranges requires Openzro client{" "}
+          Port ranges requires openZro client{" "}
           <span className="font-medium text-oz2-text">v0.48</span> or higher.
         </Callout>
       )}

@@ -283,7 +283,7 @@ export default function PeersTable({
                 size={"large"}
               />
             }
-            title={"Get Started with Openzro"}
+            title={"Get Started with openZro"}
             description={
               "It looks like you don't have any connected machines.\n" +
               "Get started by adding one to your network."

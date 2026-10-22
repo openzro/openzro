@@ -192,7 +192,7 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
                         />
                       }
                       placeholder={
-                        "/Applications/Openzro.app/Contents/MacOS/openzro"
+                        "/Applications/openZro UI.app/Contents/MacOS/openzro-ui"
                       }
                       value={p.mac_path}
                       error={
@@ -218,7 +218,7 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
                           )}
                         />
                       }
-                      placeholder={`C:\\ProgramData\\Openzro\\openzro.exe`}
+                      placeholder={`C:\\Program Files\\Openzro\\openzro.exe`}
                       value={p.windows_path}
                       error={
                         pathErrors.find((e) => e.id === p.id)?.errorWindowsPath

@@ -1,1 +1,1 @@
-export const globalMetaTitle = "Openzro Dashboard";
+export const globalMetaTitle = "openZro Dashboard";

@@ -589,7 +589,7 @@ function AddressCell({ peer }: { peer: Peer }) {
                 {peer.ip && (
                   <InlineCopyButton
                     value={peer.ip}
-                    message="Openzro IP has been copied to your clipboard"
+                    message="openZro IP has been copied to your clipboard"
                   />
                 )}
               </span>
@@ -600,7 +600,7 @@ function AddressCell({ peer }: { peer: Peer }) {
           <div className="min-w-[260px]">
             <InfoTooltipRow
               icon={ICONS.pin}
-              label="Openzro IP"
+              label="openZro IP"
               value={peer.ip || "—"}
               copyable
             />
@@ -877,7 +877,7 @@ function VersionCell({ peer }: { peer: Peer }) {
 function PeersEmptyState({ peerCount }: { peerCount: number }) {
   return (
     <OzEmptyState
-      title="Get Started with Openzro"
+      title="Get Started with openZro"
       description={
         <>
           It looks like you don&apos;t have any connected machines. Get started

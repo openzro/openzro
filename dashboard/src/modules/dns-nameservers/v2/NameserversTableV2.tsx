@@ -265,7 +265,7 @@ export default function NameserversTableV2({
         <header>
           <h1 className="text-[24px] font-semibold tracking-tight">DNS</h1>
           <p className="mt-1 max-w-2xl text-[14px] text-oz2-text-muted">
-            Add nameservers for domain name resolution in your Openzro
+            Add nameservers for domain name resolution in your openZro
             network. Learn more about{" "}
             <a
               href="https://docs.openzro.io/how-to/manage-dns-in-your-network"
@@ -459,7 +459,7 @@ function NameserversEmptyState({ canCreate }: { canCreate: boolean }) {
           icon: <BookOpen size={16} />,
           title: "How DNS works",
           description:
-            "Walk through how Openzro intercepts DNS queries on each peer and forwards to your nameservers.",
+            "Walk through how openZro intercepts DNS queries on each peer and forwards to your nameservers.",
           href: "https://docs.openzro.io/how-to/manage-dns-in-your-network",
         },
         {

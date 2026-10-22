@@ -253,7 +253,7 @@ function QuickActionsCard() {
           href="/peers"
           icon={<Users2Icon size={14} />}
           title="Add a peer"
-          sub="Install Openzro on a new device"
+          sub="Install openZro on a new device"
         />
         <QuickAction
           href="/setup-keys"

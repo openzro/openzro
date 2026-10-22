@@ -43,7 +43,7 @@ export default function LinuxTab({
           </Steps.Step>
           <Steps.Step step={2} line={false}>
             <p>
-              Run Openzro {!setupKey && "and log in the browser"}
+              Run openZro {!setupKey && "and log in the browser"}
               {showSetupKeyInfo && <RoutingPeerSetupKeyInfo />}
             </p>
             <Code>
@@ -84,7 +84,7 @@ export default function LinuxTab({
                   </Code>
                 </Steps.Step>
                 <Steps.Step step={2}>
-                  <p>Install Openzro</p>
+                  <p>Install openZro</p>
                   <Code
                     codeToCopy={[
                       `sudo apt-get update`,
@@ -101,7 +101,7 @@ export default function LinuxTab({
                 </Steps.Step>
                 <Steps.Step step={3} line={false}>
                   <p>
-                    Run Openzro {!setupKey && "and log in the browser"}
+                    Run openZro {!setupKey && "and log in the browser"}
                     {showSetupKeyInfo && <RoutingPeerSetupKeyInfo />}
                   </p>
                   <Code>

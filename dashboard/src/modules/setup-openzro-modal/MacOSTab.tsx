@@ -87,7 +87,7 @@ export default function MacOSTab({
           {GRPC_API_ORIGIN && (
             <Steps.Step step={2}>
               <p>
-                {`Click on "Settings" then "Advanced Settings" from the Openzro icon in your system tray and enter the following "Management URL"`}
+                {`Click on "Settings" then "Advanced Settings" from the openZro icon in your system tray and enter the following "Management URL"`}
               </p>
               <Code>
                 <Code.Line>{GRPC_API_ORIGIN}</Code.Line>
@@ -98,7 +98,7 @@ export default function MacOSTab({
           {setupKey ? (
             <Steps.Step step={GRPC_API_ORIGIN ? 3 : 2} line={false}>
               <p>
-                Open Terminal and run Openzro{" "}
+                Open Terminal and run openZro{" "}
                 {showSetupKeyInfo && <RoutingPeerSetupKeyInfo />}
               </p>
 
@@ -115,7 +115,7 @@ export default function MacOSTab({
               <Steps.Step step={GRPC_API_ORIGIN ? 3 : 2}>
                 <p>
                   {/* eslint-disable-next-line react/no-unescaped-entities */}
-                  Click on "Connect" from the Openzro icon in your system tray
+                  Click on "Connect" from the openZro icon in your system tray
                 </p>
               </Steps.Step>
               <Steps.Step step={GRPC_API_ORIGIN ? 4 : 3} line={false}>
@@ -142,7 +142,7 @@ export default function MacOSTab({
                 </Steps.Step>
                 <Steps.Step step={2} line={false}>
                   <p>
-                    Run Openzro {!setupKey && "and log in the browser"}
+                    Run openZro {!setupKey && "and log in the browser"}
                     {showSetupKeyInfo && <RoutingPeerSetupKeyInfo />}
                   </p>
                   <Code>
@@ -196,7 +196,7 @@ export default function MacOSTab({
                   </p>
                 </Steps.Step>
                 <Steps.Step step={3}>
-                  <p>Start Openzro daemon</p>
+                  <p>Start openZro daemon</p>
                   <Code
                     codeToCopy={[
                       `sudo brew services start openzro`,
@@ -210,7 +210,7 @@ export default function MacOSTab({
                 </Steps.Step>
                 <Steps.Step step={4} line={false}>
                   <p>
-                    Run Openzro {!setupKey && "and log in the browser"}
+                    Run openZro {!setupKey && "and log in the browser"}
                     {showSetupKeyInfo && <RoutingPeerSetupKeyInfo />}
                   </p>
                   <Code>

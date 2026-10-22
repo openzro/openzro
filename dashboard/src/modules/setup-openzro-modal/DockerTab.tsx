@@ -47,7 +47,7 @@ export default function DockerTab({
           </Steps.Step>
           <Steps.Step step={2}>
             <p>
-              Run Openzro container
+              Run openZro container
               {showSetupKeyInfo && <RoutingPeerSetupKeyInfo />}
             </p>
             <Code>
@@ -88,7 +88,7 @@ export default function DockerTab({
               passHref={true}
               target={"_blank"}
             >
-              Running Openzro in Docker
+              Running openZro in Docker
             </InlineLink>
           </Steps.Step>
         </Steps>

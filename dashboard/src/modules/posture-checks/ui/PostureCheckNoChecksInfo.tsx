@@ -33,7 +33,7 @@ export function PostureCheckNoChecksInfo({
       </h2>
       <p className="mx-auto mt-1.5 max-w-md text-[12.5px] leading-[1.55] text-oz2-text-muted">
         Add posture checks to further restrict access — e.g. require a
-        specific Openzro client version, operating system, or geofence.
+        specific openZro client version, operating system, or geofence.
       </p>
       <div className="mt-5 flex items-center justify-center gap-2">
         <OzButton

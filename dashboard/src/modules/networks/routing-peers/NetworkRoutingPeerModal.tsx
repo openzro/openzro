@@ -282,7 +282,7 @@ function RoutingPeerModalContent({
               <div className="min-w-0 flex-1">
                 <OzLabel>{"Don't have a routing peer?"}</OzLabel>
                 <OzHelpText className="mt-1">
-                  You can install Openzro with a setup key on one or more
+                  You can install openZro with a setup key on one or more
                   machines to act as routing peers.
                 </OzHelpText>
               </div>
@@ -419,7 +419,7 @@ const InstallOpenzroWithSetupKeyButton = ({
     const choice = await confirm({
       title: `Create a Setup Key?`,
       description:
-        "If you continue, a one-off setup key will be automatically created and you will be able to install Openzro.",
+        "If you continue, a one-off setup key will be automatically created and you will be able to install openZro.",
       confirmText: "Continue",
       cancelText: "Cancel",
       type: "default",
@@ -462,7 +462,7 @@ const InstallOpenzroWithSetupKeyButton = ({
         ) : (
           <DownloadIcon size={14} />
         )}
-        Install Openzro
+        Install openZro
       </OzButton>
       {setupKey && (
         <Modal

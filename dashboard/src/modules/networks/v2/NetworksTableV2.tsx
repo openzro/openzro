@@ -205,7 +205,7 @@ function NetworksView({ data, isLoading }: Props) {
           <h1 className="text-[24px] font-semibold tracking-tight">Networks</h1>
           <p className="mt-1 max-w-2xl text-[14px] text-oz2-text-muted">
             Networks allow you to access internal resources in LANs and VPCs
-            without installing Openzro on every machine. Learn more about{" "}
+            without installing openZro on every machine. Learn more about{" "}
             <a
               href="https://docs.openzro.io/how-to/networks"
               target="_blank"
@@ -387,7 +387,7 @@ function NetworksEmptyState() {
           icon: <BookOpen size={16} />,
           title: "What are networks?",
           description:
-            "Reach internal LANs and VPCs without installing Openzro on every machine.",
+            "Reach internal LANs and VPCs without installing openZro on every machine.",
           href: "https://docs.openzro.io/how-to/networks",
         },
         {

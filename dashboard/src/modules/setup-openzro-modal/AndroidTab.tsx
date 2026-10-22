@@ -29,7 +29,7 @@ export default function AndroidTab() {
               >
                 <Image
                   src={GooglePlayButton}
-                  alt={"Download Openzro from Google Play"}
+                  alt={"Download openZro from Google Play"}
                   height={50}
                 />
               </Link>

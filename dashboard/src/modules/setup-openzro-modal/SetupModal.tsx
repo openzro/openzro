@@ -109,7 +109,7 @@ export function SetupModalContent({
       );
     }
 
-    return setupKey ? "Install Openzro with Setup Key" : "Install Openzro";
+    return setupKey ? "Install openZro with Setup Key" : "Install openZro";
   }, [isFirstRun, isInstallPage, setupKey, title, user?.given_name]);
 
   return (
@@ -131,8 +131,8 @@ export function SetupModalContent({
             )}
           >
             {setupKey
-              ? "To get started, install and run Openzro with the setup key as a parameter."
-              : "To get started, install Openzro and log in with your email account."}
+              ? "To get started, install and run openZro with the setup key as a parameter."
+              : "To get started, install openZro and log in with your email account."}
           </p>
         </div>
       )}

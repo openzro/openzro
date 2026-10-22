@@ -27,7 +27,7 @@ export default function IOSTab() {
               >
                 <Image
                   src={AppStoreButton}
-                  alt={"Download Openzro on the App Store"}
+                  alt={"Download openZro on the App Store"}
                   height={50}
                 />
               </Link>
