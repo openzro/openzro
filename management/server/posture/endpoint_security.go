@@ -31,7 +31,9 @@ type EndpointSecurityCheck struct {
 	ProviderID uint64 `json:"provider_id"`
 
 	// FailOpen controls behavior when the vendor lookup itself fails
-	// (network error, vendor outage, "device not found"). Default
+	// (network error, vendor outage, rejected credentials). A device
+	// the vendor does not know is a successful lookup that reports
+	// non-compliance, so FailOpen does not let it through. Default
 	// false → the peer is treated as non-compliant on lookup failure.
 	// Operators with strict compliance posture leave it false; those
 	// who care more about availability than fail-closed flip it true.
