@@ -191,3 +191,30 @@ func TestSqlStore_DeleteUntouchedExpiredPeerLoginMFAApproval(t *testing.T) {
 		assert.True(t, ok)
 	})
 }
+
+// The gate row is created on first lock, at any strength, and removed with
+// the account.
+func TestSqlStore_LockPeerLoginGate(t *testing.T) {
+	runTestForAllEngines(t, "../testdata/store.sql", func(t *testing.T, s Store) {
+		ctx := context.Background()
+		count := func() int64 {
+			var n int64
+			require.NoError(t, s.(*SqlStore).GetDB().Model(&peerLoginGate{}).
+				Where("account_id = ?", plmAccount).Count(&n).Error)
+			return n
+		}
+		require.Zero(t, count())
+
+		for _, lock := range []LockingStrength{LockingStrengthShare, LockingStrengthUpdate, LockingStrengthShare} {
+			require.NoError(t, s.ExecuteInTransaction(ctx, func(tx Store) error {
+				return tx.LockPeerLoginGate(ctx, lock, plmAccount)
+			}))
+		}
+		assert.Equal(t, int64(1), count(), "one row per account, created once")
+
+		account, err := s.GetAccount(ctx, plmAccount)
+		require.NoError(t, err)
+		require.NoError(t, s.DeleteAccount(ctx, account))
+		assert.Zero(t, count())
+	})
+}

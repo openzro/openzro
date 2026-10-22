@@ -127,6 +127,9 @@ type Store interface {
 	ApprovePeerLoginMFAApproval(ctx context.Context, id string, now, expiresAt time.Time) (bool, error)
 	DenyPeerLoginMFAApproval(ctx context.Context, id string, now time.Time) (bool, error)
 	ConsumePeerLoginMFAApproval(ctx context.Context, accountID, userID, wgPubKey string, now time.Time) (bool, error)
+	// LockPeerLoginGate locks the row that orders device logins against
+	// settings saves for the device-login 2FA gate (ADR-0028 D3).
+	LockPeerLoginGate(ctx context.Context, lockStrength LockingStrength, accountID string) error
 	GetExpiredPeerLoginMFAApprovals(ctx context.Context, now time.Time, limit int) ([]*types.PeerLoginMFAApproval, error)
 	DeleteExpiredPeerLoginMFAApproval(ctx context.Context, id string, now time.Time) (bool, error)
 	DeleteUntouchedExpiredPeerLoginMFAApproval(ctx context.Context, id string, now time.Time) (bool, error)

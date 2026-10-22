@@ -164,3 +164,48 @@ func (s *SqlStore) DeleteUserPeerLoginMFAApprovals(ctx context.Context, accountI
 	}
 	return result.RowsAffected, nil
 }
+
+// peerLoginGate is the per-account row that orders device logins against
+// settings saves for the device-login 2FA gate (ADR-0028 D3). A login with
+// a JWT share-locks it and a settings save locks it exclusively, each as
+// its first lock, and nothing else takes it, so it adds no lock-order edge.
+// It is not the account row: SaveAccount deletes and re-inserts that row,
+// and many writers lock it after groups or users. Rows are created on first
+// use and removed with the account.
+type peerLoginGate struct {
+	AccountID string `gorm:"primaryKey;size:255"`
+}
+
+// TableName pins the table name.
+func (peerLoginGate) TableName() string { return "peer_login_gates" }
+
+// LockPeerLoginGate locks the account's gate row at lockStrength, creating
+// it on first use. It looks the row up before inserting: an upsert on an
+// existing row would lock it exclusively on MySQL, serializing every login.
+// Concurrent first inserts wait on each other, and the loser inserts
+// nothing, so both lock the same committed row.
+func (s *SqlStore) LockPeerLoginGate(ctx context.Context, lockStrength LockingStrength, accountID string) error {
+	lock := func() (bool, error) {
+		var row peerLoginGate
+		err := s.db.Clauses(clause.Locking{Strength: string(lockStrength)}).
+			Where("account_id = ?", accountID).Take(&row).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, nil
+		}
+		return err == nil, err
+	}
+	locked, err := lock()
+	if err == nil && !locked {
+		err = s.db.Clauses(clause.OnConflict{DoNothing: true}).Create(&peerLoginGate{AccountID: accountID}).Error
+		if err == nil {
+			locked, err = lock()
+		}
+	}
+	if err != nil {
+		return peerLoginMFAInternal(ctx, "lock gate", err)
+	}
+	if !locked {
+		return status.Errorf(status.Internal, "peer login gate for account %s missing after create", accountID)
+	}
+	return nil
+}
