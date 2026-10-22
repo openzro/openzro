@@ -75,7 +75,7 @@ export default function DangerZoneTab({ account }: Readonly<Props>) {
 
       <OzSettingsCard
         title="Destructive operations"
-        sub="These actions cannot be undone. Backups, exports, and audit history will be removed alongside the data they describe."
+        sub="These actions cannot be undone. The activity log is kept and records the deletion; restore from a database backup if you need the data back."
         danger
       >
         <DangerRow

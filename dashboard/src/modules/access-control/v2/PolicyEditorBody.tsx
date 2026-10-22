@@ -415,7 +415,7 @@ const PolicyEditorBody = React.forwardRef<PolicyEditorHandle, Props>(
                 <FieldLabel
                   hint={
                     portDisabled
-                      ? "Switch the protocol on the Policy tab to TCP or UDP to constrain ports."
+                      ? "Select TCP or UDP above to constrain ports."
                       : "Empty = all ports for the chosen protocol."
                   }
                 >

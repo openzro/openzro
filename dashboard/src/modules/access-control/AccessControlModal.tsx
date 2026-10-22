@@ -195,10 +195,9 @@ export function AccessControlModalContent({
               <div>
                 <OzLabel>Protocol</OzLabel>
                 <OzHelpText className="max-w-sm mt-1">
-                  Allow only specified network protocols. To change traffic
-                  direction and ports, select{" "}
-                  <b className={"text-oz2-text"}>TCP</b> or{" "}
-                  <b className={"text-oz2-text"}>UDP</b> protocol.
+                  Allow only specified network protocols. To restrict ports,
+                  select <b className={"text-oz2-text"}>TCP</b> or{" "}
+                  <b className={"text-oz2-text"}>UDP</b>.
                 </OzHelpText>
               </div>
               <div className="w-[110px] shrink-0">

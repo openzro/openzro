@@ -344,7 +344,7 @@ export default function AuthenticationTab({ account }: Readonly<Props>) {
       <OzSettingsCard
         title="Two-factor authentication (TOTP)"
         sub="openZro-side TOTP applied at the management session. Users
-        enrol via Profile → Security; an authenticator app
+        enrol under Profile Settings → Two-factor authentication; an authenticator app
         (Google Authenticator, Authy, 1Password, Bitwarden) generates
         the 6-digit code."
       >
