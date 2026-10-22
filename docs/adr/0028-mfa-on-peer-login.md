@@ -2,7 +2,8 @@
 
 ## Status
 
-**Proposed.**
+**Accepted.** Implemented in openzro#223, #225, #227, #228, #229, #230,
+#231, #232 and #235.
 
 ## Context
 
@@ -150,6 +151,40 @@ order applies to creation, approval, denial, and the 2FA reset, password
 reset and user deletion paths that clear a user's records. The login keeps its
 existing order (`users` before the approval row). When approval races a reset
 or a deletion, one side loses cleanly.
+
+**Serialization with settings saves.** A login decides from the account
+settings: whether its login expired, whether the gate applies (D2), and
+whether a new device needs peer approval (D9). A save that switches any of
+these on must not be undone by a login that read the settings before it. So
+once the save returns, no login decided under the old settings may still
+commit.
+
+The account row, which holds the settings, cannot order this:
+- `SaveAccount` deletes and re-inserts it;
+- many writers lock it after groups or users.
+
+Any placement of a login lock on that row inverts some existing order.
+
+The boundary is a second table, `peer_login_gates`, with one row per account.
+The row is created on first lock and deleted with the account. Only two kinds
+of transaction take it, each as its first lock:
+
+- **A registration**, by a user or a setup key, or **a login with a JWT**,
+  takes it with a share lock.
+- **`UpdateAccountSettings`** takes it with an exclusive lock.
+
+After the share lock, the login reads the settings without locking the
+account row, and every decision in that transaction uses that read:
+
+- expiration;
+- peer approval (`PreparePeer`, with the auto groups of the user it locked);
+- the gate.
+
+A save therefore either commits before that read, or waits for the login to
+commit and returns after it. Logins share the row, so they do not wait on
+each other. Nothing else takes the row, so it adds no edge to the existing
+lock order. The row is looked up before it is inserted: on MySQL, an upsert of
+an existing row would lock it exclusively on every login.
 
 ### D4 — The approval token and the page
 
@@ -408,7 +443,12 @@ and metric.
   polling.
 - Old clients and mobile cannot log in to accounts that switch the setting
   on. D10 makes that an explicit operator decision.
-- One new table, swept in batches, and one new column (`last_used_step`).
+- Two new tables and one new column (`last_used_step`):
+  - the approval records, swept in batches;
+  - `peer_login_gates`, one lock row per account.
+
+  Every registration and every login with a JWT takes a share lock on that
+  row first, and a settings save waits for the logins in flight.
 - The approval page is reachable by anyone who holds a link. Its exposure is
   bounded by:
   - the token's binding to one record and one user;

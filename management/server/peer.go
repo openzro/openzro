@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	b64 "encoding/base64"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -563,7 +564,7 @@ func (am *DefaultAccountManager) GetPeerNetwork(ctx context.Context, peerID stri
 // Each new Peer will be assigned a new next net.IP from the Account.Network and Account.Network.LastIP will be updated (IP's are not reused).
 // The peer property is just a placeholder for the Peer properties to pass further
 func (am *DefaultAccountManager) AddPeer(ctx context.Context, setupKey, userID string, peer *nbpeer.Peer) (*nbpeer.Peer, *types.NetworkMap, []*posture.Checks, error) {
-	return am.addPeer(ctx, setupKey, userID, nil, peer)
+	return am.addPeer(ctx, setupKey, userID, "", nil, peer)
 }
 
 // addPeer is AddPeer for a registration that may come from a peer login.
@@ -571,8 +572,8 @@ func (am *DefaultAccountManager) AddPeer(ctx context.Context, setupKey, userID s
 // the caller did not authenticate the user with a JWT; when set, the
 // registration is refused if the JWT predates the user's credentials cutoff
 // (ADR-0027 D5).
-func (am *DefaultAccountManager) addPeer(ctx context.Context, setupKey, userID string, jwtIssuedAt *time.Time,
-	peer *nbpeer.Peer) (*nbpeer.Peer, *types.NetworkMap, []*posture.Checks, error) {
+func (am *DefaultAccountManager) addPeer(ctx context.Context, setupKey, userID, connectorID string,
+	jwtIssuedAt *time.Time, peer *nbpeer.Peer) (*nbpeer.Peer, *types.NetworkMap, []*posture.Checks, error) {
 	if setupKey == "" && userID == "" {
 		// no auth method provided => reject access
 		return nil, nil, nil, status.Errorf(status.Unauthenticated, "no peer auth method provided, please use a setup key or interactive SSO login")
@@ -692,7 +693,8 @@ func (am *DefaultAccountManager) addPeer(ctx context.Context, setupKey, userID s
 		}
 	}
 
-	newPeer = am.integratedPeerValidator.PreparePeer(ctx, accountID, newPeer, groupsToAdd, settings.Extra)
+	// Peer approval (PreparePeer) is decided inside the transaction below,
+	// from the settings read behind the gate row.
 
 	// Admission gate: refuse to enroll brand new peers that fail the
 	// account-wide posture checks. Runs before IP allocation so a
@@ -744,11 +746,29 @@ func (am *DefaultAccountManager) addPeer(ctx context.Context, setupKey, userID s
 		}()
 
 		err = am.Store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
-			if jwtIssuedAt != nil {
-				if err := checkPeerRegistrationJWT(ctx, transaction, userID, *jwtIssuedAt); err != nil {
+			// The gate row comes first: the settings read below are those
+			// of any save that switched peer approval or the device-login
+			// 2FA gate on before this registration, or that save waits for
+			// it (see gatePeerLoginMFA). Peer approval (ADR-0028 D9) and
+			// the gate are decided from them, not from the read above.
+			if err := transaction.LockPeerLoginGate(ctx, store.LockingStrengthShare, accountID); err != nil {
+				return err
+			}
+			txSettings, err := transaction.GetAccountSettings(ctx, store.LockingStrengthNone, accountID)
+			if err != nil {
+				return err
+			}
+			if addedByUser {
+				user, err := lockRegisteringUser(ctx, transaction, userID, jwtIssuedAt)
+				if err != nil {
+					return err
+				}
+				groupsToAdd = user.AutoGroups
+				if err := am.gatePeerLoginMFA(ctx, transaction, txSettings, user, connectorID, newPeer.Key, true); err != nil {
 					return err
 				}
 			}
+			newPeer = am.integratedPeerValidator.PreparePeer(ctx, accountID, newPeer, groupsToAdd, txSettings.Extra)
 			err = transaction.AddPeerToAccount(ctx, store.LockingStrengthUpdate, newPeer)
 			if err != nil {
 				return err
@@ -959,7 +979,7 @@ func (am *DefaultAccountManager) handlePeerLoginNotFound(ctx context.Context, lo
 		if login.UserID != "" {
 			jwtIssuedAt = &login.JWTIssuedAt
 		}
-		return am.addPeer(ctx, login.SetupKey, login.UserID, jwtIssuedAt, newPeer)
+		return am.addPeer(ctx, login.SetupKey, login.UserID, login.ConnectorID, jwtIssuedAt, newPeer)
 	}
 
 	log.WithContext(ctx).Errorf("failed while logging in peer %s: %v", login.WireGuardPubKey, err)
@@ -968,7 +988,26 @@ func (am *DefaultAccountManager) handlePeerLoginNotFound(ctx context.Context, lo
 
 // LoginPeer logs in or registers a peer.
 // If peer doesn't exist the function checks whether a setup key or a user is present and registers a new peer if so.
+// A login the device-login 2FA gate refuses returns the refusal the client
+// acts on (ADR-0028): PeerLoginMFARequiredError, PeerLoginMFADeniedError,
+// PeerLoginMFARateLimitedError or PeerLoginMFAEnrollmentRequiredError.
 func (am *DefaultAccountManager) LoginPeer(ctx context.Context, login types.PeerLogin) (*nbpeer.Peer, *types.NetworkMap, []*posture.Checks, error) {
+	peer, networkMap, checks, err := am.loginPeer(ctx, login)
+	var gate *errPeerLoginMFA
+	if !errors.As(err, &gate) {
+		return peer, networkMap, checks, err
+	}
+	user, uerr := am.Store.GetUserByUserID(ctx, store.LockingStrengthNone, login.UserID)
+	if uerr != nil {
+		am.peerLoginMFAMetrics.CountRefusal("error")
+		return nil, nil, nil, uerr
+	}
+	err = am.peerLoginMFARefusal(ctx, login, user.AccountID, gate)
+	am.peerLoginMFAMetrics.CountRefusal(peerLoginMFARefusalReason(err))
+	return nil, nil, nil, err
+}
+
+func (am *DefaultAccountManager) loginPeer(ctx context.Context, login types.PeerLogin) (*nbpeer.Peer, *types.NetworkMap, []*posture.Checks, error) {
 	accountID, err := am.Store.GetAccountIDByPeerPubKey(ctx, login.WireGuardPubKey)
 	if err != nil {
 		return am.handlePeerLoginNotFound(ctx, login, err)
@@ -1000,12 +1039,22 @@ func (am *DefaultAccountManager) LoginPeer(ctx context.Context, login types.Peer
 	var isPeerUpdated bool
 	var postureChecks []*posture.Checks
 
-	settings, err := am.Store.GetAccountSettings(ctx, store.LockingStrengthShare, accountID)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
+	var settings *types.Settings
 	err = am.Store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
+		if login.UserID != "" {
+			// The device-login 2FA gate's boundary, taken first; see
+			// gatePeerLoginMFA.
+			if err = transaction.LockPeerLoginGate(ctx, store.LockingStrengthShare, accountID); err != nil {
+				return err
+			}
+		}
+		// Every decision below, whether the login expired included, uses
+		// the settings read here, after the gate row: a save that changed
+		// them has committed, or waits for this login (ADR-0028).
+		settings, err = transaction.GetAccountSettings(ctx, store.LockingStrengthNone, accountID)
+		if err != nil {
+			return err
+		}
 		peer, err = transaction.GetPeerByPeerPubKey(ctx, store.LockingStrengthUpdate, login.WireGuardPubKey)
 		if err != nil {
 			return err
@@ -1020,7 +1069,7 @@ func (am *DefaultAccountManager) LoginPeer(ctx context.Context, login types.Peer
 				return status.NewPeerLoginMismatchError()
 			}
 
-			changed, err := am.handleUserPeer(ctx, transaction, peer, settings, login.JWTIssuedAt)
+			changed, err := am.handleUserPeer(ctx, transaction, peer, settings, login.JWTIssuedAt, login.ConnectorID)
 			if err != nil {
 				return err
 			}
@@ -1271,21 +1320,23 @@ func errJWTRevokedForPeerLogin() error {
 	return status.Errorf(status.Unauthorized, "token invalid: issued before the user's credentials were reset")
 }
 
-// checkPeerRegistrationJWT refuses a new peer registered with a JWT issued
-// before the user's credentials cutoff. It reads the user FOR UPDATE inside
-// the registration's transaction: a concurrent password reset's cutoff
-// write then waits for the registration to commit, and its peer expiry
-// sees the new peer (ADR-0027 D5). FOR UPDATE rather than FOR SHARE because
-// the same transaction later writes the user's last login.
-func checkPeerRegistrationJWT(ctx context.Context, transaction store.Store, userID string, iat time.Time) error {
+// lockRegisteringUser locks the user registering a new peer inside the
+// registration's transaction and refuses a JWT issued before the user's
+// credentials cutoff (iat is nil when the caller had no JWT). A concurrent
+// password reset's cutoff write then waits for the registration to commit,
+// and its peer expiry sees the new peer (ADR-0027 D5). FOR UPDATE rather
+// than FOR SHARE because the same transaction later writes the user's last
+// login. The lock is also the first of the device-login 2FA gate's order.
+func lockRegisteringUser(ctx context.Context, transaction store.Store, userID string,
+	iat *time.Time) (*types.User, error) {
 	user, err := transaction.GetUserByUserID(ctx, store.LockingStrengthUpdate, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if user.JWTRevoked(iat) {
-		return errJWTRevokedForPeerLogin()
+	if iat != nil && user.JWTRevoked(*iat) {
+		return nil, errJWTRevokedForPeerLogin()
 	}
-	return nil
+	return user, nil
 }
 
 func checkIfPeerOwnerIsBlocked(peer *nbpeer.Peer, user *types.User) error {

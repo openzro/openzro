@@ -33,7 +33,7 @@ func TestProcessJWTToken_DomainDenyIsPermissionDeniedWithoutRetry(t *testing.T) 
 	}
 	server := &GRPCServer{accountManager: accountManager, authManager: authManager}
 
-	_, _, err := server.processJwtToken(context.Background(), &proto.LoginRequest{JwtToken: "token"}, wgtypes.Key{})
+	_, err := server.processJwtToken(context.Background(), &proto.LoginRequest{JwtToken: "token"}, wgtypes.Key{})
 	require.Error(t, err)
 	require.Equal(t, codes.PermissionDenied, grpcstatus.Code(err))
 	require.Equal(t, 1, accountCalls, "a policy denial must not be retried or audited repeatedly")
@@ -73,7 +73,7 @@ func TestProcessJWTToken_RetryOnlyTransientErrors(t *testing.T) {
 				},
 			}
 
-			_, _, err := server.processJwtToken(context.Background(), &proto.LoginRequest{JwtToken: "token"}, wgtypes.Key{})
+			_, err := server.processJwtToken(context.Background(), &proto.LoginRequest{JwtToken: "token"}, wgtypes.Key{})
 			require.Error(t, err)
 			require.Equal(t, tc.wantCode, grpcstatus.Code(err))
 			require.Equal(t, tc.wantCalls, calls)
@@ -94,7 +94,7 @@ func TestProcessJWTToken_InvalidTokenNotRetried(t *testing.T) {
 		},
 	}
 
-	_, _, err := server.processJwtToken(context.Background(), &proto.LoginRequest{JwtToken: "token"}, wgtypes.Key{})
+	_, err := server.processJwtToken(context.Background(), &proto.LoginRequest{JwtToken: "token"}, wgtypes.Key{})
 	require.Equal(t, codes.InvalidArgument, grpcstatus.Code(err))
 	require.Equal(t, 1, parses)
 }
@@ -117,7 +117,7 @@ func TestProcessJWTToken_CanceledWhileWaitingToRetry(t *testing.T) {
 		},
 	}
 
-	_, _, err := server.processJwtToken(ctx, &proto.LoginRequest{JwtToken: "token"}, wgtypes.Key{})
+	_, err := server.processJwtToken(ctx, &proto.LoginRequest{JwtToken: "token"}, wgtypes.Key{})
 	require.Equal(t, codes.Canceled, grpcstatus.Code(err))
 	require.Equal(t, 1, calls)
 }

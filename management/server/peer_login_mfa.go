@@ -224,7 +224,11 @@ func (am *DefaultAccountManager) ApprovePeerLoginMFA(ctx context.Context, token,
 	}
 	if verified {
 		event, meta := activity.PeerLoginMFAApproved, map[string]any{"approval_id": approval.ID, "via": "approval link"}
-		if !outcome.Approved {
+		if outcome.Approved {
+			am.peerLoginMFAMetrics.CountOutcome("approved")
+			am.peerLoginMFAMetrics.RecordTimeToApproval(now.Sub(approval.CreatedAt))
+		} else {
+			am.peerLoginMFAMetrics.CountOutcome("failed")
 			event = activity.PeerLoginMFAFailed
 			meta["reason"] = approveFailureReason(outcome)
 		}
@@ -267,6 +271,7 @@ func (am *DefaultAccountManager) DenyPeerLoginMFA(ctx context.Context, token str
 		return nil, err
 	}
 	if denied {
+		am.peerLoginMFAMetrics.CountOutcome("denied")
 		am.StoreEvent(ctx, activity.SystemInitiator, approval.UserID, approval.AccountID, activity.PeerLoginMFADenied,
 			map[string]any{"approval_id": approval.ID, "note": "denied through the approval link"})
 	}
@@ -450,6 +455,7 @@ func (am *DefaultAccountManager) sweepPeerLoginMFAApprovals(ctx context.Context,
 				return
 			}
 			if untouched {
+				am.peerLoginMFAMetrics.CountOutcome("expired")
 				am.StoreEvent(ctx, activity.SystemInitiator, a.UserID, a.AccountID, activity.PeerLoginMFAExpired,
 					map[string]any{"approval_id": a.ID})
 			}

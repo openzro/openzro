@@ -172,6 +172,10 @@ type DefaultAccountManager struct {
 	// mfaClock is the time source for TOTP checks and lockouts. Nil means
 	// time.Now; tests set it to step through TOTP windows.
 	mfaClock func() time.Time
+
+	// peerLoginMFAMetrics counts device logins the 2FA gate refuses and
+	// their approvals' outcomes; nil when metrics are off.
+	peerLoginMFAMetrics *telemetry.PeerLoginMFAMetrics
 }
 
 // FlowPolicyIndex is the narrow contract DefaultAccountManager uses
@@ -383,6 +387,10 @@ func BuildManager(
 		disableDefaultPolicy:     disableDefaultPolicy,
 	}
 
+	if metrics != nil {
+		am.peerLoginMFAMetrics = metrics.AccountManagerMetrics().PeerLoginMFA()
+	}
+
 	am.startWarmup(ctx)
 
 	accountsCounter, err := store.GetAccountsCounter(ctx)
@@ -522,6 +530,13 @@ func (am *DefaultAccountManager) UpdateAccountSettings(ctx context.Context, acco
 	err = am.Store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
 		var groupsUpdated bool
 
+		// The device-login 2FA gate's boundary, taken first: a login that
+		// decided the gate under the old settings commits before this
+		// save, and one that waits reads the new settings (ADR-0028).
+		if err = transaction.LockPeerLoginGate(ctx, store.LockingStrengthUpdate, accountID); err != nil {
+			return err
+		}
+
 		// Lock order: groups before the account row (which holds the
 		// settings), the same order group writers such as DeleteGroups take.
 		// Locking the settings first would deadlock against them across
@@ -548,6 +563,11 @@ func (am *DefaultAccountManager) UpdateAccountSettings(ctx context.Context, acco
 		case newSettings.Extra != nil && newSettings.Extra.IntegratedValidatorGroups == nil &&
 			oldSettings.Extra != nil:
 			newSettings.Extra.IntegratedValidatorGroups = append([]string(nil), oldSettings.Extra.IntegratedValidatorGroups...)
+		}
+
+		if newSettings.KeepMFAEnforcePeerLogin {
+			newSettings.MFAEnforcePeerLogin = oldSettings.MFAEnforcePeerLogin
+			newSettings.KeepMFAEnforcePeerLogin = false
 		}
 
 		if err = am.validateSettingsUpdate(ctx, transaction, newSettings, oldSettings, userID, accountID); err != nil {
@@ -601,6 +621,9 @@ func (am *DefaultAccountManager) UpdateAccountSettings(ctx context.Context, acco
 		am.StoreEvent(ctx, userID, accountID, accountID, activity.AccountAllowedEmailDomainsUpdated,
 			map[string]any{"domains": newSettings.AllowedEmailDomains})
 	}
+	// Likewise the device-login gate: an enable or disable that committed is
+	// audited even if the extra settings update below fails.
+	am.handlePeerLoginMFASettings(ctx, oldSettings, newSettings, userID, accountID)
 
 	extraSettingsChanged, err := am.settingsManager.UpdateExtraSettings(ctx, accountID, userID, newSettings.Extra)
 	if err != nil {
@@ -655,6 +678,10 @@ func (am *DefaultAccountManager) validateSettingsUpdate(ctx context.Context, tra
 		return err
 	}
 	newSettings.AllowedEmailDomains = allowedEmailDomains
+
+	if err = checkPeerLoginMFAActivation(ctx, transaction, accountID, oldSettings, newSettings); err != nil {
+		return err
+	}
 
 	peers, err := transaction.GetAccountPeers(ctx, store.LockingStrengthShare, accountID, "", "")
 	if err != nil {
@@ -2272,7 +2299,7 @@ func (am *DefaultAccountManager) GetAccountIDForPeerKey(ctx context.Context, pee
 }
 
 func (am *DefaultAccountManager) handleUserPeer(ctx context.Context, transaction store.Store, peer *nbpeer.Peer,
-	settings *types.Settings, jwtIssuedAt time.Time) (bool, error) {
+	settings *types.Settings, jwtIssuedAt time.Time, connectorID string) (bool, error) {
 	// The lock is held until the login commits, which orders this check
 	// against a concurrent password reset (see cutLocalUserAccess). It is an
 	// update lock because re-logging an expired peer writes last_login to
@@ -2293,6 +2320,12 @@ func (am *DefaultAccountManager) handleUserPeer(ctx context.Context, transaction
 	}
 
 	if peerLoginExpired(ctx, peer, settings) {
+		// Re-activating an expired login asks the second factor again
+		// (ADR-0028 D1), with the settings LoginPeer read under the gate
+		// row.
+		if err = am.gatePeerLoginMFA(ctx, transaction, settings, user, connectorID, peer.Key, false); err != nil {
+			return false, err
+		}
 		err = am.handleExpiredPeer(ctx, transaction, user, peer)
 		if err != nil {
 			return false, err

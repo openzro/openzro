@@ -82,7 +82,13 @@ func RateLimited(retryAfter time.Duration) error {
 		map[string]string{keyRetryAfter: seconds(retryAfter)})
 }
 
+// oldClientHint ends every refusal's message. Clients that know this
+// contract show their own text; an older client shows the message, which
+// tells its user what to do (ADR-0028 D10).
+const oldClientHint = "; update openZro to complete it"
+
 func build(code codes.Code, msg, reason string, md map[string]string) error {
+	msg += oldClientHint
 	st, err := status.New(code, msg).WithDetails(&errdetails.ErrorInfo{Reason: reason, Domain: Domain, Metadata: md})
 	if err != nil {
 		// Only fails for a detail that cannot be marshaled.

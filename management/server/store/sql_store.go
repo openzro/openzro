@@ -112,8 +112,8 @@ func NewSqlStore(ctx context.Context, db *gorm.DB, storeEngine types.Engine, met
 		// reservations (ADR-0024); see accountLock.
 		&accountLock{},
 		&credentialsRecheck{},
-		// Peer login approvals (ADR-0028 D3).
-		&types.PeerLoginMFAApproval{},
+		// Peer login approvals and the gate's lock row (ADR-0028 D3).
+		&types.PeerLoginMFAApproval{}, &peerLoginGate{},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("auto migratePreAuto: %w", err)
@@ -391,6 +391,9 @@ func (s *SqlStore) DeleteAccount(ctx context.Context, account *types.Account) er
 		}
 
 		if err := tx.Delete(&types.PeerLoginMFAApproval{}, accountIDCondition, account.Id).Error; err != nil {
+			return err
+		}
+		if err := tx.Delete(&peerLoginGate{}, accountIDCondition, account.Id).Error; err != nil {
 			return err
 		}
 

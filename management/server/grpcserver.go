@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/durationpb"
 
+	"github.com/openzro/openzro/management/client/peerloginmfa"
 	integrationsConfig "github.com/openzro/openzro/management/integrations/integrations/config"
 	"github.com/openzro/openzro/management/server/integrations/integrated_validator"
 
@@ -355,20 +356,30 @@ func tokenValidationError(err error) error {
 // validateToken validates a peer's JWT and returns its user ID and its iat
 // (zero when absent). The iat travels to LoginPeer, which compares it with
 // the user's credentials cutoff inside the login transaction (ADR-0027 D5).
-func (s *GRPCServer) validateToken(ctx context.Context, jwtToken string) (string, time.Time, error) {
+// loginIdentity is who a login's JWT authenticated.
+type loginIdentity struct {
+	userID string
+	// issuedAt is the token's iat, checked against the credentials cutoff.
+	issuedAt time.Time
+	// connectorID is the Dex connector that issued the token, which the
+	// device-login 2FA gate follows (ADR-0028 D2).
+	connectorID string
+}
+
+func (s *GRPCServer) validateToken(ctx context.Context, jwtToken string) (loginIdentity, error) {
 	if s.authManager == nil {
-		return "", time.Time{}, status.Errorf(codes.Internal, "missing auth manager")
+		return loginIdentity{}, status.Errorf(codes.Internal, "missing auth manager")
 	}
 
 	userAuth, token, err := s.authManager.ValidateAndParseToken(ctx, jwtToken)
 	if err != nil {
-		return "", time.Time{}, tokenValidationError(err)
+		return loginIdentity{}, tokenValidationError(err)
 	}
 
 	// we need to call this method because if user is new, we will automatically add it to existing or create a new account
 	accountId, _, err := s.accountManager.GetAccountIDFromUserAuth(ctx, userAuth)
 	if err != nil {
-		return "", time.Time{}, mapError(ctx, err)
+		return loginIdentity{}, mapError(ctx, err)
 	}
 
 	if userAuth.AccountId != accountId {
@@ -378,7 +389,7 @@ func (s *GRPCServer) validateToken(ctx context.Context, jwtToken string) (string
 
 	userAuth, err = s.authManager.EnsureUserAccessByJWTGroups(ctx, userAuth, token)
 	if err != nil {
-		return "", time.Time{}, status.Error(codes.PermissionDenied, err.Error())
+		return loginIdentity{}, status.Error(codes.PermissionDenied, err.Error())
 	}
 
 	err = s.accountManager.SyncUserJWTGroups(ctx, userAuth)
@@ -386,7 +397,7 @@ func (s *GRPCServer) validateToken(ctx context.Context, jwtToken string) (string
 		log.WithContext(ctx).Errorf("gRPC server failed to sync user JWT groups: %s", err)
 	}
 
-	return userAuth.UserId, userAuth.IssuedAt, nil
+	return loginIdentity{userID: userAuth.UserId, issuedAt: userAuth.IssuedAt, connectorID: userAuth.ConnectorID}, nil
 }
 
 func (s *GRPCServer) acquirePeerLockByUID(ctx context.Context, uniqueID string) (unlock func()) {
@@ -549,7 +560,7 @@ func (s *GRPCServer) Login(ctx context.Context, req *proto.EncryptedMessage) (*p
 		return nil, msg
 	}
 
-	userID, jwtIssuedAt, err := s.processJwtToken(ctx, loginReq, peerKey)
+	identity, err := s.processJwtToken(ctx, loginReq, peerKey)
 	if err != nil {
 		return nil, err
 	}
@@ -563,14 +574,20 @@ func (s *GRPCServer) Login(ctx context.Context, req *proto.EncryptedMessage) (*p
 		WireGuardPubKey: peerKey.String(),
 		SSHKey:          string(sshKey),
 		Meta:            extractPeerMeta(ctx, loginReq.GetMeta()),
-		UserID:          userID,
-		JWTIssuedAt:     jwtIssuedAt,
+		UserID:          identity.userID,
+		JWTIssuedAt:     identity.issuedAt,
+		ConnectorID:     identity.connectorID,
 		SetupKey:        loginReq.GetSetupKey(),
 		ConnectionIP:    realIP,
 		ExtraDNSLabels:  loginReq.GetDnsLabels(),
 	})
 	if err != nil {
+		// The refusal's details carry the approval token; the error's
+		// text, logged here, does not.
 		log.WithContext(ctx).Warnf("failed logging in peer %s: %s", peerKey, err)
+		if refusal := peerLoginMFAStatus(err, s.dashboardURL(), time.Now()); refusal != nil {
+			return nil, refusal
+		}
 		return nil, mapError(ctx, err)
 	}
 
@@ -651,14 +668,13 @@ func (s *GRPCServer) prepareLoginResponse(ctx context.Context, peer *nbpeer.Peer
 // The user ID can be empty if the token is not provided, which is acceptable if the peer is already
 // registered or if it uses a setup key to register.
 func (s *GRPCServer) processJwtToken(ctx context.Context, loginReq *proto.LoginRequest,
-	peerKey wgtypes.Key) (string, time.Time, error) {
-	userID := ""
-	var issuedAt time.Time
+	peerKey wgtypes.Key) (loginIdentity, error) {
+	var identity loginIdentity
 	if loginReq.GetJwtToken() != "" {
 		const maxAttempts = 3
 		var err error
 		for i := 0; i < maxAttempts; i++ {
-			userID, issuedAt, err = s.validateToken(ctx, loginReq.GetJwtToken())
+			identity, err = s.validateToken(ctx, loginReq.GetJwtToken())
 			if err == nil {
 				break
 			}
@@ -677,15 +693,15 @@ func (s *GRPCServer) processJwtToken(ctx context.Context, loginReq *proto.LoginR
 				"Trying again as it may be due to the IdP cache issue", peerKey.String(), err)
 			select {
 			case <-ctx.Done():
-				return "", time.Time{}, status.FromContextError(ctx.Err()).Err()
+				return loginIdentity{}, status.FromContextError(ctx.Err()).Err()
 			case <-time.After(200 * time.Millisecond):
 			}
 		}
 		if err != nil {
-			return "", time.Time{}, err
+			return loginIdentity{}, err
 		}
 	}
-	return userID, issuedAt, nil
+	return identity, nil
 }
 
 func ToResponseProto(configProto types.Protocol) proto.HostConfig_Protocol {
@@ -1267,4 +1283,36 @@ func toProtocolCheck(postureCheck *posture.Checks) *proto.Checks {
 	}
 
 	return protoCheck
+}
+
+// dashboardURL is where clients open the device-login 2FA pages; empty when
+// not configured, and clients then use their management host.
+func (s *GRPCServer) dashboardURL() string {
+	if s.config == nil || s.config.HttpConfig == nil {
+		return ""
+	}
+	return s.config.HttpConfig.DashboardURL
+}
+
+// peerLoginMFAStatus turns a device-login 2FA refusal into the status the
+// client acts on (ADR-0028 D5), or returns nil for any other error.
+func peerLoginMFAStatus(err error, dashboardURL string, now time.Time) error {
+	var (
+		required  *PeerLoginMFARequiredError
+		denied    *PeerLoginMFADeniedError
+		throttled *PeerLoginMFARateLimitedError
+		enroll    *PeerLoginMFAEnrollmentRequiredError
+	)
+	switch {
+	case errors.As(err, &required):
+		return peerloginmfa.Required(dashboardURL, required.Challenge.Token, required.Challenge.ExpiresAt.Sub(now))
+	case errors.As(err, &denied):
+		return peerloginmfa.Denied(denied.RetryAfter)
+	case errors.As(err, &throttled):
+		return peerloginmfa.RateLimited(throttled.RetryAfter)
+	case errors.As(err, &enroll):
+		return peerloginmfa.EnrollmentRequired(dashboardURL)
+	default:
+		return nil
+	}
 }

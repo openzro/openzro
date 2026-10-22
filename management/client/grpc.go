@@ -19,6 +19,7 @@ import (
 
 	"github.com/openzro/openzro/client/system"
 	"github.com/openzro/openzro/encryption"
+	"github.com/openzro/openzro/management/client/peerloginmfa"
 	"github.com/openzro/openzro/management/domain"
 	"github.com/openzro/openzro/management/proto"
 	nbgrpc "github.com/openzro/openzro/util/grpc"
@@ -346,7 +347,7 @@ func (c *GrpcClient) login(serverKey wgtypes.Key, req *proto.LoginRequest) (*pro
 
 	err = backoff.Retry(operation, nbgrpc.Backoff(c.ctx))
 	if err != nil {
-		log.Errorf("failed to login to Management Service: %v", err)
+		logLoginError(err)
 		return nil, err
 	}
 
@@ -555,4 +556,16 @@ func infoToMetaData(info *system.Info) *proto.PeerSystemMeta {
 			LazyConnectionEnabled: info.LazyConnectionEnabled,
 		},
 	}
+}
+
+// logLoginError logs a failed login. A device-login 2FA refusal is part of
+// a sign-in the caller handles and announces once, while it polls every few
+// seconds; it is logged at debug, without its message, which is meant for
+// older clients.
+func logLoginError(err error) {
+	if peerloginmfa.Is(err) {
+		log.Debug("login to Management Service refused by the device-login 2FA gate")
+		return
+	}
+	log.Errorf("failed to login to Management Service: %v", err)
 }

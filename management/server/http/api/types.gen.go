@@ -471,6 +471,9 @@ type AccountSettings struct {
 	// MfaEnforceLocal When true, users authenticating via the bundled Dex local connector (federated_claims.connector_id == "local", i.e. staticPasswords) must enroll AND complete a TOTP challenge on every session-bound API call. Local accounts have NO IdP-side MFA so this is the PRIMARY second factor for teams running openZro without an external IdP (openZro #31). Default false; users may still enroll voluntarily via the profile page regardless.
 	MfaEnforceLocal *bool `json:"mfa_enforce_local,omitempty"`
 
+	// MfaEnforcePeerLogin When true, users the 2FA rule applies to (mfa_enforce_local for local users, mfa_enforce_federated for federated ones) also approve with their second factor when they register a device or re-activate a login-expired one (ADR-0028). Switching it on, or widening the users it applies to while it is on, is refused with 412 while an active user it would apply to has no 2FA. Older clients and mobile cannot complete the approval. Default false; omit to keep the current value.
+	MfaEnforcePeerLogin *bool `json:"mfa_enforce_peer_login,omitempty"`
+
 	// PeerInactivityExpiration Period of time of inactivity after which peer session expires (seconds).
 	PeerInactivityExpiration int `json:"peer_inactivity_expiration"`
 

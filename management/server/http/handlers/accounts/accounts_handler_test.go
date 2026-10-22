@@ -126,6 +126,7 @@ func TestAccounts_AccountsHandler(t *testing.T) {
 				LazyConnectionEnabled:           br(false),
 				MfaEnforceLocal:                 br(false),
 				MfaEnforceFederated:             br(false),
+				MfaEnforcePeerLogin:             br(false),
 				DnsDomain:                       sr(""),
 				AdmissionEnforcementEnabled:     br(false),
 				AdmissionPostureChecks:          &[]string{},
@@ -159,6 +160,7 @@ func TestAccounts_AccountsHandler(t *testing.T) {
 				LazyConnectionEnabled:           br(false),
 				MfaEnforceLocal:                 br(false),
 				MfaEnforceFederated:             br(false),
+				MfaEnforcePeerLogin:             br(false),
 				DnsDomain:                       sr(""),
 				AdmissionEnforcementEnabled:     br(false),
 				AdmissionPostureChecks:          &[]string{},
@@ -192,6 +194,7 @@ func TestAccounts_AccountsHandler(t *testing.T) {
 				LazyConnectionEnabled:           br(false),
 				MfaEnforceLocal:                 br(false),
 				MfaEnforceFederated:             br(false),
+				MfaEnforcePeerLogin:             br(false),
 				DnsDomain:                       sr(""),
 				AdmissionEnforcementEnabled:     br(false),
 				AdmissionPostureChecks:          &[]string{},
@@ -225,6 +228,7 @@ func TestAccounts_AccountsHandler(t *testing.T) {
 				LazyConnectionEnabled:           br(false),
 				MfaEnforceLocal:                 br(false),
 				MfaEnforceFederated:             br(false),
+				MfaEnforcePeerLogin:             br(false),
 				DnsDomain:                       sr(""),
 				AdmissionEnforcementEnabled:     br(false),
 				AdmissionPostureChecks:          &[]string{},
@@ -258,6 +262,7 @@ func TestAccounts_AccountsHandler(t *testing.T) {
 				LazyConnectionEnabled:           br(false),
 				MfaEnforceLocal:                 br(false),
 				MfaEnforceFederated:             br(false),
+				MfaEnforcePeerLogin:             br(false),
 				DnsDomain:                       sr(""),
 				AdmissionEnforcementEnabled:     br(false),
 				AdmissionPostureChecks:          &[]string{},
@@ -713,4 +718,58 @@ func TestAccounts_MFAUnenrolledUsers(t *testing.T) {
 
 	assert.Nil(t, get(t, nil, status.NewPermissionDeniedError()).MfaUnenrolledUsers)
 	assert.Nil(t, get(t, nil, status.Errorf(status.Internal, "store unavailable")).MfaUnenrolledUsers)
+}
+
+// The device-login 2FA setting is written when sent. When omitted, the
+// handler asks the manager to keep the stored value, which it reads under
+// the settings row lock; the handler's own settings read plays no part.
+func TestAccounts_MFAEnforcePeerLogin(t *testing.T) {
+	adminUser := types.NewAdminUser("test_user")
+	account := &types.Account{
+		Id:       "test_account",
+		Domain:   "hotmail.com",
+		Network:  types.NewNetwork(),
+		Users:    map[string]*types.User{adminUser.Id: adminUser},
+		Settings: &types.Settings{PeerLoginExpiration: time.Hour, MFAEnforcePeerLogin: true},
+	}
+	handler := initAccountsTestData(t, account)
+	var captured *types.Settings
+	m, ok := handler.accountManager.(*mock_server.MockAccountManager)
+	require.True(t, ok)
+	m.UpdateAccountSettingsFunc = func(_ context.Context, _, _ string, newSettings *types.Settings) (*types.Settings, error) {
+		captured = newSettings
+		return newSettings, nil
+	}
+	put := func(body string) *httptest.ResponseRecorder {
+		t.Helper()
+		captured = nil
+		recorder := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPut, "/api/accounts/"+account.Id, bytes.NewBufferString(body))
+		req = nbcontext.SetUserAuthInRequest(req, nbcontext.UserAuth{UserId: adminUser.Id, AccountId: account.Id, Domain: "hotmail.com"})
+		router := mux.NewRouter()
+		router.HandleFunc("/api/accounts/{accountId}", handler.updateAccount).Methods("PUT")
+		router.ServeHTTP(recorder, req)
+		return recorder
+	}
+	const base = `"peer_login_expiration":3600,"peer_login_expiration_enabled":false`
+
+	rec := put(`{"settings":{` + base + `,"mfa_enforce_peer_login":false}}`)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	require.NotNil(t, captured)
+	assert.False(t, captured.MFAEnforcePeerLogin, "a sent value is written")
+	assert.False(t, captured.KeepMFAEnforcePeerLogin)
+	var got api.Account
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	require.NotNil(t, got.Settings.MfaEnforcePeerLogin)
+	assert.False(t, *got.Settings.MfaEnforcePeerLogin, "the response carries the setting")
+
+	ctrl := gomock.NewController(t)
+	failing := settings.NewMockManager(ctrl)
+	failing.EXPECT().GetSettings(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil, status.Errorf(status.Internal, "store unavailable")).AnyTimes()
+	handler.settingsManager = failing
+	rec = put(`{"settings":{` + base + `}}`)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	require.NotNil(t, captured)
+	assert.True(t, captured.KeepMFAEnforcePeerLogin, "an omitted value is kept by the manager")
 }

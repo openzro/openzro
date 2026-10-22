@@ -14,6 +14,7 @@ type AccountManagerMetrics struct {
 	getPeerNetworkMapDurationMs  metric.Float64Histogram
 	networkMapObjectCount        metric.Int64Histogram
 	peerMetaUpdateCount          metric.Int64Counter
+	peerLoginMFA                 *PeerLoginMFAMetrics
 }
 
 // NewAccountManagerMetrics creates an instance of AccountManagerMetrics
@@ -55,12 +56,18 @@ func NewAccountManagerMetrics(ctx context.Context, meter metric.Meter) (*Account
 		return nil, err
 	}
 
+	peerLoginMFA, err := NewPeerLoginMFAMetrics(ctx, meter)
+	if err != nil {
+		return nil, err
+	}
+
 	return &AccountManagerMetrics{
 		ctx:                          ctx,
 		getPeerNetworkMapDurationMs:  getPeerNetworkMapDurationMs,
 		updateAccountPeersDurationMs: updateAccountPeersDurationMs,
 		networkMapObjectCount:        networkMapObjectCount,
 		peerMetaUpdateCount:          peerMetaUpdateCount,
+		peerLoginMFA:                 peerLoginMFA,
 	}, nil
 
 }
@@ -83,4 +90,13 @@ func (metrics *AccountManagerMetrics) CountNetworkMapObjects(count int64) {
 // CountPeerMetUpdate counts the number of peer meta updates
 func (metrics *AccountManagerMetrics) CountPeerMetUpdate() {
 	metrics.peerMetaUpdateCount.Add(metrics.ctx, 1)
+}
+
+// PeerLoginMFA returns the device-login 2FA metrics; nil (a no-op) when
+// metrics are off.
+func (metrics *AccountManagerMetrics) PeerLoginMFA() *PeerLoginMFAMetrics {
+	if metrics == nil {
+		return nil
+	}
+	return metrics.peerLoginMFA
 }
