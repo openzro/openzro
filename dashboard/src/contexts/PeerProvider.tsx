@@ -78,9 +78,11 @@ export default function PeerProvider({ children, peer }: Props) {
           props.loginExpiration != undefined
             ? props.loginExpiration
             : peer.login_expiration_enabled,
+        // The API reads an omitted inactivity_expiration_enabled as false,
+        // so an update that does not change it must send the current value.
         inactivity_expiration_enabled:
           props?.inactivityExpiration == undefined
-            ? undefined
+            ? peer.inactivity_expiration_enabled
             : props.inactivityExpiration,
         approval_required:
           props?.approval_required == undefined

@@ -33,7 +33,6 @@ export function usePeerApproval() {
       promise: update({ approval_required: false }).then(() => {
         mutate("/peers");
         mutate(`/peers/${peer.id}`);
-        mutate("/groups");
       }),
       loadingMessage: "Approving peer...",
     });
