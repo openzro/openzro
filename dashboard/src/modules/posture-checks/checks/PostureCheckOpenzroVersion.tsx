@@ -30,9 +30,9 @@ export const PostureCheckOpenzroVersion = ({
       setOpen={setOpen}
       key={open ? 1 : 0}
       active={value?.min_version !== undefined}
-      title={"Openzro Client Version"}
+      title={"openZro Client Version"}
       description={
-        "Restrict access to peers with a specific Openzro client version."
+        "Restrict access to peers with a specific openZro client version."
       }
       icon={<OpenzroIcon size={18} />}
       modalWidthClass={"max-w-lg"}
@@ -75,7 +75,7 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
         <div>
           <OzLabel htmlFor="posture-version">Minimum required version</OzLabel>
           <OzHelpText className="mb-2">
-            Only peers with the minimum specified Openzro client version will
+            Only peers with the minimum specified openZro client version will
             have access to the network.
           </OzHelpText>
           <div>
@@ -102,7 +102,7 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
             Learn more about{" "}
             <a
               href={
-                "https://docs.openzro.io/how-to/manage-posture-checks#net-bird-client-version-check"
+                "https://docs.openzro.io/manage/access-control/posture-checks#open-zro-client-version"
               }
               target={"_blank"}
               rel="noopener noreferrer"

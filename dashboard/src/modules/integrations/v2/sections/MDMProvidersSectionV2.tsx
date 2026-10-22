@@ -87,7 +87,8 @@ export default function MDMProvidersSectionV2() {
         hint={
           <>
             Credentials are encrypted at rest. Posture lookups are cached
-            for 5 minutes per device to avoid hammering the vendor API.
+            per device for each provider&apos;s refresh interval (5 minutes by default)
+            to avoid hammering the vendor API.
           </>
         }
         isLoading={isLoading}

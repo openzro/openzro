@@ -451,7 +451,7 @@ export default function NetworkTrafficV2() {
             <>
               Learn more about{" "}
               <a
-                href="https://docs.openzro.io/how-to/network-traffic-events"
+                href="https://docs.openzro.io/manage/activity/traffic-events-logging"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-medium text-oz2-acc-text underline-offset-2 hover:underline"

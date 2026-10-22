@@ -162,7 +162,7 @@ function Content({ onSuccess, groupedRoute, peer }: ModalProps) {
         icon={<NetworkRoutesIcon className={"fill-openzro"} />}
         title={"Add New Routing Peer"}
         description={
-          "When you add multiple routing peers, Openzro enables high availability for this network."
+          "When you add multiple routing peers, openZro enables high availability for this network."
         }
         color={"openzro"}
       />

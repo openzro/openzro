@@ -67,7 +67,7 @@ export default function PeerVersionCell({ version, os }: Props) {
               "text-neutral-300 flex flex-col gap-1 max-w-[300px] text-xs mt-1"
             }
           >
-            A new version of Openzro is available. Please update your client to
+            A new version of openZro is available. Please update your client to
             get the latest features and bug fixes.
           </div>
           <InlineLink

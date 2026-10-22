@@ -615,7 +615,7 @@ function GroupsEmptyState({
           title: "Sync from your IdP",
           description:
             "JWT and SCIM-synced groups stay in lockstep with your identity provider.",
-          href: "https://docs.openzro.io/how-to/manage-users",
+          href: "https://docs.openzro.io/manage/team/add-users-to-your-network",
         },
         {
           icon: <ShieldCheck size={16} />,

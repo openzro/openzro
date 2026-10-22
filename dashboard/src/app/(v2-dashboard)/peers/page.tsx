@@ -83,7 +83,7 @@ function PeersBlockedView() {
           and log in with your email account. If you have further questions
           check out our{" "}
           <a
-            href="https://docs.openzro.io/how-to/getting-started#installation"
+            href="https://docs.openzro.io/get-started/install"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-oz2-acc hover:underline"

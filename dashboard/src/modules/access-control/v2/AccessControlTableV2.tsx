@@ -500,7 +500,7 @@ function AccessControlEmptyState({
           title: "Group your peers",
           description:
             "Tag machines with groups so a single policy reaches every device in a role.",
-          href: "https://docs.openzro.io/how-to/manage-groups",
+          href: "https://docs.openzro.io/manage/access-control/manage-network-access#managing-groups",
         },
         {
           icon: <ShieldCheck size={16} />,

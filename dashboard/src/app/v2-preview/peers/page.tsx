@@ -829,7 +829,7 @@ function AddressCell({ peer }: { peer: MockPeer }) {
     <Tip
       content={
         <div className="w-[280px]">
-          <TipRow icon={icons.pin} label="Openzro IP" value={peer.ip} />
+          <TipRow icon={icons.pin} label="openZro IP" value={peer.ip} />
           <TipRow
             icon={icons.network}
             label="Public IP"

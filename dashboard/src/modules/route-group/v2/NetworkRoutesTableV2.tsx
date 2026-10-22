@@ -449,7 +449,7 @@ function NetworkRoutesEmptyState({ onAddRoute }: { onAddRoute: () => void }) {
           title: "Exit nodes",
           description:
             "Route a peer's traffic through another peer to reach the public internet.",
-          href: "https://docs.openzro.io/how-to/using-an-exit-node",
+          href: "https://docs.openzro.io/manage/network-routes/use-cases/by-scenario/exit-nodes",
         },
       ]}
     />

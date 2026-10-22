@@ -27,11 +27,11 @@ export const PeerAddressTooltipContent = ({ peer }: Props) => {
     >
       <ListItem
         icon={<MapPin size={14} />}
-        label={"Openzro IP"}
+        label={"openZro IP"}
         value={
           <CopyToClipboardText
             iconAlignment={"right"}
-            message={"Openzro IP has been copied to your clipboard"}
+            message={"openZro IP has been copied to your clipboard"}
             alwaysShowIcon={true}
           >
             {peer.ip}

@@ -8,7 +8,7 @@ import * as React from "react";
 // vocabulary":
 //   .label    — 12.5px / 500, --text-2
 //   .req      — required mark in --err
-//   .opt      — "opcional" mono 10.5px --text-faint
+//   .opt      — "optional" mono 10.5px --text-faint
 //   .help     — 12px --text-muted, line-height 1.45
 //   .err      — 12px --err with inline alert icon
 //
@@ -45,7 +45,7 @@ const OzLabel = React.forwardRef<
       )}
       {optional && (
         <span className="font-mono text-[10.5px] uppercase tracking-[0.05em] text-oz2-text-faint">
-          opcional
+          optional
         </span>
       )}
     </span>

@@ -123,7 +123,7 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
           onChange={setFailOpen}
           label={"Fail open on lookup error"}
           helpText={
-            "When the vendor lookup itself fails (timeout, vendor outage, device not found), allow the peer through. Default is fail-closed: lookup failure → access denied."
+            "When the vendor lookup itself fails (timeout, vendor outage, bad credentials), allow the peer through. A device the vendor does not know is still denied. Default is fail-closed: lookup failure → access denied."
           }
           disabled={disabled}
         />
@@ -134,7 +134,7 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
             Learn more about{" "}
             <a
               href={
-                "https://docs.openzro.io/how-to/manage-posture-checks#endpoint-security"
+                "https://docs.openzro.io/manage/access-control/posture-checks#endpoint-security-mdm-edr"
               }
               target={"_blank"}
               rel="noopener noreferrer"

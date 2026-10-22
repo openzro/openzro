@@ -67,7 +67,7 @@ export default function ActivityDescription({ event }: Props) {
     return (
       <div className={"inline"}>
         Peer <Value>{m.name}</Value> <PeerConnectionInfo meta={m} /> was added
-        with the Openzro IP <Value>{m.ip}</Value>
+        with the openZro IP <Value>{m.ip}</Value>
       </div>
     );
 
@@ -167,7 +167,7 @@ export default function ActivityDescription({ event }: Props) {
     return (
       <div className={"inline"}>
         Peer <Value>{m.name}</Value> <PeerConnectionInfo meta={m} /> with
-        Openzro IP <Value>{m.ip}</Value> was deleted
+        openZro IP <Value>{m.ip}</Value> was deleted
       </div>
     );
 
@@ -175,7 +175,7 @@ export default function ActivityDescription({ event }: Props) {
     return (
       <div className={"inline"}>
         Peer <Value>{m.name}</Value> <PeerConnectionInfo meta={m} /> was added
-        with the Openzro IP <Value>{m.ip}</Value>
+        with the openZro IP <Value>{m.ip}</Value>
       </div>
     );
 
@@ -183,14 +183,14 @@ export default function ActivityDescription({ event }: Props) {
     return (
       <div className={"inline"}>
         Peer <Value>{m.name}</Value> <PeerConnectionInfo meta={m} /> with
-        Openzro IP <Value>{m.ip}</Value> was updated
+        openZro IP <Value>{m.ip}</Value> was updated
       </div>
     );
 
   if (event.activity_code == "user.join")
     return (
       <div className={"inline"}>
-        User <Value>{m.username}</Value> joined Openzro
+        User <Value>{m.username}</Value> joined openZro
       </div>
     );
 
@@ -278,14 +278,14 @@ export default function ActivityDescription({ event }: Props) {
     return (
       <div className={"inline"}>
         Group <Value>{m.group}</Value> was removed from the peer with the
-        Openzro IP <Value>{m.peer_ip}</Value>
+        openZro IP <Value>{m.peer_ip}</Value>
       </div>
     );
 
   if (event.activity_code == "peer.group.add")
     return (
       <div className={"inline"}>
-        Group <Value>{m.group}</Value> was added to the peer with the Openzro IP{" "}
+        Group <Value>{m.group}</Value> was added to the peer with the openZro IP{" "}
         <Value>{m.peer_ip}</Value>
       </div>
     );
@@ -328,7 +328,7 @@ export default function ActivityDescription({ event }: Props) {
   if (event.activity_code == "peer.rename")
     return (
       <div className={"inline"}>
-        Peer with the Openzro IP <Value>{m.ip}</Value> was renamed to{" "}
+        Peer with the openZro IP <Value>{m.ip}</Value> was renamed to{" "}
         <Value>{m.name}</Value>
       </div>
     );
@@ -336,7 +336,7 @@ export default function ActivityDescription({ event }: Props) {
   if (event.activity_code == "peer.approve")
     return (
       <div className={"inline"}>
-        Peer with the Openzro IP <Value>{m.ip}</Value> was approved
+        Peer with the openZro IP <Value>{m.ip}</Value> was approved
       </div>
     );
 

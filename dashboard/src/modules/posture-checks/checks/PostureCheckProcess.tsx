@@ -192,7 +192,7 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
                         />
                       }
                       placeholder={
-                        "/Applications/Openzro.app/Contents/MacOS/openzro"
+                        "/Applications/openZro UI.app/Contents/MacOS/openzro-ui"
                       }
                       value={p.mac_path}
                       error={
@@ -218,7 +218,7 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
                           )}
                         />
                       }
-                      placeholder={`C:\\ProgramData\\Openzro\\openzro.exe`}
+                      placeholder={`C:\\Program Files\\Openzro\\openzro.exe`}
                       value={p.windows_path}
                       error={
                         pathErrors.find((e) => e.id === p.id)?.errorWindowsPath
@@ -264,7 +264,7 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
             Learn more about{" "}
             <a
               href={
-                "https://docs.openzro.io/how-to/manage-posture-checks#process-check"
+                "https://docs.openzro.io/manage/access-control/posture-checks#process"
               }
               target={"_blank"}
               rel="noopener noreferrer"

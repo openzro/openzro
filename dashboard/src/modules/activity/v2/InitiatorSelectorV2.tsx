@@ -173,7 +173,7 @@ export default function InitiatorSelectorV2({
                   {sortedOptions.map((user) => {
                     const isSystem = user.email === "Openzro";
                     const searchValue = isSystem
-                      ? "Openzro System"
+                      ? "openZro System"
                       : `${user.name || ""} ${user.id || ""} ${user.email || ""}`;
                     return (
                       <CommandItem

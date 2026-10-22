@@ -128,8 +128,8 @@ function Hero({ title, setupKey }: { title: string; setupKey: boolean }) {
       </h2>
       <p className="mx-auto mt-1.5 max-w-[420px] text-[14.5px] leading-[1.5] text-oz2-text-muted">
         {setupKey
-          ? "To get started, install and run Openzro with the setup key as a parameter."
-          : "To get started, install Openzro and log in with your email account."}
+          ? "To get started, install and run openZro with the setup key as a parameter."
+          : "To get started, install openZro and log in with your email account."}
       </p>
     </div>
   );
@@ -232,7 +232,7 @@ function LinuxPrimary({
       </Step>
       <Step n={2} isLast>
         <StepLabel>
-          Run Openzro {!setupKey && "and log in the browser"}
+          Run openZro {!setupKey && "and log in the browser"}
         </StepLabel>
         <UpCommand setupKey={setupKey} hostname={hostname} />
       </Step>
@@ -274,7 +274,7 @@ function MacOSPrimary({
         <Step n={2}>
           <StepLabel>
             Click on &quot;Settings&quot; then &quot;Advanced Settings&quot; from the
-            Openzro icon in your system tray and enter the following &quot;Management
+            openZro icon in your system tray and enter the following &quot;Management
             URL&quot;
           </StepLabel>
           <CodeBlock
@@ -287,14 +287,14 @@ function MacOSPrimary({
 
       {setupKey ? (
         <Step n={GRPC_API_ORIGIN ? 3 : 2} isLast>
-          <StepLabel>Open Terminal and run Openzro</StepLabel>
+          <StepLabel>Open Terminal and run openZro</StepLabel>
           <UpCommand setupKey={setupKey} hostname={hostname} />
         </Step>
       ) : (
         <>
           <Step n={GRPC_API_ORIGIN ? 3 : 2}>
             <StepLabel>
-              Click on &quot;Connect&quot; from the Openzro icon in your system tray
+              Click on &quot;Connect&quot; from the openZro icon in your system tray
             </StepLabel>
           </Step>
           <Step n={lastStepIndex} isLast>
@@ -337,7 +337,7 @@ function WindowsPrimary({
         <Step n={2}>
           <StepLabel>
             Click on &quot;Settings&quot; then &quot;Advanced Settings&quot; from the
-            Openzro icon in your system tray and enter the following &quot;Management
+            openZro icon in your system tray and enter the following &quot;Management
             URL&quot;
           </StepLabel>
           <CodeBlock
@@ -350,14 +350,14 @@ function WindowsPrimary({
 
       {setupKey ? (
         <Step n={GRPC_API_ORIGIN ? 3 : 2} isLast>
-          <StepLabel>Open Command-line and run Openzro</StepLabel>
+          <StepLabel>Open Command-line and run openZro</StepLabel>
           <UpCommand setupKey={setupKey} hostname={hostname} />
         </Step>
       ) : (
         <>
           <Step n={GRPC_API_ORIGIN ? 3 : 2}>
             <StepLabel>
-              Click on &quot;Connect&quot; from the Openzro icon in your system tray
+              Click on &quot;Connect&quot; from the openZro icon in your system tray
             </StepLabel>
           </Step>
           <Step n={lastStepIndex} isLast>
@@ -423,7 +423,7 @@ function DockerPrimary({
         />
       </Step>
       <Step n={2}>
-        <StepLabel>Run Openzro container</StepLabel>
+        <StepLabel>Run openZro container</StepLabel>
         <CodeBlock
           lines={dockerLines}
           copyText={copyText}
@@ -438,7 +438,7 @@ function DockerPrimary({
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 text-[13.5px] font-medium text-oz2-acc-text underline-offset-2 hover:underline"
         >
-          Running Openzro in Docker
+          Running openZro in Docker
           <ExternalLinkIcon size={11} />
         </a>
       </Step>
@@ -537,7 +537,7 @@ function LinuxManual({
         />
       </Step>
       <Step n={2}>
-        <StepLabel>Install Openzro</StepLabel>
+        <StepLabel>Install openZro</StepLabel>
         <CodeBlock
           lines={[
             <span key="update">sudo apt-get update</span>,
@@ -556,7 +556,7 @@ function LinuxManual({
       </Step>
       <Step n={3} isLast>
         <StepLabel>
-          Run Openzro {!setupKey && "and log in the browser"}
+          Run openZro {!setupKey && "and log in the browser"}
         </StepLabel>
         <UpCommand setupKey={setupKey} hostname={hostname} />
       </Step>
@@ -594,7 +594,7 @@ function MacOSManualHomebrew({
         </StepNote>
       </Step>
       <Step n={3}>
-        <StepLabel>Start Openzro daemon</StepLabel>
+        <StepLabel>Start openZro daemon</StepLabel>
         <CodeBlock
           lines={[
             <span key="comment" className="text-oz2-text-faint">
@@ -608,7 +608,7 @@ function MacOSManualHomebrew({
       </Step>
       <Step n={4} isLast>
         <StepLabel>
-          Run Openzro {!setupKey && "and log in the browser"}
+          Run openZro {!setupKey && "and log in the browser"}
         </StepLabel>
         <UpCommand setupKey={setupKey} hostname={hostname} />
       </Step>
@@ -847,7 +847,7 @@ function Footer() {
       manage your existing devices in the admin panel. If you have further
       questions check out our{" "}
       <a
-        href="https://docs.openzro.io/how-to/getting-started#installation"
+        href="https://docs.openzro.io/get-started/install"
         target="_blank"
         rel="noopener noreferrer"
         className="font-medium text-oz2-acc-text underline-offset-2 hover:underline"

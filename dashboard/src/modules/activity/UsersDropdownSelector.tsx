@@ -208,7 +208,7 @@ export function UsersDropdownSelector({
                   {sortedOptions.map((user) => {
                     const isSystemUser = user.email === "Openzro";
                     const searchValue = isSystemUser
-                      ? "Openzro System"
+                      ? "openZro System"
                       : user.name + " " + user.id + " " + user.email;
 
                     return (

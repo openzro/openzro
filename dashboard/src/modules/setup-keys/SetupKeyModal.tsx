@@ -139,7 +139,7 @@ export default function SetupKeyModal({
                 onClick={() => setInstallModal(true)}
               >
                 <DownloadIcon size={14} />
-                Install Openzro
+                Install openZro
               </OzButton>
             </div>
           </ModalFooter>

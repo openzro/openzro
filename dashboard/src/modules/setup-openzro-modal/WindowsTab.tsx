@@ -66,7 +66,7 @@ export default function WindowsTab({
           {GRPC_API_ORIGIN && (
             <Steps.Step step={2}>
               <p>
-                {`Click on "Settings" then "Advanced Settings" from the Openzro icon in your system tray and enter the following "Management URL"`}
+                {`Click on "Settings" then "Advanced Settings" from the openZro icon in your system tray and enter the following "Management URL"`}
               </p>
               <Code>
                 <Code.Line>{GRPC_API_ORIGIN}</Code.Line>
@@ -77,7 +77,7 @@ export default function WindowsTab({
           {setupKey ? (
             <Steps.Step step={GRPC_API_ORIGIN ? 3 : 2} line={false}>
               <p>
-                Open Command-line and run Openzro{" "}
+                Open Command-line and run openZro{" "}
                 {showSetupKeyInfo && <RoutingPeerSetupKeyInfo />}
               </p>
 
@@ -94,7 +94,7 @@ export default function WindowsTab({
               <Steps.Step step={GRPC_API_ORIGIN ? 3 : 2}>
                 <p>
                   {/* eslint-disable-next-line react/no-unescaped-entities */}
-                  Click on "Connect" from the Openzro icon in your system tray
+                  Click on "Connect" from the openZro icon in your system tray
                 </p>
               </Steps.Step>
               <Steps.Step step={GRPC_API_ORIGIN ? 4 : 3} line={false}>

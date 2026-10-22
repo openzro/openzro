@@ -347,7 +347,7 @@ export default function NetworkSettingsTab({ account }: Readonly<Props>) {
               Allow routing rules to target whole DNS zones via wildcards
               instead of explicit IPs.{" "}
               <InlineLink
-                href="https://docs.openzro.io/how-to/accessing-entire-domains-within-networks#enabling-dns-wildcard-routing"
+                href="https://docs.openzro.io/manage/networks/use-cases/by-resource-type/accessing-entire-domains-within-networks#enable-dns-wildcard-routing"
                 target="_blank"
               >
                 Learn more

@@ -552,14 +552,14 @@ function UsersEmptyState({
           title: "Roles & permissions",
           description:
             "Owner, admin and user — what each role can do across the workspace.",
-          href: "https://docs.openzro.io/how-to/manage-users",
+          href: "https://docs.openzro.io/manage/team/add-users-to-your-network",
         },
         {
           icon: <ShieldCheck size={16} />,
           title: "Group membership",
           description:
             "Auto-assign groups so a user inherits the right policies from day one.",
-          href: "https://docs.openzro.io/how-to/manage-groups",
+          href: "https://docs.openzro.io/manage/access-control/manage-network-access#managing-groups",
         },
       ]}
     />

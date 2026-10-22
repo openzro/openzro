@@ -256,7 +256,7 @@ const CheckContent = ({ value, onChange, disabled }: Props) => {
             Learn more about{" "}
             <a
               href={
-                "https://docs.openzro.io/how-to/manage-posture-checks#schedule-check"
+                "https://docs.openzro.io/manage/access-control/posture-checks#schedule"
               }
               target={"_blank"}
               rel="noopener noreferrer"

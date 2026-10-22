@@ -163,7 +163,7 @@ export function AccessTokenModalContent({
       <ModalHeader
         icon={<IconApi />}
         title={"Create Access Token"}
-        description={"Use this token to access Openzro's public API"}
+        description={"Use this token to access openZro's public API"}
         color={"openzro"}
       />
 
@@ -212,7 +212,7 @@ export function AccessTokenModalContent({
           <p className={"text-sm mt-auto text-oz2-text-muted"}>
             Learn more about{" "}
             <a
-              href={"https://docs.openzro.io/how-to/access-openzro-public-api"}
+              href={"https://docs.openzro.io/ipa/guides/authentication#using-personal-access-tokens"}
               target={"_blank"}
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-oz2-acc-text underline-offset-2 hover:underline"

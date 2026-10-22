@@ -184,7 +184,7 @@ export function PeerSelector({
                     className={"w-full flex items-center justify-between"}
                     content={
                       <div className={"max-w-[240px] text-xs"}>
-                        Please update Openzro to at least{" "}
+                        Please update openZro to at least{" "}
                         <span className={"text-openzro"}>v0.36.6</span> or later
                         to use this peer as a routing peer.
                       </div>
