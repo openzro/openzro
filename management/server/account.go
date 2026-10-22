@@ -541,6 +541,9 @@ func (am *DefaultAccountManager) UpdateAccountSettings(ctx context.Context, acco
 		// settings), the same order group writers such as DeleteGroups take.
 		// Locking the settings first would deadlock against them across
 		// replicas.
+		if err = lockGroupsForPropagation(ctx, transaction, accountID, newSettings); err != nil {
+			return err
+		}
 		if err = lockPeerApprovalExemptGroups(ctx, transaction, accountID, newSettings.Extra); err != nil {
 			return err
 		}
@@ -694,6 +697,44 @@ func (am *DefaultAccountManager) validateSettingsUpdate(ctx context.Context, tra
 	}
 
 	return am.integratedPeerValidator.ValidateExtraSettings(ctx, newSettings.Extra, oldSettings.Extra, peersMap, userID, accountID)
+}
+
+// lockGroupsForPropagation locks every group of the account FOR UPDATE, in
+// ID order, when this save switches groups propagation on: the propagation
+// below rewrites group memberships after the account row is locked, and
+// group writers lock groups first and the account row second (openzro#224).
+// Taking them here keeps that order and avoids upgrading a share lock
+// later. Whether propagation turns on is read here without a lock: the gate
+// row taken before serializes settings saves across replicas, so the value
+// is the one the locked read below sees, short of a write outside
+// UpdateAccountSettings, which then propagates with the previous order.
+func lockGroupsForPropagation(ctx context.Context, transaction store.Store, accountID string,
+	newSettings *types.Settings) error {
+	if !newSettings.GroupsPropagationEnabled {
+		return nil
+	}
+	current, err := transaction.GetAccountSettings(ctx, store.LockingStrengthNone, accountID)
+	if err != nil {
+		return err
+	}
+	if current.GroupsPropagationEnabled {
+		return nil
+	}
+	groups, err := transaction.GetAccountGroups(ctx, store.LockingStrengthNone, accountID)
+	if err != nil {
+		return err
+	}
+	ids := make([]string, 0, len(groups))
+	for _, group := range groups {
+		ids = append(ids, group.ID)
+	}
+	slices.Sort(ids)
+	for _, id := range ids {
+		if _, err := transaction.GetGroupByID(ctx, store.LockingStrengthUpdate, accountID, id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // lockPeerApprovalExemptGroups share-locks every group in an explicitly sent

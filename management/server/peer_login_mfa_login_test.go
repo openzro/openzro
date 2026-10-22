@@ -355,7 +355,8 @@ func TestLoginPeer_MFAGate_ExpiredPeerSeesGateEnabledMeanwhile(t *testing.T) {
 // that lock while another replica runs.
 type pauseStore struct {
 	store.Store
-	// at is "user": right after the transaction locks a user row.
+	// at is "user" or "account": right after the transaction locks a user
+	// row, or the account row through its settings.
 	at      string
 	held    chan struct{}
 	release chan struct{}
@@ -385,6 +386,15 @@ func (s *pauseStore) pause(point string) {
 type pauseTx struct {
 	store.Store
 	parent *pauseStore
+}
+
+func (tx *pauseTx) GetAccountSettings(ctx context.Context, lock store.LockingStrength,
+	accountID string) (*types.Settings, error) {
+	settings, err := tx.Store.GetAccountSettings(ctx, lock, accountID)
+	if err == nil && lock == store.LockingStrengthUpdate {
+		tx.parent.pause("account")
+	}
+	return settings, err
 }
 
 func (tx *pauseTx) GetUserByUserID(ctx context.Context, lock store.LockingStrength, userID string) (*types.User, error) {
