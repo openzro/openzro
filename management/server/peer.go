@@ -745,24 +745,29 @@ func (am *DefaultAccountManager) addPeer(ctx context.Context, setupKey, userID, 
 		}()
 
 		err = am.Store.ExecuteInTransaction(ctx, func(transaction store.Store) error {
+			// The gate row comes first: the settings read below are those
+			// of any save that switched peer approval or the device-login
+			// 2FA gate on before this registration, or that save waits for
+			// it (see gatePeerLoginMFA). Peer approval (ADR-0028 D9) and
+			// the gate are decided from them, not from the read above.
+			if err := transaction.LockPeerLoginGate(ctx, store.LockingStrengthShare, accountID); err != nil {
+				return err
+			}
+			txSettings, err := transaction.GetAccountSettings(ctx, store.LockingStrengthNone, accountID)
+			if err != nil {
+				return err
+			}
 			if addedByUser {
-				// The device-login 2FA gate's boundary, taken first; see
-				// gatePeerLoginMFA.
-				if err := transaction.LockPeerLoginGate(ctx, store.LockingStrengthShare, accountID); err != nil {
-					return err
-				}
-				gateSettings, err := transaction.GetAccountSettings(ctx, store.LockingStrengthNone, accountID)
-				if err != nil {
-					return err
-				}
 				user, err := lockRegisteringUser(ctx, transaction, userID, jwtIssuedAt)
 				if err != nil {
 					return err
 				}
-				if err := am.gatePeerLoginMFA(ctx, transaction, gateSettings, user, connectorID, newPeer.Key, true); err != nil {
+				groupsToAdd = user.AutoGroups
+				if err := am.gatePeerLoginMFA(ctx, transaction, txSettings, user, connectorID, newPeer.Key, true); err != nil {
 					return err
 				}
 			}
+			newPeer = am.integratedPeerValidator.PreparePeer(ctx, accountID, newPeer, groupsToAdd, txSettings.Extra)
 			err = transaction.AddPeerToAccount(ctx, store.LockingStrengthUpdate, newPeer)
 			if err != nil {
 				return err

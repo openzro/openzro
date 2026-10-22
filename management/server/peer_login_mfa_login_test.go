@@ -15,6 +15,7 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
+	"github.com/openzro/openzro/management/integrations/integrations"
 	nbpeer "github.com/openzro/openzro/management/server/peer"
 	"github.com/openzro/openzro/management/server/status"
 	"github.com/openzro/openzro/management/server/store"
@@ -563,6 +564,59 @@ func TestLoginPeer_MFAGate_ExpirationChangedMeanwhile(t *testing.T) {
 
 			required := f.requireApproval(t, wgKeyA)
 			assert.False(t, f.record(t, required.Challenge.ApprovalID).NewPeer)
+		})
+	}
+}
+
+// A registration decides peer approval from the settings it reads under
+// the gate row: replica B switching peer approval on after replica A's
+// earlier read still leaves A's new device pending, whether a user or a
+// setup key registers it (ADR-0028 D9).
+func TestRegistration_PeerApprovalEnabledMeanwhile(t *testing.T) {
+	tests := []struct {
+		name string
+		// prepare runs before the race and returns the registration.
+		prepare func(t *testing.T, f *peerLoginFixture) func() error
+	}{
+		{"user", func(_ *testing.T, f *peerLoginFixture) func() error {
+			return func() error { return f.login(wgKeyA, "local") }
+		}},
+		{"setup key", func(t *testing.T, f *peerLoginFixture) func() error {
+			key, err := f.am.CreateSetupKey(context.Background(), f.accountID, "k", types.SetupKeyReusable,
+				time.Hour, nil, 0, f.userID, false, false)
+			require.NoError(t, err)
+			return func() error {
+				_, _, _, err := f.am.AddPeer(context.Background(), key.Key, "", &nbpeer.Peer{
+					Key: wgKeyA, Meta: nbpeer.PeerSystemMeta{Hostname: "server", GoOS: "linux"},
+				})
+				return err
+			}
+		}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			replicas, f := newGateReplicas(t)
+			for _, am := range []*DefaultAccountManager{replicas.A, replicas.B} {
+				am.integratedPeerValidator = &integrations.IntegratedValidatorImpl{}
+			}
+			f.gateOn(t, func(s *types.Settings) { s.MFAEnforcePeerLogin = false })
+			register := tc.prepare(t, f)
+
+			change, err := replicas.B.Store.GetAccountSettings(context.Background(), store.LockingStrengthNone, f.accountID)
+			require.NoError(t, err)
+			change.Extra = &types.ExtraSettings{PeerApprovalEnabled: true}
+			inner := replicas.A.Store
+			replicas.A.Store = &beforeTxStore{Store: inner, before: func() {
+				_, err := replicas.B.UpdateAccountSettings(context.Background(), f.accountID, "admin", change)
+				require.NoError(t, err)
+			}}
+			t.Cleanup(func() { replicas.A.Store = inner })
+
+			require.NoError(t, register())
+			peer, err := inner.GetPeerByPeerPubKey(context.Background(), store.LockingStrengthNone, wgKeyA)
+			require.NoError(t, err)
+			require.NotNil(t, peer.Status)
+			assert.True(t, peer.Status.RequiresApproval, "the device registered as approved after approval was switched on")
 		})
 	}
 }
