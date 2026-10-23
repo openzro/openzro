@@ -11,9 +11,7 @@ import Steps from "@components/Steps";
 import TabsContentPadding, { TabsContent } from "@components/Tabs";
 import { getOpenzroUpCommand, GRPC_API_ORIGIN } from "@utils/openzro";
 import {
-  BeerIcon,
   DownloadIcon,
-  ExternalLinkIcon,
   PackageOpenIcon,
   TerminalSquareIcon,
 } from "lucide-react";
@@ -74,13 +72,8 @@ export default function MacOSTab({
               Silicon. Double-click the .pkg, follow the prompts, and
               the daemon registers as a LaunchDaemon while the
               openZro UI lands in <code>/Applications/openZro UI.app</code>.
-              On first run macOS may show a Gatekeeper warning
-              (&quot;cannot be opened because Apple cannot check
-              it&quot;) — right-click → <em>Open</em> to bypass once,
-              or run{" "}
-              <code>xattr -d com.apple.quarantine ~/Downloads/openzro.pkg</code>.
-              Apple Developer ID notarization is coming soon and will
-              eliminate the warning.
+              The installer is signed with an Apple Developer ID and
+              notarized, so macOS opens it without a Gatekeeper warning.
             </p>
           </Steps.Step>
 
@@ -141,74 +134,6 @@ export default function MacOSTab({
                   </Code>
                 </Steps.Step>
                 <Steps.Step step={2} line={false}>
-                  <p>
-                    Run openZro {!setupKey && "and log in the browser"}
-                    {showSetupKeyInfo && <RoutingPeerSetupKeyInfo />}
-                  </p>
-                  <Code>
-                    <Code.Line>
-                      {getOpenzroUpCommand()}
-                      <SetupKeyParameter setupKey={setupKey} />
-                      <HostnameParameter hostname={hostname} />
-                    </Code.Line>
-                  </Code>
-                </Steps.Step>
-              </Steps>
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
-      </TabsContentPadding>
-      <Separator />
-      <TabsContentPadding>
-        <Accordion type="single" collapsible>
-          <AccordionItem value="item-1">
-            <AccordionTrigger>
-              <BeerIcon size={16} /> Install manually with HomeBrew
-            </AccordionTrigger>
-            <AccordionContent>
-              <Steps>
-                <Steps.Step step={1}>
-                  <p>Download and install HomeBrew</p>
-                  <div className={"flex gap-4"}>
-                    <Link href={"https://brew.sh/"} passHref target={"_blank"}>
-                      <Button variant={"primary"}>
-                        <ExternalLinkIcon size={14} />
-                        HomeBrew Installation Guide
-                      </Button>
-                    </Link>
-                  </div>
-                </Steps.Step>
-                <Steps.Step step={2}>
-                  <p>Install the openzro CLI</p>
-                  <Code codeToCopy={`brew install openzro/tap/openzro`}>
-                    <Code.Line>brew install openzro/tap/openzro</Code.Line>
-                  </Code>
-                  <p
-                    className={
-                      "text-xs text-nb-gray-300 mt-2 flex items-center gap-1"
-                    }
-                  >
-                    <BeerIcon size={12} className="opacity-60" />
-                    For the system-tray GUI app, use the .pkg installer
-                    above instead — a Homebrew Cask for openzro-ui will
-                    ship once we publish the macOS .app bundle (tracked
-                    as part of the packaging epic).
-                  </p>
-                </Steps.Step>
-                <Steps.Step step={3}>
-                  <p>Start openZro daemon</p>
-                  <Code
-                    codeToCopy={[
-                      `sudo brew services start openzro`,
-                    ].join("\n")}
-                  >
-                    <Code.Comment>
-                      # daemon needs root to manage WireGuard interfaces
-                    </Code.Comment>
-                    <Code.Line>sudo brew services start openzro</Code.Line>
-                  </Code>
-                </Steps.Step>
-                <Steps.Step step={4} line={false}>
                   <p>
                     Run openZro {!setupKey && "and log in the browser"}
                     {showSetupKeyInfo && <RoutingPeerSetupKeyInfo />}
