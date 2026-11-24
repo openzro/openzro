@@ -91,6 +91,13 @@ func (am *DefaultAccountManager) StoreEvent(ctx context.Context, initiatorID, ta
 		return
 	}
 	go func() {
+		// The caller's ctx is usually request-scoped and is canceled as
+		// soon as the handler returns, which is typically before this
+		// goroutine persists and exports the event. Detach it from that
+		// cancellation while keeping its values (log fields, request ID).
+		// Exporters bound their own work with per-attempt timeouts.
+		ctx := context.WithoutCancel(ctx)
+
 		event := &activity.Event{
 			Timestamp:   time.Now().UTC(),
 			Activity:    activityID.(activity.Activity),
